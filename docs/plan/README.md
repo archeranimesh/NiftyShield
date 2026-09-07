@@ -146,7 +146,7 @@ decomposition), or is there a persistent residual — and which moneyness bands 
 than theta alone predicts.
 Existing 5-min intraday chain Parquet. Monthly bucket only.
 
-**`signals/`** · 🔨 In progress · next: **S4.1** (`src/signals/factory.py`) — S3.3 `2b04546`, S3.4 `<pending>`
+**`signals/`** · 🔨 In progress · next: **S5.1** (`config/signals.toml`) — S3.4 `41254dc`, S4.1 `417cb5f`
 Multi-LLM daily directional signal pipeline: market snapshot → GPT-4o / Grok / Gemini (via
 OpenRouter) → `SignalAggregator` consensus → one `DailySignal` per day, scored forward-only
 against a coin-flip baseline. Self-contained `src/signals/` package with its own SQLite tables

@@ -27,7 +27,7 @@ rot them.
 6. **Options Income strategy** — `docs/plan/options_income/` — next **S0** (data audit).
 7. **Backtest Engine** — `docs/plan/backtest-engine/` (`phase1..4/`) — next **1.3a / 1.4** (parallel, `phase1/`). Four chained phases; each phase's GATE task blocks the next dir. Gated on
    `variance-gate`. `BACKTEST_PLAN_PHASE1.md` is the canonical spec; the phase dirs are thin status pointers.
-8. **signals: multi-LLM daily signal pipeline** — `docs/plan/signals/` — next **S4.1**. Parallel track — self-contained `src/signals/` package, own SQLite tables, zero
+8. **signals: multi-LLM daily signal pipeline** — `docs/plan/signals/` — next **S5.1**. Parallel track — self-contained `src/signals/` package, own SQLite tables, zero
    `backtest-engine` / `backtest-eval-core` dependency; runs alongside item 7. `OPENROUTER_API_KEY` needed only for the live 09:15 cron (S5.2); S5.4 baseline stats to
    be reconciled with `backtest-eval-core` later. Unblocked from `signals-eval-core` 2026-09-07 (parallel-track decision).
 9. **backtest-eval-core** — `docs/plan/backtest-eval-core/` — next **B1.1**. Blocked until `backtest-engine` tasks 1.3 + 1.4 land.
@@ -112,8 +112,10 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-07] signals/ S4.1 — added build_providers factory: canonical-order (grok,gpt4o,gemini) env-driven
+  selection, UPSTOX_ENV=test + empty-result fallback to MockSignalProvider, missing key → WARN+skip + 7 tests. SHA: 417cb5f
 - [2026-09-07] signals/ S3.4 — added GeminiSignalProvider: Phase 1 OpenRouter google/gemini-2.0-flash HTTP shim,
-  Phase 2 guarded google-generativeai SDK via asyncio.to_thread + wait_for timeout; failures → DataFetchError + 9 tests. SHA: <pending>
+  Phase 2 guarded google-generativeai SDK via asyncio.to_thread + wait_for timeout; failures → DataFetchError + 9 tests. SHA: 41254dc
 - [2026-09-07] signals/ S3.3 — added GrokSignalProvider: use_openrouter flag picks OpenRouter x-ai/grok-3 (P1) vs xAI direct grok-3 +search (P2); reuses gpt4o POST+parse + 8 tests. SHA: 2b04546
 - [2026-09-07] signals/ S3.2 — added GPT4oSignalProvider: aiohttp POST to OpenRouter chat completions, parse JSON → SignalResponse, HTTP/timeout/parse failures → DataFetchError + 7 tests. SHA: 12ba97a
 - [2026-09-07] signals/ S3.1 — added MockSignalProvider: deterministic Protocol-compliant provider (fixed direction/confidence/strike_offset), never raises + 5 tests. SHA: 1d5fbbd

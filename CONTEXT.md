@@ -45,7 +45,7 @@ Top-level `src/` packages, one line each (detail → `CONTEXT_TREE.md`):
 - `src/signals/` — multi-LLM daily directional signal pipeline (`docs/plan/signals/`, in progress).
   Frozen Pydantic models (`MarketSnapshot`/`SignalResponse`/`DailySignal`/`SignalOutcome`, `Direction`/`TradeAction`),
   `SignalProvider` protocol, pure `build_prompt`, pure `SignalAggregator` consensus, `SignalStore` (own SQLite
-  tables `signal_inputs`/`signal_responses`/`daily_signals`/`signal_outcomes`). Provider impls + factory + crons pending (S3–S5).
+  tables `signal_inputs`/`signal_responses`/`daily_signals`/`signal_outcomes`). Provider impls + `build_providers` factory done; crons pending (S5).
 - `src/risk/` — portfolio-level delta controls: `PortfolioDelta` frozen dataclass,
   `PortfolioDeltaTracker.aggregate_delta(...)` (chain-derived `position_deltas` used as-is, else
   CE/PE approximation with logged WARNING; pure/zero-I/O per council 2026-07-02),
@@ -82,8 +82,8 @@ Developer + research tooling (`pyproject.toml`, `Makefile`, `.pre-commit-config.
 ### What Does NOT Exist Yet
 
 - `src/execution/`, `src/streaming/` — empty (planned per BACKTEST_PLAN.md Phase 1–2)
-- `src/signals/providers/` (mock/gpt4o/grok/gemini), `src/signals/factory.py`, and the `scripts/morning_signal.py` /
-  `record_signal_outcome.py` / `signal_report.py` crons — pending (`docs/plan/signals/` S3–S5); live crons gated on `OPENROUTER_API_KEY`
+- `scripts/morning_signal.py` / `record_signal_outcome.py` / `signal_report.py` signals crons and `config/signals.toml` —
+  pending (`docs/plan/signals/` S5); live crons gated on `OPENROUTER_API_KEY`
 
 ### Live Data
 
