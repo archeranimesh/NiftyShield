@@ -114,7 +114,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ## Session Log
 - [2026-09-07] `eod-pt-summary/` PT-3 — docs close. CONTEXT.md (`792fa79`) / DECISIONS.md §P&L & Reporting / TODOS.md log lines already landed piecemeal with PT-1/PT-2; this pass filled the PT-2
   closing SHA (`77dc160`) into `tasks.md` + the PT-2 log line, refreshed the `docs/plan/README.md` Active-Stories row to ✅ Shipped, and marked `scratch/2026-08-13_eod_pt_summary.py` SUPERSEDED.
-  Epic `eod-pt-summary/` complete (PT-1..PT-3). Folder not yet moved to `docs/archive/plan/`. Docs-only. SHA: <pending>
+  Epic `eod-pt-summary/` complete (PT-1..PT-3). Folder not yet moved to `docs/archive/plan/`. Docs-only. SHA: dac18ea
 - [2026-09-07] `eod-pt-summary/` PT-2 — promoted `scratch/2026-08-13_eod_pt_summary.py` to `src/reporting/eod_pt_summary.py` (new package) + thin cron `scripts/eod_pt_summary.py`, 17 tests in
   `tests/unit/reporting/test_eod_pt_summary.py`. Function boundaries unchanged from the validated prototype; `escape_markdown` swapped to `src/notifications/markdown.py`, local `LtpProvider`
   Protocol for the broker surface, no-`LOT_SIZE` P&L regression-tested. Coordination question resolved with Animesh: runs **alongside** `scripts/eod_summary.py`, not a replacement (DECISIONS.md
