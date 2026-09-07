@@ -829,20 +829,21 @@ fallbacks inside the helpers.
 `search_graph("NuvamaReader")` for the non-Upstox client surfaces; `get_code_snippet("DataFetchError")`.
 
 **Confirmed sources:** _(spike run 2026-09-07 + instrument-master debug — `git log scratch/2026-09-07_signal_input_sources.py`)_
-- `usd_inr` — **Upstox, `NCD_FO` currency futures.** USDINR is a currency FUTURE, not an index —
-  the first probe failed only on the bare symbol. `data/instruments/NSE.json.gz` carries 23 live
-  USDINR FUT contracts (`NCD_FO|<token>`). Fetcher: `InstrumentLookup.search("USDINR",
-  segment="NCD_FO", instrument_type="FUT")` → nearest expiry ≥ today → `client.get_ltp([key])`.
-  (Nearest-expiry future ≈ spot for a directional signal; weekly contracts exist so basis is tiny.)
-  Pending: one live `get_ltp` confirmation from the re-run spike.
-- `gift_nifty` — **NOT on Upstox.** Zero of 80,836 NSE instruments match "gift"/"sgx" (139
-  NSE_INDEX names, none is GIFT Nifty). It trades on NSE IX (GIFT City), a separate exchange.
-  Not a naming problem — the instrument is absent. Re-run spike also greps the Dhan scrip master.
-  If Dhan is empty too → **DECISION NEEDED**: drop the field, make it optional (`Decimal | None`),
-  or allow a single non-broker fetch (investing.com / moneycontrol pre-market).
+Debugging one field at a time (Animesh's steer). Status:
+
+- `gift_nifty` — **IN PROGRESS.** Not on Upstox (0 of 80,836 NSE instruments; trades on NSE IX,
+  GIFT City). But the **Dhan scrip master carries it as an index**: `NSE,I,5024,INDEX,GIFTNIFTY,
+  "Gift Nifty"` — security id **5024**. Next: probe Dhan `marketfeed/ltp` (segment `IDX_I`) for
+  5024 — spike `probe_dhan_gift_nifty()`. Caveat (`src/dhan/reader.py` ~L230): that endpoint
+  needs the **paid Dhan Data API**; a 401/403 means the plan lacks it, not that the field is
+  unreachable. If Dhan LTP is paywalled → decision: drop / optional / non-broker pre-market fetch.
+- `usd_inr` — **Upstox `NCD_FO` currency futures, mechanism confirmed.** Nearest-expiry USDINR FUT
+  resolved from `data/instruments/NSE.json.gz` (`NCD_FO|11993`, 11 SEP 26); `get_ltp` returned
+  200 but value `0.0` — run was 20:58, currency segment closed / weekly contract illiquid.
+  Re-confirm the LTP during market hours (09:00–17:00) before wiring `fetch_usd_inr`. Fetcher:
+  `InstrumentLookup.search("USDINR", segment="NCD_FO", instrument_type="FUT")` → nearest expiry.
 - `fii` — **no broker API.** Decision taken 2026-09-07: `fetch_fii_data` downloads the NSE FII
-  derivative-statistics CSV each morning (T-1 data); raises `DataFetchError` on download/parse
-  failure, caller decides whether to abort the run.
+  derivative-statistics CSV each morning (T-1); raises `DataFetchError` on failure.
 
 **Tests:** `tests/unit/signals/test_market_inputs.py` — one happy-path + one failure test per
 function, all offline (mock broker / mock client responses). No network.

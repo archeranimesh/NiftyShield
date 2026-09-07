@@ -55,6 +55,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # dated filenam
 import requests
 
 from src.client.factory import create_client
+from src.config import settings
 from src.instruments.lookup import InstrumentLookup, parse_expiry
 
 _BOD_PATH = "data/instruments/NSE.json.gz"
@@ -111,29 +112,56 @@ async def probe_upstox() -> None:
                 print(f"    {key!r:34} -> {type(exc).__name__}: {exc}")
 
 
-def probe_dhan_scrip_master() -> None:
-    """Download the Dhan scrip master and grep for GIFT Nifty / USDINR entries."""
-    print("\n=== Dhan — scrip master (GIFT Nifty / USDINR presence) ===")
+def _gift_nifty_dhan_security_id() -> int | None:
+    """Find the GIFT Nifty INDEX security id in the Dhan scrip master.
+
+    Confirmed row (2026-09-07): NSE,I,5024,INDEX,0,GIFTNIFTY,...,Gift Nifty
+    """
     try:
         resp = requests.get(_DHAN_SCRIP_MASTER, timeout=30)
         resp.raise_for_status()
     except Exception as exc:  # noqa: BLE001
-        print(f"  download failed: {type(exc).__name__}: {exc}")
-        return
-
+        print(f"  scrip-master download failed: {type(exc).__name__}: {exc}")
+        return None
     body = resp.content
-    if body[:2] == b"PK":  # zipped
+    if body[:2] == b"PK":
         with zipfile.ZipFile(io.BytesIO(body)) as zf:
             body = zf.read(zf.namelist()[0])
-    text = body.decode("utf-8", errors="replace")
-    lines = text.splitlines()
-    header = lines[0] if lines else ""
-    print(f"  rows: {len(lines) - 1}  header: {header[:120]}")
-    for needle in ("GIFT", "SGX NIFTY", "USDINR", "USD INR"):
-        hits = [ln for ln in lines[1:] if needle in ln.upper()]
-        print(f"\n  '{needle}': {len(hits)} rows")
-        for ln in hits[:8]:
-            print(f"    {ln[:160]}")
+    for ln in body.decode("utf-8", errors="replace").splitlines():
+        cols = ln.split(",")
+        # SEM_EXM_EXCH_ID, SEM_SEGMENT, SEM_SMST_SECURITY_ID, SEM_INSTRUMENT_NAME, ...
+        if len(cols) > 5 and cols[0] == "NSE" and cols[3] == "INDEX" and "GIFT" in cols[5].upper():
+            print(f"  scrip-master row: {ln[:120]}")
+            return int(cols[2])
+    return None
+
+
+def probe_dhan_gift_nifty() -> None:
+    """gift_nifty is not on Upstox. Dhan carries it as an index — probe its LTP.
+
+    Dhan marketfeed/ltp segment for an index is `IDX_I`. NOTE (src/dhan/reader.py
+    line ~230): that endpoint needs the paid Dhan Data API — a 401/403 here means
+    the plan doesn't include it, not that the instrument is missing.
+    """
+    print("\n=== Dhan — gift_nifty via marketfeed/ltp (IDX_I) ===")
+    cid, tok = settings.dhan_client_id, settings.dhan_access_token
+    if not (cid and tok):
+        print("  DHAN_CLIENT_ID / DHAN_ACCESS_TOKEN not set — skipped")
+        return
+    sec_id = _gift_nifty_dhan_security_id()
+    if sec_id is None:
+        print("  GIFT Nifty not found in scrip master")
+        return
+    print(f"  GIFT Nifty Dhan security id: {sec_id}")
+
+    from src.dhan.reader import fetch_ltp_raw
+
+    for segment in ("IDX_I", "NSE_I", "NSE_EQ"):
+        try:
+            out = fetch_ltp_raw(cid, tok, {segment: [sec_id]})
+            print(f"    {segment:8} -> {out}")
+        except Exception as exc:  # noqa: BLE001
+            print(f"    {segment:8} -> {type(exc).__name__}: {exc}")
 
 
 def note_nuvama_and_fii() -> None:
@@ -150,7 +178,7 @@ def note_nuvama_and_fii() -> None:
 
 async def main() -> None:
     await probe_upstox()
-    probe_dhan_scrip_master()
+    probe_dhan_gift_nifty()
     note_nuvama_and_fii()
     print("\n--- done. Update signals_stories.md §S5.2a 'Confirmed sources:' with this output ---")
 
