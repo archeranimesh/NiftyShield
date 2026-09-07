@@ -33,4 +33,4 @@
   `IronCondorV1.check_signals` now emits `ic_nifty_v1.leg_greeks` (INFO) per short leg with the
   exact tick-time delta/abs_delta/gamma/theta/vega/iv/ltp + warn/stop thresholds, so the Greeks
   behind a DELTA_WARN/DELTA_STOP decision are recoverable from `logs/` independent of the cron.
-  | SHA: &lt;pending&gt;
+  | SHA: 761af8e
