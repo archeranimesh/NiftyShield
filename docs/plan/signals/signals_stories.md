@@ -837,7 +837,9 @@ Debugging one field at a time (Animesh's steer). Status:
   `latency 120 Seconds`, trades 06:30 Mon → 02:45 Sat (Mon–Fri) — so it is live at the 09:10
   snapshot. The key is a fixed constant (no expiry/strike resolution) → `fetch_gift_nifty` is
   just `client.get_ltp(["GLOBAL_INDEX|SGX NIFTY"])`. Data is ~2 min delayed; fine for a pre-open
-  gap indicator. Pending: one live `get_ltp` confirmation that the endpoint serves this key.
+  gap indicator. **CONFIRMED 2026-09-07 21:08:** `get_ltp(["GLOBAL_INDEX|SGX NIFTY"])` →
+  `Decimal('23788.5')` (Nifty spot 23779.15 — a ~9pt premium, sane). `fetch_gift_nifty` is
+  `client.get_ltp(["GLOBAL_INDEX|SGX NIFTY"])`, key as a module constant.
   (Dhan carries it as index id 5024 but `marketfeed/ltp` → 401, paid Data API not on plan;
   Nuvama has no quote surface. Upstox global is the source.)
 - `usd_inr` — **Upstox `NCD_FO` currency futures, mechanism confirmed.** Nearest-expiry USDINR FUT

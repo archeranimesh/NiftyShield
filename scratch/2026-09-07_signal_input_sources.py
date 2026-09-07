@@ -11,22 +11,18 @@ A field served by nobody → the helper raises `DataFetchError`.
 
 FINDINGS (2026-09-07, debugging one field at a time):
 
-  gift_nifty — Upstox carries it, but NOT in the NSE instrument dump. It is a
-               GLOBAL index: separate master at
-               https://assets.upstox.com/market-quote/instruments/exchange/global.json.gz
-               key form `GLOBAL_INDEX|SGX NIFTY` (per LTP-v3 docs). The batch
-               LTP endpoint (`_fetch_ltp_batch`) passes any key straight through
-               as the `instrument_key` param — no segment gate — so `get_ltp`
-               should serve it. This script resolves the real key from
-               global.json.gz and probes it. (Dhan carries GIFT Nifty as index
-               id 5024 but its marketfeed/ltp is 401 — paid Data API not on the
-               plan. Nuvama has no quote surface. Upstox global is the path.)
+  gift_nifty — CONFIRMED. Upstox `GLOBAL_INDEX|SGX NIFTY` (from the separate
+               global.json.gz master, not NSE.json.gz). `get_ltp` → 23788.5 on
+               2026-09-07 21:08 (Nifty spot 23779.15, sane premium). Fetcher is
+               a one-line get_ltp on the constant key. (Dhan has it as index id
+               5024 but marketfeed/ltp is 401 — paid Data API. Nuvama: no quote
+               surface.)
 
-  usd_inr    — Upstox `NCD_FO` currency FUTURE. Nearest-expiry USDINR FUT
-               resolved from `data/instruments/NSE.json.gz`; `get_ltp` returns
-               200. First run gave 0.0 (after hours) — re-confirm in market
-               hours. Fetcher: `InstrumentLookup.search("USDINR",
-               segment="NCD_FO", instrument_type="FUT")` → nearest expiry.
+  usd_inr    — OPEN. Upstox `NCD_FO` currency FUTURE returns 0.0 after 17:00
+               (NSE currency segment closed). This run also dumps all ~13 global
+               instruments in case one is a cleaner USD/INR fx quote, and probes
+               both nearest-weekly and nearest-monthly USDINR futures (monthly
+               carries the liquidity). RE-RUN DURING MARKET HOURS (09:00-17:00).
 
   fii        — no broker API. Decision 2026-09-07: `fetch_fii_data` downloads
                the NSE FII derivative-statistics CSV each morning (T-1).
@@ -61,26 +57,44 @@ _BOD_PATH = "data/instruments/NSE.json.gz"
 _UPSTOX_GLOBAL = "https://assets.upstox.com/market-quote/instruments/exchange/global.json.gz"
 
 
-def _nearest_usdinr_future() -> str | None:
-    """Resolve the nearest-expiry USDINR FUT instrument_key from the local dump."""
+def _usdinr_futures() -> dict[str, str]:
+    """Resolve the nearest-weekly and nearest-monthly USDINR FUT keys from the dump.
+
+    Monthly USDINR futures (last-Tuesday cadence) carry the liquidity; the weekly
+    contracts can be thin. Probe both so the real fetcher picks the right one.
+    """
     lookup = InstrumentLookup.from_file(_BOD_PATH)
     futs = lookup.search("USDINR", segment="NCD_FO", instrument_type="FUT", max_results=50)
-    today = date.today().isoformat()
+    today = date.today()
     live = sorted(
-        ((parse_expiry(f.get("expiry")), f) for f in futs if parse_expiry(f.get("expiry"))),
+        (
+            (date.fromisoformat(parse_expiry(f["expiry"])), f)
+            for f in futs
+            if parse_expiry(f.get("expiry"))
+            and date.fromisoformat(parse_expiry(f["expiry"])) >= today
+        ),
         key=lambda t: t[0],
     )
+    out: dict[str, str] = {}
+    if live:
+        exp, f = live[0]
+        print(f"    nearest USDINR FUT (weekly): {f['instrument_key']} ({f['trading_symbol']})")
+        out["weekly"] = f["instrument_key"]
+    # nearest month-end (last expiry of the earliest calendar month present)
+    by_month: dict[tuple[int, int], tuple[date, dict]] = {}
     for exp, f in live:
-        if exp >= today:
-            print(
-                f"    nearest USDINR FUT: {f['instrument_key']} ({f['trading_symbol']}, exp {exp})"
-            )
-            return f["instrument_key"]
-    return None
+        key = (exp.year, exp.month)
+        if key not in by_month or exp > by_month[key][0]:
+            by_month[key] = (exp, f)
+    if by_month:
+        _, f = by_month[min(by_month)]
+        print(f"    nearest USDINR FUT (monthly): {f['instrument_key']} ({f['trading_symbol']})")
+        out["monthly"] = f["instrument_key"]
+    return out
 
 
-def _global_index_keys() -> list[str]:
-    """Download the Upstox global instrument master and return GIFT/SGX index keys."""
+def _list_global_instruments() -> list[str]:
+    """Dump the whole Upstox global master (~13 rows) and return likely usd_inr keys."""
     try:
         resp = requests.get(_UPSTOX_GLOBAL, timeout=30)
         resp.raise_for_status()
@@ -89,20 +103,15 @@ def _global_index_keys() -> list[str]:
         return []
     with gzip.open(io.BytesIO(resp.content), "rt", encoding="utf-8") as f:
         data = json.load(f)
-    print(f"    global.json.gz: {len(data)} instruments")
-    hits = [
-        d
-        for d in data
-        if "gift" in str(d.get("name", "")).lower()
-        or "sgx" in str(d.get("name", "")).lower()
-        or "gift" in str(d.get("trading_symbol", "")).lower()
-        or "sgx" in str(d.get("trading_symbol", "")).lower()
-    ]
-    for d in hits:
-        print(
-            f"    global row: {json.dumps({k: d.get(k) for k in ('segment', 'name', 'trading_symbol', 'instrument_key')})}"
-        )
-    return [d["instrument_key"] for d in hits if d.get("instrument_key")]
+    print(f"    global.json.gz: {len(data)} instruments —")
+    fx_keys: list[str] = []
+    for d in data:
+        name = str(d.get("name", ""))
+        key = d.get("instrument_key", "")
+        print(f"      {key:28} {name}")
+        if any(t in name.upper() for t in ("USD", "INR", "DXY", "DOLLAR", "RUPEE")):
+            fx_keys.append(key)
+    return fx_keys
 
 
 async def probe_upstox() -> None:
@@ -115,12 +124,16 @@ async def probe_upstox() -> None:
         traceback.print_exc()
         return
 
-    print("\n  [gift_nifty] — resolving from Upstox global instrument master")
-    gift_keys = _global_index_keys() or ["GLOBAL_INDEX|SGX NIFTY"]  # doc fallback
+    print("\n  [global master dump — looking for a usd_inr / fx quote]")
+    fx_keys = _list_global_instruments()
+
+    print("\n  [usd_inr — NCD_FO currency futures]")
+    usdinr = _usdinr_futures()
 
     candidates: dict[str, list[str]] = {
-        "gift_nifty": gift_keys,
-        "usd_inr": [k for k in (_nearest_usdinr_future(),) if k],
+        "gift_nifty": ["GLOBAL_INDEX|SGX NIFTY"],  # CONFIRMED 2026-09-07
+        "usd_inr (global fx?)": fx_keys,
+        "usd_inr (NCD_FO fut)": list(usdinr.values()),
         "india_vix": ["NSE_INDEX|India VIX"],  # control — known good
         "nifty_spot": ["NSE_INDEX|Nifty 50"],  # control — known good
     }
