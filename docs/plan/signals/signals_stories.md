@@ -828,10 +828,18 @@ fallbacks inside the helpers.
 `search_code("get_historical_candles")` in `src/client/`; `search_graph("DhanReader")` /
 `search_graph("NuvamaReader")` for the non-Upstox client surfaces; `get_code_snippet("DataFetchError")`.
 
-**Confirmed sources:** _(fill in from the spike before implementing)_
-- `gift_nifty` — TBD
-- `fii` — TBD
-- `usd_inr` — TBD
+**Confirmed sources:** _(spike run 2026-09-07, prod Upstox token — `git show 7033a8d`)_
+- `gift_nifty` — **NO broker source.** Upstox `get_ltp` returns empty for
+  `NSE_INDEX|GIFT Nifty`, `NSE_INDEX|Gift Nifty 50`, `NSE_INDEX|SGX Nifty`; `NSE_IX|GIFT Nifty`
+  is a 400. GIFT Nifty trades on NSE IX (GIFT City) — not carried on Upstox/Dhan retail feeds.
+  Control keys work (`NSE_INDEX|India VIX` → 11.16, `NSE_INDEX|Nifty 50` → 23779.15), so the
+  probe path is sound — the instrument is genuinely absent. **DECISION NEEDED.**
+- `fii` — **NO broker API** (expected). NSE publishes FII derivative stats EOD as CSV only.
+  **DECISION NEEDED** — options in `scratch/2026-09-07_signal_input_sources.py`.
+- `usd_inr` — **not found yet.** Upstox `NSE_INDEX|USD INR` / `NCD_FO|USDINR` return empty;
+  `CDS_FO|USDINR` / `NSE_CD|USDINR` are 400. USDINR is a currency *future* — needs a real
+  contract token (current-month expiry) from the Upstox or Dhan instrument master, not a bare
+  symbol. Dhan scrip-master probe is the untried next step. **Partially blocked.**
 
 **Tests:** `tests/unit/signals/test_market_inputs.py` — one happy-path + one failure test per
 function, all offline (mock broker / mock client responses). No network.
