@@ -831,12 +831,15 @@ fallbacks inside the helpers.
 **Confirmed sources:** _(spike run 2026-09-07 + instrument-master debug — `git log scratch/2026-09-07_signal_input_sources.py`)_
 Debugging one field at a time (Animesh's steer). Status:
 
-- `gift_nifty` — **IN PROGRESS.** Not on Upstox (0 of 80,836 NSE instruments; trades on NSE IX,
-  GIFT City). But the **Dhan scrip master carries it as an index**: `NSE,I,5024,INDEX,GIFTNIFTY,
-  "Gift Nifty"` — security id **5024**. Next: probe Dhan `marketfeed/ltp` (segment `IDX_I`) for
-  5024 — spike `probe_dhan_gift_nifty()`. Caveat (`src/dhan/reader.py` ~L230): that endpoint
-  needs the **paid Dhan Data API**; a 401/403 means the plan lacks it, not that the field is
-  unreachable. If Dhan LTP is paywalled → decision: drop / optional / non-broker pre-market fetch.
+- `gift_nifty` — **Upstox, `GLOBAL_INDEX|SGX NIFTY`.** It was absent from `NSE.json.gz` because
+  it is a GLOBAL index — separate master `.../instruments/exchange/global.json.gz`. Confirmed
+  instrument metadata: `segment GLOBAL_INDEX`, `exchange GLOBAL`, `trading_symbol "GIFT NIFTY"`,
+  `latency 120 Seconds`, trades 06:30 Mon → 02:45 Sat (Mon–Fri) — so it is live at the 09:10
+  snapshot. The key is a fixed constant (no expiry/strike resolution) → `fetch_gift_nifty` is
+  just `client.get_ltp(["GLOBAL_INDEX|SGX NIFTY"])`. Data is ~2 min delayed; fine for a pre-open
+  gap indicator. Pending: one live `get_ltp` confirmation that the endpoint serves this key.
+  (Dhan carries it as index id 5024 but `marketfeed/ltp` → 401, paid Data API not on plan;
+  Nuvama has no quote surface. Upstox global is the source.)
 - `usd_inr` — **Upstox `NCD_FO` currency futures, mechanism confirmed.** Nearest-expiry USDINR FUT
   resolved from `data/instruments/NSE.json.gz` (`NCD_FO|11993`, 11 SEP 26); `get_ltp` returned
   200 but value `0.0` — run was 20:58, currency segment closed / weekly contract illiquid.
