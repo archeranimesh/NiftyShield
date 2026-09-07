@@ -33,8 +33,12 @@ from __future__ import annotations
 
 import asyncio
 import os
+import sys
 import traceback
+from pathlib import Path
 from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # dated filename → no -m
 
 from src.client.factory import create_client
 from src.config import settings
