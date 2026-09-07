@@ -208,6 +208,11 @@ src/
 │                             #   get_cumulative_realized_pnl aggregates realized_pnl_today across all historical rows per symbol via single SQL GROUP BY
 │                             #   — AR-8), nuvama_intraday_snapshots (record_intraday_positions/purge_old_intraday 30-day retention/get_intraday_extremes
 │                             #   — sums unrealized+realized per timestamp, returns max_pnl/min_pnl/nifty_high/nifty_low).
+├── reporting/
+│   ├── __init__.py           # Package marker.
+│   └── eod_pt_summary.py     # EOD PT Summary — cross-strategy paper-trade report as 1-3 MarkdownV2 Telegram messages (open positions / closed-today / strategy P&L + Ann.% on margin).
+│                             #   build_summary_parts() off live PaperStore.get_positions() + broker LTP; local LtpProvider Protocol; no LOT_SIZE multiplier (net_qty is raw units).
+│                             #   _closed_legs_for_strategy replays trade history to surface legs that closed today. Runs alongside scripts/eod_summary.py, not a replacement (PT-2).
 ├── utils/
 │   ├── __init__.py           # Package marker.
 │   ├── logging.py            # setup_logging(*, json, level): configures structlog with shared processors (contextvars merge, log level, logger name, ISO timestamp).
@@ -345,6 +350,7 @@ scripts/
                            #   Silent on pass; Telegram alert + exit 1 on failure. Cron: 30 16 * * 1-5.
 ├── position_health_check.py # Standalone position/Greeks sanity-check cron — flags stale or missing Greeks/LTP on open paper positions.
 ├── eod_summary.py         # EOD P&L summary cron — Telegram digest across all strategies. (Moved out of scripts/daemon/ — that subfolder no longer exists.)
+├── eod_pt_summary.py      # EOD PT Summary cron — thin wrapper over src/reporting/eod_pt_summary.py. --send/--dry-run/--date/--db-path/--bod-path. Runs alongside eod_summary.py (PT-2).
 ├── pre_market_brief.py    # Pre-market summary cron. (Moved out of scripts/daemon/ — that subfolder no longer exists.)
 ├── monitor_daemon.py      # Monitor daemon main loop (StrategyMonitor host process). (Moved out of scripts/daemon/ — that subfolder no longer exists.)
 ├── start_monitor.py       # Launcher for monitor_daemon.py. (Moved out of scripts/daemon/ — that subfolder no longer exists.)
