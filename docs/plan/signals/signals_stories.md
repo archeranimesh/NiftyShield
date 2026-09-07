@@ -794,15 +794,100 @@ SIGNAL_MIN_CONFIDENCE=3         # avg confidence of agreeing models to emit trad
 
 ---
 
-## S5.2 — `scripts/morning_signal.py`: 09:15 AM cron
+## S5.2a — source-discovery spike + `src/signals/market_inputs.py`
+
+**Why this exists:** `MarketSnapshot` needs `gift_nifty`, `fii`, and `usd_inr`, and the repo has
+no fetcher for any of them. Animesh's call (2026-09-07): do *not* hard-code neutral defaults and
+do *not* scrape NSE HTML — probe the broker APIs we already authenticate against (Upstox, Dhan,
+Nuvama) and see which one serves each field, then build a real helper module against the
+confirmed endpoints.
+
+**Step 1 — spike (persistent scratch artifact):** `scratch/2026-09-07_signal_input_sources.py`.
+Dated, docstring-headed, kept in-tree as the source-of-record for where each field comes from
+(same convention as the other `scratch/*.py` workshop scripts). It should:
+- try Upstox (`get_ltp` / `get_historical_candles` / any quote endpoint) for a GIFT Nifty
+  instrument key and for USD/INR;
+- try Dhan and Nuvama readers for the same;
+- try each for FII/DII index positioning (T-1);
+- print, per field: which client + endpoint returned usable data, the raw shape, and the
+  parsed value.
+Record the findings in this story section (edit S5.2a below "Confirmed sources:") before
+writing the module.
+
+**Step 2 — `src/signals/market_inputs.py`:**
+```python
+async def fetch_gift_nifty(broker) -> Decimal: ...
+async def fetch_fii_data(broker) -> FIIData: ...
+async def fetch_usd_inr(broker) -> Decimal: ...
+```
+Each targets the endpoint the spike confirmed, returns the typed value, and raises
+`DataFetchError` on total failure (caller decides whether to abort the run). No neutral
+fallbacks inside the helpers.
+
+**Before any code:** `get_code_snippet("FIIData")`; `get_code_snippet("MarketSnapshot")`;
+`search_code("get_historical_candles")` in `src/client/`; `search_graph("DhanReader")` /
+`search_graph("NuvamaReader")` for the non-Upstox client surfaces; `get_code_snippet("DataFetchError")`.
+
+**Confirmed sources:** _(fill in from the spike before implementing)_
+- `gift_nifty` — TBD
+- `fii` — TBD
+- `usd_inr` — TBD
+
+**Tests:** `tests/unit/signals/test_market_inputs.py` — one happy-path + one failure test per
+function, all offline (mock broker / mock client responses). No network.
+
+**Commit (two):** `chore(signals): source-discovery spike for gift_nifty / fii / usd_inr`
+then `feat(signals): market_inputs.py — gift_nifty / fii / usd_inr fetchers`.
+
+---
+
+## S5.2b — `src/signals/snapshot.py`: `assemble_market_snapshot`
+
+**Files to change:**
+- `src/signals/snapshot.py` — new module
+
+**Before any code:**
+`get_code_snippet("MarketSnapshot")` / `get_code_snippet("OptionChainSummary")` /
+`get_code_snippet("OILevel")` — target model shapes;
+`get_code_snippet("parse_upstox_option_chain")` — returns `OptionChain`; map its fields onto
+`OptionChainSummary`;
+`search_code("get_option_chain")` + `search_code("get_historical_candles")` in `src/client/`;
+`get_code_snippet("SignalStore.get_responses")` — no; use `signal_inputs` rows for `vix_5d_trend`.
+
+**What to implement:**
+```python
+async def assemble_market_snapshot(broker, *, store: SignalStore, trade_date: date) -> MarketSnapshot:
+    """Assemble the full MarketSnapshot from live sources at ~09:10 IST."""
+```
+- `nifty_spot`, `india_vix` — `broker.get_ltp([...])`
+- `prev_close` / `prev_high` / `prev_low` — `broker.get_historical_candles` (last completed daily candle)
+- `option_chain` — `broker.get_option_chain` → `parse_upstox_option_chain` → derive
+  `OptionChainSummary` (atm_strike, atm_iv, iv_skew, pcr_total, pcr_atm, top 3 call/put OI)
+- `monthly_expiry` — computed (last Thursday of current month; note the Apr-2026 Thu→Tue
+  change per `REFERENCES.md` — use the calendar helper, not a hard-coded weekday)
+- `vix_5d_trend` — last 5 `signal_inputs` snapshots → `"rising" | "falling" | "flat"`
+- `gift_nifty` / `fii` / `usd_inr` — `market_inputs` (S5.2a)
+
+**Tests:** `tests/unit/signals/test_snapshot.py` — happy path with a mock broker returning
+canned LTP / candles / chain; one error path (broker raises). Offline only.
+
+**Commit:** `feat(signals): snapshot.py — assemble_market_snapshot from live sources`
+
+---
+
+## S5.2 — `scripts/morning_signal.py`: 09:15 AM cron (wiring only)
 
 **Files to change:**
 - `scripts/morning_signal.py` — new script
+
+**Depends on:** S5.2a + S5.2b. This task is pure orchestration — it must not contain any
+data-source logic; that all lives in `assemble_market_snapshot`.
 
 **Before any code:**
 `get_code_snippet("SignalStore")` — current public write API;
 `get_code_snippet("SignalAggregator")` — constructor and `aggregate` signature;
 `get_code_snippet("build_providers")` — factory signature;
+`get_code_snippet("assemble_market_snapshot")` — S5.2b entry point;
 `search_code("build_notifier")` in an existing cron script (e.g. `daily_snapshot.py`)
   — see usage pattern for Telegram + structured logging;
 `search_code("asyncio.gather")` in `src/` — confirm existing gather pattern.
@@ -812,23 +897,12 @@ SIGNAL_MIN_CONFIDENCE=3         # avg confidence of agreeing models to emit trad
 **What to implement:**
 
 ```python
-async def fetch_market_snapshot() -> MarketSnapshot:
-    """Assemble MarketSnapshot from live sources at 09:10 AM."""
-    # Sources:
-    # - nifty_spot / prev_ohlc : Upstox LTP + OHLC (UPSTOX_ANALYTICS_TOKEN)
-    # - gift_nifty             : NSE pre-market page (web fetch)
-    # - india_vix              : Upstox LTP for India VIX instrument key
-    # - vix_5d_trend           : last 5 entries from signal_inputs or VIX Parquet
-    # - option_chain           : Upstox option chain → parse_upstox_option_chain
-    # - fii                    : NSE FII/DII CSV (T-1) web fetch
-    # - usd_inr                : NSE or public API
-    ...
-
 async def run() -> None:
     providers = build_providers()
-    snapshot = await fetch_market_snapshot()
-    store = SignalStore(DB_PATH)
+    broker = create_client(settings.upstox_env)
+    store = SignalStore(settings.db_path)
     store.init_db()
+    snapshot = await assemble_market_snapshot(broker, store=store, trade_date=date.today())
     store.record_snapshot(snapshot)
 
     responses = await asyncio.gather(

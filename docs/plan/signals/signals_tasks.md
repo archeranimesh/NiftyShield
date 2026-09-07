@@ -24,7 +24,13 @@
 - [x] **S5.1** — `config/signals.toml` + `.env.example`: config + env vars (no tests) | Owner: Claude | Model: Sonnet 5 | Review: docs/config-only | SHA: 80edf53
   <!-- .env.example kept local-only: untracked + blanket-ignored by .gitignore `.env*`; edit applied on disk, not committed -->
 
-- [ ] **S5.2** — `scripts/morning_signal.py`: 09:15 AM pipeline cron (no unit tests)
+- [ ] **S5.2a** — `scratch/2026-09-07_signal_input_sources.py` source-discovery spike (persistent) +
+  `src/signals/market_inputs.py`: `fetch_gift_nifty` / `fetch_fii_data` / `fetch_usd_inr` against
+  Upstox / Dhan / Nuvama + offline tests | Owner: Claude
+- [ ] **S5.2b** — `src/signals/snapshot.py`: `assemble_market_snapshot(broker)` — clean fields
+  (spot / VIX / prev-OHLC / option_chain / monthly_expiry / vix_5d_trend) + `market_inputs` calls + tests | Owner: Claude
+- [ ] **S5.2** — `scripts/morning_signal.py`: 09:15 AM pipeline cron — pure wiring over
+  `assemble_market_snapshot` + `build_providers` + aggregator + store + Telegram (no unit tests)
 - [ ] **S5.3** — `scripts/record_signal_outcome.py`: 03:00 PM outcome recorder (no unit tests)
 - [ ] **S5.4** — `scripts/signal_report.py`: on-demand performance report with random baseline (no unit tests)
 - [ ] **S6** — Docs close: CONTEXT.md tree, DECISIONS.md entry, TODOS.md log

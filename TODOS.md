@@ -112,6 +112,11 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-07] signals/ S5.2 split (docs-only) — S5.2 needs gift_nifty / fii / usd_inr and the repo has no
+  fetcher; Animesh's call: probe Upstox/Dhan/Nuvama APIs rather than scrape NSE or hard-code defaults. Added
+  S5.2a (persistent source-discovery spike `scratch/2026-09-07_signal_input_sources.py` + `src/signals/market_inputs.py`
+  + offline tests) and S5.2b (`src/signals/snapshot.py` assemble_market_snapshot); S5.2 rewritten as wiring-only.
+  Touched signals_tasks.md, signals_stories.md, docs/plan/README.md. No SHA (uncommitted at log time).
 - [2026-09-07] signals/ S5.1 — added config/signals.toml (thresholds + grok/gpt4o/gemini provider sub-tables)
   and extended .env.example with signals pipeline block (OPENROUTER/XAI/GOOGLE_AI keys, SIGNAL_PROVIDERS,
   SIGNAL_MIN_CONFIDENCE + Phase 1/2 token checklist; .env.example local-only). SHA: 80edf53
