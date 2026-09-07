@@ -27,11 +27,13 @@ rot them.
 6. **Options Income strategy** — `docs/plan/options_income/` — next **S0** (data audit).
 7. **Backtest Engine** — `docs/plan/backtest-engine/` (`phase1..4/`) — next **1.3a / 1.4** (parallel, `phase1/`). Four chained phases; each phase's GATE task blocks the next dir. Gated on
    `variance-gate`. `BACKTEST_PLAN_PHASE1.md` is the canonical spec; the phase dirs are thin status pointers.
-8. **backtest-eval-core** — `docs/plan/backtest-eval-core/` — next **B1.1**. Blocked until `backtest-engine` tasks 1.3 + 1.4 land.
-9. **signals-eval-core** — `docs/plan/signals-eval-core/` — next **SE1.1**.
+8. **signals: multi-LLM daily signal pipeline** — `docs/plan/signals/` — next **S1.1**. Parallel track — self-contained `src/signals/` package, own SQLite tables, zero
+   `backtest-engine` / `backtest-eval-core` dependency; runs alongside item 7. `OPENROUTER_API_KEY` needed only for the live 09:15 cron (S5.2); S5.4 baseline stats to
+   be reconciled with `backtest-eval-core` later. Unblocked from `signals-eval-core` 2026-09-07 (parallel-track decision).
+9. **backtest-eval-core** — `docs/plan/backtest-eval-core/` — next **B1.1**. Blocked until `backtest-engine` tasks 1.3 + 1.4 land.
+10. **signals-eval-core** — `docs/plan/signals-eval-core/` — next **SE1.1**.
     Blocked until `backtest-eval-core` + `backtest-engine` 1.12.
     Covers Track A (swing) + Track B (investment), SE1–SE8.
-10. **signals: multi-LLM daily signal pipeline** — `docs/plan/signals/` — next **S1.1**.
 11. **risk-gamma-phase-a** — `docs/plan/risk-gamma-phase-a/` — next **B2.2**
     (chain fetch + field computation). Track A + B1 / B2.1 shipped.
 12. **greeks-parity-validation** —
@@ -110,6 +112,10 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-07] `signals/` unblocked — moved out of `docs/plan/README.md` "Blocked / Later Stories" to an active parallel track (Feature Backlog #8, was
+  #10). Verified zero `src/backtest/` dependency: self-contained `src/signals/` package, own SQLite tables, S5.4 baseline is a coin flip not shared stats.
+  Runs alongside `backtest-engine`. `OPENROUTER_API_KEY` gates only the live S5.2 cron. `signals-eval-core/` stays blocked (it's mechanical-strategy
+  backtest validation, not LLM-signal work). DECISIONS.md entry added under §Strategy & Research Decisions. Next: S1.1.
 - [2026-09-07] `ic-yearly-expiry-fix/` WG-1 shipped — `IronCondorV1.check_signals` now emits `ic_nifty_v1.leg_greeks` (INFO) per short leg with tick-time
   delta/abs_delta/gamma/theta/vega/iv/ltp + warn/stop thresholds, so the Greeks behind a DELTA_WARN/DELTA_STOP decision are recoverable from `logs/` (the
   2026-07-08 0.25→0.09 discrepancy had no such record). Weekly Parquet bucket — WG-1's primary fix — already landed in `a38e53f`. Story folder complete;

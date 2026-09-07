@@ -146,6 +146,15 @@ decomposition), or is there a persistent residual — and which moneyness bands 
 than theta alone predicts.
 Existing 5-min intraday chain Parquet. Monthly bucket only.
 
+**`signals/`** · ⬜ Not started · next: **S1.1** (`src/signals/models.py` + package skeleton)
+Multi-LLM daily directional signal pipeline: market snapshot → GPT-4o / Grok / Gemini (via
+OpenRouter) → `SignalAggregator` consensus → one `DailySignal` per day, scored forward-only
+against a coin-flip baseline. Self-contained `src/signals/` package with its own SQLite tables
+— no `backtest-engine` or `backtest-eval-core` dependency, runs as a parallel track alongside
+`backtest-engine`. `OPENROUTER_API_KEY` needed only for the live 09:15 cron (S5.2); S5.4
+baseline stats to be reconciled with `backtest-eval-core` later. Unblocked from
+`signals-eval-core` 2026-09-07 (parallel-track decision).
+
 **`full-repo-review/`** · ✅ Complete — see `full-repo-review-followups/`
 One-time multi-model, multi-persona review of design docs, source, tests, the
 AI-collaboration protocol, and per-job-type surface routing (FR-1..9).
@@ -173,7 +182,6 @@ backfilled 42 rows.
 |--------|------------|
 | `backtest-eval-core/` | Phase 1.3 (Bhavcopy) + Phase 1.4 (BacktestEngine) |
 | `signals-eval-core/` | backtest-eval-core + Phase 1.12 gate |
-| `signals/` | signals-eval-core |
 
 ---
 

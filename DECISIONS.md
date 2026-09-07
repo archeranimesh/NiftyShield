@@ -639,6 +639,12 @@ return annotation `dict[str, Any]` is wrong. Deferred fix — absorb in `parse_u
 > Full rationale for each decision lives in the referenced council file or strategy doc.
 > This section is an index — one line per decision. Read the source file for reasoning.
 
+- **2026-09-07** — `signals/` (multi-LLM daily signal pipeline) decoupled from the backtest program and run as a parallel track.
+  Rationale: the story is self-contained (`src/signals/` package, own SQLite tables, no `src/backtest/` import; S5.4's baseline is a
+  `hash(trade_date) % 2` coin flip, not shared stats infra), and an LLM-consensus strategy cannot be historically backtested anyway —
+  its only possible evaluation is forward paper observation, where wall-clock sample accrual is the bottleneck. Starting now buys months.
+  The 1.12 WIP-gate was a sequencing choice, not a technical dependency. `signals-eval-core/` stays blocked — despite the name it is
+  mechanical swing/investment backtest validation and genuinely needs `BacktestStore` + OHLC Parquet. _(source: `docs/plan/signals/`, `TODOS.md` 2026-09-07 log)_
 - **2026-04-25** — CSP underlying → Nifty 50 index options (NiftyBees rejected: OI <1,000, spread >5% of mid) _(source: `docs/strategies/csp_nifty_v1.md`)_
 - **2026-04-25** — NiftyBees collateral modelled as `long_niftybees` leg in paper P&L; annual reset in January _(source: `docs/strategies/csp_nifty_v1.md`)_
 - **2026-04-26** — NiftyShield integrated: CSP Leg 1 + put spread 4 lots (8–20% OTM) + tail puts 2 lots (5-delta quarterly) _(source: `docs/strategies/niftyshield_integrated_v1.md`)_
