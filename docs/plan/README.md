@@ -58,11 +58,10 @@ comparison snapshot; automated base-leg rolling; full unattended automation.
 
 ## Active Stories
 
-**`eod-pt-summary/`** · ✅ Shipped 2026-09-07 (PT-1..PT-3) — folder not yet moved to `docs/archive/plan/`
-Cross-strategy paper-trade EOD report (open, closed-today, strategy-wise P&L / Ann.%-on-margin)
-as 1-3 MarkdownV2 Telegram messages. PT-1 (spec `d1ae760`) + PT-2 (promoted to
-`src/reporting/eod_pt_summary.py` + `scripts/eod_pt_summary.py`, `77dc160`) + PT-3 (docs close).
-Coexistence decision: runs alongside `scripts/eod_summary.py`, not a replacement (DECISIONS.md, 2026-09-07).
+**`eod-pt-summary/`** · ✅ Shipped/Archived 2026-09-07 (PT-1..PT-3) → `docs/archive/plan/eod-pt-summary/`
+Cross-strategy paper-trade EOD digest to Telegram. PT-1 (spec `d1ae760`) + PT-2 (`src/reporting/eod_pt_summary.py`
++ `scripts/eod_pt_summary.py` + `43 15` cron, `77dc160`) + PT-3 (docs close, `dac18ea`). Runs alongside
+`scripts/eod_summary.py`, not a replacement (DECISIONS.md §P&L & Reporting, 2026-09-07).
 
 **`risk-gamma-phase-a/`** · 🔄 In progress · next: **B2.2** (chain fetch + field computation)
 Risk delta gate (done) + Near-Expiry Gamma Buy `gamma_daily_watch.py`.

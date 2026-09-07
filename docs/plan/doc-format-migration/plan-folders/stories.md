@@ -45,7 +45,7 @@ First pass from `docs/plan/README.md` status + folder shape. **Not authoritative
 | `chain-decay-analysis/` | flat, 3 files | — | A | task-line format + reflow |
 | `dev-foundation/` | epic-ish, 1 subdir, only `README.md` | epic root incomplete; README says ✅ Shipped/Archived | D | archive to `docs/archive/plan/` |
 | `entry-event-filter/` | flat, no `stories.md` | missing `stories.md` | A | add `stories.md` |
-| `eod-pt-summary/` | flat, 3 files | ⬜ not started | A | task-line format + reflow |
+| `eod-pt-summary/` | flat, 3 files | ✅ Shipped/Archived 2026-09-07 | D | done — moved to `docs/archive/plan/eod-pt-summary/`, no conversion |
 | `full-repo-review/` | flat, 3 files | ✅ Complete | B | structure + reflow, digests |
 | `full-repo-review-followups/` | epic, 9 subdirs, only `README.md` | epic root incomplete | A | add router; convert 9 finding sub-stories |
 | `greeks-bs-fallback/` | flat, 3 files | 🔄 partially scoped | A | task-line format + reflow |

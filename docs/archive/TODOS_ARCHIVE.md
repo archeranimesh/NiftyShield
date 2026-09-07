@@ -5,6 +5,17 @@
 
 ---
 
+## 2026-09-07 — `eod-pt-summary` epic archived
+
+Shipped PT-1..PT-3 and moved to `docs/archive/plan/eod-pt-summary/`. **PT-1** (`d1ae760`) captured
+the confirmed 3-message MarkdownV2 Telegram split (open positions / closed today / strategy-wise
+P&L + Ann.% on margin). **PT-2** (`77dc160`) promoted the validated `scratch/2026-08-13_eod_pt_summary.py`
+prototype to `src/reporting/eod_pt_summary.py` (new package) + thin cron `scripts/eod_pt_summary.py`,
+17 tests. **PT-3** (`dac18ea`) closed the docs. Cron wired at `43 15 * * 1-5` (`--send --no-dry-run`),
+runs alongside `scripts/eod_summary.py` — not a replacement, the two read different sources by
+design (live `PaperStore.get_positions()` + broker LTP vs stored NAV snapshot). See DECISIONS.md
+§P&L & Reporting.
+
 ## 2026-09-06 — `telegram-ic-comparison-formatting` story archived
 
 Closed as superseded. **TGFMT-1** shipped as real history (SHA `a69d817`) — the dynamic
