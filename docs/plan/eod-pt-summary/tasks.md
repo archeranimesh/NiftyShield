@@ -14,8 +14,10 @@
       (`scripts/eod_pt_summary.py`). Coordination question resolved with Animesh 2026-09-07: the
       new report runs **alongside** `scripts/eod_summary.py` (not a replacement);
       `scripts/reporting/paper_pnl_report.py` is a no-cron/no-send analysis helper and is
-      untouched. See DECISIONS.md §P&L & Reporting. | SHA: <pending>
-- [ ] **PT-3** — Docs close: update `CONTEXT.md`/`DECISIONS.md`/`TODOS.md` per repo convention,
+      untouched. See DECISIONS.md §P&L & Reporting. | SHA: 77dc160
+- [x] **PT-3** — Docs close: update `CONTEXT.md`/`DECISIONS.md`/`TODOS.md` per repo convention,
       add this epic's entry to `docs/plan/README.md` "Active Stories" (already added manually
       2026-08-13 — verify it's still accurate and mark this done), archive scratch script
-      reference note. | SHA: n/a
+      reference note. CONTEXT.md (792fa79) / DECISIONS.md §P&L & Reporting / TODOS.md already
+      landed piecemeal; README row refreshed to ✅ Shipped; scratch script marked SUPERSEDED.
+      Docs-only. | SHA: n/a

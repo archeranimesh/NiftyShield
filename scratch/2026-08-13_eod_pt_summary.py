@@ -1,6 +1,9 @@
 # scratch/2026-08-13_eod_pt_summary.py
 """Scratch: EOD PT Summary — cross-strategy paper-trade summary table.
 
+SUPERSEDED 2026-09-07 (PT-3) — promoted to src/reporting/eod_pt_summary.py +
+scripts/eod_pt_summary.py (PT-2, SHA 77dc160). Kept for history only; do not run.
+
 Throwaway prototype per docs/plan/telegram-markdown-migration/README.md's
 message-format-workshop convention — confirm the table shape here before it
 gets promoted into real `src/notifications/` code.

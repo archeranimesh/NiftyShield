@@ -112,10 +112,13 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-07] `eod-pt-summary/` PT-3 — docs close. CONTEXT.md (`792fa79`) / DECISIONS.md §P&L & Reporting / TODOS.md log lines already landed piecemeal with PT-1/PT-2; this pass filled the PT-2
+  closing SHA (`77dc160`) into `tasks.md` + the PT-2 log line, refreshed the `docs/plan/README.md` Active-Stories row to ✅ Shipped, and marked `scratch/2026-08-13_eod_pt_summary.py` SUPERSEDED.
+  Epic `eod-pt-summary/` complete (PT-1..PT-3). Folder not yet moved to `docs/archive/plan/`. Docs-only. SHA: <pending>
 - [2026-09-07] `eod-pt-summary/` PT-2 — promoted `scratch/2026-08-13_eod_pt_summary.py` to `src/reporting/eod_pt_summary.py` (new package) + thin cron `scripts/eod_pt_summary.py`, 17 tests in
   `tests/unit/reporting/test_eod_pt_summary.py`. Function boundaries unchanged from the validated prototype; `escape_markdown` swapped to `src/notifications/markdown.py`, local `LtpProvider`
   Protocol for the broker surface, no-`LOT_SIZE` P&L regression-tested. Coordination question resolved with Animesh: runs **alongside** `scripts/eod_summary.py`, not a replacement (DECISIONS.md
-  §P&L & Reporting). `code-reviewer`: 1 ERROR + 5 WARNING all fixed. Next: PT-3 (docs close). SHA: <pending>
+  §P&L & Reporting). `code-reviewer`: 1 ERROR + 5 WARNING all fixed. Next: PT-3 (docs close). SHA: 77dc160
 - [2026-09-06] `eod-pt-summary/` PT-1 — captured the confirmed 3-message Telegram-split spec (open positions / Closed Today / Strategy P&L·Ann.% on Margin) in `stories.md` as the reference for
   PT-2: full column/format derivation, CE/PE-last instrument label, the 3-Track + `STRATEGY_OVERLAY` strategy_name traps, no-`LOT_SIZE` P&L formula, MarkdownV2 fence + `_PART_EMOJI` map, non-fatal
   send contract, CLI surface. Fixed a drift in the draft spec (message 3 is open-positions-only, not "open and/or closed"). Docs-only. SHA: d1ae760
