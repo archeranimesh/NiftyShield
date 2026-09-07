@@ -12,29 +12,24 @@ A field served by nobody → the helper raises `DataFetchError`.
 FINDINGS (2026-09-07):
 
   gift_nifty — CONFIRMED. Upstox `GLOBAL_INDEX|SGX NIFTY` (from the separate
-               global.json.gz master, not NSE.json.gz). `get_ltp` → 23788.5 on
-               2026-09-07 21:08 (Nifty spot 23779.15 — sane premium). 120s
-               latency, trades 06:30 Mon–02:45 Sat. Fetcher: one get_ltp on the
-               constant key.
+               global.json.gz master). `get_ltp` → 23791.0 (Nifty spot 23779.15).
+               Fetcher: one get_ltp on the constant key.
 
-  usd_inr    — OPEN. Upstox global master HAS `GLOBAL_INDICATOR|USDINR` ("USD INR",
-               20s latency, ~24/7) but LTP v3 returns 400 for it — the endpoint
-               serves `GLOBAL_INDEX` (GIFT Nifty works) but not `GLOBAL_INDICATOR`.
-               This run tries the other market-data endpoints the announcement
-               says accept these keys (full-quote v2/v3, ohlc v3, historical
-               candle). If none serve it → fall back to the NCD_FO USDINR monthly
-               future (live 09:00–17:00, so fine for the 09:15 cron).
+  usd_inr    — comparing two Upstox sources (value ~94.5 confirmed against the
+               live app: USDINR FUT NCD 28SEP26 = 94.5675):
+                 A. `GLOBAL_INDICATOR|USDINR` — only the historical-candle v3
+                    endpoint accepts it (LTP / full-quote / ohlc all 400
+                    "Invalid Instrument key"). T-1 daily close, no intraday.
+                 B. `NCD_FO` USDINR monthly future — `get_ltp` works, live
+                    09:00–17:00 (so live at the 09:15 cron); needs nearest
+                    month-end expiry resolution. This run also pulls its T-1
+                    hist-candle close for an after-hours comparison with A.
 
   fii        — no broker API. Decision 2026-09-07: `fetch_fii_data` downloads
                the NSE FII derivative-statistics CSV each morning (T-1).
 
-The full Upstox global master (13 instruments, 2026-09-07):
-  GLOBAL_INDEX|SGX NIFTY (GIFT NIFTY) | GLOBAL_INDICATOR|USDINR (USD INR)
-  GLOBAL_INDICATOR|BZUSD (Brent) | GLOBAL_INDICATOR|CLUSD (WTI)
-  GLOBAL_INDEX|^DJI ^GSPC IXIX (US Tech 100) DOW FUTURES (US 30)
-  GLOBAL_INDEX|^HSI ^FTSE ^GDAXI ^FCHI ^N225
-
-Run from repo root, venv active, with `UPSTOX_ANALYTICS_TOKEN` set:
+Run from repo root, venv active, with `UPSTOX_ANALYTICS_TOKEN` set. For B's live
+LTP, run during currency-market hours (09:00–17:00 IST):
 
     python scratch/2026-09-07_signal_input_sources.py
     UPSTOX_ENV=sandbox python scratch/2026-09-07_signal_input_sources.py
@@ -43,6 +38,7 @@ Run from repo root, venv active, with `UPSTOX_ANALYTICS_TOKEN` set:
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 import gzip
 import io
 import json
@@ -58,16 +54,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # dated filenam
 import requests
 
 from src.client.factory import create_client
+from src.instruments.lookup import InstrumentLookup, parse_expiry
 
+_BOD_PATH = "data/instruments/NSE.json.gz"
 _UPSTOX_GLOBAL = "https://assets.upstox.com/market-quote/instruments/exchange/global.json.gz"
 
-# Confirmed constant keys from the Upstox global instrument master.
 GIFT_NIFTY_KEY = "GLOBAL_INDEX|SGX NIFTY"
-USD_INR_KEY = "GLOBAL_INDICATOR|USDINR"
+USD_INR_GLOBAL_KEY = "GLOBAL_INDICATOR|USDINR"
 
 
 def _dump_global_master() -> None:
-    """Print the whole Upstox global master for the record."""
     try:
         resp = requests.get(_UPSTOX_GLOBAL, timeout=30)
         resp.raise_for_status()
@@ -84,12 +80,57 @@ def _dump_global_master() -> None:
         )
 
 
+def _nearest_monthly_usdinr_future() -> dict | None:
+    """Nearest month-end USDINR FUT from the local Upstox dump (the liquid contract)."""
+    lookup = InstrumentLookup.from_file(_BOD_PATH)
+    futs = lookup.search("USDINR", segment="NCD_FO", instrument_type="FUT", max_results=50)
+    today = dt.date.today()
+    live: list[tuple[dt.date, dict]] = []
+    for f in futs:
+        exp_s = parse_expiry(f.get("expiry"))
+        if exp_s:
+            exp = dt.date.fromisoformat(exp_s)
+            if exp >= today:
+                live.append((exp, f))
+    by_month: dict[tuple[int, int], tuple[dt.date, dict]] = {}
+    for exp, f in live:
+        k = (exp.year, exp.month)
+        if k not in by_month or exp > by_month[k][0]:
+            by_month[k] = (exp, f)
+    if not by_month:
+        return None
+    _, f = by_month[min(by_month)]
+    return f
+
+
+def _hist_candle_latest_close(session: requests.Session, key: str) -> Any:
+    """Latest daily close for `key` via historical-candle v3 (the only endpoint that
+    accepts GLOBAL_INDICATOR). Returns the (date, close) of the newest candle."""
+    today = dt.date.today()
+    to_d = today.isoformat()
+    from_d = (today - dt.timedelta(days=10)).isoformat()
+    url = (
+        f"https://api.upstox.com/v3/historical-candle/{quote(key, safe='')}/days/1/{to_d}/{from_d}"
+    )
+    try:
+        r = session.get(url, timeout=10)
+        if r.status_code != 200:
+            return f"[{r.status_code}] {r.text[:160]}"
+        candles = r.json().get("data", {}).get("candles", [])
+        if not candles:
+            return "no candles"
+        c = candles[0]  # newest first
+        return f"{c[0][:10]} close={c[4]}"
+    except Exception as exc:  # noqa: BLE001
+        return f"{type(exc).__name__}: {exc}"
+
+
 async def probe_upstox() -> None:
     env = os.environ.get("UPSTOX_ENV", "prod")
-    print(f"\n=== Upstox ({env}) — get_ltp ===")
+    print(f"\n=== Upstox ({env}) ===")
     try:
         client = create_client(env)
-    except Exception:  # noqa: BLE001 — spike: show whatever blew up
+    except Exception:  # noqa: BLE001
         print("  create_client failed:")
         traceback.print_exc()
         return
@@ -97,63 +138,49 @@ async def probe_upstox() -> None:
     print("\n  [global instrument master]")
     _dump_global_master()
 
-    candidates: dict[str, list[str]] = {
-        "gift_nifty": [GIFT_NIFTY_KEY],  # CONFIRMED 2026-09-07 → 23788.5
-        "usd_inr": [USD_INR_KEY],  # confirming live LTP this run
-        "india_vix": ["NSE_INDEX|India VIX"],  # control — known good
-        "nifty_spot": ["NSE_INDEX|Nifty 50"],  # control — known good
-    }
-    for field, keys in candidates.items():
-        print(f"\n  [{field}]")
-        for key in keys:
-            try:
-                resp: dict[str, Any] = await client.get_ltp([key])
-                print(f"    {key!r:28} -> {resp}")
-            except Exception as exc:  # noqa: BLE001
-                print(f"    {key!r:28} -> {type(exc).__name__}: {exc}")
-
-    # GLOBAL_INDICATOR|USDINR is 400 on LTP v3. Try the other market-data
-    # endpoints the global-instruments announcement says accept these keys.
-    print("\n  [usd_inr — other endpoints for GLOBAL_INDICATOR|USDINR]")
-    session = client._market._session  # noqa: SLF001 — spike
-    probes = {
-        "full-quote v2": (
-            "https://api.upstox.com/v2/market-quote/quotes",
-            {"instrument_key": USD_INR_KEY},
-        ),
-        "full-quote v3": (
-            "https://api.upstox.com/v3/market-quote/quotes",
-            {"instrument_key": USD_INR_KEY},
-        ),
-        "ohlc v3 1d": (
-            "https://api.upstox.com/v3/market-quote/ohlc",
-            {"instrument_key": USD_INR_KEY, "interval": "1d"},
-        ),
-        "hist-candle v3": (
-            "https://api.upstox.com/v3/historical-candle/"
-            f"{quote(USD_INR_KEY, safe='')}/days/1/2026-09-05/2026-08-29",
-            None,
-        ),
-    }
-    for label, (url, params) in probes.items():
+    for field, key in (
+        ("gift_nifty", GIFT_NIFTY_KEY),
+        ("india_vix (control)", "NSE_INDEX|India VIX"),
+        ("nifty_spot (control)", "NSE_INDEX|Nifty 50"),
+    ):
+        print(f"\n  [{field}] get_ltp")
         try:
-            r = session.get(url, params=params, timeout=10)
-            body = r.text[:300]
-            print(f"    {label:16} [{r.status_code}] {body}")
+            print(f"    {key!r:26} -> {await client.get_ltp([key])}")
         except Exception as exc:  # noqa: BLE001
-            print(f"    {label:16} -> {type(exc).__name__}: {exc}")
+            print(f"    {key!r:26} -> {type(exc).__name__}: {exc}")
+
+    # ── usd_inr: compare source A (GLOBAL_INDICATOR hist-candle) vs B (NCD_FO fut) ──
+    print("\n  [usd_inr — SOURCE COMPARISON]")
+    session = client._market._session  # noqa: SLF001 — spike
+
+    print("  A. GLOBAL_INDICATOR|USDINR")
+    print("     get_ltp        -> ", end="")
+    try:
+        print(await client.get_ltp([USD_INR_GLOBAL_KEY]))
+    except Exception as exc:  # noqa: BLE001
+        print(f"{type(exc).__name__}: {exc}")
+    print(f"     hist-candle    -> {_hist_candle_latest_close(session, USD_INR_GLOBAL_KEY)}")
+
+    print("  B. NCD_FO USDINR monthly future")
+    fut = _nearest_monthly_usdinr_future()
+    if not fut:
+        print("     (no live NCD_FO USDINR FUT found in the dump)")
+    else:
+        fkey = fut["instrument_key"]
+        print(f"     contract       -> {fkey} ({fut.get('trading_symbol')})")
+        try:
+            print(f"     get_ltp        -> {await client.get_ltp([fkey])}")
+        except Exception as exc:  # noqa: BLE001
+            print(f"     get_ltp        -> {type(exc).__name__}: {exc}")
+        print(f"     hist-candle    -> {_hist_candle_latest_close(session, fkey)}")
 
 
 def note_ruled_out() -> None:
-    print("\n=== Ruled out ===")
+    print("\n=== Ruled out / decided ===")
     print("  Dhan: GIFT Nifty is index id 5024 but marketfeed/ltp → 401 (paid Data API).")
-    print("  Dhan/Upstox NCD_FO USDINR futures: read 0.0 outside 09:00–17:00; the")
-    print("    GLOBAL_INDICATOR|USDINR spot quote supersedes them.")
     print("  Nuvama: no arbitrary quote endpoint wired.")
-
-    print("\n=== FII / DII index positioning ===")
-    print("  No broker API. Decision 2026-09-07: fetch_fii_data downloads the NSE FII")
-    print("  derivative-statistics CSV each morning (T-1). Raises DataFetchError on failure.")
+    print("  fii: no broker API. fetch_fii_data downloads the NSE FII derivative-stats CSV")
+    print("       each morning (T-1); raises DataFetchError on failure.")
 
 
 async def main() -> None:
