@@ -5,6 +5,19 @@
 
 ---
 
+## 2026-09-07 — `ic-yearly-expiry-fix` story archived
+
+Moved to `docs/archive/plan/ic-yearly-expiry-fix/`. **YE-1..YE-4** (June/December yearly-label
+bug in `InstrumentLookup.get_expiry_candidates()`) were superseded 2026-07-22 by an independent
+live fix — see DECISIONS.md BUG-015. **WG-1** (`761af8e`, SHA backfill `d3b17a9`) closed the
+residual weekly-expiry Greeks gap: the weekly Parquet chain bucket had already landed in
+`a38e53f` (2026-08-06), so WG-1 added `ic_nifty_v1.leg_greeks` (INFO) in
+`IronCondorV1.check_signals` — per short leg, before the `delta is None` guard, carrying
+`strike / delta / abs_delta / gamma / theta / vega / iv / ltp` + `delta_warn` / `delta_stop`
+thresholds — so the exact tick-time Greeks behind a DELTA_WARN/DELTA_STOP decision are
+recoverable from `logs/monitor_daemon.log` (the 2026-07-08 0.25→0.09 discrepancy had no such
+record). 2 tests.
+
 ## 2026-09-07 — `eod-pt-summary` epic archived
 
 Shipped PT-1..PT-3 and moved to `docs/archive/plan/eod-pt-summary/`. **PT-1** (`d1ae760`) captured

@@ -126,10 +126,11 @@ StrategyMonitor observability logs.
 Replace raw Upstox instrument keys in Telegram prose with human-readable
 `NIFTY 22000 CE 07 JUL 26` labels; CLI command lines untouched.
 
-**`ic-yearly-expiry-fix/`** · ✅ Complete · YE-1..YE-4 superseded by BUG-015 live fix; WG-1 shipped (`ic_nifty_v1.leg_greeks` INFO line; weekly Parquet bucket already in `a38e53f`)
+**`ic-yearly-expiry-fix/`** · ✅ Shipped/Archived 2026-09-07 → `docs/archive/plan/ic-yearly-expiry-fix/`
 Fix `InstrumentLookup.get_expiry_candidates()`'s `"yearly"` label resolving June instead of
 December — NSE Nifty's annual contract is always December's last Tuesday.
-YE-1..4 superseded 2026-07-22 (DECISIONS.md BUG-015); WG-1 open.
+YE-1..4 superseded 2026-07-22 (DECISIONS.md BUG-015); WG-1 shipped `761af8e`
+(`ic_nifty_v1.leg_greeks` INFO line; weekly Parquet bucket already in `a38e53f`).
 
 **`greeks-bs-fallback/`** · 🔄 Partially scoped · next: **GF-1** (audit scope)
 Upstox returns all-zero `option_greeks` for far-dated NIFTY contracts despite liquid

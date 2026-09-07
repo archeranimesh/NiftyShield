@@ -50,7 +50,7 @@ First pass from `docs/plan/README.md` status + folder shape. **Not authoritative
 | `full-repo-review-followups/` | epic, 9 subdirs, only `README.md` | epic root incomplete | A | add router; convert 9 finding sub-stories |
 | `greeks-bs-fallback/` | flat, 3 files | 🔄 partially scoped | A | task-line format + reflow |
 | `historical-data-abstraction/` | flat, no `stories.md`, 1 subdir | missing `stories.md` | A | add `stories.md`; resolve subdir |
-| `ic-yearly-expiry-fix/` | flat, 3 files | 🔄 partially superseded | A | task-line format + reflow |
+| `ic-yearly-expiry-fix/` | flat, 3 files | ✅ Shipped/Archived 2026-09-07 | D | done — moved to `docs/archive/plan/ic-yearly-expiry-fix/`, no conversion |
 | `mvp/` | flat, `mvp_*.md` names | legacy filenames | A | rename to `tasks.md`/`stories.md`/`schema.md` + reflow |
 | `options_income/` | flat, `options_income_*.md` | legacy filenames | A | rename (+ `options_income_strategy.md` → `plan.md` extra file) + reflow |
 | `paper-store-position-granularity/` | flat, 3 files | — | A/C | reflow; verify |
