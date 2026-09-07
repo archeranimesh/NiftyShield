@@ -802,62 +802,98 @@ do *not* scrape NSE HTML — probe the broker APIs we already authenticate again
 Nuvama) and see which one serves each field, then build a real helper module against the
 confirmed endpoints.
 
-**Step 1 — spike (persistent scratch artifact):** `scratch/2026-09-07_signal_input_sources.py`.
-Dated, docstring-headed, kept in-tree as the source-of-record for where each field comes from
-(same convention as the other `scratch/*.py` workshop scripts). It should:
-- try Upstox (`get_ltp` / `get_historical_candles` / any quote endpoint) for a GIFT Nifty
-  instrument key and for USD/INR;
-- try Dhan and Nuvama readers for the same;
-- try each for FII/DII index positioning (T-1);
-- print, per field: which client + endpoint returned usable data, the raw shape, and the
-  parsed value.
-Record the findings in this story section (edit S5.2a below "Confirmed sources:") before
-writing the module.
+---
 
-**Step 2 — `src/signals/market_inputs.py`:**
+### Step 1 — source-discovery spike ✅ DONE (2026-09-07)
+
+Persistent artifact: **`scratch/2026-09-07_signal_input_sources.py`** (`git log` it for the
+probe history — commits `c0208c9`..`735cb86`). All three sources are now settled; the spike
+stays in-tree as the source-of-record. **The remaining work is Step 2 only** — a fresh session
+can pick this up cold from the recipe below.
+
+### Confirmed sources (spike-verified, 2026-09-07)
+
+**`gift_nifty` → Upstox `GLOBAL_INDEX|SGX NIFTY` via `broker.get_ltp`.**
+- It is a GLOBAL index, absent from `NSE.json.gz`; lives in the separate master
+  `https://assets.upstox.com/market-quote/instruments/exchange/global.json.gz`. Metadata:
+  `segment GLOBAL_INDEX`, `trading_symbol "GIFT NIFTY"`, 120 s latency, trades 06:30 Mon →
+  02:45 Sat — live at the 09:10 snapshot.
+- The batch-LTP endpoint passes any key straight through (no segment gate), so `GLOBAL_INDEX`
+  keys work on the normal path. `GLOBAL_INDICATOR` keys do **not** (see usd_inr).
+- **Verified:** `get_ltp(["GLOBAL_INDEX|SGX NIFTY"]) → Decimal('23791.0')` (Nifty spot
+  23779.15 — sane premium).
+- **Implementation:** module constant `GIFT_NIFTY_KEY = "GLOBAL_INDEX|SGX NIFTY"`;
+  `fetch_gift_nifty` = `await broker.get_ltp([GIFT_NIFTY_KEY])`, return the one value, raise
+  `DataFetchError` if the dict is empty / key missing / value ≤ 0.
+
+**`usd_inr` → Upstox `NCD_FO` USDINR **monthly** future via `broker.get_ltp`.**
+- `GLOBAL_INDICATOR|USDINR` exists in the global master but **only** the historical-candle v3
+  endpoint accepts it (LTP / full-quote / ohlc all `400 "Invalid Instrument key"`) — T-1
+  close only, and would need a new client method. **Rejected** in favour of the future.
+- The **monthly** USDINR future (`NCD_FO`, e.g. `NCD_FO|1769` = "USDINR FUT 28 SEP 26") is
+  liquid — `get_ltp` returned `Decimal('94.57')` even after hours, matching the live app
+  (USDINR FUT 28SEP26 = 94.5675). The weekly contract (`NCD_FO|11993`) returned `0.0` — do
+  not use weeklies.
+- **Value sanity:** USD/INR sits ~94.5 in this scenario (not the ~83–88 of real 2024) —
+  confirmed against Animesh's live app screenshot. Do not "correct" it.
+- **Expiry resolution** (prototype: `_nearest_monthly_usdinr_future` in the spike):
+  ```python
+  lookup = InstrumentLookup.from_file(DEFAULT_BOD_PATH)   # src.paper.constants
+  futs = lookup.search("USDINR", segment="NCD_FO", instrument_type="FUT", max_results=50)
+  # keep expiry >= today; group by (year, month); take the last expiry of the
+  # earliest month present → that contract's instrument_key
+  ```
+  `InstrumentLookup.search_futures` filters `segment == "NSE_FO"` so it will NOT find these —
+  use `.search(..., segment="NCD_FO", ...)`. Rollover is automatic: expired contracts drop
+  from the feed, so "nearest month-end ≥ today" always lands on the live one.
+- **Implementation:** `fetch_usd_inr(broker, *, lookup: InstrumentLookup | None = None)` —
+  lazily build `lookup` from `DEFAULT_BOD_PATH` (same pattern as
+  `PaperStore._resolve_instrument_lookup`), resolve the monthly key, `get_ltp` it, raise
+  `DataFetchError` on no contract / empty LTP / value ≤ 0.
+
+**`fii` → NSE FII derivative-statistics CSV (no broker API — decided 2026-09-07).**
+- No broker exposes FII/DII index positioning. `fetch_fii_data` downloads the NSE
+  "FII derivative statistics" report for the previous trading day and parses it. This is a
+  first-party NSE data file (not an HTML scrape) — the one carve-out from the no-scrape rule.
+- URL shape: `https://archives.nseindia.com/content/nsccl/fii_stats_<DD-Mon-YYYY>.csv`
+  (date = previous trading day; use `src.market_calendar.prev_trading_day`). NSE may need a
+  browser-like `User-Agent` header — the implementer confirms against a live fetch.
+- The CSV has rows `INDEX FUTURES / INDEX OPTIONS / STOCK FUTURES / STOCK OPTIONS / TOTAL`
+  with buy/sell contract counts + amounts and open-interest columns. `FIIData` wants
+  `net_futures_cr` / `net_options_cr` (₹ cr, positive = net long index). **Open spec point
+  for the implementer:** decide day-flow (buy amt − sell amt) vs net open position
+  (open long − open short) from the INDEX FUTURES / INDEX OPTIONS rows — pin the exact
+  column mapping against a real downloaded file and record it here.
+- **Implementation:** `fetch_fii_data(broker) -> FIIData` (broker arg unused, kept for a
+  uniform signature) — download, parse, build `FIIData(net_futures_cr=Decimal(...),
+  net_options_cr=Decimal(...))`, raise `DataFetchError` on download / parse / missing-row
+  failure. Store amounts as `Decimal`, never `float`.
+
+### Step 2 — build `src/signals/market_inputs.py` + tests  ⬅ REMAINING WORK
+
 ```python
-async def fetch_gift_nifty(broker) -> Decimal: ...
-async def fetch_fii_data(broker) -> FIIData: ...
-async def fetch_usd_inr(broker) -> Decimal: ...
+GIFT_NIFTY_KEY = "GLOBAL_INDEX|SGX NIFTY"
+
+async def fetch_gift_nifty(broker: BrokerClient) -> Decimal: ...
+async def fetch_usd_inr(broker: BrokerClient, *, lookup: InstrumentLookup | None = None) -> Decimal: ...
+async def fetch_fii_data(broker: BrokerClient) -> FIIData: ...
 ```
-Each targets the endpoint the spike confirmed, returns the typed value, and raises
-`DataFetchError` on total failure (caller decides whether to abort the run). No neutral
-fallbacks inside the helpers.
+Each returns the typed value or raises `DataFetchError` (`src.client.exceptions`) on total
+failure — **no neutral fallbacks inside the helpers**; the caller (S5.2b / the cron) decides
+whether to abort.
 
-**Before any code:** `get_code_snippet("FIIData")`; `get_code_snippet("MarketSnapshot")`;
-`search_code("get_historical_candles")` in `src/client/`; `search_graph("DhanReader")` /
-`search_graph("NuvamaReader")` for the non-Upstox client surfaces; `get_code_snippet("DataFetchError")`.
-
-**Confirmed sources:** _(spike run 2026-09-07 + instrument-master debug — `git log scratch/2026-09-07_signal_input_sources.py`)_
-Debugging one field at a time (Animesh's steer). Status:
-
-- `gift_nifty` — **Upstox, `GLOBAL_INDEX|SGX NIFTY`.** It was absent from `NSE.json.gz` because
-  it is a GLOBAL index — separate master `.../instruments/exchange/global.json.gz`. Confirmed
-  instrument metadata: `segment GLOBAL_INDEX`, `exchange GLOBAL`, `trading_symbol "GIFT NIFTY"`,
-  `latency 120 Seconds`, trades 06:30 Mon → 02:45 Sat (Mon–Fri) — so it is live at the 09:10
-  snapshot. The key is a fixed constant (no expiry/strike resolution) → `fetch_gift_nifty` is
-  just `client.get_ltp(["GLOBAL_INDEX|SGX NIFTY"])`. Data is ~2 min delayed; fine for a pre-open
-  gap indicator. **CONFIRMED 2026-09-07 21:08:** `get_ltp(["GLOBAL_INDEX|SGX NIFTY"])` →
-  `Decimal('23788.5')` (Nifty spot 23779.15 — a ~9pt premium, sane). `fetch_gift_nifty` is
-  `client.get_ltp(["GLOBAL_INDEX|SGX NIFTY"])`, key as a module constant.
-  (Dhan carries it as index id 5024 but `marketfeed/ltp` → 401, paid Data API not on plan;
-  Nuvama has no quote surface. Upstox global is the source.)
-- `usd_inr` — **OPEN.** The Upstox global master has `GLOBAL_INDICATOR|USDINR` ("USD INR", 20s
-  latency, ~24/7) but **LTP v3 returns 400** for it — the endpoint serves `GLOBAL_INDEX` (GIFT
-  Nifty works) but not `GLOBAL_INDICATOR`. Next: probe full-quote v2/v3, ohlc v3, historical-
-  candle v3 for the key (spike updated). Fallback if none serve it: the `NCD_FO` USDINR **monthly**
-  future — live 09:00–17:00, so fine for the 09:15 cron; `InstrumentLookup.search("USDINR",
-  segment="NCD_FO", instrument_type="FUT")` → nearest month-end expiry.
-  Full global master (13): `GLOBAL_INDEX|` SGX NIFTY, ^DJI, ^GSPC, IXIX, DOW FUTURES, ^HSI,
-  ^FTSE, ^GDAXI, ^FCHI, ^N225 · `GLOBAL_INDICATOR|` USDINR, BZUSD (Brent), CLUSD (WTI).
-- `fii` — **no broker API.** Decision taken 2026-09-07: `fetch_fii_data` downloads the NSE FII
-  derivative-statistics CSV each morning (T-1); raises `DataFetchError` on failure.
+**Before any code (graph):** `get_code_snippet("FIIData")` · `get_code_snippet("MarketSnapshot")`
+· `get_code_snippet("DataFetchError")` · `get_code_snippet("InstrumentLookup")` ·
+`get_code_snippet("BrokerClient")` for the `get_ltp` signature (`list[str] -> dict[str, Decimal]`).
 
 **Tests:** `tests/unit/signals/test_market_inputs.py` — one happy-path + one failure test per
-function, all offline (mock broker / mock client responses). No network.
+function, all offline. Mock the broker (`get_ltp` returning a canned dict / raising); for
+`fetch_usd_inr` inject a small hand-built `InstrumentLookup(instruments=[...])` (a couple of
+USDINR FUT dicts) — do not read the real BOD file in tests; for `fetch_fii_data` monkeypatch
+`requests.get` with a canned CSV body + a 4xx case. **No network, no real BOD file.**
 
-**Commit (two):** `chore(signals): source-discovery spike for gift_nifty / fii / usd_inr`
-then `feat(signals): market_inputs.py — gift_nifty / fii / usd_inr fetchers`.
+**Commit (two):** spike commits already landed (`chore(signals): …spike…`). Second:
+`feat(signals): market_inputs.py — gift_nifty / fii / usd_inr fetchers`.
 
 ---
 
