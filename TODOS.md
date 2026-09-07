@@ -112,6 +112,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-07] signals/ S3.1 — added MockSignalProvider: deterministic Protocol-compliant provider (fixed direction/confidence/strike_offset), never raises + 5 tests. SHA: PENDING
 - [2026-09-07] signals/ S2.2 — added SignalStore read methods: get_snapshot (model_validate_json), get_responses, get_signal
   (rebuilds responses from signal_responses), get_outcome, get_all_outcomes (optional from_date/to_date/phase via parameterised WHERE) + 8 tests. SHA: fc4a8d4
 - [2026-09-07] signals/ S2.1 — added SignalStore: init_db (4 tables + 2 indexes, idempotent) + write methods
