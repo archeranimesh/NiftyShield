@@ -27,7 +27,7 @@ rot them.
 6. **Options Income strategy** — `docs/plan/options_income/` — next **S0** (data audit).
 7. **Backtest Engine** — `docs/plan/backtest-engine/` (`phase1..4/`) — next **1.3a / 1.4** (parallel, `phase1/`). Four chained phases; each phase's GATE task blocks the next dir. Gated on
    `variance-gate`. `BACKTEST_PLAN_PHASE1.md` is the canonical spec; the phase dirs are thin status pointers.
-8. **signals: multi-LLM daily signal pipeline** — `docs/plan/signals/` — next **S1.1**. Parallel track — self-contained `src/signals/` package, own SQLite tables, zero
+8. **signals: multi-LLM daily signal pipeline** — `docs/plan/signals/` — next **S3.1**. Parallel track — self-contained `src/signals/` package, own SQLite tables, zero
    `backtest-engine` / `backtest-eval-core` dependency; runs alongside item 7. `OPENROUTER_API_KEY` needed only for the live 09:15 cron (S5.2); S5.4 baseline stats to
    be reconciled with `backtest-eval-core` later. Unblocked from `signals-eval-core` 2026-09-07 (parallel-track decision).
 9. **backtest-eval-core** — `docs/plan/backtest-eval-core/` — next **B1.1**. Blocked until `backtest-engine` tasks 1.3 + 1.4 land.
@@ -112,6 +112,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-07] signals/ S2.2 — added SignalStore read methods: get_snapshot (model_validate_json), get_responses, get_signal
+  (rebuilds responses from signal_responses), get_outcome, get_all_outcomes (optional from_date/to_date/phase via parameterised WHERE) + 8 tests. SHA: fc4a8d4
 - [2026-09-07] signals/ S2.1 — added SignalStore: init_db (4 tables + 2 indexes, idempotent) + write methods
   record_snapshot/response/signal/outcome with model→schema column mapping, Decimal→TEXT, INSERT OR IGNORE for responses + 9 tests. SHA: 2aa5979
 - [2026-09-07] signals/ S1.3 — added SignalAggregator: strike/confidence validation, direction voting, Decimal confidence gate, modal strike with ATM tie-break + 10 tests. SHA: 4c5e7e6
