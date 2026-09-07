@@ -27,5 +27,10 @@
 > Do not bundle into the same session/commit as the YE tasks above. Full spec:
 > `docs/plan/ic-yearly-expiry-fix/stories.md` — "Separate concern — weekly-expiry Greeks snapshot gap".
 
-- [ ] **WG-1** — Persist per-leg Greeks for the weekly expiry bucket
+- [x] **WG-1** — Persist per-leg Greeks for the weekly expiry bucket
   (option-chain snapshot pipeline currently archives monthly/quarterly/yearly only, not weekly — root cause of an unresolvable DELTA_WARN discrepancy on 2026-07-08)
+  Weekly Parquet bucket already landed in `a38e53f` (2026-08-06). Residual gap closed here:
+  `IronCondorV1.check_signals` now emits `ic_nifty_v1.leg_greeks` (INFO) per short leg with the
+  exact tick-time delta/abs_delta/gamma/theta/vega/iv/ltp + warn/stop thresholds, so the Greeks
+  behind a DELTA_WARN/DELTA_STOP decision are recoverable from `logs/` independent of the cron.
+  | SHA: &lt;pending&gt;

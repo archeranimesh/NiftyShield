@@ -238,6 +238,34 @@ def test_flat_legs_excluded_but_open_legs_still_evaluated() -> None:
     assert all(e.payload.get("leg_role") != "short_put" for e in delta_events)
 
 
+def test_leg_greeks_logged_per_short_leg() -> None:
+    """WG-1: every resolved short leg emits ic_nifty_v1.leg_greeks with the
+    exact Greeks the delta decision is made on — recoverable from logs/ even
+    when no DELTA_WARN/DELTA_STOP fires and the weekly Parquet cron is absent.
+    """
+    strat = IronCondorV1()
+    positions = _make_ic_positions()
+    with capture_logs() as logs:
+        asyncio.run(strat.check_signals(_make_chain(), positions))
+    greeks = [e for e in logs if e["event"] == "ic_nifty_v1.leg_greeks"]
+    assert {e["leg_role"] for e in greeks} == {"short_put", "short_call"}
+    sc = next(e for e in greeks if e["leg_role"] == "short_call")
+    assert sc["delta"] == "0.10" and sc["abs_delta"] == "0.10"
+    assert sc["gamma"] == "0.001" and sc["theta"] == "-5" and sc["vega"] == "10"
+    assert sc["strike"] == "25000" and sc["strategy"] == _STRATEGY
+    assert sc["delta_warn"] and sc["delta_stop"]
+
+
+def test_leg_greeks_not_logged_when_leg_missing_from_chain() -> None:
+    """Edge: short legs absent from the chain — no leg_greeks line, no crash."""
+    strat = IronCondorV1()
+    positions = _make_ic_positions()
+    with capture_logs() as logs:
+        events = asyncio.run(strat.check_signals(_make_empty_chain(), positions))
+    assert not [e for e in logs if e["event"] == "ic_nifty_v1.leg_greeks"]
+    assert not [e for e in events if e.event_type in ("DELTA_WARN", "DELTA_STOP")]
+
+
 def test_profit_target_fires_when_mark_at_50_pct() -> None:
     """Combined mark ≤ 50% of entry credit → PROFIT_TARGET ACTION.
 

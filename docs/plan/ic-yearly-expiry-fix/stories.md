@@ -183,3 +183,22 @@ response.
 line), plus corresponding test files. Confirm actual blast radius before editing — do not assume
 scope beyond what's listed here without checking callers first, per this project's graph-before-Read
 protocol.
+
+### WG-1 findings (2026-09-07)
+
+Primary fix was **already shipped independently**: commit `a38e53f` (2026-08-06, "add weekly
+bucket to chain capture crons") added `weekly` to `_PREFERENCE` in both
+`scripts/pipeline/upstox_chain_intraday.py` and `upstox_chain_snapshot.py` and bumped the
+expected-candidate threshold 3→4. The weekly Greeks bucket is now archived to Parquet alongside
+monthly/quarterly/yearly.
+
+The residual gap — and the actual root cause of the 2026-07-08 unrecoverable 0.25→0.09 delta
+discrepancy — is that the **monitor daemon's live tick fetch** is a different `upstox.api_call`
+than the chain-snapshot cron, and the per-leg Greeks it returns were never persisted, only
+summarised in an event-level log line. Closed here: `IronCondorV1.check_signals` now emits
+`ic_nifty_v1.leg_greeks` at INFO for every resolved short leg, before the `delta is None` guard,
+carrying `strike / delta / abs_delta / gamma / theta / vega / iv / ltp` plus the
+`delta_warn` / `delta_stop` thresholds. `grep ic_nifty_v1.leg_greeks logs/monitor_daemon.log`
+now recovers the exact values behind any DELTA_WARN/DELTA_STOP decision, independent of the
+Parquet cron. No change to signal logic. 2 tests
+(`tests/unit/strategy/test_ic_nifty_v1.py`).

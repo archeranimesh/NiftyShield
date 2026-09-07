@@ -227,6 +227,28 @@ class IronCondorV1:
             opt_leg = self._find_leg(market, pos.instrument_key)
             if opt_leg is None:
                 continue
+            # WG-1: persist the exact per-leg Greeks this tick's DELTA_WARN/
+            # DELTA_STOP decision is about to be made on. The weekly Parquet
+            # chain cron snapshots the chain, not this monitor tick's live
+            # fetch — when the 2026-07-08 0.25→0.09 delta discrepancy was
+            # investigated there was no record of what Upstox returned here.
+            # `grep ic_nifty_v1.leg_greeks logs/monitor_daemon.log` now recovers it.
+            log.info(
+                "ic_nifty_v1.leg_greeks",
+                strategy=self.strategy_name,
+                leg_role=pos.leg_role,
+                instrument_key=pos.instrument_key,
+                strike=str(opt_leg.strike),
+                delta=None if opt_leg.delta is None else str(opt_leg.delta),
+                abs_delta=None if opt_leg.delta is None else str(abs(opt_leg.delta)),
+                gamma=None if opt_leg.gamma is None else str(opt_leg.gamma),
+                theta=None if opt_leg.theta is None else str(opt_leg.theta),
+                vega=None if opt_leg.vega is None else str(opt_leg.vega),
+                iv=None if opt_leg.iv is None else str(opt_leg.iv),
+                ltp=str(opt_leg.ltp),
+                delta_warn=str(self._config.delta_warn),
+                delta_stop=str(self._config.delta_stop),
+            )
             if opt_leg.delta is None:
                 continue  # Greek missing — cannot evaluate delta signals
             abs_delta = abs(opt_leg.delta)

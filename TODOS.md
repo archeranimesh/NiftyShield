@@ -21,56 +21,54 @@ rot them.
 2. **root-doc-organization** — `docs/plan/root-doc-organization/` — next **RDO-16** (loop-closure check — one real session confirms the doc-freshness mechanism end to end). RDO-11 (≥ 2026-09-03) also
    open. RDO-17.1..17.7 shipped; 17.8 decided (batch-convert all → the `doc-format-migration/` epic), pending close. 17.7 swept both POC folders + added `reflow_md.py`. Root `.md` token-efficiency
    cleanup + doc-maintenance automation.
-3. **IC yearly-expiry residual risk** — `docs/plan/ic-yearly-expiry-fix/` — next **WG-1** (persist per-leg Greeks for the weekly-expiry bucket). YE-1..YE-4 superseded / already fixed live — see
-   DECISIONS.md BUG-015.
-4. **Greeks Black-Scholes fallback** — `docs/plan/greeks-bs-fallback/` — next **GF-1** (read-only audit scope).
-5. **MVP: Multi-bagger Value Picks Tracker** — `docs/plan/mvp/` — next **M1.1**. Independent — blocks nothing.
-6. **Variance gate — CSP v1 deployment gate observation** — `docs/plan/variance-gate/` — next **VG0** (spec reconciliation; the remaining tasks are human checkpoints, not build tasks).
-7. **Options Income strategy** — `docs/plan/options_income/` — next **S0** (data audit).
-8. **Backtest Engine** — `docs/plan/backtest-engine/` (`phase1..4/`) — next **1.3a / 1.4** (parallel, `phase1/`). Four chained phases; each phase's GATE task blocks the next dir. Gated on
+3. **Greeks Black-Scholes fallback** — `docs/plan/greeks-bs-fallback/` — next **GF-1** (read-only audit scope).
+4. **MVP: Multi-bagger Value Picks Tracker** — `docs/plan/mvp/` — next **M1.1**. Independent — blocks nothing.
+5. **Variance gate — CSP v1 deployment gate observation** — `docs/plan/variance-gate/` — next **VG0** (spec reconciliation; the remaining tasks are human checkpoints, not build tasks).
+6. **Options Income strategy** — `docs/plan/options_income/` — next **S0** (data audit).
+7. **Backtest Engine** — `docs/plan/backtest-engine/` (`phase1..4/`) — next **1.3a / 1.4** (parallel, `phase1/`). Four chained phases; each phase's GATE task blocks the next dir. Gated on
    `variance-gate`. `BACKTEST_PLAN_PHASE1.md` is the canonical spec; the phase dirs are thin status pointers.
-9. **backtest-eval-core** — `docs/plan/backtest-eval-core/` — next **B1.1**. Blocked until `backtest-engine` tasks 1.3 + 1.4 land.
-10. **signals-eval-core** — `docs/plan/signals-eval-core/` — next **SE1.1**.
+8. **backtest-eval-core** — `docs/plan/backtest-eval-core/` — next **B1.1**. Blocked until `backtest-engine` tasks 1.3 + 1.4 land.
+9. **signals-eval-core** — `docs/plan/signals-eval-core/` — next **SE1.1**.
     Blocked until `backtest-eval-core` + `backtest-engine` 1.12.
     Covers Track A (swing) + Track B (investment), SE1–SE8.
-11. **signals: multi-LLM daily signal pipeline** — `docs/plan/signals/` — next **S1.1**.
-12. **risk-gamma-phase-a** — `docs/plan/risk-gamma-phase-a/` — next **B2.2**
+10. **signals: multi-LLM daily signal pipeline** — `docs/plan/signals/` — next **S1.1**.
+11. **risk-gamma-phase-a** — `docs/plan/risk-gamma-phase-a/` — next **B2.2**
     (chain fetch + field computation). Track A + B1 / B2.1 shipped.
-13. **greeks-parity-validation** —
+12. **greeks-parity-validation** —
     `docs/plan/full-repo-review-followups/greeks-parity-validation/` — next **T1**.
     P3, council-gated: do not implement directly — needs an `options-strategist` /
     `greeks-analyst` consult first (tolerance-band decision).
-14. **paper-pnl-golden-tests** —
+13. **paper-pnl-golden-tests** —
     `docs/plan/full-repo-review-followups/paper-pnl-golden-tests/` — next **T1**
     (exact-value golden assertions for `_compute_leg_unrealized_pnl`). P3.
-15. **suppression-hygiene-triage** —
+14. **suppression-hygiene-triage** —
     `docs/plan/full-repo-review-followups/suppression-hygiene-triage/` — next **T1**
     (REVIEW.md carve-out for self-describing `# noqa` codes). P3.
-16. **Fix dead IC EOD report query** — `scripts/strategies/ic/paper_ic_snapshot.py`
+15. **Fix dead IC EOD report query** — `scripts/strategies/ic/paper_ic_snapshot.py`
     (no story folder) — the "Intraday actions" query is dead code, found in the DT-3a audit.
-17. **Chain delta/decay analysis** — `docs/plan/chain-decay-analysis/` — next **CDA-1**.
+16. **Chain delta/decay analysis** — `docs/plan/chain-decay-analysis/` — next **CDA-1**.
     Exploratory / read-only, independent.
     Monthly bucket only (yearly excluded — see `greeks-bs-fallback` GF-1 findings).
-18. **Entry event filter R4** — `docs/plan/entry-event-filter/` — next **EF-1**.
+17. **Entry event filter R4** — `docs/plan/entry-event-filter/` — next **EF-1**.
     Good-to-have, not compulsory; soft-warning only (logged, non-blocking, mirrors
     `GateViolation`). `events.yaml` needs ad-hoc upkeep.
     Revisit once entries run unattended on live capital (post `backtest-engine` Phase 2), and
     reconsider hard-block then.
-19. **Broker abstraction** — `docs/plan/broker-abstraction/` — next **BA-0**
+18. **Broker abstraction** — `docs/plan/broker-abstraction/` — next **BA-0**
     (probe scripts + decision matrix).
     LOW priority; storage format frozen, only fetch + parse change.
     BA-14 / BA-15 blocked until `src/execution/` (`phase2-integrations` OE-1) exists.
     Do not start until the Phase 0.8 gate clears.
-20. **Historical data abstraction** — `docs/plan/historical-data-abstraction/` — next
+19. **Historical data abstraction** — `docs/plan/historical-data-abstraction/` — next
     **HD-0** (cost-bounded probe scripts). LOW priority.
     `HistoricalCandleFetcher` protocol so VIX + OHLC fetching can switch brokers without
     touching storage. HD-6 / HD-7 conditional on the HD-0 decision matrix.
     Do not start until the Phase 0.8 gate clears.
-21. **Phase 2 — Research Pipelines & Integrations** — `docs/plan/phase2-integrations/` —
+20. **Phase 2 — Research Pipelines & Integrations** — `docs/plan/phase2-integrations/` —
     next **PV-1** (P&L visualization — not gated, can be pulled forward).
     ZK-1 / OE-1 / PT-1 gated per the story file. 2027+.
     Excludes the swing / investment signal pipelines — those are `signals`.
-22. **Technical Debt** — `docs/plan/technical-debt/` — DEBT-3 / 5 / 6a / 6b / 6c / 7.
+21. **Technical Debt** — `docs/plan/technical-debt/` — DEBT-3 / 5 / 6a / 6b / 6c / 7.
     Opportunistic, **not sequential** — each item fires only when its named file / module is
     already being touched for another story's task. See `prompt.md` for the per-item trigger.
 
@@ -112,6 +110,10 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-07] `ic-yearly-expiry-fix/` WG-1 shipped — `IronCondorV1.check_signals` now emits `ic_nifty_v1.leg_greeks` (INFO) per short leg with tick-time
+  delta/abs_delta/gamma/theta/vega/iv/ltp + warn/stop thresholds, so the Greeks behind a DELTA_WARN/DELTA_STOP decision are recoverable from `logs/` (the
+  2026-07-08 0.25→0.09 discrepancy had no such record). Weekly Parquet bucket — WG-1's primary fix — already landed in `a38e53f`. Story folder complete;
+  removed from Feature Backlog. 2 tests.
 - [2026-09-07] `eod-pt-summary/` PT-3 — docs close. CONTEXT.md (`792fa79`) / DECISIONS.md §P&L & Reporting / TODOS.md log lines already landed piecemeal with PT-1/PT-2; this pass filled the PT-2
   closing SHA (`77dc160`) into `tasks.md` + the PT-2 log line, refreshed the `docs/plan/README.md` Active-Stories row to ✅ Shipped, and marked `scratch/2026-08-13_eod_pt_summary.py` SUPERSEDED.
   Epic `eod-pt-summary/` complete (PT-1..PT-3); folder archived to `docs/archive/plan/eod-pt-summary/`. Docs-only. SHA: dac18ea
