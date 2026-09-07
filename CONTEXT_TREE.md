@@ -126,6 +126,16 @@ src/
 │   ├── _price_utils.py       # Shared price/LTP resolution helpers used by executor.py + ic_close_executor.py
 │   └── profit_lock_engine.py # ProfitLockEngine: stateless 3-zone profit-lock evaluator; ProfitLockState + ProfitLockDecision frozen dataclasses; floor formula max(W,W)+D_cum+D_lock+K ≤ 0.75×C₀;
 │                             #   Zone 1 log-only, Zone 2 wing contraction to ~19Δ, Zone 3 CLOSE_FULL; council ruling 2026-06-27
+├── signals/                  # Multi-LLM daily directional signal pipeline (docs/plan/signals/). Self-contained: own SQLite tables, no src/backtest/ dependency.
+│   ├── __init__.py           # Package marker
+│   ├── models.py             # Frozen Pydantic: Direction/TradeAction enums; input OILevel/OptionChainSummary/FIIData/MarketSnapshot; output SignalResponse/DailySignal/SignalOutcome.
+│   ├── protocol.py           # SignalProvider Protocol — contract for all providers (Grok, GPT-4o, Gemini, Mock).
+│   ├── prompt.py             # build_prompt(snapshot, provider_name) → chat messages; SUFFIXES dict per provider; NIFTY_STRIKE_STEP=50 (pure).
+│   ├── aggregator.py         # SignalAggregator: pure consensus — strike/confidence validation, direction voting, Decimal confidence gate (min 3), modal strike with ATM tie-break.
+│   ├── store.py              # SignalStore: init_db (signal_inputs/signal_responses/daily_signals/signal_outcomes + 2 indexes, idempotent) + write methods
+│                             #   record_snapshot/record_response/record_signal/record_outcome. Model→schema column mapping; Decimal→TEXT; INSERT OR IGNORE for responses.
+│   └── providers/
+│       └── __init__.py       # Package marker (provider impls land in S3.x)
 ├── mf/
 │   ├── CLAUDE.md             # Module context: transaction ledger model, AMFI source, Decimal TEXT invariant, MFHolding location
 │   ├── __init__.py           # Package marker
