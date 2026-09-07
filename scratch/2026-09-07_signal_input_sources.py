@@ -1,38 +1,37 @@
 """Scratch — S5.2a source-discovery spike: gift_nifty / fii / usd_inr.
 
 PERSISTENT SOURCE-OF-RECORD, not an implementation. Produced 2026-09-07 for
-`docs/plan/signals/signals_stories.md` §S5.2a — confirm which broker API (if any)
-serves each of the three `MarketSnapshot` fields the repo has no fetcher for:
+`docs/plan/signals/signals_stories.md` §S5.2a — confirm which broker API serves
+each of the three `MarketSnapshot` fields the repo has no fetcher for:
 `gift_nifty`, `fii` (FIIData), `usd_inr`.
 
-Animesh's call (2026-09-07): do NOT hard-code neutral defaults, do NOT scrape NSE
-HTML — probe the broker APIs we already authenticate against (Upstox, Dhan,
-Nuvama). A field served by nobody → the helper raises `DataFetchError` and the
-caller decides whether to abort the 09:15 run.
+Animesh's steer: probe the APIs we already authenticate against, one field at a
+time, find the best source, then build `src/signals/market_inputs.py` against it.
+A field served by nobody → the helper raises `DataFetchError`.
 
-FINDINGS AFTER THE FIRST RUN + INSTRUMENT-MASTER DEBUG (2026-09-07):
+FINDINGS (2026-09-07, debugging one field at a time):
 
-  usd_inr  — SOLVED via Upstox. USDINR is a currency FUTURE in the `NCD_FO`
-             segment of `data/instruments/NSE.json.gz` (23 live contracts). The
-             first probe failed only because it passed the bare symbol
-             `USDINR`, not the `NCD_FO|<token>` key. This script now resolves
-             the nearest-expiry USDINR FUT from the local dump and probes its
-             LTP. The real fetcher uses `InstrumentLookup.search("USDINR",
-             segment="NCD_FO", instrument_type="FUT")` + nearest expiry.
+  gift_nifty — Upstox carries it, but NOT in the NSE instrument dump. It is a
+               GLOBAL index: separate master at
+               https://assets.upstox.com/market-quote/instruments/exchange/global.json.gz
+               key form `GLOBAL_INDEX|SGX NIFTY` (per LTP-v3 docs). The batch
+               LTP endpoint (`_fetch_ltp_batch`) passes any key straight through
+               as the `instrument_key` param — no segment gate — so `get_ltp`
+               should serve it. This script resolves the real key from
+               global.json.gz and probes it. (Dhan carries GIFT Nifty as index
+               id 5024 but its marketfeed/ltp is 401 — paid Data API not on the
+               plan. Nuvama has no quote surface. Upstox global is the path.)
 
-  gift_nifty — NOT on Upstox. Zero records match "gift" or "sgx" across all
-               80,836 NSE instruments (139 NSE_INDEX names, none is GIFT Nifty).
-               GIFT Nifty trades on NSE IX (GIFT City) — a separate exchange no
-               Indian retail broker market-data feed carries. This script also
-               probes the Dhan scrip master to rule Dhan in or out. If Dhan is
-               also empty, gift_nifty needs a source DECISION (drop / optional /
-               allow a non-broker fetch).
+  usd_inr    — Upstox `NCD_FO` currency FUTURE. Nearest-expiry USDINR FUT
+               resolved from `data/instruments/NSE.json.gz`; `get_ltp` returns
+               200. First run gave 0.0 (after hours) — re-confirm in market
+               hours. Fetcher: `InstrumentLookup.search("USDINR",
+               segment="NCD_FO", instrument_type="FUT")` → nearest expiry.
 
-  fii — no broker API (confirmed). Animesh's call: `fetch_fii_data` downloads the
-        NSE FII derivative-statistics CSV each morning (T-1 data).
+  fii        — no broker API. Decision 2026-09-07: `fetch_fii_data` downloads
+               the NSE FII derivative-statistics CSV each morning (T-1).
 
-Run from repo root, venv active, with live tokens in the environment
-(`UPSTOX_ANALYTICS_TOKEN`, and optionally `DHAN_CLIENT_ID` / `DHAN_ACCESS_TOKEN`):
+Run from repo root, venv active, with `UPSTOX_ANALYTICS_TOKEN` set:
 
     python scratch/2026-09-07_signal_input_sources.py
     UPSTOX_ENV=sandbox python scratch/2026-09-07_signal_input_sources.py
@@ -41,11 +40,12 @@ Run from repo root, venv active, with live tokens in the environment
 from __future__ import annotations
 
 import asyncio
+import gzip
 import io
+import json
 import os
 import sys
 import traceback
-import zipfile
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -55,11 +55,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # dated filenam
 import requests
 
 from src.client.factory import create_client
-from src.config import settings
 from src.instruments.lookup import InstrumentLookup, parse_expiry
 
 _BOD_PATH = "data/instruments/NSE.json.gz"
-_DHAN_SCRIP_MASTER = "https://images.dhan.co/api-data/api-scrip-master.csv"
+_UPSTOX_GLOBAL = "https://assets.upstox.com/market-quote/instruments/exchange/global.json.gz"
 
 
 def _nearest_usdinr_future() -> str | None:
@@ -80,6 +79,32 @@ def _nearest_usdinr_future() -> str | None:
     return None
 
 
+def _global_index_keys() -> list[str]:
+    """Download the Upstox global instrument master and return GIFT/SGX index keys."""
+    try:
+        resp = requests.get(_UPSTOX_GLOBAL, timeout=30)
+        resp.raise_for_status()
+    except Exception as exc:  # noqa: BLE001
+        print(f"    global.json.gz download failed: {type(exc).__name__}: {exc}")
+        return []
+    with gzip.open(io.BytesIO(resp.content), "rt", encoding="utf-8") as f:
+        data = json.load(f)
+    print(f"    global.json.gz: {len(data)} instruments")
+    hits = [
+        d
+        for d in data
+        if "gift" in str(d.get("name", "")).lower()
+        or "sgx" in str(d.get("name", "")).lower()
+        or "gift" in str(d.get("trading_symbol", "")).lower()
+        or "sgx" in str(d.get("trading_symbol", "")).lower()
+    ]
+    for d in hits:
+        print(
+            f"    global row: {json.dumps({k: d.get(k) for k in ('segment', 'name', 'trading_symbol', 'instrument_key')})}"
+        )
+    return [d["instrument_key"] for d in hits if d.get("instrument_key")]
+
+
 async def probe_upstox() -> None:
     env = os.environ.get("UPSTOX_ENV", "prod")
     print(f"\n=== Upstox ({env}) — get_ltp ===")
@@ -90,13 +115,12 @@ async def probe_upstox() -> None:
         traceback.print_exc()
         return
 
+    print("\n  [gift_nifty] — resolving from Upstox global instrument master")
+    gift_keys = _global_index_keys() or ["GLOBAL_INDEX|SGX NIFTY"]  # doc fallback
+
     candidates: dict[str, list[str]] = {
+        "gift_nifty": gift_keys,
         "usd_inr": [k for k in (_nearest_usdinr_future(),) if k],
-        "gift_nifty": [
-            "NSE_INDEX|GIFT Nifty",
-            "NSE_INDEX|Gift Nifty 50",
-            "NSE_INDEX|SGX Nifty",
-        ],
         "india_vix": ["NSE_INDEX|India VIX"],  # control — known good
         "nifty_spot": ["NSE_INDEX|Nifty 50"],  # control — known good
     }
@@ -112,73 +136,18 @@ async def probe_upstox() -> None:
                 print(f"    {key!r:34} -> {type(exc).__name__}: {exc}")
 
 
-def _gift_nifty_dhan_security_id() -> int | None:
-    """Find the GIFT Nifty INDEX security id in the Dhan scrip master.
-
-    Confirmed row (2026-09-07): NSE,I,5024,INDEX,0,GIFTNIFTY,...,Gift Nifty
-    """
-    try:
-        resp = requests.get(_DHAN_SCRIP_MASTER, timeout=30)
-        resp.raise_for_status()
-    except Exception as exc:  # noqa: BLE001
-        print(f"  scrip-master download failed: {type(exc).__name__}: {exc}")
-        return None
-    body = resp.content
-    if body[:2] == b"PK":
-        with zipfile.ZipFile(io.BytesIO(body)) as zf:
-            body = zf.read(zf.namelist()[0])
-    for ln in body.decode("utf-8", errors="replace").splitlines():
-        cols = ln.split(",")
-        # SEM_EXM_EXCH_ID, SEM_SEGMENT, SEM_SMST_SECURITY_ID, SEM_INSTRUMENT_NAME, ...
-        if len(cols) > 5 and cols[0] == "NSE" and cols[3] == "INDEX" and "GIFT" in cols[5].upper():
-            print(f"  scrip-master row: {ln[:120]}")
-            return int(cols[2])
-    return None
-
-
-def probe_dhan_gift_nifty() -> None:
-    """gift_nifty is not on Upstox. Dhan carries it as an index — probe its LTP.
-
-    Dhan marketfeed/ltp segment for an index is `IDX_I`. NOTE (src/dhan/reader.py
-    line ~230): that endpoint needs the paid Dhan Data API — a 401/403 here means
-    the plan doesn't include it, not that the instrument is missing.
-    """
-    print("\n=== Dhan — gift_nifty via marketfeed/ltp (IDX_I) ===")
-    cid, tok = settings.dhan_client_id, settings.dhan_access_token
-    if not (cid and tok):
-        print("  DHAN_CLIENT_ID / DHAN_ACCESS_TOKEN not set — skipped")
-        return
-    sec_id = _gift_nifty_dhan_security_id()
-    if sec_id is None:
-        print("  GIFT Nifty not found in scrip master")
-        return
-    print(f"  GIFT Nifty Dhan security id: {sec_id}")
-
-    from src.dhan.reader import fetch_ltp_raw
-
-    for segment in ("IDX_I", "NSE_I", "NSE_EQ"):
-        try:
-            out = fetch_ltp_raw(cid, tok, {segment: [sec_id]})
-            print(f"    {segment:8} -> {out}")
-        except Exception as exc:  # noqa: BLE001
-            print(f"    {segment:8} -> {type(exc).__name__}: {exc}")
-
-
 def note_nuvama_and_fii() -> None:
-    print("\n=== Nuvama ===")
-    print("  Bond-holdings reader + options-position parser only. No arbitrary quote")
-    print("  endpoint wired — would need a new APIConnect call in src/nuvama/. Not")
-    print("  pursued: Upstox already serves usd_inr and the index controls.")
+    print("\n=== Nuvama / Dhan (ruled out for gift_nifty) ===")
+    print("  Dhan: GIFT Nifty is index id 5024 but marketfeed/ltp → 401 (paid Data API).")
+    print("  Nuvama: no arbitrary quote endpoint wired.")
 
     print("\n=== FII / DII index positioning ===")
-    print("  No broker API. Decision taken 2026-09-07: fetch_fii_data downloads the")
-    print("  NSE FII derivative-statistics CSV each morning (T-1). Raises DataFetchError")
-    print("  on download/parse failure — caller decides whether to abort the 09:15 run.")
+    print("  No broker API. Decision 2026-09-07: fetch_fii_data downloads the NSE FII")
+    print("  derivative-statistics CSV each morning (T-1). Raises DataFetchError on failure.")
 
 
 async def main() -> None:
     await probe_upstox()
-    probe_dhan_gift_nifty()
     note_nuvama_and_fii()
     print("\n--- done. Update signals_stories.md §S5.2a 'Confirmed sources:' with this output ---")
 
