@@ -114,7 +114,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ## Session Log
 - [2026-09-07] signals/ S5.1 — added config/signals.toml (thresholds + grok/gpt4o/gemini provider sub-tables)
   and extended .env.example with signals pipeline block (OPENROUTER/XAI/GOOGLE_AI keys, SIGNAL_PROVIDERS,
-  SIGNAL_MIN_CONFIDENCE + Phase 1/2 token checklist). Docs/config-only, no tests. SHA: pending
+  SIGNAL_MIN_CONFIDENCE + Phase 1/2 token checklist; .env.example local-only). SHA: 80edf53
 - [2026-09-07] signals/ S4.1 — added build_providers factory: canonical-order (grok,gpt4o,gemini) env-driven
   selection, UPSTOX_ENV=test + empty-result fallback to MockSignalProvider, missing key → WARN+skip + 7 tests. SHA: 417cb5f
 - [2026-09-07] signals/ S3.4 — added GeminiSignalProvider: Phase 1 OpenRouter google/gemini-2.0-flash HTTP shim,
