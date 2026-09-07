@@ -6,7 +6,7 @@
 
 ---
 
-- [ ] **S1.1** — `src/signals/models.py`: Direction, TradeAction, MarketSnapshot, SignalResponse, DailySignal, SignalOutcome + tests
+- [x] **S1.1** — `src/signals/models.py`: Direction, TradeAction, MarketSnapshot, SignalResponse, DailySignal, SignalOutcome + tests | SHA: 8d295c6
 - [ ] **S1.2** — `src/signals/protocol.py` + `src/signals/prompt.py`: SignalProvider protocol + build_prompt pure function + tests
 - [ ] **S1.3** — `src/signals/aggregator.py`: SignalAggregator consensus + validation + confidence gate + tests
 - [ ] **S2.1** — `src/signals/store.py`: SignalStore init_db + write methods (record_snapshot, record_response, record_signal, record_outcome) + tests
