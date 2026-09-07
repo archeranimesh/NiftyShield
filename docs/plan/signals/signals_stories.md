@@ -842,11 +842,12 @@ Debugging one field at a time (Animesh's steer). Status:
   `client.get_ltp(["GLOBAL_INDEX|SGX NIFTY"])`, key as a module constant.
   (Dhan carries it as index id 5024 but `marketfeed/ltp` → 401, paid Data API not on plan;
   Nuvama has no quote surface. Upstox global is the source.)
-- `usd_inr` — **Upstox `GLOBAL_INDICATOR|USDINR`** (same global master as GIFT Nifty). Spot fx
-  quote — 20s latency, trades ~24/7 (02:30 Sun–01:30 Sat), so live at 09:10. Supersedes the
-  `NCD_FO` USDINR futures route (those read 0.0 outside 09:00–17:00 and need expiry resolution).
-  `fetch_usd_inr` is `client.get_ltp(["GLOBAL_INDICATOR|USDINR"])`, key as a module constant.
-  Pending: one live `get_ltp` confirmation.
+- `usd_inr` — **OPEN.** The Upstox global master has `GLOBAL_INDICATOR|USDINR` ("USD INR", 20s
+  latency, ~24/7) but **LTP v3 returns 400** for it — the endpoint serves `GLOBAL_INDEX` (GIFT
+  Nifty works) but not `GLOBAL_INDICATOR`. Next: probe full-quote v2/v3, ohlc v3, historical-
+  candle v3 for the key (spike updated). Fallback if none serve it: the `NCD_FO` USDINR **monthly**
+  future — live 09:00–17:00, so fine for the 09:15 cron; `InstrumentLookup.search("USDINR",
+  segment="NCD_FO", instrument_type="FUT")` → nearest month-end expiry.
   Full global master (13): `GLOBAL_INDEX|` SGX NIFTY, ^DJI, ^GSPC, IXIX, DOW FUTURES, ^HSI,
   ^FTSE, ^GDAXI, ^FCHI, ^N225 · `GLOBAL_INDICATOR|` USDINR, BZUSD (Brent), CLUSD (WTI).
 - `fii` — **no broker API.** Decision taken 2026-09-07: `fetch_fii_data` downloads the NSE FII
