@@ -11,7 +11,8 @@
 - [x] **S1.2** — `src/signals/protocol.py` + `src/signals/prompt.py`: SignalProvider protocol +
   build_prompt pure function + tests | Owner: Antigravity | Model: Gemini 3.1 Pro (Low) | Review: persona | SHA: 6ea9028
 - [x] **S1.3** — `src/signals/aggregator.py`: SignalAggregator consensus + validation + confidence gate + tests | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: 4c5e7e6
-- [ ] **S2.1** — `src/signals/store.py`: SignalStore init_db + write methods (record_snapshot, record_response, record_signal, record_outcome) + tests
+- [x] **S2.1** — `src/signals/store.py`: SignalStore init_db + write methods (record_snapshot,
+  record_response, record_signal, record_outcome) + tests | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: 2aa5979
 - [ ] **S2.2** — `src/signals/store.py`: SignalStore read methods (get_snapshot, get_signal, get_outcome, get_all_outcomes) + tests
 - [ ] **S3.1** — `src/signals/providers/mock.py`: MockSignalProvider — deterministic, Protocol-compliant + tests
 - [ ] **S3.2** — `src/signals/providers/gpt4o.py`: GPT4oSignalProvider via OpenRouter + tests

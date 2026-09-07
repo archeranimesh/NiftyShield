@@ -112,6 +112,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-07] signals/ S2.1 — added SignalStore: init_db (4 tables + 2 indexes, idempotent) + write methods
+  record_snapshot/response/signal/outcome with model→schema column mapping, Decimal→TEXT, INSERT OR IGNORE for responses + 9 tests. SHA: 2aa5979
 - [2026-09-07] signals/ S1.3 — added SignalAggregator: strike/confidence validation, direction voting, Decimal confidence gate, modal strike with ATM tie-break + 10 tests. SHA: 4c5e7e6
 - [2026-09-07] signals/ S1.2 — added SignalProvider protocol and build_prompt pure function with gpt4o, grok, and gemini suffixes + tests. SHA: 6ea9028
 - [2026-09-07] signals/ S1.1 — added signals data models, Direction, MarketSnapshot, SignalResponse, DailySignal, SignalOutcome. SHA: 8d295c6
