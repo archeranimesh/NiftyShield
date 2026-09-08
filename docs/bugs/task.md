@@ -29,9 +29,9 @@
 - [x] **B040.1** — Scratch-verify (read-only) the three candidate endpoints and
   survey how other NIFTY strategies source daily OHLC —
   `scratch/2026-09-08_signals_ohlc_probe.py`. Decide the fix's data source. | SHA `5efb464`
-- [x] **B040.2** — Implemented `get_historical_candles_sync` + async delegation; v2 day-candle form. | SHA `50a5ce4` + `<fixup>`
-- [x] **B040.3** — Rewrote `_fetch_prev_ohlc` onto `get_historical_candles` (positional-list rows, prev-session guard). | SHA `50a5ce4` + `<fixup>`
-- [x] **B040.4** — Replaced stale `{"ohlc": {...}}` fixtures; added fetcher + guard tests. | SHA `50a5ce4` + `<fixup>`
+- [x] **B040.2** — Implemented `get_historical_candles_sync` + async delegation; v2 day-candle form. | SHA `50a5ce4` + `680778b`
+- [x] **B040.3** — Rewrote `_fetch_prev_ohlc` onto `get_historical_candles` (positional-list rows, prev-session guard). | SHA `50a5ce4` + `680778b`
+- [x] **B040.4** — Replaced stale `{"ohlc": {...}}` fixtures; added fetcher + guard tests. | SHA `50a5ce4` + `680778b`
 - [x] **B040.5** — Flipped `src/client/CLAUDE.md` row; `get_ohlc` marked unused (kept, docstrings corrected). | SHA `50a5ce4`
 - [ ] **B040.6** — Suite green (3322) + real `@code-reviewer` clean (0 CRITICAL/ERROR).
   Blocked on live host: one manual `python -m scripts.morning_signal` run (logs + Telegram).

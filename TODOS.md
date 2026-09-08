@@ -197,7 +197,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
   day endpoint (`get_historical_candles_sync` in `upstox_market.py`, delegated from `upstox_live.py`);
   `_fetch_prev_ohlc` rewritten with a strict-before-`trade_date` guard. Antigravity handoff `50a5ce4` landed
   red (mangled signature, bypassed review); Claude fixup corrected it + cleared 2 `@code-reviewer` ERRORs.
-  3322 tests green. B040.6 manual `morning_signal` run blocked on live host. SHA: `<fixup>`
+  3322 tests green. B040.6 manual `morning_signal` run blocked on live host. SHA: `680778b`
 
 Full forensic log (SHAs, bug numbers, root-cause detail) moved to [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md) — most recently during the 2026-08-26 reorg (everything from 2026-08-01
 through 2026-08-26, plus item 29's inline design history above). Add new entries there going forward, or start a fresh dated section here if this file's Session Log grows large again.
