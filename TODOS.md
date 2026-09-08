@@ -112,6 +112,11 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-08] signals S5.2c — `src/signals/snapshot.py` `assemble_market_snapshot`: the 7 non-S5.2a
+  MarketSnapshot fields (nifty_spot/india_vix via get_ltp, prev close/high/low via get_ohlc "1d",
+  monthly_expiry via InstrumentLookup, option_chain→OptionChainSummary derivation, vix_5d_trend over
+  get_recent_snapshots) + gift/usd_inr/fii delegated to market_inputs via asyncio.gather; no neutral
+  fallbacks (DataFetchError). 4 offline tests. SHA: <pending>
 - [2026-09-08] signals S5.2b — added `BrokerClient.get_ohlc(instruments, interval="1d")` to the protocol
   + all impls (upstox_market async wrapper over get_ohlc_sync, upstox_live delegate, mock_client canned
   dict via set_ohlc) and `SignalStore.get_recent_snapshots(n)` (newest-first, n<=0 guard) + 6 tests.
