@@ -117,6 +117,10 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
   grok/gemini providers. Confirmed grok-3/gemini-2.0-flash retired on OpenRouter; gemini 400 is
   the slug not `response_format`. `.env.example` gitignored — doc edit on disk only. Suite green
   (3331), code-reviewer clean (1 deferred WARNING). B041.3–B041.6 remain. — SHA `f1fad55`
+- [2026-09-08] BUG-041 B041.2b — provider payloads: `max_tokens` 512→2048, default `timeout`
+  30→60s so the reasoning models `~x-ai/grok-latest` / `~openai/gpt-latest` don't time out or
+  return null content. Probe: `scratch/2026-09-08_signal_model_probe.py`. Live `morning_signal`
+  now gets 3/3 responses. Suite green (3334), code-reviewer 0 ERROR/CRITICAL. — SHA `9a2e9d3`
 - [2026-09-08] signals S5.4 — `scripts/signal_report.py` on-demand performance report: aggregates
   `get_all_outcomes` over a `--from`/`--to`/`--phase` window into OVERALL (win rate, realised EV,
   deterministic md5 coin-flip baseline), per-model direction accuracy (09:10 snapshot spot as open

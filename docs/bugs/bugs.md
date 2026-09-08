@@ -90,7 +90,20 @@ morning_signal_complete n_responses=1 consensus_direction=NEUTRAL trade_action=N
   factory override + fallback, per-provider payload-slug assertions. Suite green (3331). Real
   `@code-reviewer`: 1 WARNING (env annotation precision, matches pre-existing signature), 0
   ERROR/CRITICAL. **`.env.example` is gitignored (`.env*`) and untracked — the doc edit landed
-  on disk only, not in the commit.** Status stays 🔴 Open — B041.3–B041.6 remain.
+  on disk only, not in the commit.**
+
+- **B041.2b (SHA `9a2e9d3`)** — After Animesh set `SIGNAL_MODEL_GROK=~x-ai/grok-latest`,
+  `SIGNAL_MODEL_GPT4O=~openai/gpt-latest`, `SIGNAL_MODEL_GEMINI=~google/gemini-flash-latest`,
+  the 404/400 were gone but three new failures appeared: grok timed out at 30s (reasoning
+  model, ~45s), gpt4o returned `content: null` (512-token budget consumed by reasoning
+  tokens), gemini-pro returned truncated non-strict JSON. Probe script
+  `scratch/2026-09-08_signal_model_probe.py` confirmed the pattern across 11 candidate slugs.
+  Fix: `max_tokens` 512→2048 and default `timeout` 30→60s in all three providers (no code
+  change needed for the `-latest` slugs themselves — they resolve fine). Live `morning_signal`
+  run 16:34: 3/3 providers respond (grok 46s, gpt4o + gemini fast); consensus NEUTRAL →
+  NO_TRADE (correct — grok conf 2 below `min_confidence=3`). Suite green (3334),
+  `@code-reviewer` 0 ERROR/CRITICAL (2 test-helper WARNINGs resolved). Status stays 🔴 Open —
+  B041.3–B041.6 remain.
 
 **Out of scope but noted here so it is not lost:** `SIGNAL_MIN_CONFIDENCE` is documented in
 `.env.example` (`# avg confidence of agreeing models to emit trade_action`) but never wired —
