@@ -45,7 +45,7 @@
   | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: e1b5a0a
 - [x] **S5.2c** — `src/signals/snapshot.py`: `assemble_market_snapshot` — the 7 non-S5.2a
   `MarketSnapshot` fields, over the S5.2b prereqs. Full per-field fetch recipe +
-  `OptionChainSummary` derivation in `signals_stories.md` §S5.2c. | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: <pending>
+  `OptionChainSummary` derivation in `signals_stories.md` §S5.2c. | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: b33a43d
 - [ ] **S5.2** — `scripts/morning_signal.py`: 09:15 AM pipeline cron — pure wiring over
   `assemble_market_snapshot` + `build_providers` + aggregator + store + Telegram (no unit tests)
 - [ ] **S5.3** — `scripts/record_signal_outcome.py`: 03:00 PM outcome recorder (no unit tests)

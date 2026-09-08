@@ -27,7 +27,7 @@ rot them.
 6. **Options Income strategy** — `docs/plan/options_income/` — next **S0** (data audit).
 7. **Backtest Engine** — `docs/plan/backtest-engine/` (`phase1..4/`) — next **1.3a / 1.4** (parallel, `phase1/`). Four chained phases; each phase's GATE task blocks the next dir. Gated on
    `variance-gate`. `BACKTEST_PLAN_PHASE1.md` is the canonical spec; the phase dirs are thin status pointers.
-8. **signals: multi-LLM daily signal pipeline** — `docs/plan/signals/` — next **S5.2c**. Parallel track — self-contained `src/signals/` package, own SQLite tables, zero
+8. **signals: multi-LLM daily signal pipeline** — `docs/plan/signals/` — next **S5.2**. Parallel track — self-contained `src/signals/` package, own SQLite tables, zero
    `backtest-engine` / `backtest-eval-core` dependency; runs alongside item 7. `OPENROUTER_API_KEY` needed only for the live 09:15 cron (S5.2); S5.4 baseline stats to
    be reconciled with `backtest-eval-core` later. Unblocked from `signals-eval-core` 2026-09-07 (parallel-track decision).
 9. **backtest-eval-core** — `docs/plan/backtest-eval-core/` — next **B1.1**. Blocked until `backtest-engine` tasks 1.3 + 1.4 land.
@@ -116,7 +116,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
   MarketSnapshot fields (nifty_spot/india_vix via get_ltp, prev close/high/low via get_ohlc "1d",
   monthly_expiry via InstrumentLookup, option_chain→OptionChainSummary derivation, vix_5d_trend over
   get_recent_snapshots) + gift/usd_inr/fii delegated to market_inputs via asyncio.gather; no neutral
-  fallbacks (DataFetchError). 4 offline tests. SHA: <pending>
+  fallbacks (DataFetchError). 4 offline tests. SHA: b33a43d
 - [2026-09-08] signals S5.2b — added `BrokerClient.get_ohlc(instruments, interval="1d")` to the protocol
   + all impls (upstox_market async wrapper over get_ohlc_sync, upstox_live delegate, mock_client canned
   dict via set_ohlc) and `SignalStore.get_recent_snapshots(n)` (newest-first, n<=0 guard) + 6 tests.
