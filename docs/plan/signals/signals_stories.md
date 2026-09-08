@@ -1269,6 +1269,53 @@ No unit tests for this script.
 
 ---
 
+## S5.5 — Operational rollout walkthrough (discussion, no code)
+
+**Purpose:** the pipeline is code-complete (S1–S5.4) but has never been run in anger. Before
+the S6 docs close, walk through and record every operational decision needed to turn it on.
+No source or test changes — the output is a runbook plus a `DECISIONS.md` entry.
+
+**Must resolve:**
+
+1. **Cron enablement.** Exact crontab lines, host, and log paths (per `LOGGING.md`) for:
+   - `morning_signal.py` — 09:15 IST Mon–Fri, once `assemble_market_snapshot` inputs are live.
+   - `record_signal_outcome.py` — 15:00 IST Mon–Fri; `--auto` (weekly-expiry BOD lookup +
+     live LTP) vs manual `--entry-premium` / `--exit-premium`.
+   - `signal_report.py` — on-demand only, or a scheduled weekly digest?
+   Market-calendar holiday guard, failure alerting, and how `SIGNAL_PHASE` is set in the cron
+   environment.
+
+2. **Telegram message shapes.** Exactly what goes out and when:
+   - Signal entry — consensus direction, recommended strike, entry-premium band, consensus
+     confidence, agreeing / dissenting models, key reason + key risk. Separate NO_TRADE
+     message.
+   - Outcome / close — does `record_signal_outcome.py` post one? P&L display: ₹/lot,
+     entry→exit premium, executed vs skipped.
+   - Report — is `signal_report.py` output ever pushed to Telegram, or terminal-only?
+   Escaping via `src/notifications/markdown.py`; per-type formatting per `FORMATTING.md`.
+
+3. **LLM response mechanics.** How each provider is called and what it must return:
+   - Phase 1 (`openrouter_only`) — single `OPENROUTER_API_KEY`, all three providers via
+     OpenRouter.
+   - Phase 2 (`search_enabled`) — Grok via xAI direct, Gemini via Google AI SDK, both with
+     search enabled; GPT-4o stays on OpenRouter. `SIGNAL_PHASE` selects.
+   - The JSON schema each provider must emit, the aggregator's rejection rules, and the
+     consensus / vote logic that produces the `DailySignal`.
+
+4. **End-to-end setup.** The full first-run checklist:
+   - env vars — `OPENROUTER_API_KEY`, `XAI_API_KEY`, `GOOGLE_AI_API_KEY`, `SIGNAL_PHASE`,
+     Telegram creds — which are required for Phase 1 vs Phase 2.
+   - `config/signals.toml` knobs (thresholds, per-provider sub-tables).
+   - DB — when and how `SignalStore.init_db()` creates the four tables against
+     `portfolio.sqlite`.
+   - `.env.example` sync (kept local-only per the S5.1 note).
+
+**DoD:** every point above has a recorded answer; an ops runbook exists (location chosen in
+the discussion); `DECISIONS.md` carries the rollout entry. No `src/`, `scripts/`, or test
+changes.
+
+---
+
 ## S6 — Docs close
 
 **Files to change:**

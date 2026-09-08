@@ -50,4 +50,12 @@
   `assemble_market_snapshot` + `build_providers` + aggregator + store + Telegram (no unit tests) | SHA: e299a6b
 - [x] **S5.3** — `scripts/record_signal_outcome.py`: 03:00 PM outcome recorder (no unit tests) | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: a387349
 - [x] **S5.4** — `scripts/signal_report.py`: on-demand performance report with random baseline (no unit tests) | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: <pending>
+- [ ] **S5.5** — Operational rollout walkthrough (discussion, no code): cron enablement
+  (crontab lines + host + log paths + market-calendar guard for `morning_signal.py` /
+  `record_signal_outcome.py` / `signal_report.py`), Telegram message shapes for signal entry
+  + outcome/close incl. P&L display, LLM response mechanics (OpenRouter vs direct SDK, the
+  JSON schema each model emits, `SIGNAL_PHASE`), and the end-to-end first-run setup (env
+  vars, `config/signals.toml`, `SignalStore.init_db`, `.env.example`). Output: an ops runbook
+  (location decided in the discussion) + `DECISIONS.md` entry. Must land before S6.
+  | Owner: Claude | Model: Sonnet 5 | Review: docs-only | SHA: <pending>
 - [ ] **S6** — Docs close: CONTEXT.md tree, DECISIONS.md entry, TODOS.md log
