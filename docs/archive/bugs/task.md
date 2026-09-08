@@ -723,6 +723,6 @@ P&L whenever an overlay role has two open positions
 - [x] **B041.2b** — Provider payloads: `max_tokens` 512→2048, default `timeout` 30→60s (reasoning models). Live `morning_signal`: 3/3 respond. | SHA `9a2e9d3`
 - [x] **B041.3** — OpenRouter error-response body now captured into the `DataFetchError` message (body read before status check) in all three providers. | SHA `5bdd18c`
 - [x] **B041.4** — `SIGNAL_MIN_CONFIDENCE` + `SIGNAL_CONSENSUS_REQUIRED` wired through new `factory.build_aggregator(env)` into `SignalAggregator`; `morning_signal` uses it instead of a bare `SignalAggregator()`. | SHA `1e36c32`
-- [x] **B041.5** — Tests for slug/env override + defaults and error-body capture landed across the B041.1–B041.3 commits; suite green (115 signals tests); live 3-provider `morning_signal` run 2026-09-08 16:37 confirmed 3/3 respond. | SHA `<PENDING>`
-- [x] **B041.6** — Flipped `bugs.md` BUG-041 status ✅ + SHA; moved both sections to `docs/archive/bugs/{bugs,task}.md`; `TODOS.md` session-log line. | SHA `<PENDING>`
+- [x] **B041.5** — Tests for slug/env override + defaults and error-body capture landed across the B041.1–B041.3 commits; suite green (115 signals tests); live 3-provider `morning_signal` run 2026-09-08 16:37 confirmed 3/3 respond. | SHA `4b5aed2`
+- [x] **B041.6** — Flipped `bugs.md` BUG-041 status ✅ + SHA; moved both sections to `docs/archive/bugs/{bugs,task}.md`; `TODOS.md` session-log line. | SHA `4b5aed2`
 

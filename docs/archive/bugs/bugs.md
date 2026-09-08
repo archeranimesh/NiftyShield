@@ -1280,7 +1280,7 @@ result above.
 |---|---|
 | Severity | **Medium** — `gpt4o` still works so the pipeline degrades to a single-model vote; but |
 | | with all three enabled, two never respond and a lone vote can't reach `consensus_required=2` → every day `NO_TRADE`. |
-| Status | ✅ Fixed (2026-09-08, SHA `<PENDING>`) — root-cause chain B041.1–B041.4, closed via B041.5/B041.6 |
+| Status | ✅ Fixed (2026-09-08, SHA `4b5aed2`) — root-cause chain B041.1–B041.4, closed via B041.5/B041.6 |
 | Discovered | 2026-09-08, first live run with all three providers enabled |
 | | (`logs/morning_signal.log`, 15:11 run), via the new `morning_signal.provider_error` lines (SHA `8459604`). |
 | Location | `src/signals/providers/grok.py:17` (`x-ai/grok-3`), `gemini.py:22` |
@@ -1376,7 +1376,7 @@ morning_signal_complete n_responses=1 consensus_direction=NEUTRAL trade_action=N
   WARNINGs were under the repo's ruff line limit — no change. SHA `1e36c32`. Status stays
   🔴 Open — B041.5–B041.6 remain.
 
-- **B041.5 / B041.6 (SHA `<PENDING>`)** — No new code: the test deliverable (slug/env
+- **B041.5 / B041.6 (SHA `4b5aed2`)** — No new code: the test deliverable (slug/env
   override + defaults in `test_signals_factory.py`, error-body capture in all three
   `test_signals_<provider>_provider.py`) landed incrementally across the B041.1–B041.3
   commits. Verified at close: `pytest tests/unit/signals/` green (115 passed); one live
