@@ -31,7 +31,7 @@
 - [x] **B041.2b** — Provider payloads: `max_tokens` 512→2048, default `timeout` 30→60s (reasoning models). Live `morning_signal`: 3/3 respond. | SHA `9a2e9d3`
 - [x] **B041.3** — OpenRouter error-response body now captured into the
   `DataFetchError` message (body read before status check) in all three
-  providers. | SHA pending
+  providers. | SHA `5bdd18c`
 - [ ] **B041.4** — Also wire `SIGNAL_MIN_CONFIDENCE` (+ optionally a consensus
   count) through the same factory pass into `SignalAggregator` — currently
   documented in `.env.example` but hardcoded.

@@ -105,7 +105,7 @@ morning_signal_complete n_responses=1 consensus_direction=NEUTRAL trade_action=N
   `@code-reviewer` 0 ERROR/CRITICAL (2 test-helper WARNINGs resolved). Status stays 🔴 Open —
   B041.3–B041.6 remain.
 
-- **B041.3 (SHA `<pending>`)** — All three OpenRouter providers now read the response body
+- **B041.3 (SHA `5bdd18c`)** — All three OpenRouter providers now read the response body
   (`await resp.text()`) inside the `async with` and raise `DataFetchError` carrying the body
   text (truncated 500 chars) when `status >= 400`, replacing `resp.raise_for_status()` +
   `except aiohttp.ClientResponseError` (which discarded OpenRouter's error JSON). Success path
