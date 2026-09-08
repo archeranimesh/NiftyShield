@@ -193,6 +193,11 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
   `scratch/2026-09-06_ic_entry_confirmation_format.py`. Docs + scratch only — implementation is a follow-on session.
 - [2026-09-06] ROLL-16 — migrate production proxy delta CRITICAL alert to MarkdownV2 (shared `build_proxy_critical_alert`); guard-integrity follow-up — e5efb8f, 35c17e5
 - [2026-09-06] audit finding ROLL-15 — split base-expiry Telegram alert into summary + logged commands — 3855f8f
+- [2026-09-08] BUG-040 B040.2–B040.5 — signals prev-session OHLC now sourced from the Upstox v2 historical-candle
+  day endpoint (`get_historical_candles_sync` in `upstox_market.py`, delegated from `upstox_live.py`);
+  `_fetch_prev_ohlc` rewritten with a strict-before-`trade_date` guard. Antigravity handoff `50a5ce4` landed
+  red (mangled signature, bypassed review); Claude fixup corrected it + cleared 2 `@code-reviewer` ERRORs.
+  3322 tests green. B040.6 manual `morning_signal` run blocked on live host. SHA: `<fixup>`
 
 Full forensic log (SHAs, bug numbers, root-cause detail) moved to [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md) — most recently during the 2026-08-26 reorg (everything from 2026-08-01
 through 2026-08-26, plus item 29's inline design history above). Add new entries there going forward, or start a fresh dated section here if this file's Session Log grows large again.

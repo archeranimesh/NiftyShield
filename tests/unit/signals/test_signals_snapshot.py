@@ -252,6 +252,53 @@ async def test_assemble_broker_error_propagates(_patch_market_inputs) -> None:
         )
 
 
+@pytest.mark.asyncio
+async def test_prev_ohlc_skips_todays_partial_candle(_patch_market_inputs) -> None:
+    # candles[0] is dated on trade_date (a post-close re-run) — must fall through
+    # to the prior session's row.
+    broker = _FakeBroker(
+        ltp={
+            "NSE_INDEX|Nifty 50": Decimal("23779.15"),
+            "NSE_INDEX|India VIX": Decimal("11.16"),
+        },
+        historical_candles=[
+            ["2026-09-08T00:00:00+05:30", 23780, 23800, 23600, 23700, 0, 0],
+            ["2026-09-05T00:00:00+05:30", 23800, 23850, 23700, 23760, 0, 0],
+        ],
+        chain=_raw_chain(),
+    )
+    snap = await assemble_market_snapshot(
+        broker,
+        store=_StubStore(),
+        trade_date=date(2026, 9, 8),
+        lookup=_nifty_expiry_lookup(),
+    )
+    assert (snap.prev_close, snap.prev_high, snap.prev_low) == (
+        Decimal("23760"),
+        Decimal("23850"),
+        Decimal("23700"),
+    )
+
+
+@pytest.mark.asyncio
+async def test_prev_ohlc_no_prior_session_raises(_patch_market_inputs) -> None:
+    broker = _FakeBroker(
+        ltp={
+            "NSE_INDEX|Nifty 50": Decimal("23779.15"),
+            "NSE_INDEX|India VIX": Decimal("11.16"),
+        },
+        historical_candles=[["2026-09-08T00:00:00+05:30", 1, 1, 1, 1, 0, 0]],
+        chain=_raw_chain(),
+    )
+    with pytest.raises(DataFetchError, match="no prior session"):
+        await assemble_market_snapshot(
+            broker,
+            store=_StubStore(),
+            trade_date=date(2026, 9, 8),
+            lookup=_nifty_expiry_lookup(),
+        )
+
+
 def _make_snap(vix: str) -> MarketSnapshot:
     return MarketSnapshot(
         trade_date=date(2026, 9, 1),

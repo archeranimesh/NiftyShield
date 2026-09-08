@@ -12,7 +12,7 @@ No neutral fallbacks: any unavailable input raises
 from __future__ import annotations
 
 import asyncio
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 
 import structlog
@@ -105,8 +105,6 @@ async def _fetch_prev_ohlc(
     broker: BrokerClient, trade_date: date
 ) -> tuple[Decimal, Decimal, Decimal]:
     """Return (close, high, low) of the previous session's daily candle."""
-    from datetime import timedelta
-
     from_date = trade_date - timedelta(days=7)
     params = {
         "instrument_key": NIFTY_KEY,
@@ -117,14 +115,20 @@ async def _fetch_prev_ohlc(
 
     try:
         candles = await broker.get_historical_candles(params)
-        if not candles:
-            raise DataFetchError(f"prev OHLC unavailable for {NIFTY_KEY}: empty candles")
-
-        candle = candles[0]
+        # Rows are newest-first; skip any candle dated on/after trade_date so a
+        # post-close re-run can't pick up today's own (partial) daily candle.
+        prev = next(
+            (c for c in candles if date.fromisoformat(str(c[0])[:10]) < trade_date),
+            None,
+        )
+        if prev is None:
+            raise DataFetchError(
+                f"prev OHLC unavailable for {NIFTY_KEY}: no prior session in {candles!r}"
+            )
         return (
-            Decimal(str(candle[4])),
-            Decimal(str(candle[2])),
-            Decimal(str(candle[3])),
+            Decimal(str(prev[4])),
+            Decimal(str(prev[2])),
+            Decimal(str(prev[3])),
         )
     except (IndexError, TypeError, ValueError, InvalidOperation) as exc:
         raise DataFetchError(f"prev OHLC unavailable for {NIFTY_KEY}: {exc}") from exc

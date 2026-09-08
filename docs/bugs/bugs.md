@@ -32,7 +32,7 @@
 | Field | Value |
 |---|---|
 | Severity | **High** — `scripts/morning_signal.py` (S5.2 cron) cannot complete one run; blocks the `docs/plan/signals/` S5.5 rollout. Not yet cron-enabled — no live signal ever produced. |
-| Status | 🔴 Open |
+| Status | 🟡 Fix in progress — code landed (`50a5ce4` + fixup), B040.6 manual `morning_signal` run blocked on live host |
 | Discovered | 2026-09-08, manual run of `python -m scripts.morning_signal` during the S5.5 rollout walkthrough. |
 | Location | `src/signals/snapshot.py::_fetch_prev_ohlc` (reads `["ohlc"]`); `src/client/upstox_market.py::_remap_response`; `src/client/upstox_live.py::get_historical_candles` (stub). |
 
@@ -144,6 +144,22 @@ Side note for the fix: every `get_ltp` quote already carries `cp` = previous clo
 call, so the fix fetches all three from there for consistency.
 
 No production code touched under this note; the fix itself is B040.2–B040.7.
+
+**Implementation progress (2026-09-08, B040.2–B040.5):** Antigravity handoff produced
+`50a5ce4`, which landed with a mangled `get_historical_candles` signature (stray
+`CandleRequest` param → `TypeError`, one red test) and bypassed the financial-logic
+`@code-reviewer` gate. Claude follow-up (fixup commit) corrected the signature, reverted
+three out-of-scope annotation changes, and addressed both `@code-reviewer` ERRORs:
+`(data.get("data") or {})` null-guard in `get_historical_candles_sync`, and the return
+type set to the `list[Candle]` protocol alias with the positional-list / raw-float
+contract documented. `_fetch_prev_ohlc` now selects the first candle strictly before
+`trade_date` (guards a post-close cron re-run picking up today's partial daily candle)
+and reads `[4]/[2]/[3]` → close/high/low as `Decimal(str(...))`. `get_ohlc` /
+`get_ohlc_sync` kept but marked unused with corrected docstrings; `src/client/CLAUDE.md`
+row flipped to ✅. Tests: stale `{"ohlc": {...}}` fixtures replaced with 7-tuple rows;
+added `test_prev_ohlc_skips_todays_partial_candle`, `test_prev_ohlc_no_prior_session_raises`
+(snapshot) and 3 fetcher tests (`test_client.py`). Full suite 3322 pass; re-review clean
+(0 CRITICAL/ERROR). B040.6 manual `morning_signal` run still owed on the live host.
 
 ---
 

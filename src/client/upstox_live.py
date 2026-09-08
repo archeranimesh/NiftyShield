@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import asyncio
 from decimal import Decimal
-from typing import Any
+from typing import Any, NoReturn
 
 import requests
 import structlog
@@ -37,6 +37,7 @@ import structlog
 from src.client.exceptions import AuthenticationError, DataFetchError
 from src.client.protocol import (
     Candle,
+    CandleRequest,
     Holding,
     MarginInstrument,
     MarginResponse,
@@ -143,7 +144,7 @@ class UpstoxLiveClient:
 
     # ── Not yet implemented (constraints documented above) ────────
 
-    async def get_historical_candles(self, params: Candle, CandleRequest) -> list[Candle]:
+    async def get_historical_candles(self, params: CandleRequest) -> list[Candle]:
         """Fetch historical candles via the market client."""
         return await asyncio.to_thread(self._market.get_historical_candles_sync, params)
 

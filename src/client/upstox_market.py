@@ -27,6 +27,7 @@ import requests
 import structlog
 
 from src.client.exceptions import DataFetchError, LTPFetchError
+from src.client.protocol import Candle, CandleRequest
 from src.config import settings
 from src.models.options import OptionChain, OptionChainStrike, OptionLeg
 
@@ -145,7 +146,7 @@ class UpstoxMarketClient:
         except requests.RequestException as e:
             raise DataFetchError(f"OHLC fetch failed: {e}") from e
 
-    def get_historical_candles_sync(self, params: dict[str, Any]) -> list[list[Any]]:
+    def get_historical_candles_sync(self, params: CandleRequest) -> list[Candle]:
         """Fetch historical candles from the Upstox v2 API.
 
         Args:
@@ -153,11 +154,15 @@ class UpstoxMarketClient:
                 'interval' is optional and defaults to 'day'.
 
         Returns:
-            List of candles, where each candle is a list:
-            [ts, open, high, low, close, volume, oi], newest first.
+            List of candles, newest first. Each row is a positional list
+            ``[ts, open, high, low, close, volume, oi]`` (not a dict) until
+            TD-7 replaces the ``Candle`` alias with a real model. OHLCV values
+            are raw floats from the JSON response — callers convert to Decimal
+            at the consumer boundary.
 
         Raises:
             DataFetchError: If the HTTP request fails.
+            ValueError: If a required param is missing.
         """
         key = params.get("instrument_key")
         interval = params.get("interval", "day")
@@ -186,7 +191,7 @@ class UpstoxMarketClient:
             )
             resp.raise_for_status()
             data = resp.json()
-            candles = data.get("data", {}).get("candles", [])
+            candles = (data.get("data") or {}).get("candles", [])
             return list(candles)
         except requests.RequestException as e:
             raise DataFetchError(f"Historical candle fetch failed: {e}") from e

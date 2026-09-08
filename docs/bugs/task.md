@@ -26,23 +26,15 @@
 
 ## BUG-040 — signals `_fetch_prev_ohlc` crash: `get_ohlc` shape is fictional + `1d` `prev_ohlc` null intraday
 
-- [ ] **B040.1** — Scratch-verify (read-only) the three candidate endpoints and
+- [x] **B040.1** — Scratch-verify (read-only) the three candidate endpoints and
   survey how other NIFTY strategies source daily OHLC —
-  `scratch/2026-09-08_signals_ohlc_probe.py`. Decide the fix's data source.
-- [ ] **B040.2** — Implement `get_historical_candles_sync` + async wrapper in
-  `src/client/upstox_market.py` — v2 `/historical-candle/{key}/day/{to}?from_date=`
-  form, matching `src/backtest/vix_ingest.py:92`; delegate from
-  `src/client/upstox_live.py` (drop the `NotImplementedError`).
-- [ ] **B040.3** — Rewrite `src/signals/snapshot.py::_fetch_prev_ohlc` onto
-  `get_historical_candles` — `candles[0]` → close `[4]` / high `[2]` / low `[3]`.
-- [ ] **B040.4** — Fix the stale `{"ohlc": {...}}` fixture + stub in
-  `tests/unit/signals/test_signals_snapshot.py`; add happy + HTTP-error tests
-  for the new fetcher in `tests/unit/test_client.py`.
-- [ ] **B040.5** — Flip `src/client/CLAUDE.md` `get_historical_candles` row to
-  implemented; note `get_ohlc` now unused (decide leave-vs-remove).
-- [ ] **B040.6** — `pytest tests/unit/` green → real `@code-reviewer` on the
-  diff (financial-data boundary) → commit. One clean manual
-  `python -m scripts.morning_signal` run (logs + Telegram) before closing.
+  `scratch/2026-09-08_signals_ohlc_probe.py`. Decide the fix's data source. | SHA `5efb464`
+- [x] **B040.2** — Implemented `get_historical_candles_sync` + async delegation; v2 day-candle form. | SHA `50a5ce4` + `<fixup>`
+- [x] **B040.3** — Rewrote `_fetch_prev_ohlc` onto `get_historical_candles` (positional-list rows, prev-session guard). | SHA `50a5ce4` + `<fixup>`
+- [x] **B040.4** — Replaced stale `{"ohlc": {...}}` fixtures; added fetcher + guard tests. | SHA `50a5ce4` + `<fixup>`
+- [x] **B040.5** — Flipped `src/client/CLAUDE.md` row; `get_ohlc` marked unused (kept, docstrings corrected). | SHA `50a5ce4`
+- [ ] **B040.6** — Suite green (3322) + real `@code-reviewer` clean (0 CRITICAL/ERROR).
+  Blocked on live host: one manual `python -m scripts.morning_signal` run (logs + Telegram).
 - [ ] **B040.7** — Flip `bugs.md` BUG-040 status to ✅ Fixed + SHA; move both
   sections to `docs/archive/bugs/{bugs,task}.md`; `TODOS.md` session-log line.
   Then S5.5 rollout walkthrough can resume.
