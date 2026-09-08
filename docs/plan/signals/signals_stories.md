@@ -955,36 +955,62 @@ USDINR FUT dicts) — do not read the real BOD file in tests; for `fetch_fii_dat
 
 ### MarketSnapshot field-coverage audit (2026-09-07 — "did we skip anything?")
 
-Every `MarketSnapshot` field is accounted for across S5.2a / S5.2b — nothing dropped:
+Every `MarketSnapshot` field is accounted for across S5.2a / S5.2c — nothing dropped:
 
 | field | source | task | spike status |
 |---|---|---|---|
 | `trade_date` | cron param | S5.2 | — |
-| `nifty_spot` | `get_ltp("NSE_INDEX\|Nifty 50")` | S5.2b | ✅ 23779.15 |
-| `prev_close/high/low` | Upstox daily candle | S5.2b | ⚠ see S5.2b note — `get_historical_candles` is `NotImplementedError` on the live client |
+| `nifty_spot` | `get_ltp("NSE_INDEX\|Nifty 50")` | S5.2c | ✅ 23779.15 |
+| `prev_close/high/low` | Upstox daily candle | S5.2c | ⚠ see S5.2c note — `get_historical_candles` is `NotImplementedError` on the live client |
 | `gift_nifty` | `get_ltp("GLOBAL_INDEX\|SGX NIFTY")` | **S5.2a** | ✅ 23791.0 |
-| `india_vix` | `get_ltp("NSE_INDEX\|India VIX")` | S5.2b | ✅ 11.16 |
-| `vix_5d_trend` | computed from last 5 `signal_inputs` rows | S5.2b | — (needs 5 sessions of history) |
+| `india_vix` | `get_ltp("NSE_INDEX\|India VIX")` | S5.2c | ✅ 11.16 |
+| `vix_5d_trend` | computed from last 5 `signal_inputs` rows | S5.2c | — (needs 5 sessions of history) |
 | `usd_inr` | `get_ltp(<nearest-monthly NCD_FO USDINR FUT>)` | **S5.2a** | ✅ 94.57 |
-| `monthly_expiry` | calendar helper (Thu→Tue Apr-2026) | S5.2b | — |
-| `option_chain` | `get_option_chain` → `parse_upstox_option_chain` | S5.2b | `get_option_chain` delegates OK |
+| `monthly_expiry` | calendar helper (Thu→Tue Apr-2026) | S5.2c | — |
+| `option_chain` | `get_option_chain` → `parse_upstox_option_chain` | S5.2c | `get_option_chain` delegates OK |
 | `fii` | NSE `fiidiiTradeReact` (cash) | **S5.2a** | ✅ but ⚠ model change (F&O data unreachable) |
 
 ---
 
-## S5.2b — `src/signals/snapshot.py`: `assemble_market_snapshot`
+## S5.2b — client `get_ohlc` + `SignalStore.get_recent_snapshots` (snapshot prereqs)
+
+> Split out of the old combined S5.2b per Animesh (2026-09-08). This is the "prereq commit"
+> half; the assembler itself is now **S5.2c**. The `FIIData` redefine that was also listed
+> here landed earlier in **S1.1a** — nothing model-side remains.
+
+**Files to change:**
+- `src/client/protocol.py` — add `get_ohlc(instruments, interval="1d")` to the
+  `MarketDataProvider` + `BrokerClient` protocols
+- `src/client/upstox_market.py` — async `get_ohlc` = `asyncio.to_thread(self.get_ohlc_sync,
+  instruments, interval)` (mirrors the existing `get_ltp` / `get_option_chain` async wrappers)
+- `src/client/upstox_live.py` — `get_ohlc` delegating to `self._market.get_ohlc`
+- `src/client/mock_client.py` — `get_ohlc` returning an injectable canned dict (add a
+  `set_ohlc(key, ohlc)` setter; honour `_raise_if_queued("get_ohlc")`)
+- `src/signals/store.py` — `SignalStore.get_recent_snapshots(n)` →
+  `SELECT snapshot_json FROM signal_inputs ORDER BY trade_date DESC LIMIT ?`, returns
+  `list[MarketSnapshot]` (newest first; caller reverses for oldest→newest trend)
+
+**Before any code (graph):** `get_code_snippet("UpstoxMarketClient.get_ohlc_sync")` (return
+shape — `{pipe_key: {ohlc: {open,high,low,close}, ...}}` via `_remap_response`) ·
+`get_code_snippet("_remap_response")` · `get_code_snippet("SignalStore")` (read-method style
++ `_SCHEMA` for the `signal_inputs` column names).
+
+**Tests:**
+- `tests/unit/client/` — `get_ohlc` on `MockBrokerClient`: happy path (canned dict returned)
+  + error path (`simulate_error` → raises).
+- `tests/unit/signals/test_signals_store.py` — `get_recent_snapshots`: happy path (writes 3
+  snapshots, reads them newest-first) + edge (fewer than `n` rows → returns what exists).
+
+**Commit:** `feat(client): add get_ohlc to BrokerClient + SignalStore.get_recent_snapshots`
+
+---
+
+## S5.2c — `src/signals/snapshot.py`: `assemble_market_snapshot`
 
 **Files to change:**
 - `src/signals/snapshot.py` — new module (the assembler)
-- `src/client/protocol.py` + `src/client/upstox_live.py` + `src/client/mock_client.py` — add
-  `get_ohlc(instruments, interval="1d")` (async wrapper over the existing
-  `UpstoxMarketClient.get_ohlc_sync`; Mock returns a canned dict) — needed for `prev_*`
-- `src/signals/store.py` — add `SignalStore.get_recent_snapshots(n)` — needed for `vix_5d_trend`
-- `src/signals/models.py` + `src/signals/prompt.py` — the `FIIData` redefine, **if** it was
-  deferred out of S5.2a (see S5.2a §fii)
 
-This is bigger than one commit — split: (1) client `get_ohlc` + store `get_recent_snapshots`
-prereqs, (2) `snapshot.py` + tests.
+Depends on the S5.2b prereqs (`broker.get_ohlc`, `store.get_recent_snapshots`).
 
 **Before any code (graph):**
 `get_code_snippet("MarketSnapshot")` · `get_code_snippet("OptionChainSummary")` ·
@@ -1012,8 +1038,7 @@ other seven are built in this task):
   ⚠ `BrokerClient.get_historical_candles` raises `NotImplementedError`. But
   `UpstoxMarketClient.get_ohlc_sync(["NSE_INDEX|Nifty 50"], "1d")` **is** live (wraps
   `V3_OHLC_URL`), returning `{pipe_key: {ohlc: {open,high,low,close}, ...}}` via
-  `_remap_response`. Prereq: add `get_ohlc` to the `BrokerClient` protocol + `UpstoxLiveClient`
-  (async wrapper over `_market.get_ohlc_sync`) + a `MockBrokerClient` stub. Then read
+  `_remap_response`. Prereq (S5.2b): `broker.get_ohlc` is added to the protocol + all impls. Then read
   `["ohlc"]["close" / "high" / "low"]` as `Decimal(str(...))`. At 09:10 the `"1d"` candle is
   the previous session (today's isn't formed) — verify the exact key name against a live
   response before locking.
@@ -1048,8 +1073,7 @@ canned LTP / OHLC / option-chain dicts + a stub `SignalStore`; one error path (b
 propagates). Offline only, no real BOD file (inject `InstrumentLookup` or monkeypatch the
 expiry call).
 
-**Commits:** `feat(client): add get_ohlc to BrokerClient + SignalStore.get_recent_snapshots`
-then `feat(signals): snapshot.py — assemble_market_snapshot from live sources`
+**Commit:** `feat(signals): snapshot.py — assemble_market_snapshot from live sources`
 
 ---
 

@@ -27,7 +27,7 @@ rot them.
 6. **Options Income strategy** — `docs/plan/options_income/` — next **S0** (data audit).
 7. **Backtest Engine** — `docs/plan/backtest-engine/` (`phase1..4/`) — next **1.3a / 1.4** (parallel, `phase1/`). Four chained phases; each phase's GATE task blocks the next dir. Gated on
    `variance-gate`. `BACKTEST_PLAN_PHASE1.md` is the canonical spec; the phase dirs are thin status pointers.
-8. **signals: multi-LLM daily signal pipeline** — `docs/plan/signals/` — next **S5.2**. Parallel track — self-contained `src/signals/` package, own SQLite tables, zero
+8. **signals: multi-LLM daily signal pipeline** — `docs/plan/signals/` — next **S5.2b**. Parallel track — self-contained `src/signals/` package, own SQLite tables, zero
    `backtest-engine` / `backtest-eval-core` dependency; runs alongside item 7. `OPENROUTER_API_KEY` needed only for the live 09:15 cron (S5.2); S5.4 baseline stats to
    be reconciled with `backtest-eval-core` later. Unblocked from `signals-eval-core` 2026-09-07 (parallel-track decision).
 9. **backtest-eval-core** — `docs/plan/backtest-eval-core/` — next **B1.1**. Blocked until `backtest-engine` tasks 1.3 + 1.4 land.
@@ -112,6 +112,10 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-08] signals S5.2b split (docs-only) — the old combined S5.2b (get_ohlc/get_recent_snapshots
+  prereqs + snapshot.py assembler) split into S5.2b (client `get_ohlc` across protocol + all 3 impls +
+  `SignalStore.get_recent_snapshots` + tests) and S5.2c (`snapshot.py` assemble_market_snapshot), one
+  commit each per Animesh. Touched signals_tasks.md, signals_stories.md, docs/plan/README.md. No SHA.
 - [2026-09-08] signals S5.2a — built src/signals/market_inputs.py: fetch_gift_nifty (GLOBAL_INDEX|SGX NIFTY
   LTP), fetch_usd_inr (nearest-monthly NCD_FO USDINR future via InstrumentLookup), fetch_fii_data (NSE
   fiidiiTradeReact cash-market net → FIIData); each raises DataFetchError on failure, no fallbacks + 9 offline tests. SHA: <pending>
