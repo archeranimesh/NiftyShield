@@ -112,6 +112,9 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-08] signals S5.2a — built src/signals/market_inputs.py: fetch_gift_nifty (GLOBAL_INDEX|SGX NIFTY
+  LTP), fetch_usd_inr (nearest-monthly NCD_FO USDINR future via InstrumentLookup), fetch_fii_data (NSE
+  fiidiiTradeReact cash-market net → FIIData); each raises DataFetchError on failure, no fallbacks + 9 offline tests. SHA: <pending>
 - [2026-09-07] signals/ S5.2 split (docs-only) — S5.2 needs gift_nifty / fii / usd_inr and the repo has no
   fetcher; Animesh's call: probe Upstox/Dhan/Nuvama APIs rather than scrape NSE or hard-code defaults. Added
   S5.2a (persistent source-discovery spike `scratch/2026-09-07_signal_input_sources.py` + `src/signals/market_inputs.py`
@@ -171,7 +174,7 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
   positioning (`net_futures_cr`/`net_options_cr` — unreachable per S5.2a spike) to cash-market
   net flows (`fii_cash_net_cr`/`dii_cash_net_cr`, NSE `fiidiiTradeReact`). `src/signals/models.py`
   + `prompt.py` + 8 signals test files. Split out of S5.2a per Animesh. 77 signals tests green.
-  SHA: `<pending>`. Next: S5.2a (`market_inputs.py`).
+  SHA: `<pending>`. Next: S5.2b (`snapshot.py`).
 - **2026-09-06** — `docs/plan/telegram-markdown-migration/strategy-rollout/` ROLL-14 shipped: 3-track overlay entry
   bootstrap notification migrated to MarkdownV2 kv format. SHA: `129d54e`. Next: ROLL-15.
 - **2026-09-06** — `docs/plan/telegram-markdown-migration/strategy-rollout/` ROLL-13 shipped: 3-track base entry notification migrated to MarkdownV2 kv format. SHA: `7adf484`. Next: ROLL-14.

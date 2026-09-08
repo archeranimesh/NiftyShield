@@ -29,14 +29,14 @@
   cash-market net flows (`fii_cash_net_cr`/`dii_cash_net_cr`, NSE `fiidiiTradeReact`) + test
   updates. Split out of S5.2a per Animesh (2026-09-07). | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: <pending>
 
-- [ ] **S5.2a** — source-discovery spike ✅ done (`scratch/2026-09-07_signal_input_sources.py`,
+- [x] **S5.2a** — source-discovery spike ✅ done (`scratch/2026-09-07_signal_input_sources.py`,
   commits `c0208c9`..`a60dc29`; all 3 sources confirmed + real FII file downloaded — see
   `signals_stories.md` §S5.2a). **Remaining:** build `src/signals/market_inputs.py` —
   `fetch_gift_nifty` → `get_ltp("GLOBAL_INDEX|SGX NIFTY")`; `fetch_usd_inr` → nearest-monthly
   `NCD_FO` USDINR future via `get_ltp` + `InstrumentLookup`; `fetch_fii_data` → NSE
   `fiidiiTradeReact` JSON (cash-market net) — + offline tests. **Decide first:** redefine
   `FIIData` to `fii_cash_net_cr`/`dii_cash_net_cr` (F&O positioning data is unreachable —
-  §S5.2a). **Resolved: done in S1.1a.** Full per-field recipe in the story §Step 2. | Owner: Claude
+  §S5.2a). **Resolved: done in S1.1a.** Full per-field recipe in the story §Step 2. | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: <pending>
 - [ ] **S5.2b** — `src/signals/snapshot.py`: `assemble_market_snapshot` — the 7 non-S5.2a
   `MarketSnapshot` fields. Prereq commit: add `BrokerClient.get_ohlc` (for `prev_*`) +
   `SignalStore.get_recent_snapshots` (for `vix_5d_trend`). Full per-field fetch recipe +

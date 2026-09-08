@@ -45,7 +45,8 @@ Top-level `src/` packages, one line each (detail → `CONTEXT_TREE.md`):
 - `src/signals/` — multi-LLM daily directional signal pipeline (`docs/plan/signals/`, in progress).
   Frozen Pydantic models (`MarketSnapshot`/`SignalResponse`/`DailySignal`/`SignalOutcome`, `Direction`/`TradeAction`),
   `SignalProvider` protocol, pure `build_prompt`, pure `SignalAggregator` consensus, `SignalStore` (own SQLite
-  tables `signal_inputs`/`signal_responses`/`daily_signals`/`signal_outcomes`). Provider impls + `build_providers` factory done; crons pending (S5).
+  tables `signal_inputs`/`signal_responses`/`daily_signals`/`signal_outcomes`). Provider impls + `build_providers` factory done;
+  `market_inputs.py` (gift_nifty / usd_inr / fii fetchers) done; `snapshot.py` assembler + crons pending (S5.2b+).
 - `src/risk/` — portfolio-level delta controls: `PortfolioDelta` frozen dataclass,
   `PortfolioDeltaTracker.aggregate_delta(...)` (chain-derived `position_deltas` used as-is, else
   CE/PE approximation with logged WARNING; pure/zero-I/O per council 2026-07-02),
