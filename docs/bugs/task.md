@@ -26,14 +26,8 @@
 
 ## BUG-041 — signals `grok` + `gemini` providers fail on OpenRouter (stale hardcoded model slugs)
 
-- [ ] **B041.1** — Check openrouter.ai/models for the live `x-ai/*` and
-  `google/gemini-2.0-flash*` slugs; confirm the `gemini` 400 is slug vs
-  `response_format`. Decide the default slugs with Animesh.
-- [ ] **B041.2** — Add `SIGNAL_MODEL_GROK` / `SIGNAL_MODEL_GPT4O` /
-  `SIGNAL_MODEL_GEMINI` env vars, read in `factory._construct` from the
-  injectable `env` dict; add a `model` param to `GrokSignalProvider` /
-  `GeminiSignalProvider` mirroring `GPT4oSignalProvider`. Document in
-  `.env.example`.
+- [x] **B041.1** — Confirmed both slugs retired; gemini 400 is slug not `response_format`. Decision: slugs env-configurable, Animesh fills live values. | SHA `f1fad55`
+- [x] **B041.2** — `SIGNAL_MODEL_{GROK,GPT4O,GEMINI}` threaded through `factory._construct`; `model` param on grok/gemini providers. | SHA `f1fad55`
 - [ ] **B041.3** — Capture the OpenRouter error-response body into the
   `DataFetchError` message (read body before `raise_for_status`) in all three
   providers.

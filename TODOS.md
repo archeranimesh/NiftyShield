@@ -112,6 +112,11 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-08] BUG-041 B041.1/B041.2 — OpenRouter model slugs made env-configurable
+  (`SIGNAL_MODEL_{GROK,GPT4O,GEMINI}`) threaded through `factory._construct`; `model` param on
+  grok/gemini providers. Confirmed grok-3/gemini-2.0-flash retired on OpenRouter; gemini 400 is
+  the slug not `response_format`. `.env.example` gitignored — doc edit on disk only. Suite green
+  (3331), code-reviewer clean (1 deferred WARNING). B041.3–B041.6 remain. — SHA `f1fad55`
 - [2026-09-08] signals S5.4 — `scripts/signal_report.py` on-demand performance report: aggregates
   `get_all_outcomes` over a `--from`/`--to`/`--phase` window into OVERALL (win rate, realised EV,
   deterministic md5 coin-flip baseline), per-model direction accuracy (09:10 snapshot spot as open

@@ -76,6 +76,22 @@ morning_signal_complete n_responses=1 consensus_direction=NEUTRAL trade_action=N
   confirm at fix time — do not guess).
 - Capture the OpenRouter error body into the `DataFetchError` message before `raise_for_status`.
 
+**Implementation progress:**
+
+- **B041.1 / B041.2 (SHA `f1fad55`)** — Confirmed on openrouter.ai (Sept 2026): `x-ai/grok-3`
+  returns 404 (retired; Grok is on 4.x — e.g. `x-ai/grok-4.1-fast`) and `google/gemini-2.0-flash`
+  returns 400 (retired; Gemini Flash is on 3.x — e.g. `google/gemini-3.7-flash`). The gemini 400
+  is the slug, **not** `response_format` — `gpt4o` sends a byte-identical payload and succeeds,
+  and current Gemini Flash models support structured outputs. Decision (Animesh): slugs become
+  env-configurable, defaults stay at the existing constants, real values filled in `.env` on the
+  live host. Added `SIGNAL_MODEL_{GROK,GPT4O,GEMINI}`, read in `factory._construct` from the
+  injectable `env` dict (blank/missing → provider default); added a `model: str | None` param to
+  `GrokSignalProvider` / `GeminiSignalProvider` mirroring `GPT4oSignalProvider`. Tests:
+  factory override + fallback, per-provider payload-slug assertions. Suite green (3331). Real
+  `@code-reviewer`: 1 WARNING (env annotation precision, matches pre-existing signature), 0
+  ERROR/CRITICAL. **`.env.example` is gitignored (`.env*`) and untracked — the doc edit landed
+  on disk only, not in the commit.** Status stays 🔴 Open — B041.3–B041.6 remain.
+
 **Out of scope but noted here so it is not lost:** `SIGNAL_MIN_CONFIDENCE` is documented in
 `.env.example` (`# avg confidence of agreeing models to emit trade_action`) but never wired —
 `SignalAggregator.__init__` hardcodes `min_confidence=3` / `consensus_required=2` and nothing
