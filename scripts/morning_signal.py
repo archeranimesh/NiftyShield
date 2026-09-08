@@ -88,6 +88,11 @@ async def run() -> None:
     snapshot = await assemble_market_snapshot(broker, store=store, trade_date=trade_date)
     await asyncio.to_thread(store.record_snapshot, snapshot)
 
+    logger.info(
+        "morning_signal.providers_dispatched",
+        providers=[p.__class__.__name__ for p in providers],
+        count=len(providers),
+    )
     responses = await asyncio.gather(
         *[p.get_signal(snapshot) for p in providers],
         return_exceptions=True,
@@ -96,10 +101,28 @@ async def run() -> None:
     valid = []
     for r in responses:
         if isinstance(r, Exception):
-            logger.warning("provider_error", exc=str(r))
+            logger.warning("morning_signal.provider_error", exc=str(r))
         else:
             await asyncio.to_thread(store.record_response, r)
+            logger.info(
+                "morning_signal.provider_response",
+                provider=r.provider,
+                direction=r.direction.value,
+                confidence=r.confidence,
+                recommended_strike=r.recommended_strike,
+                premium_low=str(r.entry_premium_low),
+                premium_high=str(r.entry_premium_high),
+                key_reason=r.key_reason,
+                key_risk=r.key_risk,
+            )
             valid.append(r)
+
+    if not valid:
+        logger.warning(
+            "morning_signal.no_valid_responses",
+            dispatched=len(providers),
+            errors=len(responses),
+        )
 
     signal = SignalAggregator().aggregate(snapshot, valid)
     await asyncio.to_thread(store.record_signal, signal)
@@ -112,6 +135,7 @@ async def run() -> None:
     logger.info(
         "morning_signal_complete",
         trade_date=trade_date.isoformat(),
+        n_responses=len(valid),
         consensus_direction=signal.consensus_direction.value,
         trade_action=signal.trade_action.value,
         confidence=str(signal.consensus_confidence),
