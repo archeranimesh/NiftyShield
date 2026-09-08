@@ -105,6 +105,20 @@ morning_signal_complete n_responses=1 consensus_direction=NEUTRAL trade_action=N
   `@code-reviewer` 0 ERROR/CRITICAL (2 test-helper WARNINGs resolved). Status stays 🔴 Open —
   B041.3–B041.6 remain.
 
+- **B041.3 (SHA `<pending>`)** — All three OpenRouter providers now read the response body
+  (`await resp.text()`) inside the `async with` and raise `DataFetchError` carrying the body
+  text (truncated 500 chars) when `status >= 400`, replacing `resp.raise_for_status()` +
+  `except aiohttp.ClientResponseError` (which discarded OpenRouter's error JSON). Success path
+  does `json.loads(body_text)` guarded by a `JSONDecodeError` → `DataFetchError` ("non-JSON
+  response body"); `UnicodeDecodeError` from `text()` also surfaces as `DataFetchError` per the
+  non-fatal contract. `morning_signal.provider_error` lines now name the exact OpenRouter
+  reason (bad slug, unsupported param) instead of a bare `HTTP 404`/`HTTP 400`. Tests: per
+  provider — error-body capture, non-JSON envelope, existing HTTP-error test migrated to the
+  status-code mechanism; `_FakeResponse` doubles gain `.status` + `async text()`. Suite green
+  (3337 + 3). Real `@code-reviewer`: 0 CRITICAL/ERROR; WARNINGs (missing outer-JSON test,
+  `UnicodeDecodeError` gap, type hint, line length) all resolved before commit. Status stays
+  🔴 Open — B041.4–B041.6 remain.
+
 **Out of scope but noted here so it is not lost:** `SIGNAL_MIN_CONFIDENCE` is documented in
 `.env.example` (`# avg confidence of agreeing models to emit trade_action`) but never wired —
 `SignalAggregator.__init__` hardcodes `min_confidence=3` / `consensus_required=2` and nothing

@@ -71,16 +71,23 @@ class GPT4oSignalProvider:
         try:
             async with aiohttp.ClientSession(timeout=self._timeout) as session:
                 async with session.post(url, json=payload, headers=headers) as resp:
-                    resp.raise_for_status()
-                    envelope = await resp.json()
-        except aiohttp.ClientResponseError as e:
-            raise DataFetchError(f"{_PROVIDER}: OpenRouter HTTP {e.status}: {e}") from e
+                    body_text = await resp.text()
+                    status = resp.status
         except aiohttp.ClientError as e:
             raise DataFetchError(f"{_PROVIDER}: OpenRouter request failed: {e}") from e
+        except UnicodeDecodeError as e:
+            raise DataFetchError(f"{_PROVIDER}: undecodable response body: {e}") from e
         except asyncio.TimeoutError as e:
             raise DataFetchError(
                 f"{_PROVIDER}: request timed out after {self._timeout.total}s"
             ) from e
+
+        if status >= 400:
+            raise DataFetchError(f"{_PROVIDER}: OpenRouter HTTP {status}: {body_text[:500]}")
+        try:
+            envelope = json.loads(body_text)
+        except json.JSONDecodeError as e:
+            raise DataFetchError(f"{_PROVIDER}: non-JSON response body: {body_text[:500]}") from e
 
         return _parse_response(snapshot, envelope)
 

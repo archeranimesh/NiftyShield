@@ -6,7 +6,6 @@ from datetime import date
 from decimal import Decimal
 from unittest.mock import patch
 
-import aiohttp
 import pytest
 
 from src.client.exceptions import DataFetchError
@@ -54,9 +53,9 @@ def snapshot() -> MarketSnapshot:
 
 
 class _FakeResponse:
-    def __init__(self, *, body: str, raise_status: aiohttp.ClientResponseError | None = None):
+    def __init__(self, *, body: str, status: int = 200):
         self._body = body
-        self._raise_status = raise_status
+        self.status = status
 
     async def __aenter__(self):
         return self
@@ -64,12 +63,8 @@ class _FakeResponse:
     async def __aexit__(self, *exc):
         return False
 
-    def raise_for_status(self):
-        if self._raise_status is not None:
-            raise self._raise_status
-
-    async def json(self):
-        return json.loads(self._body)
+    async def text(self) -> str:
+        return self._body
 
 
 class _FakeSession:
@@ -132,15 +127,21 @@ async def test_phase2_xai_direct_uses_xai_base_url(snapshot: MarketSnapshot) -> 
 
 
 async def test_http_429_raises_datafetcherror(snapshot: MarketSnapshot) -> None:
-    req_info = aiohttp.RequestInfo(
-        url=aiohttp.client.URL("https://openrouter.ai/api/v1/chat/completions"),
-        method="POST",
-        headers=aiohttp.typedefs.CIMultiDict(),
-        real_url=aiohttp.client.URL("https://openrouter.ai/api/v1/chat/completions"),
-    )
-    err = aiohttp.ClientResponseError(request_info=req_info, history=(), status=429)
-    with _patch_session(_FakeSession(_FakeResponse(body="{}", raise_status=err))):
-        with pytest.raises(DataFetchError):
+    with _patch_session(_FakeSession(_FakeResponse(body="{}", status=429))):
+        with pytest.raises(DataFetchError, match="HTTP 429"):
+            await GrokSignalProvider(api_key="k").get_signal(snapshot)
+
+
+async def test_error_body_captured_in_datafetcherror(snapshot: MarketSnapshot) -> None:
+    body = json.dumps({"error": {"message": "x-ai/grok-3 is not a valid model id", "code": 404}})
+    with _patch_session(_FakeSession(_FakeResponse(body=body, status=404))):
+        with pytest.raises(DataFetchError, match="not a valid model id"):
+            await GrokSignalProvider(api_key="k").get_signal(snapshot)
+
+
+async def test_non_json_envelope_raises_datafetcherror(snapshot: MarketSnapshot) -> None:
+    with _patch_session(_FakeSession(_FakeResponse(body="<html>Bad Gateway</html>"))):
+        with pytest.raises(DataFetchError, match="non-JSON response body"):
             await GrokSignalProvider(api_key="k").get_signal(snapshot)
 
 

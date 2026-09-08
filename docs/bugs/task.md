@@ -29,9 +29,9 @@
 - [x] **B041.1** — Confirmed both slugs retired; gemini 400 is slug not `response_format`. Decision: slugs env-configurable, Animesh fills live values. | SHA `f1fad55`
 - [x] **B041.2** — `SIGNAL_MODEL_{GROK,GPT4O,GEMINI}` threaded through `factory._construct`; `model` param on grok/gemini providers. | SHA `f1fad55`
 - [x] **B041.2b** — Provider payloads: `max_tokens` 512→2048, default `timeout` 30→60s (reasoning models). Live `morning_signal`: 3/3 respond. | SHA `9a2e9d3`
-- [ ] **B041.3** — Capture the OpenRouter error-response body into the
-  `DataFetchError` message (read body before `raise_for_status`) in all three
-  providers.
+- [x] **B041.3** — OpenRouter error-response body now captured into the
+  `DataFetchError` message (body read before status check) in all three
+  providers. | SHA pending
 - [ ] **B041.4** — Also wire `SIGNAL_MIN_CONFIDENCE` (+ optionally a consensus
   count) through the same factory pass into `SignalAggregator` — currently
   documented in `.env.example` but hardcoded.

@@ -213,6 +213,13 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
   script). Live `morning_signal` run on 2026-09-08 verified the BUG-040 fix end-to-end (gpt4o
   responded NEUTRAL/conf 3 → NO_TRADE; prev-OHLC sourced correctly from historical-candle). SHA: `8459604`
 
+- [2026-09-08] BUG-041 B041.3 — all three OpenRouter signal providers now read the response body
+  before the status check and put its text (≤500 chars) into the `DataFetchError`, so
+  `morning_signal.provider_error` names the real OpenRouter reason instead of a bare `HTTP 404`/`400`;
+  non-JSON envelope and `UnicodeDecodeError` also surface as `DataFetchError`. Per-provider tests for
+  error-body capture + non-JSON envelope; `@code-reviewer` 0 CRITICAL/ERROR, WARNINGs resolved. 3340
+  tests green. SHA: `<pending>`
+
 Full forensic log (SHAs, bug numbers, root-cause detail) moved to [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md) — most recently during the 2026-08-26 reorg (everything from 2026-08-01
 through 2026-08-26, plus item 29's inline design history above). Add new entries there going forward, or start a fresh dated section here if this file's Session Log grows large again.
 
