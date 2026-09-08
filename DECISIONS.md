@@ -960,6 +960,17 @@ Source: `docs/archive/council/strategy/2026-06-26_paper-trade-exit-philosophy.md
 Noted, deferred: Hybrid split-fetch (LTP every tick + periodic Greeks) for Phase 1 when scale warrants it.
 Source: `docs/archive/council/data_architecture/2026-06-26_strategy-monitor-watchlist-design.md`
 
+**Deferred pointer (2026-09-08) — WebSocket streamer to replace REST polling.** Raised while
+scoping BUG-040: Upstox exposes a market-data WebSocket (`MarketDataStreamerV3` —
+`upstox.com/developer/api-documentation/streamer-function`, protobuf, modes `ltpc` / `full` /
+`option_greeks` / `full_d30`). A single `full` / `option_greeks` subscription would replace
+`StrategyMonitor`'s 90s full-chain REST poll across every live paper strategy, and would also
+feed intraday LTP to any future consumer. Not in scope for BUG-040 (that needs *prev-session
+daily* OHLC, which the feed does not carry — see BUG-040 entry). To be scoped as its own epic
+later: new `src/streaming/` package (currently empty, planned Phase 1–2 per `BACKTEST_PLAN.md`),
+protobuf decode, reconnect/backfill-on-gap handling, and a REST-fallback path. Supersedes the
+"Hybrid split-fetch" note above if adopted.
+
 ---
 
 ## IC V2 Profit-Lock Adjustment (2026-06-27, council q13)
