@@ -55,6 +55,27 @@ def _fake_signal(action: TradeAction = TradeAction.NO_TRADE) -> MagicMock:
     return sig
 
 
+def _fake_snapshot() -> MagicMock:
+    snap = MagicMock()
+    snap.nifty_spot = Decimal("23644.35")
+    snap.prev_close = Decimal("23779.15")
+    snap.prev_high = Decimal("23890.0")
+    snap.prev_low = Decimal("23737.9")
+    snap.gift_nifty = Decimal("23704.5")
+    snap.india_vix = Decimal("11.15")
+    snap.vix_5d_trend = "flat"
+    snap.usd_inr = Decimal("94.78")
+    snap.monthly_expiry = date(2026, 9, 29)
+    snap.option_chain.atm_strike = 23650
+    snap.option_chain.atm_iv = Decimal("10.32")
+    snap.option_chain.iv_skew = Decimal("0.26")
+    snap.option_chain.pcr_total = Decimal("1.05")
+    snap.option_chain.pcr_atm = Decimal("1.02")
+    snap.fii.fii_cash_net_cr = Decimal("280.13")
+    snap.fii.dii_cash_net_cr = Decimal("566.76")
+    return snap
+
+
 async def _run_with(providers: list[object]) -> list[tuple[str, dict]]:
     """Run morning_signal.run() with all I/O mocked; return captured log calls."""
     calls: list[tuple[str, dict]] = []
@@ -71,7 +92,9 @@ async def _run_with(providers: list[object]) -> list[tuple[str, dict]]:
         patch.object(morning_signal, "create_client", return_value=MagicMock()),
         patch.object(morning_signal, "SignalStore", return_value=MagicMock()),
         patch.object(
-            morning_signal, "assemble_market_snapshot", AsyncMock(return_value=MagicMock())
+            morning_signal,
+            "assemble_market_snapshot",
+            AsyncMock(return_value=_fake_snapshot()),
         ),
         patch.object(morning_signal, "SignalAggregator", return_value=aggregator),
         patch.object(morning_signal, "build_notifier", return_value=None),
@@ -98,6 +121,19 @@ async def test_each_provider_response_is_logged() -> None:
 
     complete = next(kw for e, kw in calls if e == "morning_signal_complete")
     assert complete["n_responses"] == 1
+
+
+@pytest.mark.asyncio
+async def test_snapshot_inputs_are_logged() -> None:
+    calls = await _run_with([_OkProvider(_response())])
+    snap_line = next(kw for e, kw in calls if e == "morning_signal.snapshot_assembled")
+    assert snap_line["usd_inr"] == "94.78"
+    assert snap_line["india_vix"] == "11.15"
+    assert snap_line["gift_nifty"] == "23704.5"
+    assert snap_line["atm_strike"] == 23650
+    assert snap_line["pcr_total"] == "1.05"
+    assert snap_line["fii_cash_net_cr"] == "280.13"
+    assert snap_line["monthly_expiry"] == "2026-09-29"
 
 
 @pytest.mark.asyncio

@@ -32,7 +32,12 @@ from src.notifications.markdown import escape_markdown  # noqa: E402
 from src.notifications.telegram import build_notifier  # noqa: E402
 from src.signals.aggregator import SignalAggregator  # noqa: E402
 from src.signals.factory import build_providers  # noqa: E402
-from src.signals.models import DailySignal, Direction, TradeAction  # noqa: E402
+from src.signals.models import (  # noqa: E402
+    DailySignal,
+    Direction,
+    MarketSnapshot,
+    TradeAction,
+)
 from src.signals.snapshot import assemble_market_snapshot  # noqa: E402
 from src.signals.store import SignalStore  # noqa: E402
 from src.utils.logging import setup_logging  # noqa: E402
@@ -76,6 +81,34 @@ def _format_signal_notification(signal: DailySignal) -> str:
     return f"{head}\n{tail}"
 
 
+def _log_snapshot(snapshot: MarketSnapshot) -> None:
+    """Log the scalar market context sent to every LLM.
+
+    The strike-by-strike OI arrays are omitted — they are persisted in full to
+    ``signal_inputs.snapshot_json``.
+    """
+    oc = snapshot.option_chain
+    logger.info(
+        "morning_signal.snapshot_assembled",
+        nifty_spot=str(snapshot.nifty_spot),
+        prev_close=str(snapshot.prev_close),
+        prev_high=str(snapshot.prev_high),
+        prev_low=str(snapshot.prev_low),
+        gift_nifty=str(snapshot.gift_nifty),
+        india_vix=str(snapshot.india_vix),
+        vix_5d_trend=snapshot.vix_5d_trend,
+        usd_inr=str(snapshot.usd_inr),
+        monthly_expiry=snapshot.monthly_expiry.isoformat(),
+        atm_strike=oc.atm_strike,
+        atm_iv=str(oc.atm_iv),
+        iv_skew=str(oc.iv_skew),
+        pcr_total=str(oc.pcr_total),
+        pcr_atm=str(oc.pcr_atm),
+        fii_cash_net_cr=str(snapshot.fii.fii_cash_net_cr),
+        dii_cash_net_cr=str(snapshot.fii.dii_cash_net_cr),
+    )
+
+
 async def run() -> None:
     """Execute the full morning signal pipeline once."""
     trade_date = market_today()
@@ -87,6 +120,7 @@ async def run() -> None:
 
     snapshot = await assemble_market_snapshot(broker, store=store, trade_date=trade_date)
     await asyncio.to_thread(store.record_snapshot, snapshot)
+    _log_snapshot(snapshot)
 
     logger.info(
         "morning_signal.providers_dispatched",
