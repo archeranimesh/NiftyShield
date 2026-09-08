@@ -198,6 +198,11 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
   `_fetch_prev_ohlc` rewritten with a strict-before-`trade_date` guard. Antigravity handoff `50a5ce4` landed
   red (mangled signature, bypassed review); Claude fixup corrected it + cleared 2 `@code-reviewer` ERRORs.
   3322 tests green. B040.6 manual `morning_signal` run blocked on live host. SHA: `680778b`
+- [2026-09-08] BUG-040 follow-up — `scripts/morning_signal.py` now logs one structured line per LLM
+  response (`morning_signal.provider_response`), a `providers_dispatched` count, and a
+  `no_valid_responses` warning; new `tests/unit/scripts/test_morning_signal.py` (first tests for that
+  script). Live `morning_signal` run on 2026-09-08 verified the BUG-040 fix end-to-end (gpt4o
+  responded NEUTRAL/conf 3 → NO_TRADE; prev-OHLC sourced correctly from historical-candle). SHA: `8459604`
 
 Full forensic log (SHAs, bug numbers, root-cause detail) moved to [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md) — most recently during the 2026-08-26 reorg (everything from 2026-08-01
 through 2026-08-26, plus item 29's inline design history above). Add new entries there going forward, or start a fresh dated section here if this file's Session Log grows large again.
