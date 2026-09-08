@@ -58,4 +58,78 @@
   vars, `config/signals.toml`, `SignalStore.init_db`, `.env.example`). Output: an ops runbook
   (location decided in the discussion) + `DECISIONS.md` entry. Must land before S6.
   | Owner: Claude | Model: Sonnet 5 | Review: docs-only | SHA: <pending>
+
+  **Telegram message-format review (discussion 2026-09-08, ongoing — `/work` picks up here):**
+  - ✅ **09:15 directional signal** — finalized, spec in S5.5c, on-device validated
+    (`scratch/2026-09-08_signal_telegram_messages.py` messages 1–3): CONSENSUS / NO CONSENSUS /
+    PIPELINE FAILED, bold header + blank line + emoji lines.
+  - ⏸ **entry + exit / P&L messages** — moved to `signals-paper-track` SPT-3 (entry) and
+    SPT-5 (exit); the signals track is becoming a real paper trade (Animesh 2026-09-08), so
+    the 15:00 "outcome" message is replaced by an actual exit message. Candidates in
+    `docs/plan/signals-paper-track/stories.md` §SPT-3 / §SPT-5 — **still to correct/finalize
+    there.**
+  - ⬜ **`signal_report.py` digest to Telegram** — not yet reviewed; decide shape when SPT-7
+    (evaluation report) is scoped.
+
+- [ ] **S5.5a** — **SUPERSEDED → `signals-paper-track` SPT-5.** The 15:00 `SignalOutcome`
+  Telegram message is replaced by SPT-5's exit message now that the track paper-trades for
+  real (entry/exit, not a would-have-done row). Do not implement here. `/work` skips this box;
+  close it in S6 with `SHA: n/a (won't-do → SPT-5)`. Reference renderer
+  `format_outcome_notification` in `scratch/2026-09-08_signal_telegram_messages.py` carries
+  forward to SPT-5. | Owner: Claude | Model: n/a | Review: none | SHA: <pending>
+- [ ] **S5.5b** — NSE-holiday guard: `is_trading_day(market_today())` early-exit (log + return 0)
+  at the top of `scripts/morning_signal.py` and `scripts/signal_report.py`, mirroring
+  `scripts/pipeline/upstox_chain_snapshot.py`. No new tests (matches existing cron pattern).
+  | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: <pending>
+- [ ] **S5.5c** — reformat `morning_signal.py` entry message to the agreed layout (discussion
+  2026-09-08):
+  A blank line follows the bold header in every variant; a blank line separates sections.
+  ```
+  *📈 CONSENSUS: BULLISH*
+
+  🎯 Strike: 24800
+  📊 Confidence: 3.5 / 5.0
+  💰 Entry band: ₹58.00 – ₹72.00
+
+  *Model Votes:*
+  👍 Agree: grok, gpt4o
+  👎 Dissent: gemini
+  ```
+  Direction emoji: 📈 BULLISH / 📉 BEARISH.
+
+  NO_TRADE, responses present (split / low-confidence / majority-neutral) — one emoji line per
+  model (📈 BULLISH / 📉 BEARISH / ➖ NEUTRAL):
+  ```
+  *⏸ NO TRADE · NO CONSENSUS*
+
+  📈 grok: BULLISH
+  📉 gpt4o: BEARISH
+  ➖ gemini: NEUTRAL
+  ```
+
+  NO_TRADE, zero valid responses (`not signal.responses`) — operational alert, worded as what
+  the pipeline actually does (it does NOT pause; next day's cron runs normally). The `0 / N`
+  count uses `len(providers)`, not a literal 3:
+  ```
+  *🚨 SIGNAL PIPELINE FAILED*
+
+  ❌ 0 / 3 models responded
+  ⏸ No signal issued today
+
+  👉 Check logs before the next run
+  ```
+
+  Reference renderer: `format_directional_v3` in `scratch/2026-09-08_signal_telegram_messages.py`
+  (messages 1–3, validated on-device 2026-09-08).
+  Entry band = **mean of the agreeing models' `entry_premium_low` / `_high`** (consistent with
+  `record_signal_outcome._consensus_entry_premium`), not a single model's band.
+  Bold header requires moving the escaping boundary: `_format_signal_notification` escapes its
+  own dynamic parts (`escape_markdown` per value) and emits literal `*` for markup; the caller
+  in `morning_signal.py` stops wrapping the whole string. Strike via `format_strike` (identifier
+  — no thousands separator, `FORMATTING.md`); premium band via `format_money`. Register the
+  formatter in `tests/unit/notifications/test_escaping_guard.py`. Extend the no-network
+  formatter tests (directional + NO_TRADE render). Key reason / key risk: **dropped from the
+  message** per discussion 2026-09-08 (kept in `signal_responses` DB rows for the report).
+  | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: <pending>
+
 - [ ] **S6** — Docs close: CONTEXT.md tree, DECISIONS.md entry, TODOS.md log
