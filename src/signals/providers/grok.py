@@ -35,7 +35,7 @@ class GrokSignalProvider:
         self,
         api_key: str,
         use_openrouter: bool = True,
-        timeout: float = 30.0,
+        timeout: float = 60.0,
         model: str | None = None,
     ) -> None:
         """Configure the provider.
@@ -70,7 +70,7 @@ class GrokSignalProvider:
         payload: dict[str, Any] = {
             "model": self._model,
             "messages": messages,
-            "max_tokens": 512,
+            "max_tokens": 2048,
             "temperature": 0,
             "response_format": {"type": "json_object"},
         }

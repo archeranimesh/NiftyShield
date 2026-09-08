@@ -75,6 +75,7 @@ class _FakeResponse:
 class _FakeSession:
     def __init__(self, response: _FakeResponse):
         self._response = response
+        self.calls: list[tuple[tuple, dict]] = []
 
     async def __aenter__(self):
         return self
@@ -83,11 +84,12 @@ class _FakeSession:
         return False
 
     def post(self, *args, **kwargs):
+        self.calls.append((args, kwargs))
         return self._response
 
 
-def _patch_session(response: _FakeResponse):
-    return patch("aiohttp.ClientSession", return_value=_FakeSession(response))
+def _patch_session(session: _FakeSession):
+    return patch("aiohttp.ClientSession", return_value=session)
 
 
 def _valid_body(direction: str = "BULLISH", confidence: int = 4) -> str:
@@ -106,7 +108,7 @@ def _valid_body(direction: str = "BULLISH", confidence: int = 4) -> str:
 
 
 async def test_valid_response_returns_signal(snapshot: MarketSnapshot) -> None:
-    with _patch_session(_FakeResponse(body=_valid_body("BEARISH", 3))):
+    with _patch_session(_FakeSession(_FakeResponse(body=_valid_body("BEARISH", 3)))):
         resp = await GPT4oSignalProvider(api_key="k").get_signal(snapshot)
     assert isinstance(resp, SignalResponse)
     assert resp.direction is Direction.BEARISH
@@ -122,14 +124,14 @@ async def test_http_429_raises_datafetcherror(snapshot: MarketSnapshot) -> None:
         real_url=aiohttp.client.URL("https://openrouter.ai/api/v1/chat/completions"),
     )
     err = aiohttp.ClientResponseError(request_info=req_info, history=(), status=429)
-    with _patch_session(_FakeResponse(body="{}", raise_status=err)):
+    with _patch_session(_FakeSession(_FakeResponse(body="{}", raise_status=err))):
         with pytest.raises(DataFetchError):
             await GPT4oSignalProvider(api_key="k").get_signal(snapshot)
 
 
 async def test_non_json_body_raises_datafetcherror(snapshot: MarketSnapshot) -> None:
     body = json.dumps({"choices": [{"message": {"content": "not json at all"}}]})
-    with _patch_session(_FakeResponse(body=body)):
+    with _patch_session(_FakeSession(_FakeResponse(body=body))):
         with pytest.raises(DataFetchError):
             await GPT4oSignalProvider(api_key="k").get_signal(snapshot)
 
@@ -143,9 +145,18 @@ async def test_timeout_raises_datafetcherror(snapshot: MarketSnapshot) -> None:
 async def test_missing_key_raises_datafetcherror(snapshot: MarketSnapshot) -> None:
     content = json.dumps({"direction": "BULLISH"})  # missing confidence, strike, premiums
     body = json.dumps({"choices": [{"message": {"content": content}}]})
-    with _patch_session(_FakeResponse(body=body)):
+    with _patch_session(_FakeSession(_FakeResponse(body=body))):
         with pytest.raises(DataFetchError, match="could not parse"):
             await GPT4oSignalProvider(api_key="k").get_signal(snapshot)
+
+
+async def test_payload_has_headroom_for_reasoning_models(snapshot: MarketSnapshot) -> None:
+    session = _FakeSession(_FakeResponse(body=_valid_body()))
+    with _patch_session(session):
+        provider = GPT4oSignalProvider(api_key="k")
+        await provider.get_signal(snapshot)
+    assert session.calls[0][1]["json"]["max_tokens"] == 2048
+    assert provider._timeout.total == 60.0
 
 
 def test_provider_name_attribute() -> None:

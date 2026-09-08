@@ -180,5 +180,14 @@ async def test_model_override_sent_in_payload(snapshot: MarketSnapshot) -> None:
     assert session.calls[0][1]["json"]["model"] == "x-ai/grok-4.1-fast"
 
 
+async def test_payload_has_headroom_for_reasoning_models(snapshot: MarketSnapshot) -> None:
+    session = _FakeSession(_FakeResponse(body=_valid_body()))
+    with _patch_session(session):
+        provider = GrokSignalProvider(api_key="k")
+        await provider.get_signal(snapshot)
+    assert session.calls[0][1]["json"]["max_tokens"] == 2048
+    assert provider._timeout.total == 60.0
+
+
 def test_is_runtime_signal_provider() -> None:
     assert isinstance(GrokSignalProvider(api_key="k"), SignalProvider)

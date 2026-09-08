@@ -29,7 +29,7 @@ class GPT4oSignalProvider:
         api_key: str,
         model: str = "openai/gpt-4o",
         base_url: str = "https://openrouter.ai/api/v1",
-        timeout: float = 30.0,
+        timeout: float = 60.0,
     ) -> None:
         """Configure the provider.
 
@@ -61,7 +61,7 @@ class GPT4oSignalProvider:
         payload = {
             "model": self._model,
             "messages": messages,
-            "max_tokens": 512,
+            "max_tokens": 2048,
             "temperature": 0,
             "response_format": {"type": "json_object"},
         }

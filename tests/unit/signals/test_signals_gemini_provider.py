@@ -222,5 +222,14 @@ async def test_model_override_sent_in_payload(snapshot: MarketSnapshot) -> None:
     assert session.calls[0][1]["json"]["model"] == "google/gemini-3.7-flash"
 
 
+async def test_payload_has_headroom_for_reasoning_models(snapshot: MarketSnapshot) -> None:
+    session = _FakeSession(_FakeResponse(body=_valid_body("BEARISH", 3)))
+    with _patch_session(session):
+        provider = GeminiSignalProvider(api_key="k")
+        await provider.get_signal(snapshot)
+    assert session.calls[0][1]["json"]["max_tokens"] == 2048
+    assert provider._timeout.total == 60.0
+
+
 def test_is_runtime_signal_provider() -> None:
     assert isinstance(GeminiSignalProvider(api_key="k"), SignalProvider)
