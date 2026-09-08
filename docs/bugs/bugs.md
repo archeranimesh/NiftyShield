@@ -27,6 +27,126 @@
 
 ---
 
+## BUG-040 — signals pipeline crashes at `_fetch_prev_ohlc`: `get_ohlc` expects a response shape Upstox v3 never returns, and `1d` `prev_ohlc` is null intraday
+
+| Field | Value |
+|---|---|
+| Severity | **High** — `scripts/morning_signal.py` (S5.2 cron) cannot complete one run; blocks the `docs/plan/signals/` S5.5 rollout. Not yet cron-enabled — no live signal ever produced. |
+| Status | 🔴 Open |
+| Discovered | 2026-09-08, manual run of `python -m scripts.morning_signal` during the S5.5 rollout walkthrough. |
+| Location | `src/signals/snapshot.py::_fetch_prev_ohlc` (reads `["ohlc"]`); `src/client/upstox_market.py::_remap_response`; `src/client/upstox_live.py::get_historical_candles` (stub). |
+
+**Symptom:** `python -m scripts.morning_signal` aborts before any provider call or Telegram
+send with:
+
+```
+File "src/signals/snapshot.py", line 114, in _fetch_prev_ohlc
+    Decimal(str(candle["close"])),
+KeyError: 'close'
+... raise DataFetchError(f"prev OHLC unavailable for {NIFTY_KEY}: {ohlc!r}")
+src.client.exceptions.DataFetchError: prev OHLC unavailable for NSE_INDEX|Nifty 50:
+  {'NSE_INDEX|Nifty 50': {'last_price': 23672.95, 'instrument_token': 'NSE_INDEX|Nifty 50',
+                          'prev_ohlc': None,
+                          'live_ohlc': {'open': 23743.1, 'high': 23758.95, 'low': 23657.15,
+                                        'close': 23672.95, 'volume': 0, 'ts': 1788805800000}}}
+```
+
+**Root cause — two compounding defects:**
+
+1. **`get_ohlc` response shape is fictional.** `src/signals/snapshot.py::_fetch_prev_ohlc`
+   reads `ohlc[key]["ohlc"]["close" | "high" | "low"]`. The live Upstox v3
+   `/v3/market-quote/ohlc` response (verified 2026-09-08) has **no `"ohlc"` key** — each
+   per-instrument value is `{last_price, instrument_token, prev_ohlc, live_ohlc}`.
+   `_remap_response` (`src/client/upstox_market.py:41`) only rewrites the outer colon-key to
+   pipe-key and passes the value through untouched. Every test fixture mirrors the invented
+   `{"ohlc": {...}}` shape (`tests/unit/signals/test_signals_snapshot.py:128`,
+   `tests/unit/test_mock_client.py:168`), so CI is green while the live path has never worked.
+
+2. **`interval=1d` returns `prev_ohlc: null` during / after market open.** Verified against
+   the live API: `interval=1d` → `prev_ohlc: null`, `live_ohlc` = today's forming daily
+   candle. Only `interval=I1` populates `prev_ohlc` — and that is the previous *minute*, not
+   the previous session. So there is no fix to `_fetch_prev_ohlc` that keeps calling
+   `get_ohlc`: the previous session's *daily* close/high/low is simply not in that endpoint
+   at 09:15–09:30. `_fetch_prev_ohlc`'s docstring premise ("at 09:10 the `1d` candle is still
+   the previous session") does not hold for v3.
+
+**Verified working alternative (2026-09-08 probe):** the historical-candle API
+`GET /v3/historical-candle/{instrument_key}/days/1/{to_date}/{from_date}` returns
+`data.candles` as `[ts, open, high, low, close, volume, oi]` rows, most-recent first — e.g.
+for NIFTY on 2026-09-08 the first row is the completed 2026-09-07 daily candle. The
+`BrokerClient` protocol already declares `get_historical_candles(params: CandleRequest)`;
+`MockBrokerClient` implements it (fixture-backed); only `UpstoxLiveClient` has it stubbed as
+`NotImplementedError` ("Add a sync fetcher to UpstoxMarketClient first"). A reference sync
+implementation of the same endpoint already exists at
+`scripts/dev/verify_analytics.py::step_historical_candles` (~L239).
+
+**Suggested fix (not yet started — see task.md B040.x):**
+
+- Implement `get_historical_candles_sync` + async wrapper in
+  `src/client/upstox_market.py` (mirror `verify_analytics.py:239`), delegate from
+  `src/client/upstox_live.py` (replace the `NotImplementedError`).
+- Rewrite `src/signals/snapshot.py::_fetch_prev_ohlc` to build a `CandleRequest` and read
+  `candles[0]` → `close=[4]`, `high=[2]`, `low=[3]`.
+- Fix the stale `{"ohlc": {...}}` shape in `tests/unit/signals/test_signals_snapshot.py` and
+  the `get_ohlc` stub there; add happy + HTTP-error unit tests for the new fetcher in
+  `tests/unit/test_client.py`.
+- `get_ohlc` / `get_ohlc_sync` become unused after this (only caller was `_fetch_prev_ohlc`).
+  Leave in place (protocol-adjacent surface) but correct the lying docstrings, or remove in a
+  follow-up — decide at fix time.
+- Flip the `get_historical_candles` row in `src/client/CLAUDE.md` from ⛔ to implemented.
+- Financial-data boundary → real `@code-reviewer` against the fix diff before commit.
+
+**Investigation notes / scratch (2026-09-08, `scratch/2026-09-08_signals_ohlc_probe.py`,
+read-only, no writes):**
+
+- `/v3/market-quote/ohlc` `interval=1d` → `prev_ohlc: None`, `live_ohlc` = today's forming
+  daily candle. Confirmed again live. Dead end for prev-session daily OHLC.
+- `interval=I1` → `prev_ohlc` populated but it is the previous *minute* candle. Not usable.
+- `/v3/historical-candle/{key}/days/1/{to}/{from}` **and** `/v2/historical-candle/{key}/day/{to}?from_date=`
+  both return `data.candles` as `[ts, open, high, low, close, volume, oi]`, most-recent
+  first. For NIFTY on 2026-09-08 `candles[0]` = `2026-09-07` daily
+  (`close=23779.15 high=23890.0 low=23737.9`) — exactly the three numbers `_fetch_prev_ohlc`
+  needs. The API skips non-trading days itself (2026-09-05 absent), so `candles[0]` is a
+  more reliable "previous session" than computing `prev_trading_day` locally.
+- Repo survey: `src/backtest/vix_ingest.py:92,156` already uses the **v2**
+  `/historical-candle/{key}/day/{to}?from_date=` form for daily India VIX OHLC and parses the
+  same 7-tuple. `scripts/dev/verify_analytics.py:239` uses the **v3** `days/1` form. No
+  strategy sources index prev-day OHLC from `/market-quote/ohlc`.
+- **WebSocket streamer checked (`MarketDataStreamerV3`,
+  upstox.com/developer/api-documentation/streamer-function + .../v3/get-market-data-feed):**
+  does **not** help here. `ltpc` mode's `cp` field is the prior session's *close* only — no
+  prev high/low. `full` mode's `marketOHLC` `1d` entry is the *current* day's forming candle,
+  identical limitation to the REST `/market-quote/ohlc`. No separate prev-day OHLC anywhere in
+  the feed. Plus: protobuf decode + a persistent connection for a once-daily batch cron, and
+  the repo has no streaming infra (`src/streaming/` empty, Phase 1–2). The streamer is a
+  candidate for the *intraday* `StrategyMonitor` poll loop later — out of scope for BUG-040.
+- **Decision:** fix uses the historical-candle REST API. Match `vix_ingest.py`'s v2
+  `day/{to}?from_date={to-7d}` call for consistency with the one existing daily-OHLC
+  fetcher; take `candles[0]`.
+
+**Blast-radius audit (2026-09-08, live probes) — is `_fetch_prev_ohlc` the only broken input?**
+Yes. Every other `assemble_market_snapshot` field was probed against its real source and works:
+
+| Field | Source | Live status |
+|---|---|---|
+| `nifty_spot`, `india_vix` | `get_ltp([NIFTY, VIX])` | ✅ (crash was downstream of this — already proven) |
+| `prev_close/high/low` | `_fetch_prev_ohlc` → `get_ohlc` | ❌ **this bug** |
+| `gift_nifty` | `get_ltp(GLOBAL_INDEX\|SGX NIFTY)` | ✅ `last_price` 23711.5 |
+| `usd_inr` | BOD lookup → `get_ltp(NCD_FO\|1769 = USDINR26SEPFUT)` | ✅ 94.76 |
+| `fii` | NSE `fiidiiTradeReact` scrape | ✅ JSON shape matches (`category`/`netValue`, `07-Sep-2026`) — ⚠ NSE is IP/cookie-sensitive, reverify on the live host once |
+| `monthly_expiry` | BOD lookup | ✅ `2026-09-29` (correct post-April-2026 Tuesday) |
+| `option_chain` | `get_option_chain` V2 + `parse_upstox_option_chain` | ✅ 123 strikes → `OptionChain` |
+| `vix_5d_trend` | local `SignalStore` | ✅ bootstrap → `"flat"` |
+
+Side note for the fix: every `get_ltp` quote already carries `cp` = previous close (e.g. NIFTY
+`cp` seen in the SGX/USDINR probes). So `prev_close` is available for free from the existing
+`get_ltp([NIFTY_KEY])` call — but `prev_high` / `prev_low` still need the historical-candle
+call, so the fix fetches all three from there for consistency.
+
+No production code touched under this note; the fix itself is B040.2–B040.7.
+
+---
+
 ## BUG-038 — `OverlayCloser`'s three `self._notifier.send()` calls are unawaited coroutines (never actually sent)
 
 | Field | Value |

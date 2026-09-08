@@ -24,6 +24,29 @@
 > BUG-036 closed 2026-08-24 (SHA `d40c3a1`, backfill applied same day) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 > BUG-035 closed 2026-08-24 (SHA `0ecd86b`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
+## BUG-040 — signals `_fetch_prev_ohlc` crash: `get_ohlc` shape is fictional + `1d` `prev_ohlc` null intraday
+
+- [ ] **B040.1** — Scratch-verify (read-only) the three candidate endpoints and
+  survey how other NIFTY strategies source daily OHLC —
+  `scratch/2026-09-08_signals_ohlc_probe.py`. Decide the fix's data source.
+- [ ] **B040.2** — Implement `get_historical_candles_sync` + async wrapper in
+  `src/client/upstox_market.py` — v2 `/historical-candle/{key}/day/{to}?from_date=`
+  form, matching `src/backtest/vix_ingest.py:92`; delegate from
+  `src/client/upstox_live.py` (drop the `NotImplementedError`).
+- [ ] **B040.3** — Rewrite `src/signals/snapshot.py::_fetch_prev_ohlc` onto
+  `get_historical_candles` — `candles[0]` → close `[4]` / high `[2]` / low `[3]`.
+- [ ] **B040.4** — Fix the stale `{"ohlc": {...}}` fixture + stub in
+  `tests/unit/signals/test_signals_snapshot.py`; add happy + HTTP-error tests
+  for the new fetcher in `tests/unit/test_client.py`.
+- [ ] **B040.5** — Flip `src/client/CLAUDE.md` `get_historical_candles` row to
+  implemented; note `get_ohlc` now unused (decide leave-vs-remove).
+- [ ] **B040.6** — `pytest tests/unit/` green → real `@code-reviewer` on the
+  diff (financial-data boundary) → commit. One clean manual
+  `python -m scripts.morning_signal` run (logs + Telegram) before closing.
+- [ ] **B040.7** — Flip `bugs.md` BUG-040 status to ✅ Fixed + SHA; move both
+  sections to `docs/archive/bugs/{bugs,task}.md`; `TODOS.md` session-log line.
+  Then S5.5 rollout walkthrough can resume.
+
 ## BUG-038 — `OverlayCloser`'s three `self._notifier.send()` calls are unawaited (never sent)
 
 - [ ] **B038.1** — `trace_path` both methods' callers (`close_collar_all`,
