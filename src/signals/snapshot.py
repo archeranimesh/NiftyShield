@@ -158,6 +158,8 @@ def _summarize_option_chain(chain: OptionChain, nifty_spot: Decimal) -> OptionCh
     atm = min(strikes, key=lambda k: abs(k - nifty_spot))
     atm_leg = strikes[atm]
     atm_ivs = [leg.iv for leg in (atm_leg.ce, atm_leg.pe) if leg is not None and leg.iv is not None]
+    # Degenerate: both ATM legs lack IV (illiquid / pre-open chain). atm_iv is a
+    # non-optional model field, so 0 is the sentinel for "no ATM IV available".
     atm_iv = (sum(atm_ivs) / len(atm_ivs)) if atm_ivs else Decimal("0")
 
     otm_call_iv = next(
@@ -176,8 +178,12 @@ def _summarize_option_chain(chain: OptionChain, nifty_spot: Decimal) -> OptionCh
         ),
         None,
     )
-    iv_skew = (otm_call_iv if otm_call_iv is not None else Decimal("0")) - (
-        otm_put_iv if otm_put_iv is not None else Decimal("0")
+    # Both sides required: a one-sided subtraction (e.g. 0 - put_iv) would look
+    # like a valid skew but carry the wrong magnitude, so fall back to 0 instead.
+    iv_skew = (
+        otm_call_iv - otm_put_iv
+        if otm_call_iv is not None and otm_put_iv is not None
+        else Decimal("0")
     )
 
     total_call_oi = sum(s.ce.oi for s in strikes.values() if s.ce is not None)

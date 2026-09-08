@@ -186,6 +186,47 @@ async def test_vix_trend_rising(_patch_market_inputs) -> None:
 
 
 @pytest.mark.asyncio
+async def test_iv_skew_zero_when_one_otm_side_missing(_patch_market_inputs) -> None:
+    """Exactly one OTM IV present -> iv_skew falls back to 0, not one-sided noise."""
+    chain = _raw_chain()
+    chain[2]["call_options"]["option_greeks"].pop("iv")  # 23900 CE (first OTM call) loses IV
+    broker = _FakeBroker(
+        ltp={
+            "NSE_INDEX|Nifty 50": Decimal("23850"),  # ATM 23800, first OTM call 23900
+            "NSE_INDEX|India VIX": Decimal("11.16"),
+        },
+        ohlc={"NSE_INDEX|Nifty 50": {"ohlc": {"high": 1, "low": 1, "close": 1}}},
+        chain=chain,
+    )
+    snap = await assemble_market_snapshot(
+        broker,
+        store=_StubStore(),
+        trade_date=date(2026, 9, 8),
+        lookup=_nifty_expiry_lookup(),
+    )
+    assert snap.option_chain.iv_skew == Decimal("0")
+
+
+@pytest.mark.asyncio
+async def test_empty_option_chain_raises(_patch_market_inputs) -> None:
+    broker = _FakeBroker(
+        ltp={
+            "NSE_INDEX|Nifty 50": Decimal("23779.15"),
+            "NSE_INDEX|India VIX": Decimal("11.16"),
+        },
+        ohlc={"NSE_INDEX|Nifty 50": {"ohlc": {"high": 1, "low": 1, "close": 1}}},
+        chain=[],
+    )
+    with pytest.raises(DataFetchError, match="no strikes"):
+        await assemble_market_snapshot(
+            broker,
+            store=_StubStore(),
+            trade_date=date(2026, 9, 8),
+            lookup=_nifty_expiry_lookup(),
+        )
+
+
+@pytest.mark.asyncio
 async def test_assemble_missing_nifty_spot_raises(_patch_market_inputs) -> None:
     broker = _FakeBroker(ltp={"NSE_INDEX|India VIX": Decimal("11.16")})
     with pytest.raises(DataFetchError, match="nifty_spot unavailable"):
