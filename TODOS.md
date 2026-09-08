@@ -27,7 +27,7 @@ rot them.
 6. **Options Income strategy** — `docs/plan/options_income/` — next **S0** (data audit).
 7. **Backtest Engine** — `docs/plan/backtest-engine/` (`phase1..4/`) — next **1.3a / 1.4** (parallel, `phase1/`). Four chained phases; each phase's GATE task blocks the next dir. Gated on
    `variance-gate`. `BACKTEST_PLAN_PHASE1.md` is the canonical spec; the phase dirs are thin status pointers.
-8. **signals: multi-LLM daily signal pipeline** — `docs/plan/signals/` — next **S5.2b**. Parallel track — self-contained `src/signals/` package, own SQLite tables, zero
+8. **signals: multi-LLM daily signal pipeline** — `docs/plan/signals/` — next **S5.2c**. Parallel track — self-contained `src/signals/` package, own SQLite tables, zero
    `backtest-engine` / `backtest-eval-core` dependency; runs alongside item 7. `OPENROUTER_API_KEY` needed only for the live 09:15 cron (S5.2); S5.4 baseline stats to
    be reconciled with `backtest-eval-core` later. Unblocked from `signals-eval-core` 2026-09-07 (parallel-track decision).
 9. **backtest-eval-core** — `docs/plan/backtest-eval-core/` — next **B1.1**. Blocked until `backtest-engine` tasks 1.3 + 1.4 land.
@@ -112,6 +112,10 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-08] signals S5.2b — added `BrokerClient.get_ohlc(instruments, interval="1d")` to the protocol
+  + all impls (upstox_market async wrapper over get_ohlc_sync, upstox_live delegate, mock_client canned
+  dict via set_ohlc) and `SignalStore.get_recent_snapshots(n)` (newest-first, n<=0 guard) + 6 tests.
+  Prereqs for the S5.2c snapshot assembler. SKIP=mypy (7 pre-existing upstox_live.py errors). SHA: e1b5a0a
 - [2026-09-08] signals S5.2b split (docs-only) — the old combined S5.2b (get_ohlc/get_recent_snapshots
   prereqs + snapshot.py assembler) split into S5.2b (client `get_ohlc` across protocol + all 3 impls +
   `SignalStore.get_recent_snapshots` + tests) and S5.2c (`snapshot.py` assemble_market_snapshot), one

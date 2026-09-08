@@ -46,7 +46,8 @@ Top-level `src/` packages, one line each (detail → `CONTEXT_TREE.md`):
   Frozen Pydantic models (`MarketSnapshot`/`SignalResponse`/`DailySignal`/`SignalOutcome`, `Direction`/`TradeAction`),
   `SignalProvider` protocol, pure `build_prompt`, pure `SignalAggregator` consensus, `SignalStore` (own SQLite
   tables `signal_inputs`/`signal_responses`/`daily_signals`/`signal_outcomes`). Provider impls + `build_providers` factory done;
-  `market_inputs.py` (gift_nifty / usd_inr / fii fetchers) done; `snapshot.py` assembler + crons pending (S5.2b+).
+  `market_inputs.py` (gift_nifty / usd_inr / fii fetchers) + `BrokerClient.get_ohlc` /
+  `SignalStore.get_recent_snapshots` prereqs done; `snapshot.py` assembler + crons pending (S5.2c+).
 - `src/risk/` — portfolio-level delta controls: `PortfolioDelta` frozen dataclass,
   `PortfolioDeltaTracker.aggregate_delta(...)` (chain-derived `position_deltas` used as-is, else
   CE/PE approximation with logged WARNING; pure/zero-I/O per council 2026-07-02),
