@@ -27,6 +27,63 @@
 
 ---
 
+## BUG-041 — signals `grok` + `gemini` providers fail on OpenRouter (stale hardcoded model slugs, not env-configurable)
+
+| Field | Value |
+|---|---|
+| Severity | **Medium** — `gpt4o` still works so the pipeline degrades to a single-model vote; but |
+| | with all three enabled, two never respond and a lone vote can't reach `consensus_required=2` → every day `NO_TRADE`. |
+| Status | 🔴 Open |
+| Discovered | 2026-09-08, first live run with all three providers enabled |
+| | (`logs/morning_signal.log`, 15:11 run), via the new `morning_signal.provider_error` lines (SHA `8459604`). |
+| Location | `src/signals/providers/grok.py:17` (`x-ai/grok-3`), `gemini.py:22` |
+| | (`google/gemini-2.0-flash`), `src/signals/factory.py::_construct`. |
+
+**Symptom (from `logs/morning_signal.log`, 2026-09-08 15:11):**
+
+```
+morning_signal.provider_error exc=grok: HTTP 404: 404, message='Not Found', url='https://openrouter.ai/api/v1/chat/completions'
+morning_signal.provider_response provider=gpt4o direction=NEUTRAL confidence=3 ...
+morning_signal.provider_error exc=gemini: HTTP 400: 400, message='Bad Request', url='https://openrouter.ai/api/v1/chat/completions'
+morning_signal_complete n_responses=1 consensus_direction=NEUTRAL trade_action=NO_TRADE
+```
+
+**Root cause (not yet fully confirmed — needs an OpenRouter model-list check):**
+
+1. **`grok` 404** — a 404 on OpenRouter's `/chat/completions` is the model slug not existing.
+   `grok.py` hardcodes `x-ai/grok-3`; OpenRouter appears to have retired/renamed it. The live
+   slug (e.g. `x-ai/grok-4`, `x-ai/grok-3-mini`, `x-ai/grok-2-1212`) must be taken from
+   openrouter.ai/models.
+2. **`gemini` 400** — `gpt4o` sends a byte-identical payload (`response_format:
+   {"type": "json_object"}`, `max_tokens`, `temperature`) and succeeds, so the 400 is almost
+   certainly the slug: OpenRouter wants a version suffix, `google/gemini-2.0-flash-001`, not
+   the bare `google/gemini-2.0-flash`. Outside chance it's `response_format` not being
+   supported for that model on OpenRouter.
+3. **Diagnostics gap** — both providers call `resp.raise_for_status()` *before* reading the
+   body, so OpenRouter's error JSON (which names the exact reason) is discarded; the
+   `DataFetchError` only carries the bare HTTP status. Read + log the response body on a
+   non-2xx before raising.
+
+**Suggested fix (next session):**
+
+- Make the OpenRouter model slug per-provider env-configurable — `SIGNAL_MODEL_GROK` /
+  `SIGNAL_MODEL_GPT4O` / `SIGNAL_MODEL_GEMINI`, read in `factory._construct` from the same
+  injectable `env` dict `build_providers` already uses for `SIGNAL_PROVIDERS`, each defaulting
+  to that provider's current constant. Add a `model` param to `GrokSignalProvider` /
+  `GeminiSignalProvider` mirroring `GPT4oSignalProvider`'s existing one. Document the three
+  vars in `.env.example`.
+- Pick verified-working default slugs for grok + gemini from openrouter.ai/models (Animesh to
+  confirm at fix time — do not guess).
+- Capture the OpenRouter error body into the `DataFetchError` message before `raise_for_status`.
+
+**Out of scope but noted here so it is not lost:** `SIGNAL_MIN_CONFIDENCE` is documented in
+`.env.example` (`# avg confidence of agreeing models to emit trade_action`) but never wired —
+`SignalAggregator.__init__` hardcodes `min_confidence=3` / `consensus_required=2` and nothing
+reads the env var or passes overrides. `scripts/morning_signal.py` constructs
+`SignalAggregator()` with no args. Same `_construct`/factory pass should thread these through.
+
+---
+
 ## BUG-040 — signals pipeline crashes at `_fetch_prev_ohlc`: `get_ohlc` expects a response shape Upstox v3 never returns, and `1d` `prev_ohlc` is null intraday
 
 | Field | Value |
