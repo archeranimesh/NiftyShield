@@ -112,6 +112,11 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-08] signals S5.2 — `scripts/morning_signal.py` 09:15 AM cron: pure wiring over
+  `assemble_market_snapshot` → `build_providers` → `asyncio.gather` fan-out (return_exceptions) →
+  `SignalAggregator.aggregate` → `SignalStore` writes (init_db/record_snapshot/response/signal via
+  to_thread) → guarded `build_notifier` send + end-of-run structured JSON log. No unit tests
+  (integration-only). SHA: e299a6b
 - [2026-09-08] signals S5.2c — `src/signals/snapshot.py` `assemble_market_snapshot`: the 7 non-S5.2a
   MarketSnapshot fields (nifty_spot/india_vix via get_ltp, prev close/high/low via get_ohlc "1d",
   monthly_expiry via InstrumentLookup, option_chain→OptionChainSummary derivation, vix_5d_trend over

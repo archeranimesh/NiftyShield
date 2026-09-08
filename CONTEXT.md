@@ -47,7 +47,7 @@ Top-level `src/` packages, one line each (detail → `CONTEXT_TREE.md`):
   `SignalProvider` protocol, pure `build_prompt`, pure `SignalAggregator` consensus, `SignalStore` (own SQLite
   tables `signal_inputs`/`signal_responses`/`daily_signals`/`signal_outcomes`). Provider impls + `build_providers` factory done;
   `market_inputs.py` (gift_nifty / usd_inr / fii fetchers) + `BrokerClient.get_ohlc` /
-  `SignalStore.get_recent_snapshots` prereqs done; `snapshot.py` `assemble_market_snapshot` done (S5.2c); crons pending (S5.2+).
+  `SignalStore.get_recent_snapshots` prereqs done; `snapshot.py` `assemble_market_snapshot` done (S5.2c); `scripts/morning_signal.py` 09:15 cron done (S5.2); outcome/report crons pending (S5.3+).
 - `src/risk/` — portfolio-level delta controls: `PortfolioDelta` frozen dataclass,
   `PortfolioDeltaTracker.aggregate_delta(...)` (chain-derived `position_deltas` used as-is, else
   CE/PE approximation with logged WARNING; pure/zero-I/O per council 2026-07-02),
@@ -84,8 +84,9 @@ Developer + research tooling (`pyproject.toml`, `Makefile`, `.pre-commit-config.
 ### What Does NOT Exist Yet
 
 - `src/execution/`, `src/streaming/` — empty (planned per BACKTEST_PLAN.md Phase 1–2)
-- `scripts/morning_signal.py` / `record_signal_outcome.py` / `signal_report.py` signals crons and `config/signals.toml` —
-  pending (`docs/plan/signals/` S5); live crons gated on `OPENROUTER_API_KEY`
+- `scripts/record_signal_outcome.py` / `signal_report.py` signals crons and `config/signals.toml` —
+  pending (`docs/plan/signals/` S5.3+); live crons gated on `OPENROUTER_API_KEY`
+  (`scripts/morning_signal.py` done — S5.2, `e299a6b`)
 
 ### Live Data
 
