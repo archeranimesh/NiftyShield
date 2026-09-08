@@ -112,6 +112,11 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-08] signals S5.4 — `scripts/signal_report.py` on-demand performance report: aggregates
+  `get_all_outcomes` over a `--from`/`--to`/`--phase` window into OVERALL (win rate, realised EV,
+  deterministic md5 coin-flip baseline), per-model direction accuracy (09:10 snapshot spot as open
+  proxy), confidence calibration, NO_TRADE move check, phase breakdown. No unit tests (per S5.4 spec).
+  — SHA: <pending>
 - [2026-09-08] signals S5.3 — `scripts/record_signal_outcome.py` 03:00 PM outcome recorder: reads the
   day's `DailySignal`, captures entry/exit premium (manual flags or `--auto` weekly-expiry BOD lookup +
   live LTP), writes one `SignalOutcome` row; NO_TRADE / non-executed signals still logged for direction
