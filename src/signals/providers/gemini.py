@@ -43,6 +43,7 @@ class GeminiSignalProvider:
         api_key: str,
         use_openrouter: bool = True,
         timeout: float = 30.0,
+        model: str | None = None,
     ) -> None:
         """Configure the provider.
 
@@ -50,6 +51,8 @@ class GeminiSignalProvider:
             api_key: OpenRouter key (Phase 1) or ``GOOGLE_AI_API_KEY`` (Phase 2).
             use_openrouter: Route via OpenRouter when True, else Google AI SDK.
             timeout: Total request timeout in seconds (Phase 1 only).
+            model: Override the OpenRouter model slug. Defaults to
+                ``google/gemini-2.0-flash``.
 
         Raises:
             ImportError: When ``use_openrouter=False`` and ``google-generativeai``
@@ -59,7 +62,8 @@ class GeminiSignalProvider:
             raise ImportError(_MISSING_SDK)
         self._api_key = api_key
         self._use_openrouter = use_openrouter
-        self._base_url, self._model = _OPENROUTER
+        self._base_url, default_model = _OPENROUTER
+        self._model = model or default_model
         self._timeout_s = timeout
         self._timeout = aiohttp.ClientTimeout(total=timeout)
         if not use_openrouter:

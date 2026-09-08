@@ -41,6 +41,9 @@ def build_providers(env: dict | None = None) -> list[SignalProvider]:
         SIGNAL_PROVIDERS: comma-separated subset of ``"grok,gpt4o,gemini"``
             (default ``"gpt4o"``).
         OPENROUTER_API_KEY: required for every Phase 1 provider.
+        SIGNAL_MODEL_GROK / SIGNAL_MODEL_GPT4O / SIGNAL_MODEL_GEMINI: optional
+            per-provider OpenRouter model-slug overrides; each defaults to that
+            provider's built-in constant.
         UPSTOX_ENV: ``"test"`` short-circuits to ``[MockSignalProvider()]``.
     """
     env = os.environ if env is None else env
@@ -66,7 +69,7 @@ def build_providers(env: dict | None = None) -> list[SignalProvider]:
                 reason="OPENROUTER_API_KEY missing",
             )
             continue
-        providers.append(_construct(name, openrouter_key))
+        providers.append(_construct(name, openrouter_key, env))
 
     unknown = requested - set(_KNOWN_PROVIDERS)
     for name in sorted(unknown):
@@ -79,12 +82,25 @@ def build_providers(env: dict | None = None) -> list[SignalProvider]:
     return providers
 
 
-def _construct(name: str, openrouter_key: str) -> SignalProvider:
-    """Instantiate one Phase 1 provider by name."""
+_MODEL_ENV_VAR = {
+    "grok": "SIGNAL_MODEL_GROK",
+    "gpt4o": "SIGNAL_MODEL_GPT4O",
+    "gemini": "SIGNAL_MODEL_GEMINI",
+}
+
+
+def _construct(name: str, openrouter_key: str, env: dict) -> SignalProvider:
+    """Instantiate one Phase 1 provider by name.
+
+    Reads ``SIGNAL_MODEL_<NAME>`` from ``env`` for an optional slug override;
+    an empty or missing value leaves the provider on its built-in default.
+    """
+    model = env.get(_MODEL_ENV_VAR[name], "").strip() or None
     if name == "gpt4o":
-        return GPT4oSignalProvider(api_key=openrouter_key)
+        kwargs = {"model": model} if model else {}
+        return GPT4oSignalProvider(api_key=openrouter_key, **kwargs)
     if name == "grok":
-        return GrokSignalProvider(api_key=openrouter_key, use_openrouter=True)
+        return GrokSignalProvider(api_key=openrouter_key, use_openrouter=True, model=model)
     if name == "gemini":
-        return GeminiSignalProvider(api_key=openrouter_key, use_openrouter=True)
+        return GeminiSignalProvider(api_key=openrouter_key, use_openrouter=True, model=model)
     raise ValueError(f"Unknown provider: {name}")

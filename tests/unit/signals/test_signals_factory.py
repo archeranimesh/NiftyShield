@@ -59,6 +59,36 @@ def test_all_three_configured_in_canonical_order() -> None:
     assert [p.provider_name for p in providers] == ["grok", "gpt4o", "gemini"]
 
 
+def test_model_slug_overrides_applied_per_provider() -> None:
+    providers = build_providers(
+        {
+            **_OPENROUTER,
+            "SIGNAL_PROVIDERS": "grok,gpt4o,gemini",
+            "SIGNAL_MODEL_GROK": "x-ai/grok-4.1-fast",
+            "SIGNAL_MODEL_GPT4O": "openai/gpt-4.1",
+            "SIGNAL_MODEL_GEMINI": "google/gemini-3.7-flash",
+        },
+    )
+    by_name = {p.provider_name: p for p in providers}
+    assert by_name["grok"]._model == "x-ai/grok-4.1-fast"
+    assert by_name["gpt4o"]._model == "openai/gpt-4.1"
+    assert by_name["gemini"]._model == "google/gemini-3.7-flash"
+
+
+def test_blank_or_missing_slug_keeps_provider_default() -> None:
+    providers = build_providers(
+        {
+            **_OPENROUTER,
+            "SIGNAL_PROVIDERS": "grok,gpt4o,gemini",
+            "SIGNAL_MODEL_GROK": "   ",
+        },
+    )
+    by_name = {p.provider_name: p for p in providers}
+    assert by_name["grok"]._model == "x-ai/grok-3"
+    assert by_name["gpt4o"]._model == "openai/gpt-4o"
+    assert by_name["gemini"]._model == "google/gemini-2.0-flash"
+
+
 def test_unknown_provider_logs_warning(
     caplog: pytest.LogCaptureFixture,
 ) -> None:

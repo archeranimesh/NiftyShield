@@ -209,5 +209,18 @@ def test_provider_name_attribute() -> None:
     assert GeminiSignalProvider(api_key="k").provider_name == "gemini"
 
 
+def test_default_model_slug() -> None:
+    assert GeminiSignalProvider(api_key="k")._model == "google/gemini-2.0-flash"
+
+
+async def test_model_override_sent_in_payload(snapshot: MarketSnapshot) -> None:
+    session = _FakeSession(_FakeResponse(body=_valid_body("BEARISH", 3)))
+    with _patch_session(session):
+        await GeminiSignalProvider(api_key="k", model="google/gemini-3.7-flash").get_signal(
+            snapshot
+        )
+    assert session.calls[0][1]["json"]["model"] == "google/gemini-3.7-flash"
+
+
 def test_is_runtime_signal_provider() -> None:
     assert isinstance(GeminiSignalProvider(api_key="k"), SignalProvider)

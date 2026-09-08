@@ -169,5 +169,16 @@ def test_provider_name_attribute() -> None:
     assert GrokSignalProvider(api_key="k").provider_name == "grok"
 
 
+def test_default_model_slug() -> None:
+    assert GrokSignalProvider(api_key="k")._model == "x-ai/grok-3"
+
+
+async def test_model_override_sent_in_payload(snapshot: MarketSnapshot) -> None:
+    session = _FakeSession(_FakeResponse(body=_valid_body()))
+    with _patch_session(session):
+        await GrokSignalProvider(api_key="k", model="x-ai/grok-4.1-fast").get_signal(snapshot)
+    assert session.calls[0][1]["json"]["model"] == "x-ai/grok-4.1-fast"
+
+
 def test_is_runtime_signal_provider() -> None:
     assert isinstance(GrokSignalProvider(api_key="k"), SignalProvider)

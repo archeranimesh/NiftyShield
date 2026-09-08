@@ -36,6 +36,7 @@ class GrokSignalProvider:
         api_key: str,
         use_openrouter: bool = True,
         timeout: float = 30.0,
+        model: str | None = None,
     ) -> None:
         """Configure the provider.
 
@@ -43,10 +44,13 @@ class GrokSignalProvider:
             api_key: OpenRouter key (Phase 1) or xAI key (Phase 2).
             use_openrouter: Route via OpenRouter when True, else xAI direct.
             timeout: Total request timeout in seconds.
+            model: Override the model slug. Defaults to the current mode's
+                constant (``x-ai/grok-3`` on OpenRouter, ``grok-3`` direct).
         """
         self._api_key = api_key
         self._use_openrouter = use_openrouter
-        self._base_url, self._model = _OPENROUTER if use_openrouter else _XAI_DIRECT
+        self._base_url, default_model = _OPENROUTER if use_openrouter else _XAI_DIRECT
+        self._model = model or default_model
         self._timeout = aiohttp.ClientTimeout(total=timeout)
 
     async def get_signal(self, snapshot: MarketSnapshot) -> SignalResponse:
