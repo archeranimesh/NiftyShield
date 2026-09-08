@@ -30,8 +30,7 @@ from src.config import settings  # noqa: E402
 from src.market_calendar import market_today  # noqa: E402
 from src.notifications.markdown import escape_markdown  # noqa: E402
 from src.notifications.telegram import build_notifier  # noqa: E402
-from src.signals.aggregator import SignalAggregator  # noqa: E402
-from src.signals.factory import build_providers  # noqa: E402
+from src.signals.factory import build_aggregator, build_providers  # noqa: E402
 from src.signals.models import (  # noqa: E402
     DailySignal,
     Direction,
@@ -158,7 +157,7 @@ async def run() -> None:
             errors=len(responses),
         )
 
-    signal = SignalAggregator().aggregate(snapshot, valid)
+    signal = build_aggregator().aggregate(snapshot, valid)
     await asyncio.to_thread(store.record_signal, signal)
 
     notifier = build_notifier()

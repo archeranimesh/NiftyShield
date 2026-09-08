@@ -11,6 +11,7 @@ import os
 
 import structlog
 
+from .aggregator import SignalAggregator
 from .protocol import SignalProvider
 from .providers.gemini import GeminiSignalProvider
 from .providers.gpt4o import GPT4oSignalProvider
@@ -104,3 +105,44 @@ def _construct(name: str, openrouter_key: str, env: dict) -> SignalProvider:
     if name == "gemini":
         return GeminiSignalProvider(api_key=openrouter_key, use_openrouter=True, model=model)
     raise ValueError(f"Unknown provider: {name}")
+
+
+def _int_env(env: dict, key: str, default: int) -> int:
+    """Read a positive int from ``env``.
+
+    Falls back to ``default`` on a blank, non-integer, or sub-1 value.
+    """
+    raw = env.get(key, "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning("signal_env_not_int", key=key, value=raw, fallback=default)
+        return default
+    if value < 1:
+        logger.warning("signal_env_out_of_range", key=key, value=value, fallback=default)
+        return default
+    return value
+
+
+def build_aggregator(env: dict | None = None) -> SignalAggregator:
+    """Build the consensus aggregator from environment variables.
+
+    Args:
+        env: Environment mapping. Defaults to ``os.environ``; pass a dict in
+            tests to avoid touching real env vars.
+
+    Reads:
+        SIGNAL_MIN_CONFIDENCE: mean confidence of agreeing models required for
+            a directional trade (default 3).
+        SIGNAL_CONSENSUS_REQUIRED: number of validated models that must agree
+            on a direction (default 2).
+
+    Blank, non-integer, or sub-1 values fall back to the default with a warning.
+    """
+    env = os.environ if env is None else env
+    return SignalAggregator(
+        min_confidence=_int_env(env, "SIGNAL_MIN_CONFIDENCE", 3),
+        consensus_required=_int_env(env, "SIGNAL_CONSENSUS_REQUIRED", 2),
+    )

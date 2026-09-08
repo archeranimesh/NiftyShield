@@ -6,7 +6,7 @@ import logging
 
 import pytest
 
-from src.signals.factory import build_providers
+from src.signals.factory import build_aggregator, build_providers
 from src.signals.providers.mock import MockSignalProvider
 
 _OPENROUTER = {"OPENROUTER_API_KEY": "or-key"}  # pragma: allowlist secret
@@ -87,6 +87,33 @@ def test_blank_or_missing_slug_keeps_provider_default() -> None:
     assert by_name["grok"]._model == "x-ai/grok-3"
     assert by_name["gpt4o"]._model == "openai/gpt-4o"
     assert by_name["gemini"]._model == "google/gemini-2.0-flash"
+
+
+def test_aggregator_defaults_when_unset() -> None:
+    agg = build_aggregator({})
+    assert agg.min_confidence == 3
+    assert agg.consensus_required == 2
+
+
+def test_aggregator_reads_env_overrides() -> None:
+    agg = build_aggregator(
+        {"SIGNAL_MIN_CONFIDENCE": "4", "SIGNAL_CONSENSUS_REQUIRED": "3"},
+    )
+    assert agg.min_confidence == 4
+    assert agg.consensus_required == 3
+
+
+def test_aggregator_invalid_value_falls_back_with_warning(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    with caplog.at_level(logging.WARNING):
+        agg = build_aggregator(
+            {"SIGNAL_MIN_CONFIDENCE": "high", "SIGNAL_CONSENSUS_REQUIRED": "0"},
+        )
+    assert agg.min_confidence == 3
+    assert agg.consensus_required == 2
+    assert "signal_env_not_int" in caplog.text
+    assert "signal_env_out_of_range" in caplog.text
 
 
 def test_unknown_provider_logs_warning(

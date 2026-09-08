@@ -119,11 +119,14 @@ morning_signal_complete n_responses=1 consensus_direction=NEUTRAL trade_action=N
   `UnicodeDecodeError` gap, type hint, line length) all resolved before commit. Status stays
   🔴 Open — B041.4–B041.6 remain.
 
-**Out of scope but noted here so it is not lost:** `SIGNAL_MIN_CONFIDENCE` is documented in
-`.env.example` (`# avg confidence of agreeing models to emit trade_action`) but never wired —
-`SignalAggregator.__init__` hardcodes `min_confidence=3` / `consensus_required=2` and nothing
-reads the env var or passes overrides. `scripts/morning_signal.py` constructs
-`SignalAggregator()` with no args. Same `_construct`/factory pass should thread these through.
+- **B041.4** — `factory.build_aggregator(env=None)` added, mirroring `build_providers`: reads
+  `SIGNAL_MIN_CONFIDENCE` (default 3) and `SIGNAL_CONSENSUS_REQUIRED` (default 2) via a shared
+  `_int_env` helper (blank / non-int / sub-1 → default + warning). `scripts/morning_signal.py`
+  now calls `build_aggregator()` instead of `SignalAggregator()`. `.env.example` gains
+  `SIGNAL_CONSENSUS_REQUIRED` (on-disk only — `.env*` gitignored). Tests: 3 in
+  `test_signals_factory.py` (defaults / overrides / invalid-fallback); `test_morning_signal.py`
+  mock target renamed. Suite green (3343). `@code-reviewer`: 0 CRITICAL/ERROR, 4 line-length
+  WARNINGs all fixed before commit. Status stays 🔴 Open — B041.5–B041.6 remain.
 
 ---
 

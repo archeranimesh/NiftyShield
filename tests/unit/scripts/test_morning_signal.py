@@ -96,7 +96,7 @@ async def _run_with(providers: list[object]) -> list[tuple[str, dict]]:
             "assemble_market_snapshot",
             AsyncMock(return_value=_fake_snapshot()),
         ),
-        patch.object(morning_signal, "SignalAggregator", return_value=aggregator),
+        patch.object(morning_signal, "build_aggregator", return_value=aggregator),
         patch.object(morning_signal, "build_notifier", return_value=None),
         patch.object(morning_signal, "market_today", return_value=date(2026, 9, 8)),
     ):

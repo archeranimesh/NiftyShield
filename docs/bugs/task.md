@@ -32,9 +32,9 @@
 - [x] **B041.3** — OpenRouter error-response body now captured into the
   `DataFetchError` message (body read before status check) in all three
   providers. | SHA `5bdd18c`
-- [ ] **B041.4** — Also wire `SIGNAL_MIN_CONFIDENCE` (+ optionally a consensus
-  count) through the same factory pass into `SignalAggregator` — currently
-  documented in `.env.example` but hardcoded.
+- [x] **B041.4** — `SIGNAL_MIN_CONFIDENCE` + `SIGNAL_CONSENSUS_REQUIRED` wired
+  through new `factory.build_aggregator(env)` into `SignalAggregator`;
+  `morning_signal` uses it instead of a bare `SignalAggregator()`.
 - [ ] **B041.5** — Tests: `test_signals_factory.py` for the slug/env override
   + defaults; provider tests for the error-body capture. `pytest tests/unit/`
   green → real `@code-reviewer` → commit. One manual `morning_signal` run with
