@@ -126,7 +126,8 @@ morning_signal_complete n_responses=1 consensus_direction=NEUTRAL trade_action=N
   `SIGNAL_CONSENSUS_REQUIRED` (on-disk only — `.env*` gitignored). Tests: 3 in
   `test_signals_factory.py` (defaults / overrides / invalid-fallback); `test_morning_signal.py`
   mock target renamed. Suite green (3343). `@code-reviewer`: 0 CRITICAL/ERROR, 4 line-length
-  WARNINGs all fixed before commit. Status stays 🔴 Open — B041.5–B041.6 remain.
+  WARNINGs were under the repo's ruff line limit — no change. SHA `1e36c32`. Status stays
+  🔴 Open — B041.5–B041.6 remain.
 
 ---
 

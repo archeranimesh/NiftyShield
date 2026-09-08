@@ -34,7 +34,7 @@
   providers. | SHA `5bdd18c`
 - [x] **B041.4** — `SIGNAL_MIN_CONFIDENCE` + `SIGNAL_CONSENSUS_REQUIRED` wired
   through new `factory.build_aggregator(env)` into `SignalAggregator`;
-  `morning_signal` uses it instead of a bare `SignalAggregator()`.
+  `morning_signal` uses it instead of a bare `SignalAggregator()`. | SHA `1e36c32`
 - [ ] **B041.5** — Tests: `test_signals_factory.py` for the slug/env override
   + defaults; provider tests for the error-body capture. `pytest tests/unit/`
   green → real `@code-reviewer` → commit. One manual `morning_signal` run with

@@ -224,7 +224,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
   through new `src/signals/factory.build_aggregator(env)` (shared `_int_env` helper, blank/invalid
   → default + warning) into `SignalAggregator`; `scripts/morning_signal.py` calls it instead of a
   bare `SignalAggregator()`. 3 factory tests + mock-target rename. 3343 tests green; `@code-reviewer`
-  0 CRITICAL/ERROR (4 line-length WARNINGs fixed). SHA: `<pending>`
+  0 CRITICAL/ERROR. SHA: `1e36c32`
 
 Full forensic log (SHAs, bug numbers, root-cause detail) moved to [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md) — most recently during the 2026-08-26 reorg (everything from 2026-08-01
 through 2026-08-26, plus item 29's inline design history above). Add new entries there going forward, or start a fresh dated section here if this file's Session Log grows large again.
