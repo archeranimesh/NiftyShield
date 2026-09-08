@@ -1273,3 +1273,116 @@ with BUG-031 (live monitor not seeing overlay positions to close) — ruled out,
 result above.
 
 ---
+
+## BUG-041 — signals `grok` + `gemini` providers fail on OpenRouter (stale hardcoded model slugs, not env-configurable)
+
+| Field | Value |
+|---|---|
+| Severity | **Medium** — `gpt4o` still works so the pipeline degrades to a single-model vote; but |
+| | with all three enabled, two never respond and a lone vote can't reach `consensus_required=2` → every day `NO_TRADE`. |
+| Status | ✅ Fixed (2026-09-08, SHA `<PENDING>`) — root-cause chain B041.1–B041.4, closed via B041.5/B041.6 |
+| Discovered | 2026-09-08, first live run with all three providers enabled |
+| | (`logs/morning_signal.log`, 15:11 run), via the new `morning_signal.provider_error` lines (SHA `8459604`). |
+| Location | `src/signals/providers/grok.py:17` (`x-ai/grok-3`), `gemini.py:22` |
+| | (`google/gemini-2.0-flash`), `src/signals/factory.py::_construct`. |
+
+**Symptom (from `logs/morning_signal.log`, 2026-09-08 15:11):**
+
+```
+morning_signal.provider_error exc=grok: HTTP 404: 404, message='Not Found', url='https://openrouter.ai/api/v1/chat/completions'
+morning_signal.provider_response provider=gpt4o direction=NEUTRAL confidence=3 ...
+morning_signal.provider_error exc=gemini: HTTP 400: 400, message='Bad Request', url='https://openrouter.ai/api/v1/chat/completions'
+morning_signal_complete n_responses=1 consensus_direction=NEUTRAL trade_action=NO_TRADE
+```
+
+**Root cause (not yet fully confirmed — needs an OpenRouter model-list check):**
+
+1. **`grok` 404** — a 404 on OpenRouter's `/chat/completions` is the model slug not existing.
+   `grok.py` hardcodes `x-ai/grok-3`; OpenRouter appears to have retired/renamed it. The live
+   slug (e.g. `x-ai/grok-4`, `x-ai/grok-3-mini`, `x-ai/grok-2-1212`) must be taken from
+   openrouter.ai/models.
+2. **`gemini` 400** — `gpt4o` sends a byte-identical payload (`response_format:
+   {"type": "json_object"}`, `max_tokens`, `temperature`) and succeeds, so the 400 is almost
+   certainly the slug: OpenRouter wants a version suffix, `google/gemini-2.0-flash-001`, not
+   the bare `google/gemini-2.0-flash`. Outside chance it's `response_format` not being
+   supported for that model on OpenRouter.
+3. **Diagnostics gap** — both providers call `resp.raise_for_status()` *before* reading the
+   body, so OpenRouter's error JSON (which names the exact reason) is discarded; the
+   `DataFetchError` only carries the bare HTTP status. Read + log the response body on a
+   non-2xx before raising.
+
+**Suggested fix (next session):**
+
+- Make the OpenRouter model slug per-provider env-configurable — `SIGNAL_MODEL_GROK` /
+  `SIGNAL_MODEL_GPT4O` / `SIGNAL_MODEL_GEMINI`, read in `factory._construct` from the same
+  injectable `env` dict `build_providers` already uses for `SIGNAL_PROVIDERS`, each defaulting
+  to that provider's current constant. Add a `model` param to `GrokSignalProvider` /
+  `GeminiSignalProvider` mirroring `GPT4oSignalProvider`'s existing one. Document the three
+  vars in `.env.example`.
+- Pick verified-working default slugs for grok + gemini from openrouter.ai/models (Animesh to
+  confirm at fix time — do not guess).
+- Capture the OpenRouter error body into the `DataFetchError` message before `raise_for_status`.
+
+**Implementation progress:**
+
+- **B041.1 / B041.2 (SHA `f1fad55`)** — Confirmed on openrouter.ai (Sept 2026): `x-ai/grok-3`
+  returns 404 (retired; Grok is on 4.x — e.g. `x-ai/grok-4.1-fast`) and `google/gemini-2.0-flash`
+  returns 400 (retired; Gemini Flash is on 3.x — e.g. `google/gemini-3.7-flash`). The gemini 400
+  is the slug, **not** `response_format` — `gpt4o` sends a byte-identical payload and succeeds,
+  and current Gemini Flash models support structured outputs. Decision (Animesh): slugs become
+  env-configurable, defaults stay at the existing constants, real values filled in `.env` on the
+  live host. Added `SIGNAL_MODEL_{GROK,GPT4O,GEMINI}`, read in `factory._construct` from the
+  injectable `env` dict (blank/missing → provider default); added a `model: str | None` param to
+  `GrokSignalProvider` / `GeminiSignalProvider` mirroring `GPT4oSignalProvider`. Tests:
+  factory override + fallback, per-provider payload-slug assertions. Suite green (3331). Real
+  `@code-reviewer`: 1 WARNING (env annotation precision, matches pre-existing signature), 0
+  ERROR/CRITICAL. **`.env.example` is gitignored (`.env*`) and untracked — the doc edit landed
+  on disk only, not in the commit.**
+
+- **B041.2b (SHA `9a2e9d3`)** — After Animesh set `SIGNAL_MODEL_GROK=~x-ai/grok-latest`,
+  `SIGNAL_MODEL_GPT4O=~openai/gpt-latest`, `SIGNAL_MODEL_GEMINI=~google/gemini-flash-latest`,
+  the 404/400 were gone but three new failures appeared: grok timed out at 30s (reasoning
+  model, ~45s), gpt4o returned `content: null` (512-token budget consumed by reasoning
+  tokens), gemini-pro returned truncated non-strict JSON. Probe script
+  `scratch/2026-09-08_signal_model_probe.py` confirmed the pattern across 11 candidate slugs.
+  Fix: `max_tokens` 512→2048 and default `timeout` 30→60s in all three providers (no code
+  change needed for the `-latest` slugs themselves — they resolve fine). Live `morning_signal`
+  run 16:34: 3/3 providers respond (grok 46s, gpt4o + gemini fast); consensus NEUTRAL →
+  NO_TRADE (correct — grok conf 2 below `min_confidence=3`). Suite green (3334),
+  `@code-reviewer` 0 ERROR/CRITICAL (2 test-helper WARNINGs resolved). Status stays 🔴 Open —
+  B041.3–B041.6 remain.
+
+- **B041.3 (SHA `5bdd18c`)** — All three OpenRouter providers now read the response body
+  (`await resp.text()`) inside the `async with` and raise `DataFetchError` carrying the body
+  text (truncated 500 chars) when `status >= 400`, replacing `resp.raise_for_status()` +
+  `except aiohttp.ClientResponseError` (which discarded OpenRouter's error JSON). Success path
+  does `json.loads(body_text)` guarded by a `JSONDecodeError` → `DataFetchError` ("non-JSON
+  response body"); `UnicodeDecodeError` from `text()` also surfaces as `DataFetchError` per the
+  non-fatal contract. `morning_signal.provider_error` lines now name the exact OpenRouter
+  reason (bad slug, unsupported param) instead of a bare `HTTP 404`/`HTTP 400`. Tests: per
+  provider — error-body capture, non-JSON envelope, existing HTTP-error test migrated to the
+  status-code mechanism; `_FakeResponse` doubles gain `.status` + `async text()`. Suite green
+  (3337 + 3). Real `@code-reviewer`: 0 CRITICAL/ERROR; WARNINGs (missing outer-JSON test,
+  `UnicodeDecodeError` gap, type hint, line length) all resolved before commit. Status stays
+  🔴 Open — B041.4–B041.6 remain.
+
+- **B041.4** — `factory.build_aggregator(env=None)` added, mirroring `build_providers`: reads
+  `SIGNAL_MIN_CONFIDENCE` (default 3) and `SIGNAL_CONSENSUS_REQUIRED` (default 2) via a shared
+  `_int_env` helper (blank / non-int / sub-1 → default + warning). `scripts/morning_signal.py`
+  now calls `build_aggregator()` instead of `SignalAggregator()`. `.env.example` gains
+  `SIGNAL_CONSENSUS_REQUIRED` (on-disk only — `.env*` gitignored). Tests: 3 in
+  `test_signals_factory.py` (defaults / overrides / invalid-fallback); `test_morning_signal.py`
+  mock target renamed. Suite green (3343). `@code-reviewer`: 0 CRITICAL/ERROR, 4 line-length
+  WARNINGs were under the repo's ruff line limit — no change. SHA `1e36c32`. Status stays
+  🔴 Open — B041.5–B041.6 remain.
+
+- **B041.5 / B041.6 (SHA `<PENDING>`)** — No new code: the test deliverable (slug/env
+  override + defaults in `test_signals_factory.py`, error-body capture in all three
+  `test_signals_<provider>_provider.py`) landed incrementally across the B041.1–B041.3
+  commits. Verified at close: `pytest tests/unit/signals/` green (115 passed); one live
+  `python -m scripts.morning_signal` run on 2026-09-08 16:37 with all three providers
+  enabled — `grok`, `gpt4o`, `gemini` all returned `provider_response`, zero
+  `provider_error`, `morning_signal_complete n_responses=3` (consensus NEUTRAL → NO_TRADE,
+  correct). Docs-only closing commit; both sections moved to `docs/archive/bugs/`.
+
+---

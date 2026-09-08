@@ -112,6 +112,10 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-08] BUG-041 B041.5/B041.6 — closed. No new code: slug/env-override and error-body
+  capture tests landed across B041.1–B041.3. Verified at close: `pytest tests/unit/signals/`
+  green (115), live `morning_signal` 16:37 run 3/3 providers respond, zero `provider_error`.
+  `bugs.md` + `task.md` sections moved to `docs/archive/bugs/`. — SHA `<PENDING>`
 - [2026-09-08] BUG-041 B041.1/B041.2 — OpenRouter model slugs made env-configurable
   (`SIGNAL_MODEL_{GROK,GPT4O,GEMINI}`) threaded through `factory._construct`; `model` param on
   grok/gemini providers. Confirmed grok-3/gemini-2.0-flash retired on OpenRouter; gemini 400 is

@@ -24,23 +24,7 @@
 > BUG-036 closed 2026-08-24 (SHA `d40c3a1`, backfill applied same day) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 > BUG-035 closed 2026-08-24 (SHA `0ecd86b`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
-## BUG-041 — signals `grok` + `gemini` providers fail on OpenRouter (stale hardcoded model slugs)
-
-- [x] **B041.1** — Confirmed both slugs retired; gemini 400 is slug not `response_format`. Decision: slugs env-configurable, Animesh fills live values. | SHA `f1fad55`
-- [x] **B041.2** — `SIGNAL_MODEL_{GROK,GPT4O,GEMINI}` threaded through `factory._construct`; `model` param on grok/gemini providers. | SHA `f1fad55`
-- [x] **B041.2b** — Provider payloads: `max_tokens` 512→2048, default `timeout` 30→60s (reasoning models). Live `morning_signal`: 3/3 respond. | SHA `9a2e9d3`
-- [x] **B041.3** — OpenRouter error-response body now captured into the
-  `DataFetchError` message (body read before status check) in all three
-  providers. | SHA `5bdd18c`
-- [x] **B041.4** — `SIGNAL_MIN_CONFIDENCE` + `SIGNAL_CONSENSUS_REQUIRED` wired
-  through new `factory.build_aggregator(env)` into `SignalAggregator`;
-  `morning_signal` uses it instead of a bare `SignalAggregator()`. | SHA `1e36c32`
-- [ ] **B041.5** — Tests: `test_signals_factory.py` for the slug/env override
-  + defaults; provider tests for the error-body capture. `pytest tests/unit/`
-  green → real `@code-reviewer` → commit. One manual `morning_signal` run with
-  all three providers before closing.
-- [ ] **B041.6** — Flip `bugs.md` BUG-041 status ✅ + SHA; move both sections
-  to `docs/archive/bugs/{bugs,task}.md`; `TODOS.md` session-log line.
+> BUG-041 closed 2026-09-08 — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
 ## BUG-040 — signals `_fetch_prev_ohlc` crash: `get_ohlc` shape is fictional + `1d` `prev_ohlc` null intraday
 
