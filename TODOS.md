@@ -112,6 +112,10 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-08] signals S5.3 — `scripts/record_signal_outcome.py` 03:00 PM outcome recorder: reads the
+  day's `DailySignal`, captures entry/exit premium (manual flags or `--auto` weekly-expiry BOD lookup +
+  live LTP), writes one `SignalOutcome` row; NO_TRADE / non-executed signals still logged for direction
+  accuracy. `phase` from `SIGNAL_PHASE` env / key-set. No unit tests (per S5.3 spec). — a387349
 - [2026-09-08] signals S5.2 — `scripts/morning_signal.py` 09:15 AM cron: pure wiring over
   `assemble_market_snapshot` → `build_providers` → `asyncio.gather` fan-out (return_exceptions) →
   `SignalAggregator.aggregate` → `SignalStore` writes (init_db/record_snapshot/response/signal via

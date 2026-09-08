@@ -48,6 +48,6 @@
   `OptionChainSummary` derivation in `signals_stories.md` §S5.2c. | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: b33a43d
 - [x] **S5.2** — `scripts/morning_signal.py`: 09:15 AM pipeline cron — pure wiring over
   `assemble_market_snapshot` + `build_providers` + aggregator + store + Telegram (no unit tests) | SHA: e299a6b
-- [ ] **S5.3** — `scripts/record_signal_outcome.py`: 03:00 PM outcome recorder (no unit tests)
+- [x] **S5.3** — `scripts/record_signal_outcome.py`: 03:00 PM outcome recorder (no unit tests) | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: a387349
 - [ ] **S5.4** — `scripts/signal_report.py`: on-demand performance report with random baseline (no unit tests)
 - [ ] **S6** — Docs close: CONTEXT.md tree, DECISIONS.md entry, TODOS.md log
