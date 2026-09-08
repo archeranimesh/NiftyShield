@@ -156,6 +156,15 @@ against a coin-flip baseline. Self-contained `src/signals/` package with its own
 baseline stats to be reconciled with `backtest-eval-core` later. Unblocked from
 `signals-eval-core` 2026-09-07 (parallel-track decision).
 
+**`signals-paper-track/`** · ⬜ Not started · next: **SPT-1** (council checkpoint — no code)
+Turns the `signals/` consensus into a live paper-traded strategy: auto-enter the daily
+`DailySignal` as a long weekly option, manage it intraday against a stop-loss / target /
+trailing-stop, exit on a hit or square off by 15:00, and record every entry + exit for a
+6-month evaluation window that gates go-live. SPT-1 is a mandatory council call on the module
+boundary (reuse `src/strategy/` + `src/paper/` vs a self-contained `src/signals/` loop) and
+the full SL / target / trailing rule set; its ruling rewrites SPT-2..SPT-8. Supersedes
+`signals/` S5.5a (the 15:00 outcome message becomes SPT-5's exit message).
+
 **`full-repo-review/`** · ✅ Complete — see `full-repo-review-followups/`
 One-time multi-model, multi-persona review of design docs, source, tests, the
 AI-collaboration protocol, and per-job-type surface routing (FR-1..9).

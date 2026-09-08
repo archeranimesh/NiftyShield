@@ -27,9 +27,12 @@ rot them.
 6. **Options Income strategy** — `docs/plan/options_income/` — next **S0** (data audit).
 7. **Backtest Engine** — `docs/plan/backtest-engine/` (`phase1..4/`) — next **1.3a / 1.4** (parallel, `phase1/`). Four chained phases; each phase's GATE task blocks the next dir. Gated on
    `variance-gate`. `BACKTEST_PLAN_PHASE1.md` is the canonical spec; the phase dirs are thin status pointers.
-8. **signals: multi-LLM daily signal pipeline** — `docs/plan/signals/` — next **S5.2**. Parallel track — self-contained `src/signals/` package, own SQLite tables, zero
+8. **signals: multi-LLM daily signal pipeline** — `docs/plan/signals/` — next **S5.5** (then S5.5a–c, S6). Parallel track — self-contained `src/signals/` package, own SQLite tables, zero
    `backtest-engine` / `backtest-eval-core` dependency; runs alongside item 7. `OPENROUTER_API_KEY` needed only for the live 09:15 cron (S5.2); S5.4 baseline stats to
    be reconciled with `backtest-eval-core` later. Unblocked from `signals-eval-core` 2026-09-07 (parallel-track decision).
+8a. **signals-paper-track** — `docs/plan/signals-paper-track/` — next **SPT-1** (council checkpoint, no code). Turns the `signals/` consensus into a paper-traded strategy:
+    auto-enter as a long weekly option, intraday SL / target / trailing-stop, exit or 15:00 square-off, 6-month evaluation window → go-live gate. SPT-1 rules on module boundary
+    (`src/strategy/`+`src/paper/` reuse vs self-contained `src/signals/` loop) + the rule set, then rewrites SPT-2..SPT-8. Supersedes `signals/` S5.5a.
 9. **backtest-eval-core** — `docs/plan/backtest-eval-core/` — next **B1.1**. Blocked until `backtest-engine` tasks 1.3 + 1.4 land.
 10. **signals-eval-core** — `docs/plan/signals-eval-core/` — next **SE1.1**.
     Blocked until `backtest-eval-core` + `backtest-engine` 1.12.
