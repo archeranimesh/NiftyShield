@@ -10,8 +10,6 @@ Covers:
 All tests are offline — no HTTP, no DB, no tokens exchanged.
 """
 
-import pytest
-
 from src.client.protocol import (
     BrokerClient,
     MarketDataProvider,
@@ -19,7 +17,6 @@ from src.client.protocol import (
     OrderExecutor,
     PortfolioReader,
 )
-
 
 # ---------------------------------------------------------------------------
 # Minimal DummyBrokerClient — all 10 required async methods
@@ -31,6 +28,7 @@ class DummyBrokerClient:
 
     async def get_ltp(self, instruments, *a, **kw): ...
     async def get_option_chain(self, instrument, expiry, *a, **kw): ...
+    async def get_ohlc(self, instruments, interval="1d", *a, **kw): ...
     async def place_order(self, order, *a, **kw): ...
     async def modify_order(self, order_id, changes, *a, **kw): ...
     async def cancel_order(self, order_id, *a, **kw): ...

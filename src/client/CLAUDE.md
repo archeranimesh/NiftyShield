@@ -33,7 +33,7 @@ from src.client.upstox_live import UpstoxLiveClient
 | `get_positions`, `get_holdings`, `get_margins` | ⛔ `NotImplementedError` | Daily OAuth token not wired |
 | `get_historical_candles` | ⛔ `NotImplementedError` | Not yet implemented |
 | `get_expired_option_contracts` | ⛔ `NotImplementedError` | Paid Upstox subscription required |
-| `get_ltp`, `get_option_chain` | ✅ Live | Analytics Token (long-lived) |
+| `get_ltp`, `get_option_chain`, `get_ohlc` | ✅ Live | Analytics Token (long-lived) |
 
 Blocked methods raise `NotImplementedError` with an explanatory message via `_raise_order_blocked()`. Never return `None` silently — fail loudly.
 
@@ -41,7 +41,7 @@ Blocked methods raise `NotImplementedError` with an explanatory message via `_ra
 
 ## Sub-Protocols (ISP)
 
-Three narrow sub-protocols in `protocol.py` — `MarketDataProvider`, `OrderExecutor`, `PortfolioReader`. Depend on the narrowest one that covers your use. `BrokerClient` is flat (not inheriting from them) so its full method list is readable in one place; structural typing means any class satisfying all 10 `BrokerClient` methods satisfies all three. Per-protocol method lists: `NOTES.md`.
+Three narrow sub-protocols in `protocol.py` — `MarketDataProvider`, `OrderExecutor`, `PortfolioReader`. Depend on the narrowest one that covers your use. `BrokerClient` is flat (not inheriting from them) so its full method list is readable in one place; structural typing means any class satisfying all 11 `BrokerClient` methods satisfies all three. Per-protocol method lists: `NOTES.md`.
 
 ---
 

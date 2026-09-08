@@ -183,6 +183,12 @@ class UpstoxMarketClient:
         """Async wrapper around get_option_chain_sync."""
         return await asyncio.to_thread(self.get_option_chain_sync, instrument, expiry)
 
+    async def get_ohlc(
+        self, instruments: list[str], interval: str = "1d"
+    ) -> dict[str, dict[str, Any]]:
+        """Async wrapper around get_ohlc_sync."""
+        return await asyncio.to_thread(self.get_ohlc_sync, instruments, interval)
+
     # ── Internal helpers ─────────────────────────────────────────
 
     def _fetch_ltp_batch(self, instruments: list[str]) -> dict[str, Decimal]:

@@ -185,6 +185,34 @@ def test_get_snapshot_missing_date_returns_none(store: SignalStore) -> None:
     assert store.get_snapshot(TRADE_DATE) is None
 
 
+def test_get_recent_snapshots_newest_first(store: SignalStore) -> None:
+    base = _snapshot()
+    for offset, vix in ((0, "10"), (1, "11"), (2, "12")):
+        store.record_snapshot(
+            base.model_copy(
+                update={
+                    "trade_date": date(2026, 9, 1 + offset),
+                    "india_vix": Decimal(vix),
+                }
+            )
+        )
+    got = store.get_recent_snapshots(2)
+    assert [s.trade_date for s in got] == [date(2026, 9, 3), date(2026, 9, 2)]
+    assert got[0].india_vix == Decimal("12")
+
+
+def test_get_recent_snapshots_fewer_rows_than_requested(store: SignalStore) -> None:
+    store.record_snapshot(_snapshot())
+    got = store.get_recent_snapshots(5)
+    assert len(got) == 1
+
+
+def test_get_recent_snapshots_non_positive_n_returns_empty(store: SignalStore) -> None:
+    store.record_snapshot(_snapshot())
+    assert store.get_recent_snapshots(0) == []
+    assert store.get_recent_snapshots(-3) == []
+
+
 def test_get_responses_count_and_provider(store: SignalStore) -> None:
     store.record_response(_response("grok"))
     store.record_response(_response("gpt4o"))

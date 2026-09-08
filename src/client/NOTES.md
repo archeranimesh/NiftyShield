@@ -21,7 +21,7 @@
 
 Three narrow sub-protocols in `protocol.py`:
 
-- `MarketDataProvider` — `get_ltp`, `get_option_chain` (used by tracker/signals)
+- `MarketDataProvider` — `get_ltp`, `get_option_chain`, `get_ohlc` (used by tracker/signals)
 - `OrderExecutor` — `place_order`, `modify_order`, `cancel_order` (execution layer)
 - `PortfolioReader` — `get_positions`, `get_holdings`, `get_margins`
 

@@ -248,6 +248,24 @@ class SignalStore:
             return None
         return MarketSnapshot.model_validate_json(row["snapshot_json"])
 
+    def get_recent_snapshots(self, n: int) -> list[MarketSnapshot]:
+        """Return the ``n`` most recent persisted snapshots, newest first.
+
+        Used to compute ``vix_5d_trend`` in ``assemble_market_snapshot``; the
+        caller reverses the list for an oldest→newest comparison.
+
+        Args:
+            n: Maximum number of snapshots to return.
+        """
+        if n <= 0:
+            return []
+        with connect(self.db_path) as conn:
+            rows = conn.execute(
+                "SELECT snapshot_json FROM signal_inputs ORDER BY trade_date DESC LIMIT ?",
+                (n,),
+            ).fetchall()
+        return [MarketSnapshot.model_validate_json(row["snapshot_json"]) for row in rows]
+
     def get_responses(self, trade_date: date) -> list[SignalResponse]:
         """Return every stored provider response for a day, ordered by provider.
 

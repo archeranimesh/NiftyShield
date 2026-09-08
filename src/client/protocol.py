@@ -74,6 +74,12 @@ class MarketDataProvider(Protocol):
 
     async def get_option_chain(self, instrument: str, expiry: str) -> list[dict[str, Any]]: ...
 
+    async def get_ohlc(
+        self, instruments: list[str], interval: str = "1d"
+    ) -> dict[str, dict[str, Any]]:
+        """Fetch OHLC candle data keyed by instrument key (``{key: {"ohlc": {...}}}``)."""
+        ...
+
 
 @runtime_checkable
 class OrderExecutor(Protocol):
@@ -100,9 +106,7 @@ class PortfolioReader(Protocol):
 
     async def get_margins(self) -> MarginResponse: ...
 
-    async def get_order_margin(
-        self, instruments: list[MarginInstrument]
-    ) -> OrderMarginResponse:
+    async def get_order_margin(self, instruments: list[MarginInstrument]) -> OrderMarginResponse:
         """Compute required/final margin for a basket of not-yet-placed orders.
 
         Distinct from ``get_margins`` (account-level funds/margin snapshot):
@@ -142,6 +146,10 @@ class BrokerClient(Protocol):
         ...
 
     async def get_option_chain(self, instrument: str, expiry: str) -> list[dict[str, Any]]: ...
+
+    async def get_ohlc(
+        self, instruments: list[str], interval: str = "1d"
+    ) -> dict[str, dict[str, Any]]: ...
 
     # ── OrderExecutor surface ────────────────────────────────────
 

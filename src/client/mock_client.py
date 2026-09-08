@@ -92,6 +92,7 @@ class MockBrokerClient:
         self._orders: list[dict[str, Any]] = []
         self._positions: list[dict[str, Any]] = []
         self._price_map: dict[str, Decimal] = {}
+        self._ohlc_map: dict[str, dict[str, Any]] = {}
         self._error_queue: dict[str, Exception] = {}
 
     # ------------------------------------------------------------------
@@ -106,6 +107,16 @@ class MockBrokerClient:
             price: Last traded price to return from ``get_ltp``.
         """
         self._price_map[instrument_key] = Decimal(str(price))
+
+    def set_ohlc(self, instrument_key: str, ohlc: dict[str, Any]) -> None:
+        """Register a canned OHLC candle for an instrument, returned by ``get_ohlc``.
+
+        Args:
+            instrument_key: Upstox instrument key (e.g. ``"NSE_INDEX|Nifty 50"``).
+            ohlc: OHLC values, e.g. ``{"open": 100, "high": 110, "low": 95, "close": 108}``.
+                Stored under the ``"ohlc"`` sub-key to mirror the live response shape.
+        """
+        self._ohlc_map[instrument_key] = {"ohlc": dict(ohlc)}
 
     def set_margin(self, amount: Decimal) -> None:
         """Override available margin.
@@ -216,6 +227,23 @@ class MockBrokerClient:
         if data is None:
             return []
         return data if isinstance(data, list) else []
+
+    async def get_ohlc(
+        self, instruments: list[str], interval: str = "1d"
+    ) -> dict[str, dict[str, Any]]:
+        """Return canned OHLC candles registered via ``set_ohlc``.
+
+        Unknown instrument keys are silently omitted, matching the live client.
+
+        Args:
+            instruments: List of Upstox instrument keys.
+            interval: Candle interval; accepted but ignored by the mock.
+
+        Returns:
+            Dict of ``{instrument_key: {"ohlc": {...}}}`` for registered keys.
+        """
+        self._raise_if_queued("get_ohlc")
+        return {k: self._ohlc_map[k] for k in instruments if k in self._ohlc_map}
 
     # ------------------------------------------------------------------
     # BrokerClient — OrderExecutor surface
@@ -335,9 +363,7 @@ class MockBrokerClient:
         self._raise_if_queued("get_margins")
         return {"available_margin": float(self._margin_available)}
 
-    async def get_order_margin(
-        self, instruments: list[MarginInstrument]
-    ) -> OrderMarginResponse:
+    async def get_order_margin(self, instruments: list[MarginInstrument]) -> OrderMarginResponse:
         """Return a deterministic fake margin for a basket of instruments.
 
         Not calibrated to real SPAN/exposure math — this exists so offline

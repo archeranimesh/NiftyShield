@@ -40,8 +40,8 @@ from src.client.protocol import (
     Holding,
     MarginInstrument,
     MarginResponse,
-    OrderModify,
     OrderMarginResponse,
+    OrderModify,
     OrderRequest,
     OrderResponse,
     Position,
@@ -117,6 +117,27 @@ class UpstoxLiveClient:
             DataFetchError: If the API request fails.
         """
         return await self._market.get_option_chain(instrument, expiry)
+
+    async def get_ohlc(
+        self, instruments: list[str], interval: str = "1d"
+    ) -> dict[str, dict[str, Any]]:
+        """Fetch OHLC candle data for a list of instrument keys.
+
+        Delegates to UpstoxMarketClient. At ~09:10 IST the ``"1d"`` candle is
+        the previous session (today's is not yet formed).
+
+        Args:
+            instruments: Pipe-format instrument keys.
+            interval: Candle interval (``"1d"``, ``"I1"``, ``"I30"``).
+
+        Returns:
+            Dict mapping instrument key -> OHLC data dict
+            (``{key: {"ohlc": {open, high, low, close}, ...}}``).
+
+        Raises:
+            DataFetchError: If the API request fails.
+        """
+        return await self._market.get_ohlc(instruments, interval)
 
     # ── Not yet implemented (constraints documented above) ────────
 
@@ -205,9 +226,7 @@ class UpstoxLiveClient:
     # directly rather than waiting on that broader change. Scope: IC margin
     # capture at paper-trade entry only — see DECISIONS.md.
 
-    async def get_order_margin(
-        self, instruments: list[MarginInstrument]
-    ) -> OrderMarginResponse:
+    async def get_order_margin(self, instruments: list[MarginInstrument]) -> OrderMarginResponse:
         """Compute required/final margin for a basket of not-yet-placed orders.
 
         Args:
@@ -236,15 +255,12 @@ class UpstoxLiveClient:
             )
         return await asyncio.to_thread(self._get_order_margin_sync, instruments)
 
-    def _get_order_margin_sync(
-        self, instruments: list[MarginInstrument]
-    ) -> OrderMarginResponse:
+    def _get_order_margin_sync(self, instruments: list[MarginInstrument]) -> OrderMarginResponse:
         """Sync implementation of get_order_margin — see that method for contract."""
         token = settings.upstox_access_token
         if not token:
             raise AuthenticationError(
-                "get_order_margin: UPSTOX_ACCESS_TOKEN not set — "
-                "run: python -m src.auth.login"
+                "get_order_margin: UPSTOX_ACCESS_TOKEN not set — run: python -m src.auth.login"
             )
 
         try:
@@ -267,9 +283,7 @@ class UpstoxLiveClient:
                 "token likely expired, run: python -m src.auth.login"
             )
         if not resp.ok:
-            raise DataFetchError(
-                f"get_order_margin: HTTP {resp.status_code}: {resp.text[:500]}"
-            )
+            raise DataFetchError(f"get_order_margin: HTTP {resp.status_code}: {resp.text[:500]}")
 
         body: dict[str, Any] = resp.json()
         data = body.get("data")

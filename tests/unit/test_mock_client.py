@@ -24,7 +24,6 @@ Coverage:
 
 from __future__ import annotations
 
-import asyncio
 from decimal import Decimal
 from pathlib import Path
 
@@ -151,6 +150,33 @@ class TestGetOptionChain:
         client = MockBrokerClient(fixtures_dir=None)
         result = await client.get_option_chain("NSE_INDEX|Nifty 50", "2026-04-07")
         assert result == []
+
+
+# ---------------------------------------------------------------------------
+# get_ohlc
+# ---------------------------------------------------------------------------
+
+
+class TestGetOhlc:
+    async def test_registered_key_returned_with_ohlc_shape(self) -> None:
+        client = make_client()
+        client.set_ohlc(
+            "NSE_INDEX|Nifty 50",
+            {"open": 100, "high": 110, "low": 95, "close": 108},
+        )
+        result = await client.get_ohlc(["NSE_INDEX|Nifty 50"])
+        assert result["NSE_INDEX|Nifty 50"]["ohlc"]["close"] == 108
+
+    async def test_unknown_key_omitted(self) -> None:
+        client = make_client()
+        result = await client.get_ohlc(["NSE_INDEX|Nifty 50"])
+        assert result == {}
+
+    async def test_simulate_error_propagates(self) -> None:
+        client = make_client()
+        client.simulate_error("get_ohlc", RuntimeError("ohlc down"))
+        with pytest.raises(RuntimeError, match="ohlc down"):
+            await client.get_ohlc(["NSE_INDEX|Nifty 50"])
 
 
 # ---------------------------------------------------------------------------
@@ -281,8 +307,18 @@ class TestPortfolioReader:
         """A basket with both BUY and SELL legs (an IC) gets the benefit factor."""
         client = make_client()
         instruments = [
-            {"instrument_key": "NSE_FO|1", "quantity": 50, "transaction_type": "SELL", "product": "D"},
-            {"instrument_key": "NSE_FO|2", "quantity": 50, "transaction_type": "BUY", "product": "D"},
+            {
+                "instrument_key": "NSE_FO|1",
+                "quantity": 50,
+                "transaction_type": "SELL",
+                "product": "D",
+            },
+            {
+                "instrument_key": "NSE_FO|2",
+                "quantity": 50,
+                "transaction_type": "BUY",
+                "product": "D",
+            },
         ]
         result = await client.get_order_margin(instruments)
         # required = (50 + 50) * 50 = 5000; final = 5000 * 0.4 = 2000
@@ -293,7 +329,12 @@ class TestPortfolioReader:
         """A basket with only SELL legs gets no netting benefit — final == required."""
         client = make_client()
         instruments = [
-            {"instrument_key": "NSE_FO|1", "quantity": 50, "transaction_type": "SELL", "product": "D"},
+            {
+                "instrument_key": "NSE_FO|1",
+                "quantity": 50,
+                "transaction_type": "SELL",
+                "product": "D",
+            },
         ]
         result = await client.get_order_margin(instruments)
         assert result["required_margin"] == result["final_margin"] == pytest.approx(2_500.0)
