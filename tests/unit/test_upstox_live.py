@@ -10,7 +10,6 @@ network or env vars are needed. Tests cover:
 
 from __future__ import annotations
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -19,10 +18,10 @@ from src.client.exceptions import LTPFetchError
 from src.client.protocol import BrokerClient, MarketDataProvider
 from src.client.upstox_live import UpstoxLiveClient
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def make_client() -> UpstoxLiveClient:
     """Return an UpstoxLiveClient with a patched UpstoxMarketClient.
@@ -139,12 +138,6 @@ class TestNotImplemented:
             await client.get_margins()
 
     @pytest.mark.asyncio
-    async def test_get_historical_candles_raises(self) -> None:
-        client = make_client()
-        with pytest.raises(NotImplementedError):
-            await client.get_historical_candles(object())
-
-    @pytest.mark.asyncio
     async def test_get_expired_option_contracts_raises(self) -> None:
         client = make_client()
         with pytest.raises(NotImplementedError, match="paid subscription"):
@@ -163,9 +156,7 @@ class TestErrorPassthrough:
     async def test_ltp_fetch_error_propagates(self) -> None:
         client = make_client()
         client._market = MagicMock()
-        client._market.get_ltp = AsyncMock(
-            side_effect=LTPFetchError("API returned empty data")
-        )
+        client._market.get_ltp = AsyncMock(side_effect=LTPFetchError("API returned empty data"))
 
         with pytest.raises(LTPFetchError, match="API returned empty data"):
             await client.get_ltp(["NSE_EQ|INF754K01LE1"])
@@ -276,3 +267,16 @@ class TestGetOrderMargin:
             mock_settings.upstox_access_token = "fake-daily-token"
             with pytest.raises(DataFetchError, match="unexpected response shape"):
                 await client.get_order_margin(self._INSTRUMENTS)
+
+
+class TestDelegationHistoricalCandles:
+    @pytest.mark.asyncio
+    async def test_get_historical_candles_delegates(self, monkeypatch) -> None:
+        client = make_client()
+
+        def _mock_fetch(params):
+            return ["fake_candle"]
+
+        client._market.get_historical_candles_sync = _mock_fetch
+        res = await client.get_historical_candles({"instrument_key": "x"})
+        assert res == ["fake_candle"]

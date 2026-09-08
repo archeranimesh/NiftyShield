@@ -19,11 +19,14 @@ from src.signals.snapshot import assemble_market_snapshot
 
 
 class _FakeBroker:
-    """Minimal broker stub exercising get_ltp / get_ohlc / get_option_chain."""
+    """Minimal broker stub exercising get_ltp / get_ohlc / get_historical_candles / get_option_chain."""
 
-    def __init__(self, *, ltp=None, ohlc=None, chain=None, raise_on=None) -> None:
+    def __init__(
+        self, *, ltp=None, ohlc=None, historical_candles=None, chain=None, raise_on=None
+    ) -> None:
         self._ltp = ltp or {}
         self._ohlc = ohlc or {}
+        self._historical_candles = historical_candles or []
         self._chain = chain if chain is not None else []
         self._raise_on = raise_on
 
@@ -34,6 +37,9 @@ class _FakeBroker:
 
     async def get_ohlc(self, instruments, interval="1d"):
         return {k: v for k, v in self._ohlc.items() if k in instruments}
+
+    async def get_historical_candles(self, params):
+        return self._historical_candles
 
     async def get_option_chain(self, instrument, expiry):
         return self._chain
@@ -123,11 +129,7 @@ async def test_assemble_happy_path(_patch_market_inputs) -> None:
             "NSE_INDEX|Nifty 50": Decimal("23779.15"),
             "NSE_INDEX|India VIX": Decimal("11.16"),
         },
-        ohlc={
-            "NSE_INDEX|Nifty 50": {
-                "ohlc": {"open": 23800, "high": 23850, "low": 23700, "close": 23760}
-            }
-        },
+        historical_candles=[["2026-08-25", 23800, 23850, 23700, 23760, 0, 0]],
         chain=_raw_chain(),
     )
     snap = await assemble_market_snapshot(
@@ -173,7 +175,7 @@ async def test_vix_trend_rising(_patch_market_inputs) -> None:
             "NSE_INDEX|Nifty 50": Decimal("23779.15"),
             "NSE_INDEX|India VIX": Decimal("11.16"),
         },
-        ohlc={"NSE_INDEX|Nifty 50": {"ohlc": {"high": 1, "low": 1, "close": 1}}},
+        historical_candles=[["2026-08-25", 1, 1, 1, 1, 0, 0]],
         chain=_raw_chain(),
     )
     snap = await assemble_market_snapshot(
@@ -195,7 +197,7 @@ async def test_iv_skew_zero_when_one_otm_side_missing(_patch_market_inputs) -> N
             "NSE_INDEX|Nifty 50": Decimal("23850"),  # ATM 23800, first OTM call 23900
             "NSE_INDEX|India VIX": Decimal("11.16"),
         },
-        ohlc={"NSE_INDEX|Nifty 50": {"ohlc": {"high": 1, "low": 1, "close": 1}}},
+        historical_candles=[["2026-08-25", 1, 1, 1, 1, 0, 0]],
         chain=chain,
     )
     snap = await assemble_market_snapshot(
@@ -214,7 +216,7 @@ async def test_empty_option_chain_raises(_patch_market_inputs) -> None:
             "NSE_INDEX|Nifty 50": Decimal("23779.15"),
             "NSE_INDEX|India VIX": Decimal("11.16"),
         },
-        ohlc={"NSE_INDEX|Nifty 50": {"ohlc": {"high": 1, "low": 1, "close": 1}}},
+        historical_candles=[["2026-08-25", 1, 1, 1, 1, 0, 0]],
         chain=[],
     )
     with pytest.raises(DataFetchError, match="no strikes"):

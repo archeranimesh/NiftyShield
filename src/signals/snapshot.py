@@ -69,7 +69,7 @@ async def assemble_market_snapshot(
     if india_vix is None or india_vix <= 0:
         raise DataFetchError(f"india_vix unavailable: get_ltp returned {quotes!r}")
 
-    prev_close, prev_high, prev_low = await _fetch_prev_ohlc(broker)
+    prev_close, prev_high, prev_low = await _fetch_prev_ohlc(broker, trade_date)
 
     gift_nifty, usd_inr, fii = await asyncio.gather(
         fetch_gift_nifty(broker),
@@ -101,22 +101,33 @@ async def assemble_market_snapshot(
     )
 
 
-async def _fetch_prev_ohlc(broker: BrokerClient) -> tuple[Decimal, Decimal, Decimal]:
-    """Return (close, high, low) of the previous session's daily candle.
+async def _fetch_prev_ohlc(
+    broker: BrokerClient, trade_date: date
+) -> tuple[Decimal, Decimal, Decimal]:
+    """Return (close, high, low) of the previous session's daily candle."""
+    from datetime import timedelta
 
-    At 09:10 the ``"1d"`` candle is still the previous session — today's is
-    not yet formed.
-    """
-    ohlc = await broker.get_ohlc([NIFTY_KEY], "1d")
-    candle = (ohlc.get(NIFTY_KEY) or {}).get("ohlc") or {}
+    from_date = trade_date - timedelta(days=7)
+    params = {
+        "instrument_key": NIFTY_KEY,
+        "interval": "day",
+        "to_date": trade_date.isoformat(),
+        "from_date": from_date.isoformat(),
+    }
+
     try:
+        candles = await broker.get_historical_candles(params)
+        if not candles:
+            raise DataFetchError(f"prev OHLC unavailable for {NIFTY_KEY}: empty candles")
+
+        candle = candles[0]
         return (
-            Decimal(str(candle["close"])),
-            Decimal(str(candle["high"])),
-            Decimal(str(candle["low"])),
+            Decimal(str(candle[4])),
+            Decimal(str(candle[2])),
+            Decimal(str(candle[3])),
         )
-    except (KeyError, InvalidOperation, TypeError) as exc:
-        raise DataFetchError(f"prev OHLC unavailable for {NIFTY_KEY}: {ohlc!r}") from exc
+    except (IndexError, TypeError, ValueError, InvalidOperation) as exc:
+        raise DataFetchError(f"prev OHLC unavailable for {NIFTY_KEY}: {exc}") from exc
 
 
 def _resolve_monthly_expiry(lookup: InstrumentLookup, trade_date: date) -> date:

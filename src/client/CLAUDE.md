@@ -31,9 +31,10 @@ from src.client.upstox_live import UpstoxLiveClient
 |---|---|---|
 | `place_order`, `modify_order`, `cancel_order` | ⛔ `NotImplementedError` | Static IP not provisioned |
 | `get_positions`, `get_holdings`, `get_margins` | ⛔ `NotImplementedError` | Daily OAuth token not wired |
-| `get_historical_candles` | ⛔ `NotImplementedError` | Not yet implemented |
+| `get_historical_candles` | ✅ Live | V2 historical-candle endpoint |
 | `get_expired_option_contracts` | ⛔ `NotImplementedError` | Paid Upstox subscription required |
-| `get_ltp`, `get_option_chain`, `get_ohlc` | ✅ Live | Analytics Token (long-lived) |
+| `get_ltp`, `get_option_chain` | ✅ Live | Analytics Token (long-lived) |
+| `get_ohlc` | ⛔ Unused | V3 daily candle resets at midnight (unusable for prev-session) |
 
 Blocked methods raise `NotImplementedError` with an explanatory message via `_raise_order_blocked()`. Never return `None` silently — fail loudly.
 

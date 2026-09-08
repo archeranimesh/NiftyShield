@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+import urllib.parse
 from datetime import date
 from decimal import Decimal
 from typing import Any
@@ -34,6 +35,7 @@ logger = structlog.stdlib.get_logger(__name__)
 V3_LTP_URL = "https://api.upstox.com/v3/market-quote/ltp"
 V3_OHLC_URL = "https://api.upstox.com/v3/market-quote/ohlc"
 V2_OPTION_CHAIN_URL = "https://api.upstox.com/v2/option/chain"
+V2_HISTORICAL_CANDLE_URL = "https://api.upstox.com/v2/historical-candle"
 
 MAX_INSTRUMENTS_PER_REQUEST = 500
 
@@ -106,6 +108,9 @@ class UpstoxMarketClient:
     ) -> dict[str, dict[str, Any]]:
         """Fetch OHLC data for a list of instrument keys.
 
+        NOTE: Unused. The v3 endpoint resets the daily candle at midnight, so at
+        09:10 it returns nulls/missing fields rather than the previous session.
+
         Args:
             instruments: List of pipe-format keys.
             interval: Candle interval ('1d', 'I1', 'I30').
@@ -139,6 +144,52 @@ class UpstoxMarketClient:
             return _remap_response(data)
         except requests.RequestException as e:
             raise DataFetchError(f"OHLC fetch failed: {e}") from e
+
+    def get_historical_candles_sync(self, params: dict[str, Any]) -> list[list[Any]]:
+        """Fetch historical candles from the Upstox v2 API.
+
+        Args:
+            params: Dict containing 'instrument_key', 'to_date', and 'from_date'.
+                'interval' is optional and defaults to 'day'.
+
+        Returns:
+            List of candles, where each candle is a list:
+            [ts, open, high, low, close, volume, oi], newest first.
+
+        Raises:
+            DataFetchError: If the HTTP request fails.
+        """
+        key = params.get("instrument_key")
+        interval = params.get("interval", "day")
+        to_date = params.get("to_date")
+        from_date = params.get("from_date")
+
+        if not key or not to_date or not from_date:
+            raise ValueError("CandleRequest requires instrument_key, to_date, from_date")
+
+        encoded_key = urllib.parse.quote(key, safe="")
+        url = f"{V2_HISTORICAL_CANDLE_URL}/{encoded_key}/{interval}/{to_date}"
+
+        try:
+            t0 = time.perf_counter()
+            resp = self._session.get(
+                url,
+                params={"from_date": from_date},
+                timeout=10,
+            )
+            latency_ms = int((time.perf_counter() - t0) * 1000)
+            logger.info(
+                "upstox.api_call",
+                endpoint=url,
+                status_code=resp.status_code,
+                latency_ms=latency_ms,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            candles = data.get("data", {}).get("candles", [])
+            return list(candles)
+        except requests.RequestException as e:
+            raise DataFetchError(f"Historical candle fetch failed: {e}") from e
 
     def get_option_chain_sync(self, instrument: str, expiry: str) -> list[dict[str, Any]]:
         """Fetch option chain for an underlying + expiry.

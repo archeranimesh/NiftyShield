@@ -19,7 +19,7 @@ import pytest
 import requests
 import structlog
 
-from src.client.exceptions import LTPFetchError
+from src.client.exceptions import DataFetchError, LTPFetchError
 from src.client.upstox_market import UpstoxMarketClient
 
 FAKE_TOKEN = "fake-analytics-token"
@@ -277,3 +277,60 @@ async def test_async_get_ltp_raises_on_empty_data(
     monkeypatch.setattr(client._session, "get", lambda *a, **kw: _Resp())
     with pytest.raises(LTPFetchError, match="empty data"):
         await client.get_ltp(["NSE_FO|37810"])
+
+
+# ── Historical Candles ────────────────────────────────────────────
+
+
+def test_historical_candles_sync_success(client: UpstoxMarketClient, monkeypatch) -> None:
+    class MockResponse:
+        status_code = 200
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {
+                "status": "success",
+                "data": {
+                    "candles": [["2026-08-25T00:00:00+05:30", 25000, 25100, 24900, 25050, 0, 0]]
+                },
+            }
+
+    def _mock_get(url, params, timeout):
+        assert "v2/historical-candle/NSE_INDEX%7CNifty%2050/day/2026-08-26" in url
+        assert params["from_date"] == "2026-08-20"
+        return MockResponse()
+
+    monkeypatch.setattr(client._session, "get", _mock_get)
+
+    params = {
+        "instrument_key": "NSE_INDEX|Nifty 50",
+        "interval": "day",
+        "to_date": "2026-08-26",
+        "from_date": "2026-08-20",
+    }
+    candles = client.get_historical_candles_sync(params)
+    assert len(candles) == 1
+    assert candles[0][1] == 25000
+
+
+def test_historical_candles_sync_missing_params(client: UpstoxMarketClient) -> None:
+    with pytest.raises(ValueError, match="CandleRequest requires instrument_key"):
+        client.get_historical_candles_sync({"interval": "day"})
+
+
+def test_historical_candles_sync_http_error(client: UpstoxMarketClient, monkeypatch) -> None:
+    def _fail(*args, **kwargs):
+        raise requests.ConnectionError("connection refused")
+
+    monkeypatch.setattr(client._session, "get", _fail)
+
+    params = {
+        "instrument_key": "NSE_INDEX|Nifty 50",
+        "interval": "day",
+        "to_date": "2026-08-26",
+        "from_date": "2026-08-20",
+    }
+    with pytest.raises(DataFetchError, match="Historical candle fetch failed"):
+        client.get_historical_candles_sync(params)

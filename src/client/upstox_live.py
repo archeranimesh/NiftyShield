@@ -36,7 +36,7 @@ import structlog
 
 from src.client.exceptions import AuthenticationError, DataFetchError
 from src.client.protocol import (
-    CandleRequest,
+    Candle,
     Holding,
     MarginInstrument,
     MarginResponse,
@@ -101,7 +101,7 @@ class UpstoxLiveClient:
         """
         return await self._market.get_ltp(instruments)
 
-    async def get_option_chain(self, instrument: str, expiry: str) -> dict:
+    async def get_option_chain(self, instrument: str, expiry: str) -> list[dict[str, Any]]:
         """Fetch option chain for an underlying + expiry date.
 
         Delegates to UpstoxMarketClient.
@@ -123,8 +123,10 @@ class UpstoxLiveClient:
     ) -> dict[str, dict[str, Any]]:
         """Fetch OHLC candle data for a list of instrument keys.
 
-        Delegates to UpstoxMarketClient. At ~09:10 IST the ``"1d"`` candle is
-        the previous session (today's is not yet formed).
+        NOTE: Unused. The v3 endpoint resets the daily candle at midnight, so at
+        09:10 it returns nulls/missing fields rather than the previous session.
+
+        Delegates to UpstoxMarketClient.
 
         Args:
             instruments: Pipe-format instrument keys.
@@ -141,20 +143,11 @@ class UpstoxLiveClient:
 
     # ── Not yet implemented (constraints documented above) ────────
 
-    async def get_historical_candles(self, params: CandleRequest) -> list:
-        """Not yet implemented.
+    async def get_historical_candles(self, params: Candle, CandleRequest) -> list[Candle]:
+        """Fetch historical candles via the market client."""
+        return await asyncio.to_thread(self._market.get_historical_candles_sync, params)
 
-        Raises:
-            NotImplementedError: Always — historical candles via Upstox API
-                are not yet wired up in UpstoxMarketClient. Add a sync
-                fetcher there first, then delegate here.
-        """
-        raise NotImplementedError(
-            "get_historical_candles: not yet implemented in UpstoxLiveClient. "
-            "Add a sync fetcher to UpstoxMarketClient first."
-        )
-
-    async def get_expired_option_contracts(self, instrument: str, expiry: str) -> list:
+    async def get_expired_option_contracts(self, instrument: str, expiry: str) -> list[Candle]:
         """Not available — requires a paid Upstox subscription.
 
         Raises:
@@ -293,7 +286,7 @@ class UpstoxLiveClient:
 
     # ── Private helpers ───────────────────────────────────────────
 
-    def _raise_order_blocked(self) -> None:
+    def _raise_order_blocked(self) -> NoReturn:
         """Raise NotImplementedError for all order execution methods.
 
         Centralises the error message so the three order methods stay

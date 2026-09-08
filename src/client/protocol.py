@@ -77,7 +77,11 @@ class MarketDataProvider(Protocol):
     async def get_ohlc(
         self, instruments: list[str], interval: str = "1d"
     ) -> dict[str, dict[str, Any]]:
-        """Fetch OHLC candle data keyed by instrument key (``{key: {"ohlc": {...}}}``)."""
+        """Fetch OHLC candle data keyed by instrument key (``{key: {"ohlc": {...}}}``).
+
+        NOTE: Unused. The v3 endpoint resets the daily candle at midnight, so at
+        09:10 it returns nulls/missing fields rather than the previous session.
+        """
         ...
 
 
