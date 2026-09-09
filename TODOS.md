@@ -118,7 +118,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
-- [2026-09-09] signals S6 — story closed and archived. Docs-only: `CONTEXT.md` `src/signals/`
+- [2026-09-09] signals S6 (`566e1b0`) — story closed and archived. Docs-only: `CONTEXT.md` `src/signals/`
   bullet rewritten to "shipped" + crons-live, signals crons removed from "What Does NOT Exist
   Yet"; `DECISIONS.md` close bullet (story archived + `phase` column semantics);
   `docs/plan/README.md` entry collapsed to a `✅ Archived` pointer; `git mv docs/plan/signals/

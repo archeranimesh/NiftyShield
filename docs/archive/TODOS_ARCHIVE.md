@@ -16,7 +16,7 @@ coin-flip baseline. Self-contained `src/signals/` package with its own SQLite ta
 (Phase 1 `openrouter_only`): `morning_signal` 09:30, `record_signal_outcome --auto` 16:00,
 `signal_report` 16:35 (Mon–Fri), each pushing a Telegram message. Phase 2 (`search_enabled`,
 xAI + Google AI direct SDKs) is a later `SIGNAL_PHASE` flip. Next signals work is
-`signals-paper-track` (SPT-1). S6 close SHA: `<pending>`.
+`signals-paper-track` (SPT-1). S6 close SHA: `566e1b0`.
 
 ## 2026-09-07 — `ic-yearly-expiry-fix` story archived
 
