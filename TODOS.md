@@ -77,6 +77,12 @@ rot them.
 21. **Technical Debt** — `docs/plan/technical-debt/` — DEBT-3 / 5 / 6a / 6b / 6c / 7.
     Opportunistic, **not sequential** — each item fires only when its named file / module is
     already being touched for another story's task. See `prompt.md` for the per-item trigger.
+22. **IC payoff charts on Telegram** — `docs/plan/ic-payoff-charts/` — next **PC-2**
+    (`src/strategy/payoff.py` — `ICPayoff` + `compute_ic_payoff`).
+    Epic: `chart-core/` (expiry payoff PNG + `sendPhoto` plumbing + wire into entry / EOD
+    audit / close, one chart per IC variation — no option model, ships now) → `chart-model-overlay/`
+    (T+0 curve + ±1σ/±2σ bands + POP — blocked on `greeks-bs-fallback/` GF-2 + GF-3).
+    Priority relative to items 13–21 is Animesh's call.
 
 ## Open Bugs
 

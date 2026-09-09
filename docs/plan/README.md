@@ -14,6 +14,16 @@ Format per entry: `**\`folder/\`** · <status> · next: **<task id>**` then a sh
 
 ## Active Epics
 
+**`ic-payoff-charts/`** · ⬜ Not started — start with `chart-core/` **PC-2**
+Stockmock-style payoff diagram (one PNG per IC variation) attached to the entry, EOD-audit,
+and close Telegram messages. Two sub-stories: `chart-core/` (PC-1..15 — payoff math +
+matplotlib expiry-payoff renderer + `sendPhoto` on `TelegramNotifier`/`TelegramGateway` +
+wire into `paper_ic_entry`/`_v2`, `paper_ic_snapshot`, both `_send_close_notification`; no
+option model, ships now) → `chart-model-overlay/` (MO-1..9 — blue T+0 curve + ±1σ/±2σ bands
++ POP; **blocked on `greeks-bs-fallback/` GF-2 + GF-3** for the shared `src/pricing/` pricer
++ IV solver). Modeling decisions (rate / DTE convention / delta tolerance) inherited from
+`greeks-bs-fallback/`. No DB schema change. Requested by Animesh 2026-09-09.
+
 **`token-efficiency/`** · ✅ Shipped/Archived 2026-09-03 → `docs/archive/plan/token-efficiency/`
 `measurement/` (MEAS-1..2) + `fixed-overhead/` (FIX-1..4) + `suggestions-sweep/` (SWEEP-1..7)
 all shipped. `token_audit.py`, the `CLAUDE.md`/`AGENTS.md` skill-ification, `session-close`
