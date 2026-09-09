@@ -72,7 +72,7 @@
   - ⬜ **`signal_report.py` 16:35 digest to Telegram** — decided (Animesh 2026-09-09): push
     **every weekday** run, the **full 5-section report** in a MarkdownV2 fenced code block
     (escaped per the `FORMATTING.md` boundary contract). Implementation tracked as **S5.5d**.
-  | Owner: Claude | Model: Sonnet 5 | Review: docs-only | SHA: <pending>
+  | Owner: Claude | Model: Sonnet 5 | Review: docs-only | SHA: 0811b65
 
 - [ ] **S5.5a** — **SUPERSEDED → `signals-paper-track` SPT-5.** The 15:00 `SignalOutcome`
   Telegram message is replaced by SPT-5's exit message now that the track paper-trades for
