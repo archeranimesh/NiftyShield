@@ -100,11 +100,11 @@ Monitor tick (09:35→15:00): fetch LTP `M`, update `mark` and `peak = max(peak,
 Exit engine — pure eval, priority order:
 
 ```
-1. M ≤ sl_price                        → STOP_LOSS
-2. trail armed and M ≤ trail_stop      → TRAILING_STOP     (open point 3)
-3. M ≥ tgt_price  (if target active)   → TARGET
-4. now ≥ 15:00                         → TIME_EXIT
-5. otherwise                           → HOLD
+1. M ≥ tgt_price                       → TARGET
+2. M ≤ sl_price                        → STOP_LOSS
+3. now ≥ 15:00                         → TIME_EXIT
+4. otherwise                           → HOLD
+   (TRAILING_STOP slots in above STOP_LOSS — Phase 2, see point 3)
 ```
 
 On non-HOLD: exit fill `X` (observed mark, **not** the level), realised P&L `= (X − E) × 65`,
@@ -125,9 +125,10 @@ matter.
   2026-09-09).
 
 **Recommendation into the council:** launch with judgment values — starting proposal
-**SL −30% / target +50%, flat (not conviction-scaled)** — explicitly provisional; SPT-4 logs
-intraday MFE / MAE from day one; scheduled recalibration after **N = 30** closed paper trades.
-A mid-course level adjustment inside the 6-month window is expected, not a failure.
+**SL −30% / target +50%, flat (not conviction-scaled), both fixed (no ratchet — see point 3)**
+— explicitly provisional; SPT-4 logs intraday MFE / MAE from day one; scheduled recalibration
+after **N = 30** closed paper trades. A mid-course level adjustment inside the 6-month window
+is expected, not a failure.
 
 **Question for the council:** are −30% / +50% asymmetric-flat reasonable launch values for a
 1-lot intraday long monthly Nifty option off a multi-LLM directional consensus, and is
@@ -138,14 +139,47 @@ asymmetry / magnitude need rethinking before any paper trade fires?
 
 ### 3. Trailing stop  (`strategy_parameters`)
 
-**Open.**
+**Resolved 2026-09-09: no trailing in Phase 1. Defer the dynamic-exit design to a Phase 2
+story after N = 30 closed trades.**
 
-- Activation threshold — arm the trail only after +X% unrealised.
-- Trail distance — Y% give-back from the peak mark, or a fixed rupee give-back.
-- Interaction with the fixed target — does the trail *replace* the target once armed, or
-  *coexist* (whichever fires first)?
+**Why.** Ratcheting the stop up while the target stays at +50% is incoherent — you add
+machinery and still cap the winner at +50%. A dynamic exit only makes sense if SL *and* target
+move together (or a capture-zone ratchet replaces both). Designing that without data is
+guessing. Precedent: **IronCondorV2 shipped Phase 1 with no `profit_target_fraction` at all**
+(`src/strategy/ic_expiry_config_v2.py:133`) and added the zone-based `ProfitLockEngine`
+(25 % / 50 % / 75 % of entry credit captured → escalating action) as a **separate later story
+under its own council ruling** (`docs/archive/council/strategy/2026-06-27_ic-v2-profit-lock-adjustment.md`).
+This track follows the same path.
 
-_Discussion notes: (add here)_
+**Phase 1 (first 30 closed trades).** Exit engine ships with `TARGET` / `STOP_LOSS` /
+`TIME_EXIT` / `HOLD` only. SL −30 % and target +50 % are **fixed** — no breakeven bump, no
+trail. SPT-4 logs, per position: the full mark path on each tick, and the derived intraday
+MFE (max favourable excursion) and MAE (max adverse excursion) as % of `E`. The exit-reason
+enum reserves a `TRAILING_STOP` member now so the schema does not churn when Phase 2 lands.
+
+**Phase 2 (new story, after N = 30).** Design the dynamic exit against the observed MFE / MAE
+distribution. Two candidate shapes to weigh then — not now:
+
+- _Move both together._ Two-stage: at +15 % unrealised raise the stop to breakeven; at +30 %
+  trail the stop at `peak − 0.15·E` (ratchet up only) **and** lift the target to `peak + 0.25·E`
+  so a trending position keeps room.
+- _Capture-zone ratchet_ (IC-V2 analog). Discrete zones on unrealised-% — e.g. +20 % → stop to
+  breakeven; +40 % → stop to +20 %; +60 % → close full. No continuous trail.
+
+**Worked example of the two-stage shape** (kept here as the Phase-2 reference), E = ₹300, ×65:
+
+- Runs 300→420 (+40 %), fades to 375 → trail armed at +30 %, lock = peak(+40 %) − 15 % = +25 %,
+  exit ~375 → **+₹4,875**. Target also lifted to 420 + 0.25·300 = 495, so it stays out of the way.
+- Runs 300→455 straight up → dynamic target (now well above +50 %) lets it run instead of
+  capping at 450 → exit higher than the fixed-target **+₹9,750**.
+- Runs 300→345 (+15 %), collapses to 250 → breakeven bump fired, stop at 300, exit ~300 →
+  **~₹0** instead of the fixed-SL −₹3,250.
+- Never above +12 %, drifts to 250 by close → no stage fired, `TIME_EXIT` at 250 → **−₹3,250**.
+  Residual exposure the trail cannot help; the N = 30 data tunes the +15 / +30 / 0.15 numbers.
+
+**Question for the council:** confirm Phase 1 ships fixed-only (no trail), and that the Phase 2
+dynamic exit is a separate story/ruling — or is there a reason to commit to one dynamic shape
+now?
 
 ---
 
