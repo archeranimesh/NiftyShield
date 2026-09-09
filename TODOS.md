@@ -116,6 +116,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-09] signals — restructured `signals_tasks.md` into "Remaining work — in order"
+  (S5.5c → S5.5a → S5.5d → S5.5b → S6 + summary table) and "Completed". 4ec58c6.
 - [2026-09-09] signals S5.5a design — revived (was superseded → SPT-5) as the Phase-1 interim
   16:00 outcome message; `record_signal_outcome.py` currently sends nothing. Restyled messages
   6–8 in `scratch/2026-09-08_signal_telegram_messages.py` to the S5.5c vertical layout
