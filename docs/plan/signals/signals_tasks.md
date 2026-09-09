@@ -124,7 +124,7 @@ eventually supersedes S5.5a.
   mirroring `scripts/pipeline/upstox_chain_snapshot.py`. No new tests (matches existing cron
   pattern). `test_escaping_guard.py` baseline line numbers bumped for the shifted `.send()`
   call sites.
-  | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: <pending>
+  | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: 5466b9d
 
 ---
 

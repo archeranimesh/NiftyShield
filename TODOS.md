@@ -128,7 +128,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
   tests (matches existing cron pattern); `test_escaping_guard.py` baseline line numbers bumped
   (morning_signal 215→218, signal_report 313→314) for the shifted `.send()` call sites. Full
   suite 3354 green. code-reviewer: 0 CRITICAL/ERROR, 1 WARNING (double `market_today()` call —
-  fixed). — SHA `<pending>`
+  fixed). — SHA `5466b9d`
 - [2026-09-09] signals S5.5d — `scripts/signal_report.py` now pushes the full 5-section
   performance report to Telegram on every run (was `print()`-only). Local
   `_format_report_message` wraps the body in a MarkdownV2 fenced block with fence-safe
