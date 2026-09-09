@@ -78,14 +78,61 @@ namespace — from the shared engines?
 
 ### 2. Stop-loss / target levels  (`strategy_parameters`)
 
-**Open.** Basis is fixed (% of entry premium). Still to decide:
+**Open.** Basis is fixed (% of entry premium). Still to decide: the actual −X% / +Y% numbers,
+symmetric vs asymmetric, and judgment vs empirical calibration.
 
-- The actual −X% / +Y% numbers.
-- Symmetric vs asymmetric.
-- Whether the numbers are derived from the historical `signal_outcomes` distribution (how far
-  the not-taken trades actually ran intraday) or set by judgment.
+**Runtime flow (settled 2026-09-09).**
 
-_Discussion notes: (add here)_
+At entry the two levels are pure arithmetic off the entry fill `E`, frozen into the position
+row alongside `E`, qty (1 lot = 65) and the trailing snapshot:
+
+```
+sl_price  = E * (1 − sl_pct)      # sl_pct 0.30 → SL at 0.70·E
+tgt_price = E * (1 + tgt_pct)     # tgt_pct 0.50 → target at 1.50·E
+```
+
+Anchored to premium, not the underlying — the monitor needs only the option LTP per tick, and
+the levels self-scale with IV.
+
+Monitor tick (09:35→15:00): fetch LTP `M`, update `mark` and `peak = max(peak, M)`, hand
+`(position, M, now)` to the exit engine.
+
+Exit engine — pure eval, priority order:
+
+```
+1. M ≤ sl_price                        → STOP_LOSS
+2. trail armed and M ≤ trail_stop      → TRAILING_STOP     (open point 3)
+3. M ≥ tgt_price  (if target active)   → TARGET
+4. now ≥ 15:00                         → TIME_EXIT
+5. otherwise                           → HOLD
+```
+
+On non-HOLD: exit fill `X` (observed mark, **not** the level), realised P&L `= (X − E) × 65`,
+close row, Telegram exit. Gap-through is real — a tick at `0.60·E` against a `0.70·E` SL books
+−40%, not −30%. This is why monitor cadence (point 5) and the exit-fill assumption (point 4)
+matter.
+
+**Setting `sl_pct` / `tgt_pct` — two routes.**
+
+- _Judgment._ An ATM monthly Nifty option carries ~1–1.5% of spot in premium; a typical 0.5%
+  intraday spot move is a ~15–25% premium swing (delta ~0.5 plus gamma). So SL −25/−35% and
+  target +40/+60% ≈ "stopped on a ~0.7% adverse move, target on a ~1.2% favourable move."
+  Asymmetric favouring the upside fits a directional-conviction entry. Available today.
+- _Empirical._ `record_signal_outcome` logs premium-at-close vs entry — it does **not** capture
+  intraday MFE / MAE. Proper calibration needs SPT-4 logging peak-favourable and peak-adverse
+  excursion per day, then after ~30 closed trades set SL just beyond the median MAE of the
+  eventual winners and target near the 60th-percentile MFE. Zero data today (pipeline shipped
+  2026-09-09).
+
+**Recommendation into the council:** launch with judgment values — starting proposal
+**SL −30% / target +50%, flat (not conviction-scaled)** — explicitly provisional; SPT-4 logs
+intraday MFE / MAE from day one; scheduled recalibration after **N = 30** closed paper trades.
+A mid-course level adjustment inside the 6-month window is expected, not a failure.
+
+**Question for the council:** are −30% / +50% asymmetric-flat reasonable launch values for a
+1-lot intraday long monthly Nifty option off a multi-LLM directional consensus, and is
+"judgment now, recalibrate on MFE/MAE at N=30" the right calibration path — or does the
+asymmetry / magnitude need rethinking before any paper trade fires?
 
 ---
 
