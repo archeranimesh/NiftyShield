@@ -10,8 +10,8 @@
 ## Remaining work — in execution order
 
 The pipeline is code-complete through S5.4 and all three crons are live (Phase 1
-`openrouter_only`). What is left is the Telegram message layer, then a holiday guard, then
-the docs close. **Do these in order — 1 → 5.**
+`openrouter_only`). What is left is the Telegram message layer, then a holiday guard, then a
+real-entry-price fix, then the docs close. **Do these in order — 1 → 6.**
 
 | # | Task | File(s) | Gist |
 |---|---|---|---|
@@ -19,7 +19,8 @@ the docs close. **Do these in order — 1 → 5.**
 | 2 | **S5.5a** | `scripts/record_signal_outcome.py` | 16:00 outcome message (executed / would-be / NO_TRADE) |
 | 3 | **S5.5d** | `scripts/signal_report.py` | 16:35 full report pushed to Telegram |
 | 4 | **S5.5b** | `scripts/morning_signal.py` + `scripts/signal_report.py` | NSE-holiday early-exit guard |
-| 5 | **S6** | docs only | Close the story — CONTEXT.md / DECISIONS.md / TODOS.md / README |
+| 5 | **S5.6** | `models.py` + `store.py` + both scripts | Real entry premium at 09:15 → true P&L; pin entry/exit to one expiry |
+| 6 | **S6** | docs only | Close the story — CONTEXT.md / DECISIONS.md / TODOS.md / README |
 
 After S6 the `signals/` story is closed. Next work moves to
 **`docs/plan/signals-paper-track/`**, starting at **SPT-1** (council checkpoint, no code) —
@@ -128,7 +129,62 @@ eventually supersedes S5.5a.
 
 ---
 
-### 5 · S6 — Docs close
+### 5 · S5.6 — Real entry premium at 09:15, true P&L at exit
+
+- [ ] **S5.6** — The 09:15 message's "Entry band" is the **mean of the agreeing models'
+  quoted `entry_premium_low`/`_high`** (`morning_signal._consensus_entry_band`) — an LLM
+  estimate, never checked against the chain. `record_signal_outcome --auto` then books P&L as
+  `real_exit_LTP − mean(LLM entry_premium)` (`_consensus_entry_premium`). Worse: the strike
+  is chosen on the **monthly** chain (`snapshot._resolve_monthly_expiry`,
+  `preference=["monthly"]`) but the exit LTP is fetched on the **weekly** option
+  (`record_signal_outcome._resolve_option_key`, `preference=["weekly"]`) — entry and exit are
+  not the same instrument. Fix: fetch and persist the recommended option's real LTP at 09:15
+  as the entry premium, and pin strike-selection / entry / exit to one expiry.
+
+  **Decision to settle before code (not a council — single discipline; route to
+  `options-strategist` advisory if unsure):** does a daily directional signal trade the
+  **weekly** or the **monthly** option? Pick one; make `snapshot` strike-selection, the new
+  09:15 entry fetch, and `record_signal_outcome._resolve_option_key` all use it. Leaning
+  weekly (matches the intraday-to-few-day horizon and `signals-paper-track` SPT-3); monthly
+  ATM IV stays a valid prompt input regardless.
+
+  **Before any code:** `get_code_snippet` on `DailySignal`, `SignalStore.record_signal` +
+  `init_db` (migration pattern), `morning_signal.run`, `record_signal_outcome._resolve_option_key`
+  / `_consensus_entry_premium` / `_fetch_ltp`. Read `DB_REGISTRY.md` for the `daily_signals`
+  row.
+
+  **Scope:**
+  - `src/signals/models.py` — `DailySignal` gains `entry_premium: Decimal | None = None`
+    (frozen Pydantic, serialized as str per repo Decimal rules).
+  - `src/signals/store.py` — `daily_signals` gains `entry_premium TEXT` (nullable; additive
+    `ALTER TABLE` in `init_db` guarded like the existing migrations). `record_signal` writes
+    it; read methods hydrate via `Decimal(row["entry_premium"])` when non-null.
+  - Lift `_resolve_option_key` out of `record_signal_outcome.py` into `src/signals/` (shared
+    by both scripts) using the decided expiry preference.
+  - `scripts/morning_signal.py` — after a directional consensus forms, resolve the option key
+    and fetch its LTP (broker already created in `run()`); persist as `signal.entry_premium`.
+    Non-fatal: fetch failure → WARNING + `None`, downstream falls back to today's behaviour.
+  - `scripts/record_signal_outcome.py` — `--auto` uses `signal.entry_premium` when set;
+    `_consensus_entry_premium` becomes the explicit fallback for back-dated / null rows only.
+  - `_format_signal_notification` — when `entry_premium` is set, replace the "Entry band
+    ₹low – ₹high" line with a single "💰 Entry: ₹NNN.NN" real price; keep the band as the
+    `None` fallback.
+
+  **Tests:** model default + round-trip; store migration + read hydration; shared resolver
+  happy + no-match; formatter render (real entry + fallback band); `record_signal_outcome`
+  prefers stored entry over consensus and falls back when null. No network — mock the LTP
+  fetch.
+
+  **Commit boundaries:** Model + Store → shared resolver + 09:15 entry capture →
+  `record_signal_outcome` switch → message format (4 commits).
+
+  **Note:** `signals-paper-track` SPT-3 / SPT-5 will later supersede this with a real paper
+  position; S5.6 is the interim fix so Phase-1 P&L is instrument-consistent.
+  | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: <pending>
+
+---
+
+### 6 · S6 — Docs close
 
 - [ ] **S6** — Docs close: `CONTEXT.md` tree, `DECISIONS.md` entry, `TODOS.md` log,
   `docs/plan/README.md` status. Then the `signals/` story is done — move to

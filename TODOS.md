@@ -27,8 +27,8 @@ rot them.
 6. **Options Income strategy** — `docs/plan/options_income/` — next **S0** (data audit).
 7. **Backtest Engine** — `docs/plan/backtest-engine/` (`phase1..4/`) — next **1.3a / 1.4** (parallel, `phase1/`). Four chained phases; each phase's GATE task blocks the next dir. Gated on
    `variance-gate`. `BACKTEST_PLAN_PHASE1.md` is the canonical spec; the phase dirs are thin status pointers.
-8. **signals: multi-LLM daily signal pipeline** — `docs/plan/signals/` — next **S6** (docs close;
-   S5.5/S5.5c/S5.5a/S5.5d/S5.5b done). Parallel track — self-contained `src/signals/` package, own SQLite tables, zero
+8. **signals: multi-LLM daily signal pipeline** — `docs/plan/signals/` — next **S5.6** (real
+   entry premium + P&L; then S6 close; S5.5/S5.5c/S5.5a/S5.5d/S5.5b done). Parallel track — self-contained `src/signals/` package, own SQLite tables, zero
    `backtest-engine` / `backtest-eval-core` dependency; runs alongside item 7. `OPENROUTER_API_KEY` needed only for the live 09:15 cron (S5.2); S5.4 baseline stats to
    be reconciled with `backtest-eval-core` later. Unblocked from `signals-eval-core` 2026-09-07 (parallel-track decision).
 8a. **signals-paper-track** — `docs/plan/signals-paper-track/` — next **SPT-1** (council checkpoint, no code). Turns the `signals/` consensus into a paper-traded strategy:
@@ -122,6 +122,12 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-09] signals S5.6 filed — the 09:15 "Entry band" is an LLM guess
+  (`_consensus_entry_band`), and `record_signal_outcome --auto` books P&L against it while
+  fetching the exit LTP on the *weekly* option though the strike was picked on the *monthly*
+  chain. S5.6 (before S6): fetch + persist the real option LTP at 09:15 as the entry premium,
+  use it for exit P&L, pin strike/entry/exit to one expiry (weekly vs monthly = a pre-code
+  decision). Spec in `signals_tasks.md` / `signals_stories.md`. Docs-only.
 - [2026-09-09] signals S5.5b — NSE-holiday early-exit guard added to `scripts/morning_signal.py`
   (`run()`) and `scripts/signal_report.py` (`main()`): `if not is_trading_day(market_today()):
   logger.info(...); return`, mirroring `scripts/pipeline/upstox_chain_snapshot.py`. No new

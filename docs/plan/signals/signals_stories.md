@@ -1402,6 +1402,55 @@ does it).
 
 ---
 
+## S5.6 — Real entry premium at 09:15, true P&L at exit
+
+**Why:** The 09:15 "Entry band" (`morning_signal._consensus_entry_band`) is the mean of the
+agreeing models' self-reported `entry_premium_low`/`_high` — an LLM guess, never validated
+against the option chain. `record_signal_outcome --auto` then books would-be P&L as
+`real_exit_LTP − mean(LLM entry_premium)` (`_consensus_entry_premium`). Compounding it, the
+strike is selected on the **monthly** chain (`snapshot._resolve_monthly_expiry`) while the
+exit LTP is read on the **weekly** option (`record_signal_outcome._resolve_option_key`) — so
+entry and exit are not even the same contract. Result: the recorded P&L is not a real trade
+outcome. Fetch the recommended option's actual LTP at 09:15, persist it, use it as the entry
+leg, and pin strike / entry / exit to a single expiry.
+
+**Decision to settle before code** (single discipline — `options-strategist` advisory, not a
+council): weekly vs monthly option for a daily directional signal. Recommend **weekly**
+(intraday-to-few-day horizon; matches `signals-paper-track` SPT-3). Whatever is chosen,
+`snapshot` strike-selection, the 09:15 entry fetch, and `_resolve_option_key` must agree.
+
+**Before any code:** `get_code_snippet` on `DailySignal`, `SignalStore.record_signal` /
+`init_db`, `morning_signal.run`, `record_signal_outcome._resolve_option_key` /
+`_consensus_entry_premium` / `_fetch_ltp`. Read `DB_REGISTRY.md` (`daily_signals` row).
+
+**Scope:**
+- `src/signals/models.py` — `DailySignal.entry_premium: Decimal | None = None` (frozen
+  Pydantic; str-serialized per repo Decimal rules).
+- `src/signals/store.py` — `daily_signals.entry_premium TEXT` nullable; additive migration in
+  `init_db` guarded like the existing ones; `record_signal` writes it; reads hydrate via
+  `Decimal(row["entry_premium"])` when non-null.
+- Lift `_resolve_option_key` from `record_signal_outcome.py` into `src/signals/` (shared),
+  using the decided expiry preference.
+- `scripts/morning_signal.py` — on a directional consensus, resolve the option key and fetch
+  its LTP via the broker already created in `run()`; persist as `signal.entry_premium`.
+  Non-fatal: fetch failure → WARNING + `None`.
+- `scripts/record_signal_outcome.py` — `--auto` uses `signal.entry_premium` when set;
+  `_consensus_entry_premium` is the fallback for back-dated / null rows only.
+- `_format_signal_notification` — real "💰 Entry: ₹NNN.NN" line when `entry_premium` is set;
+  keep the band line as the `None` fallback.
+
+**Tests:** model default + round-trip; store migration + read hydration; shared resolver
+happy + no-match; formatter (real entry + fallback); `record_signal_outcome` prefers stored
+entry, falls back when null. No network — mock the LTP fetch.
+
+**Commits:** Model + Store → shared resolver + 09:15 capture → `record_signal_outcome`
+switch → message format.
+
+**Note:** superseded later by `signals-paper-track` SPT-3 / SPT-5 (real paper position); this
+is the Phase-1 interim fix.
+
+---
+
 ## S6 — Docs close
 
 **Files to change:**
