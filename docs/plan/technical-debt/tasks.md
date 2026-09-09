@@ -52,3 +52,16 @@ cleanup. Every other item stays opportunistic.
   nested `strategy-rollout/tasks.md`) — `--all` exits 0 with ROLL-14 checked and the README row
   still reading `next: **ROLL-14**`. Extend the guard's `README_ENTRY_RE` / resolution to follow
   the sub-story pointer, then verify. Trigger: standalone. | Owner: Claude | Model: claude-sonnet-5 | Review: none
+- [ ] **DEBT-14** — `standalone-actionable`. `context-tree-row-missing-for-new-module` (Count 5
+  at escalation, 2026-09-07). No mechanical catch exists: a session adds `src/<module>/` code
+  (new dir, or a new file in an under-documented module) and closes without adding the
+  `CONTEXT_TREE.md` row / `CONTEXT.md` "What Exists" line. `src/signals/` has had this gap open
+  since S1.1 across four stories. Add a pre-commit / preflight audit that diffs `src/*/` and
+  `scripts/*/` dirs against the anchors present in `CONTEXT_TREE.md`, then verify against the
+  `src/signals/` backfill. Trigger: standalone. | Owner: Claude | Model: claude-sonnet-5 | Review: none
+- [ ] **DEBT-15** — `standalone-actionable`. Verify the SWEEP-4 `commit_preflight.py` staged
+  `ruff format --check` blocker is effective against `ruff-format-check-skipped-precommit-abort`
+  (Count 5 at escalation, 2026-09-08). It caught the S5.3 case (`✗ ruff-format` on
+  `record_signal_outcome.py` before the commit) but still cost a `ruff format` + re-stage cycle
+  because only `ruff check` + an `awk` length sweep were run pre-stage. Trigger: standalone once
+  3 sessions are logged after `2b85b84`; escalate if still recurring. | Owner: Claude | Model: claude-sonnet-5 | Review: none

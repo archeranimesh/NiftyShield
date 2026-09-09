@@ -108,3 +108,19 @@ Step 4b item 8) and record the outcome in `DECISIONS.md`.
   **ROLL-14**` while `strategy-rollout/tasks.md` has ROLL-14 checked) passes `--all` clean.
   Extend the guard to resolve the sub-story `tasks.md` for epic rows, then verify against the
   ROLL-14 close (`eb782d0`, README:43 left at `next: **ROLL-14**`). Standalone — no trigger wait.
+- **DEBT-14** — `context-tree-row-missing-for-new-module` (Count 5). No remediation exists.
+  Every doc-freshness hook proxies "docs behind code" by a src-commit count and never checks
+  whether a `src/<module>/` dir has a matching `CONTEXT_TREE.md` row or `CONTEXT.md` "What
+  Exists" line. `src/signals/` was created by an Antigravity handoff at S1.1 (`8d295c6`) and
+  S1.2/S1.3/S2.1 each added code (`store.py` at S2.1, `2aa5979`) without ever backfilling the
+  row. Build a `check_context_tree_coverage.py` preflight that lists `src/*/` + `scripts/*/`
+  dirs absent from `CONTEXT_TREE.md`, wire it into `commit_preflight.py`, then verify against
+  the `src/signals/` backfill commit. Standalone — no trigger wait.
+- **DEBT-15** — `ruff-format-check-skipped-precommit-abort` (Count 5). Remediation: SWEEP-4
+  `commit_preflight.py` staged `ruff format --check` blocker (`2b85b84`). It fires before the
+  commit rather than letting the pre-commit hook abort it, but a `ruff format` + re-stage cycle
+  still costs a round trip when only `ruff check` + an `awk` length sweep were run pre-stage
+  (S5.3: `✗ ruff-format` on `record_signal_outcome.py`). Run `token_audit.py` / grep
+  session-close reports over the 3 sessions after `2b85b84`; if the slug did not recur, tick the
+  box. If it recurred, open a protocol/model discussion — likely folding `ruff format` into the
+  standard pre-stage checklist. Standalone — no trigger wait.
