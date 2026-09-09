@@ -23,6 +23,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import asyncio
 import os
 import sys
 from datetime import date
@@ -39,6 +40,9 @@ from dotenv import load_dotenv
 from src.config import settings
 from src.instruments.lookup import InstrumentLookup
 from src.market_calendar import market_today
+from src.notifications.formatting import format_money, pnl_emoji
+from src.notifications.markdown import escape_markdown
+from src.notifications.telegram import build_notifier
 from src.paper.constants import DEFAULT_BOD_PATH, LOT_SIZE
 from src.signals.models import DailySignal, SignalOutcome, TradeAction
 from src.signals.store import SignalStore
@@ -51,6 +55,9 @@ load_dotenv()
 
 _NIFTY_SPOT_KEY = "NSE_INDEX|Nifty 50"
 _OPTION_TYPE = {TradeAction.BUY_CALL: "CE", TradeAction.BUY_PUT: "PE"}
+_ACTION_LABEL = {TradeAction.BUY_CALL: "BUY CALL", TradeAction.BUY_PUT: "BUY PUT"}
+_DIRECTION_EMOJI = {"BULLISH": "📈", "BEARISH": "📉"}
+_E = escape_markdown
 
 
 def _parse_args() -> argparse.Namespace:
@@ -177,6 +184,75 @@ def _pnl_per_lot(entry: Decimal | None, exit_premium: Decimal | None) -> Decimal
     return (exit_premium - entry) * LOT_SIZE
 
 
+def _format_outcome_notification(outcome: SignalOutcome, signal: DailySignal) -> str:
+    """Render the daily outcome as MarkdownV2-ready Telegram message text.
+
+    S5.5c vertical layout (reference renderer ``format_outcome_notification``,
+    validated on-device 2026-09-08): bold header + blank line + one
+    emoji-prefixed line per field. This formatter owns its escaping — every
+    dynamic part is escaped per value and literal ``*`` is emitted for bold — so
+    the caller sends the result WITHOUT re-wrapping it in ``escape_markdown``.
+
+    Would-be P&L for the not-taken case is derived here from
+    ``entry_premium``/``exit_premium`` (both populated by ``--auto`` even when
+    ``executed`` is False) — no ``SignalOutcome`` change.
+
+    Args:
+        outcome: The persisted ``SignalOutcome`` for the trading day.
+        signal: The aggregated ``DailySignal`` — direction of the trade call.
+
+    Returns:
+        Fully-escaped message text. One of: an executed block, a not-taken
+        (would-be P&L) block, a NO_TRADE line, or a close-only fallback when a
+        premium leg is missing.
+    """
+    day = outcome.trade_date.strftime("%d %b")
+    close = _E(f"🏁 Nifty close: {outcome.nifty_close:,.0f}")
+    entry, exit_ = outcome.entry_premium, outcome.exit_premium
+
+    if outcome.trade_action is TradeAction.NO_TRADE:
+        header = _E(f"📊 SIGNAL OUTCOME · {day} · NO TRADE")
+        return f"*{header}*\n\n{_E('➖ No signal issued today')}\n{close}"
+    if entry is None or exit_ is None:
+        header = _E(f"📊 SIGNAL OUTCOME · {day}")
+        return f"*{header}*\n\n{_E('➖ Outcome not priced')}\n{close}"
+
+    emoji = _DIRECTION_EMOJI.get(signal.consensus_direction.value, "📊")
+    action = _ACTION_LABEL[outcome.trade_action]
+    line_dir = _E(
+        f"{emoji} {signal.consensus_direction.value} · {action} {outcome.recommended_strike}"
+    )
+
+    pnl_val = outcome.pnl_per_lot if outcome.pnl_per_lot is not None else (exit_ - entry) * LOT_SIZE
+    label = "P&L" if outcome.executed else "Paper P&L"
+    pnl_line = f"{pnl_emoji(pnl_val)} {_E(f'{label}: {format_money(pnl_val, signed=True)} / lot')}"
+
+    if outcome.executed:
+        header = _E(f"📊 SIGNAL OUTCOME · {day}")
+        prem = _E(f"💰 Entry {format_money(entry)} → Exit {format_money(exit_)}")
+    else:
+        header = _E(f"📊 SIGNAL OUTCOME · {day} · NOT TAKEN")
+        prem = _E(f"💰 Entry {format_money(entry)} → Exit {format_money(exit_)} (would-be)")
+
+    return (
+        f"*{header}*\n\n{line_dir}\n{prem}\n{pnl_line}\n\n"
+        f"{close}\n{_E(f'🔧 Phase: {outcome.phase}')}"
+    )
+
+
+def _notify(outcome: SignalOutcome, signal: DailySignal) -> None:
+    """Push the outcome to Telegram; non-fatal when no notifier is configured."""
+    notifier = build_notifier()
+    if notifier is None:
+        return
+    try:
+        asyncio.run(notifier.send(_format_outcome_notification(outcome, signal)))
+    # noqa BLE001: the outcome row is already persisted — a formatting/send failure
+    # must not crash the cron after the write. Log and move on.
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("signal_outcome_notify_failed", error=str(exc))
+
+
 def main() -> None:
     """CLI entry point — assemble one ``SignalOutcome`` and persist it."""
     args = _parse_args()
@@ -250,6 +326,7 @@ def main() -> None:
         notes=args.notes,
     )
     store.record_outcome(outcome)
+    _notify(outcome, signal)
 
     logger.info(
         "signal_outcome_recorded",
