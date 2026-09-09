@@ -13,7 +13,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from scripts import morning_signal
-from src.signals.models import Direction, SignalResponse, TradeAction
+from src.signals.models import DailySignal, Direction, SignalResponse, TradeAction
 
 
 def _response(provider: str = "gpt4o", direction: Direction = Direction.NEUTRAL) -> SignalResponse:
@@ -134,6 +134,93 @@ async def test_snapshot_inputs_are_logged() -> None:
     assert snap_line["pcr_total"] == "1.05"
     assert snap_line["fii_cash_net_cr"] == "280.13"
     assert snap_line["monthly_expiry"] == "2026-09-29"
+
+
+def _resp(
+    provider: str,
+    direction: Direction,
+    conf: int = 4,
+    low: str = "58.00",
+    high: str = "72.00",
+) -> SignalResponse:
+    return SignalResponse(
+        trade_date=date(2026, 9, 8),
+        provider=provider,
+        direction=direction,
+        confidence=conf,
+        recommended_strike=24800,
+        entry_premium_low=Decimal(low),
+        entry_premium_high=Decimal(high),
+        key_reason="GIFT Nifty supportive.",
+        key_risk="US CPI tonight.",
+        raw_response="{}",
+    )
+
+
+def test_format_signal_notification_directional_consensus() -> None:
+    signal = DailySignal(
+        trade_date=date(2026, 9, 8),
+        responses=[
+            _resp("grok", Direction.BULLISH, 4, low="50.00", high="66.00"),
+            _resp("gpt4o", Direction.BULLISH, 3, low="66.00", high="78.00"),
+        ],
+        consensus_direction=Direction.BULLISH,
+        consensus_confidence=Decimal("3.5"),
+        trade_action=TradeAction.BUY_CALL,
+        recommended_strike=24800,
+        agreeing_models=["grok", "gpt4o"],
+        dissenting_models=["gemini"],
+    )
+    msg = morning_signal._format_signal_notification(signal, 3)
+
+    assert msg.startswith("*📈 CONSENSUS: BULLISH*\n\n")
+    assert "🎯 Strike: 24800" in msg
+    assert "📊 Confidence: 3\\.5 / 5\\.0" in msg
+    assert "💰 Entry band: ₹58\\.00 – ₹72\\.00" in msg
+    assert "*Model Votes:*" in msg
+    assert "👍 Agree: grok, gpt4o" in msg
+    assert "👎 Dissent: gemini" in msg
+
+
+def test_format_signal_notification_no_consensus_lists_every_vote() -> None:
+    signal = DailySignal(
+        trade_date=date(2026, 9, 8),
+        responses=[
+            _resp("grok", Direction.BULLISH),
+            _resp("gpt4o", Direction.BEARISH),
+            _resp("gemini", Direction.NEUTRAL),
+        ],
+        consensus_direction=Direction.NEUTRAL,
+        consensus_confidence=Decimal("0"),
+        trade_action=TradeAction.NO_TRADE,
+        recommended_strike=None,
+        agreeing_models=[],
+        dissenting_models=["grok", "gpt4o", "gemini"],
+    )
+    msg = morning_signal._format_signal_notification(signal, 3)
+
+    assert msg.startswith("*⏸ NO TRADE · NO CONSENSUS*\n\n")
+    assert "📈 grok: BULLISH" in msg
+    assert "📉 gpt4o: BEARISH" in msg
+    assert "➖ gemini: NEUTRAL" in msg
+
+
+def test_format_signal_notification_pipeline_failed_uses_provider_count() -> None:
+    signal = DailySignal(
+        trade_date=date(2026, 9, 8),
+        responses=[],
+        consensus_direction=Direction.NEUTRAL,
+        consensus_confidence=Decimal("0"),
+        trade_action=TradeAction.NO_TRADE,
+        recommended_strike=None,
+        agreeing_models=[],
+        dissenting_models=[],
+    )
+    msg = morning_signal._format_signal_notification(signal, 2)
+
+    assert msg.startswith("*🚨 SIGNAL PIPELINE FAILED*\n\n")
+    assert "❌ 0 / 2 models responded" in msg
+    assert "No signal issued today" in msg
 
 
 @pytest.mark.asyncio

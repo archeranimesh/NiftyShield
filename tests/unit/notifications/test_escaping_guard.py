@@ -244,6 +244,12 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
     ("scripts/strategies/three_track/paper_3track_snapshot.py", 2018): (
         "value escaped inside callee build_proxy_critical_alert() — guard inspects enclosing function only"
     ),
+    ("scripts/morning_signal.py", 215): (
+        "S5.5c — value is fully escaped inside the callee _format_signal_notification() "
+        "(the message-builder owns the MarkdownV2 boundary: escape_markdown() per dynamic "
+        "value, literal * for bold), but this guard only inspects the immediate enclosing "
+        "function (run), not the builder it calls — same shape as the scripts/eod_summary.py:200 entry"
+    ),
     ("scripts/strategies/three_track/paper_3track_snapshot.py", 2064): (
         "heuristic limitation, not a real gap - value is escaped inside the callee "
         "_build_recovery_digest() (MD-4.2 scope) but this guard only inspects the "

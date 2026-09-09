@@ -14,7 +14,9 @@ from __future__ import annotations
 
 import asyncio
 import sys
+from decimal import Decimal
 from pathlib import Path
+from statistics import mean
 
 import structlog
 from dotenv import load_dotenv
@@ -28,6 +30,7 @@ load_dotenv()
 from src.client.factory import create_client  # noqa: E402
 from src.config import settings  # noqa: E402
 from src.market_calendar import market_today  # noqa: E402
+from src.notifications.formatting import format_money, format_strike  # noqa: E402
 from src.notifications.markdown import escape_markdown  # noqa: E402
 from src.notifications.telegram import build_notifier  # noqa: E402
 from src.signals.factory import build_aggregator, build_providers  # noqa: E402
@@ -46,38 +49,84 @@ logger = structlog.get_logger("scripts.morning_signal")
 _DIRECTION_EMOJI = {
     Direction.BULLISH: "📈",
     Direction.BEARISH: "📉",
-    Direction.NEUTRAL: "⏸",
+    Direction.NEUTRAL: "➖",
 }
 
+_E = escape_markdown
 
-def _format_signal_notification(signal: DailySignal) -> str:
-    """Render the consensus signal as a MarkdownV2-safe Telegram message.
+
+def _consensus_entry_band(signal: DailySignal) -> tuple[Decimal, Decimal]:
+    """Mean of the agreeing models' quoted entry-premium bands.
+
+    Mirrors ``record_signal_outcome._consensus_entry_premium`` — the band shown
+    to the operator is the average of every agreeing model's low / high, not a
+    single model's quote.
+
+    Args:
+        signal: A directional (non-``NO_TRADE``) ``DailySignal``.
+
+    Returns:
+        ``(low, high)`` — both ``Decimal``, quantized to 2dp.
+    """
+    lows = [r.entry_premium_low for r in signal.responses if r.provider in signal.agreeing_models]
+    highs = [r.entry_premium_high for r in signal.responses if r.provider in signal.agreeing_models]
+    if not lows:  # a directional signal always has agreeing models — defensive only
+        return (Decimal("0"), Decimal("0"))
+    return (
+        mean(lows).quantize(Decimal("0.01")),
+        mean(highs).quantize(Decimal("0.01")),
+    )
+
+
+def _format_signal_notification(signal: DailySignal, n_providers: int) -> str:
+    """Render the consensus signal as MarkdownV2-ready Telegram message text.
+
+    Vertical layout agreed with Animesh 2026-09-08 (reference renderer
+    ``format_directional_v3``). This formatter owns its escaping — every dynamic
+    part is escaped per value and literal ``*`` is emitted for bold — so the
+    caller sends the result WITHOUT re-wrapping it in ``escape_markdown``.
 
     Args:
         signal: The aggregated ``DailySignal`` for the session.
+        n_providers: Providers dispatched — the ``0 / N`` count in the
+            pipeline-failure variant.
 
     Returns:
-        Raw (un-escaped) message text — a two-line message for a directional
-        trade (direction, mean confidence, strike, then agreeing/dissenting
-        models), or a single-line "no trade" message listing each provider's
-        vote. The caller escapes it for MarkdownV2 before sending.
+        Fully-escaped message text. One of three variants: a directional
+        consensus block, a no-consensus block (one line per model vote), or a
+        pipeline-failure alert when no provider responded.
     """
     if signal.trade_action is TradeAction.NO_TRADE:
-        votes = ", ".join(f"{r.provider}: {r.direction.value}" for r in signal.responses)
-        if votes:
-            return f"⏸ NO TRADE — split signal ({votes})"
-        return "⏸ NO TRADE — no responses"
+        if not signal.responses:
+            return (
+                f"*{_E('🚨 SIGNAL PIPELINE FAILED')}*\n"
+                f"\n"
+                f"{_E(f'❌ 0 / {n_providers} models responded')}\n"
+                f"{_E('⏸ No signal issued today')}\n"
+                f"\n"
+                f"{_E('👉 Check logs before the next run')}"
+            )
+        votes = "\n".join(
+            _E(f"{_DIRECTION_EMOJI[r.direction]} {r.provider}: {r.direction.value}")
+            for r in signal.responses
+        )
+        return f"*{_E('⏸ NO TRADE · NO CONSENSUS')}*\n\n{votes}"
 
     emoji = _DIRECTION_EMOJI[signal.consensus_direction]
-    head = (
-        f"{emoji} {signal.consensus_direction.value} — "
-        f"confidence {signal.consensus_confidence:.1f} — "
-        f"strike {signal.recommended_strike}"
+    band_low, band_high = _consensus_entry_band(signal)
+    agree = ", ".join(signal.agreeing_models) or "—"
+    dissent = ", ".join(signal.dissenting_models) or "—"
+    return (
+        f"*{_E(f'{emoji} CONSENSUS: {signal.consensus_direction.value}')}*\n"
+        f"\n"
+        f"{_E(f'🎯 Strike: {format_strike(signal.recommended_strike)}')}\n"
+        f"{_E(f'📊 Confidence: {signal.consensus_confidence:.1f} / 5.0')}\n"
+        f"{_E(f'💰 Entry band: {format_money(band_low)} – {format_money(band_high)}')}\n"
+        f"\n"
+        f"*{_E('Model Votes:')}*\n"
+        f"{_E(f'👍 Agree: {agree}')}\n"
+        f"{_E(f'👎 Dissent: {dissent}')}"
     )
-    agreed = ", ".join(signal.agreeing_models) or "—"
-    dissented = ", ".join(signal.dissenting_models) or "—"
-    tail = f"Agreed: {agreed}  |  Dissented: {dissented}"
-    return f"{head}\n{tail}"
 
 
 def _log_snapshot(snapshot: MarketSnapshot) -> None:
@@ -162,7 +211,7 @@ async def run() -> None:
 
     notifier = build_notifier()
     if notifier:
-        msg = escape_markdown(_format_signal_notification(signal))
+        msg = _format_signal_notification(signal, len(providers))
         await notifier.send(msg)
 
     logger.info(

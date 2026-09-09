@@ -30,7 +30,7 @@ eventually supersedes S5.5a.
 
 ### 1 · S5.5c — `morning_signal.py` 09:15 directional message
 
-- [ ] **S5.5c** — reformat the `morning_signal.py` entry message to the agreed layout
+- [x] **S5.5c** — reformat the `morning_signal.py` entry message to the agreed layout
   (discussion 2026-09-08). A blank line follows the bold header in every variant; a blank
   line separates sections.
 

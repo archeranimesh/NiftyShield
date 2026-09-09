@@ -116,6 +116,10 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-09] signals S5.5c — reformatted `morning_signal.py` 09:15 Telegram message to the
+  agreed vertical layout (CONSENSUS / NO CONSENSUS / PIPELINE FAILED); `_format_signal_notification`
+  now owns its MarkdownV2 escaping (caller sends without re-wrapping), entry band = mean of
+  agreeing models' quoted bands. 3 formatter render tests + escaping-guard baseline entry.
 - [2026-09-09] signals — restructured `signals_tasks.md` into "Remaining work — in order"
   (S5.5c → S5.5a → S5.5d → S5.5b → S6 + summary table) and "Completed". 4ec58c6.
 - [2026-09-09] signals S5.5a design — revived (was superseded → SPT-5) as the Phase-1 interim
