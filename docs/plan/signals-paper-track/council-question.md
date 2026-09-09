@@ -219,13 +219,30 @@ Model (already council-ruled, already shipped in `src/strategy/executor.py`):
 
 ---
 
-### 5. Monitor cadence  (`strategy_parameters`)
+### 5. Monitor cadence  (`strategy_parameters`)  — **goes to the council**
 
-**Open.** How often the loop polls the open position's option LTP during market hours.
-Trade-off: tighter cadence catches stops closer to the level but burns more API calls, and
-under model A has to fit `StrategyMonitor`'s existing tick interval (or justify changing it).
+**Our position going in:** run the 6-month paper phase at `StrategyMonitor`'s inherited
+**90-second tick** (`src/strategy/monitor.py`, `poll_interval_s` default 90) — no new loop,
+no infra change under model A. Log the full mark path at every tick from day one; after 6
+months, use that logged path to check whether a tighter cadence (30 s / 15 s) would have
+changed any fill materially, and tighten only if the data says so.
 
-_Discussion notes: (add here)_
+**Why this is a council question and not a self-call:** a naked long option can move fast on
+an event (RBI, a data print, a gap) — 90 s between ticks is 90 s of unobserved gap-through
+risk on the stop. The credit-spread strategies that set the 90 s default are far less
+gamma-exposed intraday. The council should weigh whether 90 s is acceptable for this vehicle
+for a *paper* phase whose explicit purpose is to gather the movement data, or whether even the
+paper track needs a tighter evaluate cadence from the start.
+
+**Logging (decided — "log the trades").** Every tick writes a mark-path row: `ts`, `ltp`,
+`bid`, `ask`, `unrealised_pct`, running `mfe_pct`, running `mae_pct`. This is the data asset
+that answers the cadence question retrospectively and feeds the N = 30 SL / target
+recalibration. Implies a tick-log table in `schema.md` (SPT-2).
+
+**Question for the council:** is a 90 s evaluate cadence acceptable for a 1-lot intraday long
+monthly Nifty option during the 6-month paper phase (full path logged, cadence revisited with
+data before any live promotion), or must the paper track evaluate exits on a tighter cadence
+from day one?
 
 ---
 
