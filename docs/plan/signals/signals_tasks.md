@@ -131,7 +131,7 @@ eventually supersedes S5.5a.
 
 ### 5 · S5.6 — Real entry premium at 09:15, true P&L at exit
 
-- [ ] **S5.6** — The 09:15 message's "Entry band" is the **mean of the agreeing models'
+- [x] **S5.6** — The 09:15 message's "Entry band" is the **mean of the agreeing models'
   quoted `entry_premium_low`/`_high`** (`morning_signal._consensus_entry_band`) — an LLM
   estimate, never checked against the chain. `record_signal_outcome --auto` then books P&L as
   `real_exit_LTP − mean(LLM entry_premium)` (`_consensus_entry_premium`). Worse: the strike
@@ -180,7 +180,7 @@ eventually supersedes S5.5a.
 
   **Note:** `signals-paper-track` SPT-3 / SPT-5 will later supersede this with a real paper
   position; S5.6 is the interim fix so Phase-1 P&L is instrument-consistent.
-  | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: <pending>
+  | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: 402db00
 
 ---
 

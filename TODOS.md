@@ -329,6 +329,7 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
   follow-ups: DEBT-8..DEBT-12.
 
 ### 2026-09-09
+- **S5.6 completed.** Real entry premium fetch implemented and plugged into the 09:15 signal formatter and outcome P&L calculator; strike selection pinned to monthly option. (SHA `402db00`).
 
 - **Logged BUG-042** — `721daf9`'s unconditional MarkdownV2 switch broke every unmigrated `TelegramNotifier` cron caller (CC/PP entry, paper snapshot, monitor daemon, pre-market brief);
   silent `400 Bad Request` on every send since 2026-08-25. Same root cause as BUG-039 (which fixed `daily_snapshot.py` only). Full entry + fix options in `docs/bugs/bugs.md`, checklist B042.1–B042.7

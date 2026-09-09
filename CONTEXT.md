@@ -44,7 +44,7 @@ Top-level `src/` packages, one line each (detail → `CONTEXT_TREE.md`):
   `ic_close_executor`, `roll_utils`.
 - `src/signals/` — multi-LLM daily directional signal pipeline (`docs/plan/signals/`, in progress).
   Frozen Pydantic models (`MarketSnapshot`/`SignalResponse`/`DailySignal`/`SignalOutcome`, `Direction`/`TradeAction`),
-  `SignalProvider` protocol, pure `build_prompt`, pure `SignalAggregator` consensus, `SignalStore` (own SQLite
+  `SignalProvider` protocol, pure `build_prompt`, pure `SignalAggregator` consensus, `option_resolver.py`, `SignalStore` (own SQLite
   tables `signal_inputs`/`signal_responses`/`daily_signals`/`signal_outcomes`). Provider impls + `build_providers` factory done;
   `market_inputs.py` (gift_nifty / usd_inr / fii fetchers) + `BrokerClient.get_ohlc` /
   `SignalStore.get_recent_snapshots` prereqs done; `snapshot.py` `assemble_market_snapshot` done (S5.2c); `scripts/morning_signal.py` 09:15 cron done (S5.2); outcome/report crons pending (S5.3+).
