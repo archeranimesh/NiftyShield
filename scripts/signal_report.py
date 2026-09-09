@@ -41,6 +41,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from dotenv import load_dotenv
 
 from src.config import settings
+from src.market_calendar import is_trading_day, market_today
 from src.notifications.telegram import build_notifier
 from src.paper.constants import LOT_SIZE
 from src.signals.models import (
@@ -318,6 +319,11 @@ def _notify(body: str) -> None:
 def main() -> None:
     """CLI entry point — load outcomes for the window and print the report."""
     args = _parse_args()
+    today = market_today()
+    if not is_trading_day(today):
+        logger.info("signal_report.skip_non_trading_day", date=today.isoformat())
+        return
+
     from_date = _parse_date(args.from_date, "from")
     to_date = _parse_date(args.to_date, "to")
 

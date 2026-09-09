@@ -119,10 +119,11 @@ eventually supersedes S5.5a.
 
 ### 4 · S5.5b — NSE-holiday guard
 
-- [ ] **S5.5b** — NSE-holiday guard: `is_trading_day(market_today())` early-exit (log +
+- [x] **S5.5b** — NSE-holiday guard: `is_trading_day(market_today())` early-exit (log +
   return 0) at the top of `scripts/morning_signal.py` and `scripts/signal_report.py`,
   mirroring `scripts/pipeline/upstox_chain_snapshot.py`. No new tests (matches existing cron
-  pattern).
+  pattern). `test_escaping_guard.py` baseline line numbers bumped for the shifted `.send()`
+  call sites.
   | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: <pending>
 
 ---
