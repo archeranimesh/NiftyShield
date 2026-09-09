@@ -27,8 +27,8 @@ rot them.
 6. **Options Income strategy** — `docs/plan/options_income/` — next **S0** (data audit).
 7. **Backtest Engine** — `docs/plan/backtest-engine/` (`phase1..4/`) — next **1.3a / 1.4** (parallel, `phase1/`). Four chained phases; each phase's GATE task blocks the next dir. Gated on
    `variance-gate`. `BACKTEST_PLAN_PHASE1.md` is the canonical spec; the phase dirs are thin status pointers.
-8. **signals: multi-LLM daily signal pipeline** — `docs/plan/signals/` — next **S5.5b** (then S5.5c, S5.5d, S6;
-   S5.5 done; S5.5a/b/c/d remain). Parallel track — self-contained `src/signals/` package, own SQLite tables, zero
+8. **signals: multi-LLM daily signal pipeline** — `docs/plan/signals/` — next **S5.5d** (then S5.5b, S6;
+   S5.5/S5.5c/S5.5a done). Parallel track — self-contained `src/signals/` package, own SQLite tables, zero
    `backtest-engine` / `backtest-eval-core` dependency; runs alongside item 7. `OPENROUTER_API_KEY` needed only for the live 09:15 cron (S5.2); S5.4 baseline stats to
    be reconciled with `backtest-eval-core` later. Unblocked from `signals-eval-core` 2026-09-07 (parallel-track decision).
 8a. **signals-paper-track** — `docs/plan/signals-paper-track/` — next **SPT-1** (council checkpoint, no code). Turns the `signals/` consensus into a paper-traded strategy:
@@ -122,6 +122,13 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-09] signals S5.5a — `record_signal_outcome.py` now posts the daily outcome to
+  Telegram on its 16:00 run (S5.5c vertical layout): executed / not-taken (would-be P&L
+  derived in the formatter, no `SignalOutcome` change) / NO_TRADE / close-only fallback.
+  Local `_format_outcome_notification` owns MarkdownV2 escaping; `_notify` send is non-fatal
+  (guards `build_notifier() is None` + swallows formatter/send errors post-write). 4 render
+  tests + escaping-guard baseline entry. code-reviewer: 0 CRITICAL/ERROR, 2 WARNING both
+  fixed. — SHA `ce59529`
 - [2026-09-09] signals S5.5c — reformatted `morning_signal.py` 09:15 Telegram message to the
   agreed vertical layout (CONSENSUS / NO CONSENSUS / PIPELINE FAILED); `_format_signal_notification`
   now owns its MarkdownV2 escaping (caller sends without re-wrapping), entry band = mean of

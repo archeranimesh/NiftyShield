@@ -89,7 +89,7 @@ eventually supersedes S5.5a.
 
 ### 2 · S5.5a — `record_signal_outcome.py` 16:00 outcome message
 
-- [ ] **S5.5a** — **Phase-1 interim outcome message** (revived 2026-09-09; was superseded →
+- [x] **S5.5a** — **Phase-1 interim outcome message** (revived 2026-09-09; was superseded →
   SPT-5). `scripts/record_signal_outcome.py` posts a Telegram message on its 16:00 run —
   executed / not-taken (would-be P&L) / NO_TRADE — restyled to the S5.5c vertical layout
   (bold header + blank line + one emoji-prefixed line per field). The script currently sends
@@ -101,7 +101,7 @@ eventually supersedes S5.5a.
   `scratch/2026-09-08_signal_telegram_messages.py` (messages 6–8, restyled 2026-09-09).
   Tests: no-network render of all three cases + the empty-premium fallback. **SPT-5 still
   supersedes this** when the paper track goes live (real exit replaces the would-be row).
-  | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: <pending>
+  | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: ce59529
 
 ---
 
