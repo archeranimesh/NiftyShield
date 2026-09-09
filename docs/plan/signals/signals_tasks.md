@@ -107,13 +107,13 @@ eventually supersedes S5.5a.
 
 ### 3 · S5.5d — `signal_report.py` 16:35 digest to Telegram
 
-- [ ] **S5.5d** — `scripts/signal_report.py`: push the full 5-section report to Telegram on
+- [x] **S5.5d** — `scripts/signal_report.py`: push the full 5-section report to Telegram on
   every 16:35 weekday run (currently `print()`-only). Wrap the existing `"\n".join(out)` body
   in a MarkdownV2 fenced code block, escape per the `FORMATTING.md` boundary contract, send
   via `build_notifier()` after the `print()` (non-fatal if no notifier configured, mirroring
   `morning_signal._notify`). Keep the `"No signal outcomes recorded"` early-return
   terminal-only. NSE-holiday guard is S5.5b. Extend the no-network formatter test.
-  | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: <pending>
+  | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: 51d3e59
 
 ---
 

@@ -27,8 +27,8 @@ rot them.
 6. **Options Income strategy** — `docs/plan/options_income/` — next **S0** (data audit).
 7. **Backtest Engine** — `docs/plan/backtest-engine/` (`phase1..4/`) — next **1.3a / 1.4** (parallel, `phase1/`). Four chained phases; each phase's GATE task blocks the next dir. Gated on
    `variance-gate`. `BACKTEST_PLAN_PHASE1.md` is the canonical spec; the phase dirs are thin status pointers.
-8. **signals: multi-LLM daily signal pipeline** — `docs/plan/signals/` — next **S5.5d** (then S5.5b, S6;
-   S5.5/S5.5c/S5.5a done). Parallel track — self-contained `src/signals/` package, own SQLite tables, zero
+8. **signals: multi-LLM daily signal pipeline** — `docs/plan/signals/` — next **S5.5b** (then S6;
+   S5.5/S5.5c/S5.5a/S5.5d done). Parallel track — self-contained `src/signals/` package, own SQLite tables, zero
    `backtest-engine` / `backtest-eval-core` dependency; runs alongside item 7. `OPENROUTER_API_KEY` needed only for the live 09:15 cron (S5.2); S5.4 baseline stats to
    be reconciled with `backtest-eval-core` later. Unblocked from `signals-eval-core` 2026-09-07 (parallel-track decision).
 8a. **signals-paper-track** — `docs/plan/signals-paper-track/` — next **SPT-1** (council checkpoint, no code). Turns the `signals/` consensus into a paper-traded strategy:
@@ -122,6 +122,14 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-09] signals S5.5d — `scripts/signal_report.py` now pushes the full 5-section
+  performance report to Telegram on every run (was `print()`-only). Local
+  `_format_report_message` wraps the body in a MarkdownV2 fenced block with fence-safe
+  escaping (backslash + backtick only — `escape_markdown` renders backslashes literally
+  inside a fence); non-fatal `_notify` mirrors `record_signal_outcome._notify`, sent after
+  `print()` and downstream of the empty-window early return. 4 tests + escaping-guard
+  baseline entry. code-reviewer: 0 CRITICAL/ERROR, 3 WARNING (1 fixed, 2 pre-existing/not
+  in scope). — SHA `51d3e59`
 - [2026-09-09] signals S5.5a — `record_signal_outcome.py` now posts the daily outcome to
   Telegram on its 16:00 run (S5.5c vertical layout): executed / not-taken (would-be P&L
   derived in the formatter, no `SignalOutcome` change) / NO_TRADE / close-only fallback.
