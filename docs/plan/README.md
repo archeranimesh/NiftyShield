@@ -166,7 +166,7 @@ Capture OpenRouter per-call token usage + credit cost (`"usage": {"include": tru
 new nullable columns on `signal_responses`, show today's three-call spend on the 09:30 morning Telegram message, and add `SignalStore.get_signal_cost(from, to)` SQL-aggregate. Four
 tasks SCT-1..4. Carries a `schema.md`. Month-to-date cost → future `signal_report.py` change, out of scope. Requested by Animesh 2026-09-09.
 
-**`signals-paper-track/`** · 🔨 In progress · SPT-1 done (`<SHA>`) · next: **SPT-2** (signal paper models + store)
+**`signals-paper-track/`** · 🔨 In progress · SPT-1 done (`636c190`) · next: **SPT-2** (signal paper models + store)
 Turns the `signals/` consensus into a live paper-traded strategy: auto-enter the daily
 `DailySignal` as a long monthly option (near-month, ≤ 7-DTE roll), manage it intraday against
 a fixed SL −30 % / target +50 %, exit on a hit or square off by 15:00, log the full mark path,

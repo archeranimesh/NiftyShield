@@ -120,7 +120,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
-- [2026-09-09] signals-paper-track SPT-1 closed (`<SHA>`) — council q17 ruled
+- [2026-09-09] signals-paper-track SPT-1 closed (`636c190`) — council q17 ruled
   (`docs/archive/council/strategy/2026-09-09_signals-paper-track-execution-layer.md`). Docs-only:
   `DECISIONS.md` §"Signals Paper Track — Execution Layer" (module boundary A, pure
   `src/strategy/signal_exit.py`, fixed SL −30 % / target +50 %, Phase 1 fixed-only +
