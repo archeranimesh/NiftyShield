@@ -23,7 +23,8 @@ this one in `stories.md`.
 - `src/strategy/CLAUDE.md`, `src/paper/CLAUDE.md` — the `StrategyMonitor` tick loop,
   `PaperExecutor`, `ExitSignalEngine`, `ProfitLockEngine`, `PaperStore`, `TradeState` contracts.
 - `src/signals/` in full — models, aggregator, store, `scripts/morning_signal.py`,
-  `scripts/record_signal_outcome.py` (its `--auto` weekly-option resolution).
+  `scripts/record_signal_outcome.py` (its `--auto` monthly-option resolution via
+  `src/signals/option_resolver.py::resolve_monthly_option`).
 - `DECISIONS.md` 2026-07-02 paper-delta-source council and the §Paper & Reporting entries
   (the track-independence decision, 2026-08-10 council).
 
@@ -33,7 +34,7 @@ this one in `stories.md`.
    - **A — reuse `src/strategy/` + `src/paper/`.** Signals becomes a `PaperStrategy`; the
      monitor daemon, exit engines and profit-lock (trailing) logic already exist and are
      tested; the position persists in `PaperStore`. Cost: couples the deliberately-independent
-     signals track to the paper engine's model evolution; the signal is a naked long weekly
+     signals track to the paper engine's model evolution; the signal is a naked long monthly
      option, structurally unlike the delta-neutral strategies that engine was built around;
      the 2026-08-10 council explicitly ruled the signals track independent.
    - **B — self-contained loop in `src/signals/`.** A small monitor and exit evaluator built
@@ -41,16 +42,23 @@ this one in `stories.md`.
      table. Cost: reimplements trailing-stop and tick-loop mechanics that already exist;
      a second monitor process to run and supervise.
 
-2. **Trade rules (`strategy_parameters`).**
-   - Stop-loss and target: as a % of entry premium (e.g. −30% / +50%) vs a function of the
-     underlying move vs a fixed rupee amount.
+2. **Trade rules (`strategy_parameters`).** Several parameters are **pre-decided (2026-09-09,
+   Animesh) and not reopened by the council:**
+   - Expiry: monthly, near-month, roll to next month at ≤ 7 DTE — uniform via
+     `src/signals/option_resolver.py::resolve_monthly_option` (a ≤ 7-DTE roll added to it;
+     `get_expiry_candidates` untouched), so the paper track and `record_signal_outcome.py`
+     trade the identical instrument.
+   - Position size: fixed 1 lot.
+   - Time exit: hard 15:00 square-off, no overnight hold. Intraday-only, so theta is a minor
+     cost — spread is the real one; the ≤ 7-DTE roll keeps entries in the liquid near-month.
+   - Stop-loss and target: expressed as a % of entry premium (levels are the council's to set).
+   - Entry timing: immediately on the aggregated signal.
+
+   **Open for the council:**
+   - Stop-loss / target *levels* (the −X% / +Y% numbers).
    - Trailing stop: activation threshold (after +X% unrealised), trail distance (Y% of peak
      mark, or a fixed rupee give-back), and whether it replaces or coexists with the fixed
      target.
-   - Time exit: hard 15:00 square-off vs hold overnight. Weekly-expiry theta on a long option
-     is punishing into the close — name the assumption.
-   - Position size (fixed 1 lot?), expiry (weekly, matching `record_signal_outcome --auto`?),
-     and entry timing (immediately on the 09:15 signal, or a delayed/limit entry).
    - Intraday fill model: mid, last, or a spread-aware mark; the exit-fill assumption at a
      stop or a square-off.
 
@@ -64,6 +72,8 @@ Name `options-strategist` and `greeks-analyst` perspectives in the draft.
    option and why).
 3. A rewrite of `tasks.md` SPT-2..SPT-8 and every spec below, concrete to the chosen design —
    real file paths, real model names, per-task tests and commit messages. Add `schema.md`.
+   Add a dedicated task for the `resolve_monthly_option` ≤ 7-DTE roll (tests: near-month at
+   8 DTE stays, at 7 DTE rolls to next month), landing before SPT-3.
 
 **Commit:** `docs(signals-paper-track): council ruling on execution layer + rule set`
 (docs-only — no `code-reviewer`).
@@ -90,8 +100,9 @@ boundary on the money columns.
 ## SPT-3 — Entry executor *(provisional)*
 
 **Intent:** given today's `DailySignal` with `trade_action != NO_TRADE`, resolve the
-recommended strike to a weekly option instrument key (reuse
-`record_signal_outcome._resolve_option_key`), take a simulated entry fill at the agreed mark,
+recommended strike to a monthly option instrument key (reuse
+`src/signals/option_resolver.py::resolve_monthly_option`, which carries the ≤ 7-DTE roll),
+take a simulated entry fill at the agreed mark,
 write the open position row, and send the Telegram entry message — the actual fill price, not
 the advisory band. NO_TRADE / already-open days are a no-op with a logged reason.
 
@@ -101,14 +112,14 @@ escaping, `FORMATTING.md` per-type rules, blank line after the bold header):
 ```
 *✅ SIGNAL ENTRY · 08 Sep*
 
-📈 BUY CALL 24800  (weekly, 11 Sep)
+📈 BUY CALL 24800  (monthly, 30 Sep)
 💰 Entry: ₹65.50 / unit  ·  ₹4,257.50 / lot
 🕘 09:18  ·  Nifty 24,760
 
 🛑 SL ₹45.85  ·  🎯 Target ₹98.25
 ```
 
-**Before any code:** `get_code_snippet("_resolve_option_key")`, `get_code_snippet("InstrumentLookup")`,
+**Before any code:** `get_code_snippet("resolve_monthly_option")`, `get_code_snippet("InstrumentLookup")`,
 `trace_path("build_notifier")`; the SPT-2 model.
 
 **Tests:** BUY_CALL and BUY_PUT resolve + open one row; NO_TRADE and already-open are no-ops;

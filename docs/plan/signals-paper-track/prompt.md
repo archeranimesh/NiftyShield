@@ -1,7 +1,8 @@
 # Signals Paper Track — prompt
 
 > Turn the multi-LLM directional signal into a live paper-traded strategy: auto-enter the
-> daily consensus as a long weekly option, monitor it intraday against a stop-loss / target /
+> daily consensus as a long monthly option (near-month, rolling to next month at ≤ 7 DTE),
+> monitor it intraday against a stop-loss / target /
 > trailing-stop, auto-exit on a hit or square off by 15:00, and record every entry and exit
 > for a 6-month evaluation window that gates the go-live decision.
 
@@ -49,6 +50,14 @@ where SPT hands the `DailySignal` to the new entry step. The live (non-paper) po
 `src/portfolio/`, and the finideas strategies are untouched. No real orders — simulated fills
 only, consistent with `Order execution blocked (static IP)` in `CONTEXT.md`.
 
+**One carved exception (2026-09-09 decision):** `src/signals/option_resolver.py::resolve_monthly_option`
+gains a ≤ 7-DTE roll — when the near-month monthly is 7 or fewer calendar days to expiry it
+advances to the next month's last-Tuesday contract. This keeps the paper-track entry and
+`record_signal_outcome.py` on the exact same instrument (both call `resolve_monthly_option`),
+so SPT-3 reuses it unchanged. `src/instruments/lookup.py::get_expiry_candidates` and its
+`dte >= 14` monthly floor are **not** touched — they are shared by the finideas overlays, the
+IC strategies and the chain pipelines, all out of bounds here.
+
 **Overlap with `docs/plan/signals/`:** S5.5c (the 09:15 advisory message) stays there. S5.5a
 (the 15:00 outcome message) is **superseded** by this story's exit message — mark S5.5a
 `won't-do` and point it here once SPT's exit message lands. S5.5b (holiday guard) still
@@ -60,12 +69,12 @@ Beyond `CONTEXT.md`:
 - `DECISIONS.md` — the §Paper & Reporting entries, the 2026-07-02 paper-delta-source council,
   and (after SPT-1) the new SPT architecture entry.
 - `docs/plan/signals/signals_stories.md` — the `DailySignal` / `SignalResponse` shapes and the
-  `record_signal_outcome.py` `--auto` weekly-expiry resolution this story reuses.
+  `record_signal_outcome.py` `--auto` monthly-expiry resolution this story reuses.
 - `src/strategy/CLAUDE.md` and `src/paper/CLAUDE.md` — the existing monitor/executor/store
   contracts SPT-1 weighs reusing.
 - `src/signals/` — read the current package before proposing where the new layer lives.
 - `BACKTEST_PLAN.md` Phase 0 — the paper-trading / evaluation-gate context.
-- `REFERENCES.md` — weekly-expiry calendar (Thursday→Tuesday change, April 2026), lot size.
+- `REFERENCES.md` — monthly-expiry calendar (last Tuesday; Thursday→Tuesday change, April 2026), lot size.
 - This story changes DB schema (a signals paper-position table). It carries `schema.md` once
   SPT-1 fixes the storage decision — read it before any Store work.
 
@@ -73,12 +82,19 @@ Beyond `CONTEXT.md`:
 
 Provisional — SPT-1's council output rewrites SPT-2 onward before any of it is executed.
 
+**Locked before the council (2026-09-09, Animesh):** monthly expiry, near-month, roll to next
+month at ≤ 7 DTE (uniform via `resolve_monthly_option`); fixed 1 lot; hard 15:00 square-off,
+no overnight hold; stop-loss and target expressed as a % of entry premium. Still open for the
+council: the SL/target *levels*, the trailing-stop design, and the module boundary.
+
 - **SPT-1** — Council checkpoint (no code): reuse `src/strategy`+`src/paper` vs self-contained
-  `src/signals` loop, and the SL / target / trailing-stop rule design. Output → `DECISIONS.md`
-  + a rewrite of this file's `tasks.md` / `stories.md`.
+  `src/signals` loop, and the trailing-stop rule design (expiry, size, time exit and the
+  SL/target basis are pre-decided above — the council does not reopen them). Output →
+  `DECISIONS.md` + a rewrite of this file's `tasks.md` / `stories.md`, including a task for
+  the `resolve_monthly_option` ≤ 7-DTE roll.
 - **SPT-2** — Paper-position model + `schema.md` + Store (persist entry, exit, state, P&L).
-- **SPT-3** — Entry executor: `DailySignal` → resolved weekly option → simulated fill → row +
-  Telegram entry message.
+- **SPT-3** — Entry executor: `DailySignal` → resolved monthly option (`resolve_monthly_option`,
+  ≤ 7-DTE roll) → simulated fill → row + Telegram entry message.
 - **SPT-4** — Intraday monitor loop: poll the position's LTP on a cadence, evaluate exit rules.
 - **SPT-5** — Exit engine: stop-loss, target, trailing-stop, 15:00 square-off; exit fill + row
   update + Telegram exit message with P&L.
@@ -99,7 +115,8 @@ in `DECISIONS.md` and reflected in the shipped `tasks.md`.
 
 ## Perspectives not covered
 
-The economic realism of simulated intraday fills for weekly Nifty options near expiry
-(slippage, spread, the 15:00 square-off assumption) — SPT-1's rule design should name a fill
-model but a rigorous slippage study is a separate backtest-methodology question, not scoped
-here.
+The economic realism of simulated intraday fills for monthly Nifty options (slippage, spread,
+the 15:00 square-off assumption). Positions are intraday-only — never held overnight — so
+theta is a minor cost and bid/ask is the dominant one; the ≤ 7-DTE roll keeps entries in the
+liquid near-month. SPT-1's rule design should name a fill model, but a rigorous slippage study
+is a separate backtest-methodology question, not scoped here.

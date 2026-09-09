@@ -12,16 +12,18 @@ see `stories.md` for the per-task implementation spec.
 
 - [ ] **SPT-1** — Council checkpoint (no code): (a) module boundary — reuse `src/strategy/` +
   `src/paper/` (signals becomes a `PaperStrategy`) vs a self-contained monitor/exit loop in
-  `src/signals/`; (b) trade rules — stop-loss and target as % of entry premium vs underlying
-  move; trailing-stop activation threshold and trail distance; hold-overnight vs 15:00
-  square-off given weekly-expiry theta; position size; which expiry; the intraday fill model.
+  `src/signals/`; (b) trade rules still open — stop-loss / target *levels* (basis is fixed:
+  % of entry premium), trailing-stop activation threshold + trail distance + coexist-with-target,
+  the intraday fill model. **Pre-decided, not reopened:** monthly expiry / near-month / ≤ 7-DTE
+  roll (uniform via `resolve_monthly_option`), fixed 1 lot, hard 15:00 square-off.
   Draft the question against the `strategy_parameters` template with a `data_architecture`
-  section for (a). Output: `DECISIONS.md` entry + rewrite of SPT-2..SPT-8 / `stories.md`.
+  section for (a). Output: `DECISIONS.md` entry + rewrite of SPT-2..SPT-8 / `stories.md`,
+  including a task for the `resolve_monthly_option` ≤ 7-DTE roll before SPT-3.
   | Owner: Animesh | Model: n/a | Review: none | SHA: <—>
 - [ ] **SPT-2** — *(provisional)* Paper-position model + `schema.md` + Store — persist entry,
   exit, state, realised P&L for the signals paper track. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: <—>
-- [ ] **SPT-3** — *(provisional)* Entry executor — `DailySignal` → resolved weekly option →
-  simulated fill → position row + Telegram entry message. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: <—>
+- [ ] **SPT-3** — *(provisional)* Entry executor — `DailySignal` → resolved monthly option
+  (`resolve_monthly_option`, ≤ 7-DTE roll) → simulated fill → position row + Telegram entry message. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: <—>
 - [ ] **SPT-4** — *(provisional)* Intraday monitor loop — poll position LTP on a cadence,
   evaluate exit rules, dedup. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: <—>
 - [ ] **SPT-5** — *(provisional)* Exit engine — stop-loss / target / trailing-stop / 15:00
@@ -35,8 +37,9 @@ see `stories.md` for the per-task implementation spec.
 
 ## Story done when
 
-- **SPT-1** — the council has ruled on the module boundary and the trade-rule design; the
-  ruling is in `DECISIONS.md`; SPT-2..SPT-8 and `stories.md` have been rewritten to match.
+- **SPT-1** — the council has ruled on the module boundary and the open trade-rule design; the
+  ruling is in `DECISIONS.md`; SPT-2..SPT-8 and `stories.md` have been rewritten to match,
+  including a task for the `resolve_monthly_option` ≤ 7-DTE roll.
 - **SPT-2** — a signals paper-position row persists entry, exit, state and P&L; `schema.md` is
   the sole DDL source; happy-path + edge tests pass with no real DB.
 - **SPT-3** — a `DailySignal` that fires produces one resolved-option paper entry at a
