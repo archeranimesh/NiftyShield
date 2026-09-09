@@ -3,6 +3,11 @@
 > One task per session. Find the first unchecked item in `mvp_tasks.md`. That is your only task.
 > Full implementation rules in `CLAUDE.md` and `REVIEW.md`.
 > After each task: tick `mvp_tasks.md`, append `| SHA: <sha>`, add one line to `TODOS.md`.
+>
+> ⚠️ **Read the "Design decisions & open questions" block at the top of `mvp_tasks.md`
+> first.** This story predates the capital-deployment framing (fixed ₹1L notional,
+> 6% tranche ladder, −30% deployed-drawdown hard stop). M1/M2/M4 need rewriting against
+> those decisions before implementation.
 
 ---
 

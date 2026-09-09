@@ -1,5 +1,10 @@
 # MVP — Database Schema
 
+> ⚠️ **Stale — predates the capital-deployment framing.** Needs a `mvp_tranches` table and
+> new `mvp_recommendations` columns (`capital_allotted`, `tranche_step_pct`,
+> `deployed_capital`, `total_qty`, `avg_cost`, `realized_pnl`, `benchmark_entry`). See the
+> "Design decisions & open questions" block at the top of `mvp_tasks.md` before M1.
+
 Four tables in `data/portfolio/portfolio.sqlite`.
 
 ```sql
