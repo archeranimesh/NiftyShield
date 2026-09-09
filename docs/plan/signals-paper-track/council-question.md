@@ -185,16 +185,37 @@ now?
 
 ### 4. Intraday fill model  (`strategy_parameters` / `backtest_methodology`)
 
-**Open.**
+**Resolved 2026-09-09: reuse `PaperFillSimulator` unchanged — `mid ± s`, consistent with the
+CC / CSP / IC paper strategies. No new council question; this defers to the existing
+2026-04-30 slippage-model ruling (`DECISIONS.md` §Slippage Model).**
 
-- Entry fill: mid / last / spread-aware mark.
-- Exit fill at a stop: fill at the level, or at the next observed mark after the level is
-  breached (gap-through risk)?
-- Exit fill at the 15:00 square-off: same question.
-- Note: `PaperFillSimulator` already exists (used by the CC/CSP/IC paper strategies) — the
-  question is which of its modes / assumptions apply to a naked long weekly-ish option.
+Model (already council-ruled, already shipped in `src/strategy/executor.py`):
 
-_Discussion notes: (add here)_
+- Absolute-INR slippage `s`, VIX-banded: ₹1.0 (≤20) / ₹1.5 (20–25) / ₹3.0 (25–30) / ₹4.0
+  (>30); **₹1.5 default** when VIX is unknown.
+- BUY fills at `mid + s`, SELL fills at `mid − s`. TARGET / STOP_LOSS / TIME_EXIT all SELL to
+  close → all fill at `mid − s`.
+
+**Decisions for this track:**
+
+- **`mid` = real `(bid + ask) / 2`** from the quote endpoint (`upstox_market.py` already parses
+  `bid_price` / `ask_price`), not LTP-as-mid — LTP sitting on the bid would understate a BUY.
+- **No `s_effective = max(s, half-spread)` tweak.** Considered and rejected — keep it identical
+  to the other paper strategies. A ₹300 ATM monthly option's half-spread (~₹1–2) is already in
+  line with `s`.
+- **OI multiplier — not applied.** The signal strike is ATM / near-ATM monthly Nifty, OI
+  always ≥ 50k → 1.0×. Documented in the 2026-04-30 ruling; does not bind here.
+- **SL 1.5× exit multiplier — deferred**, not applied at launch. It is in the 2026-04-30
+  ruling but no paper strategy currently applies it; adding it here only would break
+  consistency. Revisit at the N = 30 review alongside the SL / target recalibration.
+- **Monitor ticks use cheap batch LTP** against `sl_price` / `tgt_price`; the fuller bid/ask
+  quote is fetched only at the two fill moments (entry, exit trigger). Gap-through is captured
+  naturally — `mid` at trigger time is already past the level, then `− s` on top.
+- **VIX input** — pass India VIX from the morning snapshot if available; else the ₹1.5 default
+  band.
+
+**SPT-7 report** shows optimistic (LTP, zero slippage) beside base (this model) P&L, per the
+2026-04-30 "all reports must include the scenario table" rule.
 
 ---
 
