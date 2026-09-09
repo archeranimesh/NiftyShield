@@ -1003,6 +1003,108 @@ Source: `docs/archive/council/strategy/2026-06-27_ic-v2-profit-lock-adjustment.m
 
 ---
 
+## Signals Paper Track — Execution Layer (2026-09-09, council q17)
+
+The `signals/` daily consensus becomes a live paper-traded strategy. SPT-1 ruling; rewrites
+`docs/plan/signals-paper-track/` SPT-2..SPT-8. Expiry / size / time-exit / fill model were
+pre-decided by the operator and not reopened.
+
+**Module boundary — A.** The track is a `PaperStrategy` named `paper_signal_track_v1` on the
+shared `StrategyMonitor` + `PaperExecutor` / `PaperFillSimulator` + `PaperStore`. B (a
+self-contained `src/signals/` loop) is rejected: the 2026-09-07 independence ruling was
+`src/backtest/`-scoped, the PT-S2 roadmap slot always pointed here, and a second daemon is not
+justified by the one real cost of A (exit-vocabulary mismatch), which is paid either way. An
+adapter converts an actionable `DailySignal` -> `SignalEvent` / `ApprovedAction` / one
+`LegSpec` (BUY, 1 lot, key from `resolve_monthly_option` incl. the <= 7-DTE roll).
+
+**Exit evaluator — new pure module `src/strategy/signal_exit.py`.** `evaluate(entry, mark,
+now) -> TARGET | STOP_LOSS | TIME_EXIT | HOLD`, no I/O, no state machine. NOT a branch in
+`ExitSignalEngine` (its short-premium / delta / IVR vocabulary does not fit a naked long);
+NOT in `src/signals/` (that stays the advisory pipeline). Phase-1 priority: `TARGET` (mark >=
+tgt) -> `STOP_LOSS` (mark <= sl) -> `TIME_EXIT` (>= 15:00 IST) -> `HOLD`.
+
+**Storage.** `paper_trades` stays the sole position ledger — `strategy_name =
+'paper_signal_track_v1'` (the `paper_` prefix is enforced by `PaperTrade`'s validator;
+`signal_track_v1` would fail construction). No parallel signals-position table (breaks the
+unified `eod_pt_summary` read). Frozen per trade: `sl_price`, `tgt_price`, `sl_pct`,
+`tgt_pct`, `ruleset_version`, signal confidence, entry VIX, entry DTE. New **mark-path
+telemetry table** keyed to `paper_trades.id`, one row per monitor tick: `(trade_id, ts, ltp,
+bid, ask, unrealised_pct, mfe_pct, mae_pct)` + `stale` / `gap_event` flags — it is the Phase 2
+dataset and the 6-month gate input, and ships in SPT-4 from day one. `paper_exit_events`
+(existing) carries the exit reason + final fill. DDL:
+`docs/plan/signals-paper-track/schema.md`. Exit-reason enum: `TARGET` / `STOP_LOSS` /
+`TIME_EXIT` for Phase 1, with `TRAILING_STOP` **reserved now** so Phase 2 needs no migration.
+
+**SL / target — flat -30 % / +50 %** of the entry fill `E`: `sl_price = E * 0.70`, `tgt_price
+= E * 1.50`. Not confidence-scaled, not ATR-scaled, same for calls and puts. Explicitly
+provisional. Position size fixed 1 lot (Nifty lot 65), no scale-up on promotion.
+
+**Fill model — `PaperFillSimulator` unchanged.** BUY at `mid + s`, every exit SELL at `mid -
+s`, `mid = (bid + ask) / 2`, VIX-banded `s` (₹1.5 default). Fill at the **observed tick**, not
+the threshold price — gap-through is booked (a `0.60*E` mark vs a `0.70*E` SL realises -40 %).
+Defers to §Slippage Model (2026-04-30). OI multiplier n/a (ATM => 1.0x); the SL 1.5x exit
+multiplier is deferred to the N = 30 review. Time exit: hard 15:00 IST square-off, no
+overnight hold — kept even in Phase 2.
+
+**Monitor cadence — 30 s** for `paper_signal_track_v1`, via per-strategy due-scheduling inside
+the single shared `StrategyMonitor` (credit spreads stay 90 s; quotes fetched only for
+strategies due that tick). Persist quote timestamps; flag / reject quotes > 30 s stale.
+Fallback to 90 s only if chain-fetch latency makes 30 s impractical — and then with gap-event
+flagging (inter-tick `|dM|/E > 0.20`) and a cadence mini-review at >= 5 such events in 30
+trades.
+
+**Recalibration — two-tier, never collapsed into one number.** N = 30 closed trades is a
+gross-miscalibration fuse only (a one-notch SL/target tweak if the MFE/MAE distribution shows
+the bands are obviously wrong). A full redesign happens only at the 6-month gate (N ~ 50). Any
+changed parameter ships as a prospectively-versioned **v2 cohort**, never pooled with v1; the
+gate report shows v1 / v2 separately.
+
+**Phase 1 exit — fixed-only.** No breakeven bump, no trailing (a BE stop is not "free" under
+intraday mean reversion and contaminates the MFE/MAE sample Phase 2 needs). **Phase 2 exit —
+a two-stage trail that also lifts the target** (BE at +X %; at +Y % trail the stop at `peak -
+k*E` and lift the target to `peak + m*E`). The IC-V2 capture-zone ratchet is rejected —
+"close full" re-caps a convex payoff. Separate story + its own ruling, designed against Phase
+1 MFE/MAE; no parameter values now.
+
+**Go-live gate (SPT-7) — pass/fail, all-pass, no composite score.** G1 window: >= 6 calendar
+months AND >= 50 closed trades (`NO_TRADE` days excluded; hard floor N >= 40). G2 exit-path:
+>= 5 each of `STOP_LOSS` / `TARGET` / `TIME_EXIT` (deterministic replay OK for the rarest).
+G3 regime: >= 1 stretch India VIX > 18 with a position open, else extend. G4 net P&L > ₹0.
+G5 expectancy > 0. G6 profit factor >= 1.20. G7 win rate **not gated** — reported only. G8
+max drawdown <= 8x the mean losing trade; any single trade losing > 1.5x the expected SL loss
+gets an incident classification. G9 cost sanity: median round-trip slippage `2s/E` < 8 %,
+else halt and re-council. Operational: zero unresolved overnight, no duplicate entries/exits,
+>= 95 % reconciliation with `record_signal_outcome`, every fill reproducible, all exit paths
+unit-tested. **Not gates** (report, don't block): advisory-P&L agreement, confidence-/ATR-
+scaled counterfactuals, crash/gap-tail quantiles, seasonal / per-provider attribution.
+
+**First live pilot** (after G1–G9 pass): 1 lot, **auto-execute entries** (per-entry manual
+approval kills the 09:30 timing and breaks comparability with the paper gate), protective
+exits automatic. 8 weeks OR 20 closed live trades (whichever later). Strategy-level halt if
+the rolling 10-trade PF < 0.8, DD breaches G8, or two consecutive sessions show inter-tick
+`|dM|/E > 0.40`. Order execution is still blocked on static IP — the pilot is a rule, not a
+date.
+
+Noted, deferred:
+- **Module-boundary minority (B).** A naked intraday long is structurally unlike the multi-day
+  short-premium book on `PaperStore`; the coupling rides model-evolution risk. Rebuttal: the
+  coupling is one `strategy_name` + a pure evaluator, and B's operational cost (second
+  heartbeat, second holiday guard, a second fill path that drifts from `PaperFillSimulator`)
+  is larger. Watch: if the single long leg ever violates a `PaperLegSnapshot` / `total_pnl`
+  invariant, revisit B rather than contorting the core engine.
+- **Widen SL when DTE <= 10.** `greeks-analyst` minority: at 8–12 DTE (just after the roll)
+  gamma is high enough that -30 % can print on a ~0.4 % Nifty dip. Not actioned pre-data; a
+  future review may widen SL for DTE <= 10 only, if the N = 30 MFE/MAE shows it.
+- **Breakeven stop, pulled forward.** If the N = 30 review shows median winner MFE far above
+  +50 % with brutal give-backs through SL, add a BE stop as an out-of-cycle patch — not as
+  Phase 1 scope.
+- **90 s cadence fallback.** If 30 s proves impractical on chain-fetch latency, the documented
+  fallback (90 s + gap flagging + the mini-review trigger) applies without another council call.
+
+Source: `docs/archive/council/strategy/2026-09-09_signals-paper-track-execution-layer.md`
+
+---
+
 ## B002.3 — `PaperPosition.option_type` resolution strategy (2026-07-02)
 
 Read-time lazy resolution in `PaperStore.get_position`/`get_positions` via `InstrumentLookup`, not a write-time column on `paper_trades` and not a `legs` table join. Rejected: (b)

@@ -166,14 +166,16 @@ Capture OpenRouter per-call token usage + credit cost (`"usage": {"include": tru
 new nullable columns on `signal_responses`, show today's three-call spend on the 09:30 morning Telegram message, and add `SignalStore.get_signal_cost(from, to)` SQL-aggregate. Four
 tasks SCT-1..4. Carries a `schema.md`. Month-to-date cost → future `signal_report.py` change, out of scope. Requested by Animesh 2026-09-09.
 
-**`signals-paper-track/`** · ⬜ Not started · next: **SPT-1** (council checkpoint — no code)
+**`signals-paper-track/`** · 🔨 In progress · SPT-1 done (`<SHA>`) · next: **SPT-2** (signal paper models + store)
 Turns the `signals/` consensus into a live paper-traded strategy: auto-enter the daily
-`DailySignal` as a long weekly option, manage it intraday against a stop-loss / target /
-trailing-stop, exit on a hit or square off by 15:00, and record every entry + exit for a
-6-month evaluation window that gates go-live. SPT-1 is a mandatory council call on the module
-boundary (reuse `src/strategy/` + `src/paper/` vs a self-contained `src/signals/` loop) and
-the full SL / target / trailing rule set; its ruling rewrites SPT-2..SPT-8. SPT-5's exit
-message later replaces `signals/` S5.5a's Phase-1 interim outcome message.
+`DailySignal` as a long monthly option (near-month, ≤ 7-DTE roll), manage it intraday against
+a fixed SL −30 % / target +50 %, exit on a hit or square off by 15:00, log the full mark path,
+and record every entry + exit for a 6-month evaluation window that gates go-live. SPT-1 ruled
+2026-09-09 (council q17, `docs/archive/council/strategy/2026-09-09_signals-paper-track-execution-layer.md`):
+module boundary **A** — `paper_signal_track_v1` `PaperStrategy` on the shared
+`StrategyMonitor` / `PaperExecutor` / `PaperStore`; pure `src/strategy/signal_exit.py`; Phase 1
+fixed-only (`TRAILING_STOP` reserved); 30 s cadence; two-tier recalibration; go-live gate
+G1–G9 all-pass. SPT-5's exit message replaces `signals/` S5.5a's Phase-1 interim outcome message.
 
 **`full-repo-review/`** · ✅ Complete — see `full-repo-review-followups/`
 One-time multi-model, multi-persona review of design docs, source, tests, the

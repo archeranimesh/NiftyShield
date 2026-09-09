@@ -1,14 +1,15 @@
-# SPT-1 — Council question (working draft)
+# SPT-1 — Council question  *(SUBMITTED + RULED 2026-09-09)*
 
-> Living doc. We refine this during discussion; when our own understanding is settled the
-> "Question to submit" block below goes to `scripts/ask_council.py`. Not yet submitted.
+> **Status: closed.** Question submitted as council q17
+> (`tmp/q17_signals_paper_track_execution_layer.md` / `tmp/q17.sh`). Ruling:
+> `docs/archive/council/strategy/2026-09-09_signals-paper-track-execution-layer.md`, absorbed
+> into `DECISIONS.md` §"Signals Paper Track — Execution Layer (2026-09-09, council q17)" and
+> the SPT-2..SPT-8 rewrite in `stories.md` / `tasks.md` / `schema.md`.
 >
-> Template: `strategy_parameters` (primary) with a `data_architecture` section for the module
-> boundary. Context files to attach: this folder's `prompt.md`, `stories.md`, and
-> `src/strategy/CLAUDE.md` + `src/paper/CLAUDE.md`.
-> Perspectives to name in the draft: `options-strategist`, `greeks-analyst`.
+> This file is kept as the reasoning record behind the question. Everything below is the
+> pre-ruling working draft — read the ruling, not this, for what gets built.
 
-_Last updated: 2026-09-09._
+_Last updated: 2026-09-09 (closed)._
 
 ---
 
@@ -261,13 +262,14 @@ _Discussion notes: (add here)_
 
 ---
 
-## Question to submit  (fill in once the above is settled)
+## Question as submitted
 
-```
-topic:    signals-paper-track-execution-layer
-template: strategy_parameters
-context:  docs/plan/signals-paper-track/prompt.md
-          docs/plan/signals-paper-track/stories.md
-question: |
-  (final wording — TBD after discussion)
-```
+`tmp/q17_signals_paper_track_execution_layer.md`, via `tmp/q17.sh`
+(`--topic signals-paper-track-execution-layer --template strategy_parameters`, 10 `--context`
+files). Ruling `docs/archive/council/strategy/2026-09-09_signals-paper-track-execution-layer.md`.
+
+**Where the ruling moved from our going-in position:** cadence → 30 s (not 90 s), via
+per-strategy scheduling in the one shared monitor; recalibration → explicit two-tier (N=30
+fuse vs 6-month/N≈50 redesign, v2 cohort); go-live gate → N≥50, all-pass, PF ≥ 1.20, DD ≤ 8×
+mean loss, no win-rate floor, + G9 cost-sanity halt; exit evaluator → `src/strategy/signal_exit.py`;
+live pilot → auto-execute entries (manual approval rejected). Everything else confirmed.

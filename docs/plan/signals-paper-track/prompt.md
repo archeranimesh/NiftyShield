@@ -40,9 +40,10 @@ call that spans strategy design, architecture, and risk — hence SPT-1.
 ## Scope guard
 
 **In bounds:** a new execution layer for the signals track — an entry executor, an intraday
-monitor, an exit engine (SL / target / trailing), a paper-position model and its persistence,
-and the entry + exit Telegram messages. The exact module home (`src/signals/` vs a
-`PaperStrategy` under `src/strategy/`) is SPT-1's decision.
+monitor registration, a pure exit evaluator (SL / target / 15:00), the paper-position models
++ telemetry table, and the entry + exit Telegram messages. Module home fixed by SPT-1: a
+`PaperStrategy` `paper_signal_track_v1` in `src/strategy/`, with the exit evaluator in
+`src/strategy/signal_exit.py` and persistence on the shared `PaperStore`.
 
 **Out of bounds:** the signal pipeline itself (`src/signals/models.py`, `aggregator.py`,
 `snapshot.py`, `providers/`, `factory.py`, `scripts/morning_signal.py`) — unchanged except
@@ -80,29 +81,29 @@ Beyond `CONTEXT.md`:
 
 ## Task overview
 
-Provisional — SPT-1's council output rewrites SPT-2 onward before any of it is executed.
+SPT-1 is closed (ruled 2026-09-09, council q17 —
+`docs/archive/council/strategy/2026-09-09_signals-paper-track-execution-layer.md`, absorbed
+into `DECISIONS.md`). `tasks.md` / `stories.md` / `schema.md` are the authoritative rewrite;
+the list below is the map.
 
-**Locked before the council (2026-09-09, Animesh):** monthly expiry, near-month, roll to next
-month at ≤ 7 DTE (uniform via `resolve_monthly_option`); fixed 1 lot; hard 15:00 square-off,
-no overnight hold; stop-loss and target expressed as a % of entry premium. Still open for the
-council: the SL/target *levels*, the trailing-stop design, and the module boundary.
+**Fixed by the ruling + the pre-council locks:** module boundary **A** (`paper_signal_track_v1`
+on the shared `StrategyMonitor` / `PaperExecutor` / `PaperStore`); pure
+`src/strategy/signal_exit.py`; monthly expiry, near-month, ≤ 7-DTE roll via
+`resolve_monthly_option`; fixed 1 lot; fixed SL −30 % / target +50 % of the entry fill
+(provisional); hard 15:00 square-off; Phase 1 fixed-only (`TRAILING_STOP` reserved); 30 s
+per-strategy monitor cadence; mark-path telemetry from day one; two-tier recalibration
+(N=30 fuse / 6-month N≈50 redesign / v2 cohort); go-live gate G1–G9 all-pass; auto-execute
+1-lot live pilot.
 
-- **SPT-1** — Council checkpoint (no code): reuse `src/strategy`+`src/paper` vs self-contained
-  `src/signals` loop, and the trailing-stop rule design (expiry, size, time exit and the
-  SL/target basis are pre-decided above — the council does not reopen them). Output →
-  `DECISIONS.md` + a rewrite of this file's `tasks.md` / `stories.md`, including a task for
-  the `resolve_monthly_option` ≤ 7-DTE roll.
-- **SPT-2** — Paper-position model + `schema.md` + Store (persist entry, exit, state, P&L).
-- **SPT-3** — Entry executor: `DailySignal` → resolved monthly option (`resolve_monthly_option`,
-  ≤ 7-DTE roll) → simulated fill → row + Telegram entry message.
-- **SPT-4** — Intraday monitor loop: poll the position's LTP on a cadence, evaluate exit rules.
-- **SPT-5** — Exit engine: stop-loss, target, trailing-stop, 15:00 square-off; exit fill + row
-  update + Telegram exit message with P&L.
-- **SPT-6** — Cron / entrypoint wiring + market-calendar guard + `SIGNAL_PHASE` handling.
-- **SPT-7** — 6-month evaluation report: extend `signal_report.py` (or a new report) with the
-  paper-track realised P&L, win rate, and the go-live gate criteria.
-- **SPT-8** — Docs close: `CONTEXT.md`, `DECISIONS.md`, `TODOS.md`, `docs/plan/README.md`,
-  module `CLAUDE.md`.
+- **SPT-1** — Council checkpoint. ✅ Done — `DECISIONS.md` entry + `schema.md` + the SPT-2..8 rewrite.
+- **SPT-2** — `SignalPaperEntry` / `SignalMark` models + store methods (incl. `cumulative_pnl`).
+- **SPT-2a** — `≤ 7-DTE` roll in `resolve_monthly_option` (`get_expiry_candidates` untouched).
+- **SPT-3** — Entry executor: `src/strategy/signal_track_v1.py` `PaperStrategy` + `build_position_table` extraction + Telegram entry message.
+- **SPT-4** — `StrategyMonitor` registration at 30 s + per-tick `paper_signal_marks` logging.
+- **SPT-5** — `src/strategy/signal_exit.py` pure evaluator + exit fill at the observed mark + Telegram exit message.
+- **SPT-6** — `scripts/signal_paper_entry.py` cron + `monitor_daemon` registration.
+- **SPT-7** — PAPER TRACK evaluation report + the all-pass G1–G9 go-live gate.
+- **SPT-8** — Docs close: `CONTEXT.md`, `DECISIONS.md` as-built, `DB_REGISTRY.md`, `TODOS.md`, `docs/plan/README.md`, `src/strategy/CLAUDE.md`; archive.
 
 ## Definition of done
 

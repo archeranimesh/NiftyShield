@@ -5,118 +5,118 @@
 > After each task: set `SHA:` on the task line + tick the box, update the story status
 > summary in `docs/plan/README.md`, add one line to `TODOS.md`.
 
-> DDL note: SPT-2 onward that touch DB use the exact schema in `schema.md` (added by SPT-1's
-> rewrite once the storage decision is fixed). Do not inline DDL in a spec below — `schema.md`
-> is the sole source once it exists.
+> DDL note: every task that touches the DB uses the exact schema in `schema.md` — the sole
+> DDL source, fixed by the SPT-1 ruling. Do not inline DDL in a spec below.
 
 ---
 
-## SPT-1 — Council checkpoint (no code)
+## SPT-1 — Council checkpoint  *(COMPLETE — ruled 2026-09-09)*
 
-**Files to change / create:** none this task. Output is a `docs/council/` prompt (or a saved
-prompt under `docs/council/pending/` if the council server is offline), a `DECISIONS.md`
-entry once the ruling lands, and a rewrite of SPT-2..SPT-8 in `tasks.md` + every spec below
-this one in `stories.md`.
+**Ruling:** `docs/archive/council/strategy/2026-09-09_signals-paper-track-execution-layer.md`
+(council q17). Absorbed into `DECISIONS.md` §"Signals Paper Track — Execution Layer
+(2026-09-09, council q17)". SPT-2..SPT-8 below are rewritten from it.
 
-**Before any council draft — read:**
-- `docs/council/README.md` §"When to Trigger" and the template list.
-- `src/strategy/CLAUDE.md`, `src/paper/CLAUDE.md` — the `StrategyMonitor` tick loop,
-  `PaperExecutor`, `ExitSignalEngine`, `ProfitLockEngine`, `PaperStore`, `TradeState` contracts.
-- `src/signals/` in full — models, aggregator, store, `scripts/morning_signal.py`,
-  `scripts/record_signal_outcome.py` (its `--auto` monthly-option resolution via
-  `src/signals/option_resolver.py::resolve_monthly_option`).
-- `DECISIONS.md` 2026-07-02 paper-delta-source council and the §Paper & Reporting entries
-  (the track-independence decision, 2026-08-10 council).
-
-**The two decisions to put to the council:**
-
-1. **Module boundary (`data_architecture`).**
-   - **A — reuse `src/strategy/` + `src/paper/`.** Signals becomes a `PaperStrategy`; the
-     monitor daemon, exit engines and profit-lock (trailing) logic already exist and are
-     tested; the position persists in `PaperStore`. Cost: couples the deliberately-independent
-     signals track to the paper engine's model evolution; the signal is a naked long monthly
-     option, structurally unlike the delta-neutral strategies that engine was built around;
-     the 2026-08-10 council explicitly ruled the signals track independent.
-   - **B — self-contained loop in `src/signals/`.** A small monitor and exit evaluator built
-     for exactly one shape: one long option, SL / target / trailing, square off by 15:00; own
-     table. Cost: reimplements trailing-stop and tick-loop mechanics that already exist;
-     a second monitor process to run and supervise.
-
-2. **Trade rules (`strategy_parameters`).** Several parameters are **pre-decided (2026-09-09,
-   Animesh) and not reopened by the council:**
-   - Expiry: monthly, near-month, roll to next month at ≤ 7 DTE — uniform via
-     `src/signals/option_resolver.py::resolve_monthly_option` (a ≤ 7-DTE roll added to it;
-     `get_expiry_candidates` untouched), so the paper track and `record_signal_outcome.py`
-     trade the identical instrument.
-   - Position size: fixed 1 lot.
-   - Time exit: hard 15:00 square-off, no overnight hold. Intraday-only, so theta is a minor
-     cost — spread is the real one; the ≤ 7-DTE roll keeps entries in the liquid near-month.
-   - Stop-loss and target: expressed as a % of entry premium (levels are the council's to set).
-   - Entry timing: immediately on the aggregated signal.
-
-   **Open for the council:**
-   - Stop-loss / target *levels* (the −X% / +Y% numbers).
-   - Trailing stop: activation threshold (after +X% unrealised), trail distance (Y% of peak
-     mark, or a fixed rupee give-back), and whether it replaces or coexists with the fixed
-     target.
-   - Intraday fill model: mid, last, or a spread-aware mark; the exit-fill assumption at a
-     stop or a square-off.
-
-**Recommended template:** `strategy_parameters` as the primary frame (the SL/target/trailing
-design is the larger surface), with an explicit `data_architecture` section for decision 1.
-Name `options-strategist` and `greeks-analyst` perspectives in the draft.
-
-**What to produce:**
-1. The council prompt, saved per `docs/council/README.md`.
-2. On ruling: a `DECISIONS.md` entry (module boundary + the full rule set, with the rejected
-   option and why).
-3. A rewrite of `tasks.md` SPT-2..SPT-8 and every spec below, concrete to the chosen design —
-   real file paths, real model names, per-task tests and commit messages. Add `schema.md`.
-   Add a dedicated task for the `resolve_monthly_option` ≤ 7-DTE roll (tests: near-month at
-   8 DTE stays, at 7 DTE rolls to next month), landing before SPT-3.
+**One-paragraph summary.** Module boundary **A** — the track is a `PaperStrategy` named
+`paper_signal_track_v1` on the shared `StrategyMonitor` / `PaperExecutor` /
+`PaperFillSimulator` / `PaperStore`. A new **pure** evaluator `src/strategy/signal_exit.py`
+(*not* `ExitSignalEngine`, *not* `src/signals/`) returns `TARGET | STOP_LOSS | TIME_EXIT |
+HOLD`. Fixed SL **−30 %** / target **+50 %** of the entry fill, provisional. Phase 1
+fixed-only — no breakeven, no trailing; `TRAILING_STOP` enum member reserved. Monitor cadence
+**30 s** for this strategy (per-strategy scheduling inside the one shared monitor; credit
+spreads stay 90 s). Full mark-path telemetry from day one (`paper_signal_marks`). Two-tier
+recalibration: N=30 = gross-miscalibration fuse, full redesign at the 6-month gate (N≈50),
+any change ships as a prospectively-versioned v2 cohort. Go-live gate G1–G9, all-pass. First
+live pilot: 1 lot, auto-execute entries, 8 weeks / 20 closed trades.
 
 **Commit:** `docs(signals-paper-track): council ruling on execution layer + rule set`
 (docs-only — no `code-reviewer`).
 
 ---
 
-## SPT-2 — Paper-position model + Store *(provisional — SPT-1 rewrites this)*
+## SPT-2 — Signal paper models + Store
 
-**Intent:** a frozen model for one signals paper position (entry date, option key, direction,
-entry premium + fill ts, size, SL / target / trailing params snapshot, state, exit premium +
-ts + reason, realised P&L per lot and total) stored as `TEXT` monetary values per house rules,
-plus a Store with write (`open`, `close`, `update_mark`) and read (`get_open`, `get_by_date`,
-`get_window`, and `cumulative_pnl()` → `(total, n_trades, wins, losses)` since inception via a
-SQL `SUM` — precedent `get_cumulative_realized_pnl`, the Rule-1 aggregation reference) methods.
-`schema.md` is the DDL source. Reuses `src/db.py`.
+**Intent:** `schema.md` is done. Build the frozen models and the store layer for the two new
+tables plus the entry-metadata freeze. The position itself is an ordinary `PaperTrade` row
+(`strategy_name='paper_signal_track_v1'`, `leg_role='signal_long'`, `quantity=65`) — reuse
+`PaperStore.record_trade`, the existing close path, and `paper_exit_events`. New:
 
-**Before any code:** `get_code_snippet` for whichever base the ruling picks (`PaperTrade` /
-`PaperPosition` if A, or a fresh model if B); `search_graph("TradeState")`;
-`get_code_snippet("SignalOutcome")` for the P&L field conventions already in the track.
+- **`SignalPaperEntry`** (frozen Pydantic) — mirrors `paper_signal_entries`: `trade_id`,
+  `signal_date`, `trade_action`, `instrument_key`, `expiry`, `entry_dte`, `entry_ts`,
+  `entry_premium`, `entry_bid` / `entry_ask` / `entry_slippage`, `entry_vix`,
+  `entry_underlying`, `signal_confidence`, `sl_pct`, `tgt_pct`, `sl_price`, `tgt_price`,
+  `ruleset_version='v1'`. `Decimal` for money, persisted `TEXT`.
+- **`SignalMark`** (frozen) — mirrors `paper_signal_marks`.
+- Store methods (extend `PaperStore` or a `SignalPaperStore` composed over `src/db.py`):
+  `open_signal_entry(entry)`, `get_open_signal_entry() -> SignalPaperEntry | None` (one
+  position at a time), `record_mark(mark)`, `get_marks(trade_id)`,
+  `close_signal_entry(trade_id, exit_event)`, `get_entries(from_, to)`, and
+  `cumulative_pnl() -> (total: Decimal, n: int, wins: int, losses: int)` over closed
+  `paper_signal_track_v1` rows (SQL `SUM` / `COUNT`; precedent `get_cumulative_realized_pnl`,
+  the Rule-1 aggregation reference).
 
-**Tests:** round-trip open→close persistence; reject double-open for a date; Decimal/TEXT
-boundary on the money columns; `cumulative_pnl()` over an empty table and over a mix of
-winning and losing closed rows.
+**Before any code:** `get_code_snippet("PaperStore")`, `get_code_snippet("PaperTrade")` (the
+`paper_` prefix validator + required fields), `get_code_snippet("record_trade")`,
+`get_code_snippet("PaperExitEvent")`, `search_graph("TradeState")`,
+`get_code_snippet("get_cumulative_realized_pnl")`. Do not write a `_make_*` model helper from
+memory — pull the field lists first.
+
+**Tests:** round-trip `open_signal_entry` → `record_mark` ×N → `close_signal_entry`;
+reject a second `open` while one is open; `Decimal`/`TEXT` boundary on every money column;
+`cumulative_pnl()` over an empty table and a win/loss mix; `gap_event` / `stale` persist as
+written.
+
+**Commit:** `feat(signals-paper-track): SPT-2 signal paper models + store`
 
 ---
 
-## SPT-3 — Entry executor *(provisional)*
+## SPT-2a — `resolve_monthly_option` ≤ 7-DTE roll
 
-**Intent:** given today's `DailySignal` with `trade_action != NO_TRADE`, resolve the
-recommended strike to a monthly option instrument key (reuse
-`src/signals/option_resolver.py::resolve_monthly_option`, which carries the ≤ 7-DTE roll),
-take a simulated entry fill at the agreed mark,
-write the open position row, and send the Telegram entry message — the actual fill price, not
-the advisory band. NO_TRADE / already-open days are a no-op with a logged reason.
+**Intent:** add the ≤ 7-DTE roll to
+`src/signals/option_resolver.py::resolve_monthly_option` so the paper track **and**
+`record_signal_outcome.py` both trade the next-month contract inside the current month's final
+week. `get_expiry_candidates` and its `dte >= 14` floor are **not** touched — shared by the
+finideas overlays / IC / chain pipelines.
 
-**Telegram entry message** (shape to confirm at SPT-1; candidate — formatter owns its
-escaping, `FORMATTING.md` per-type rules, blank line after the bold header.
+**Mechanics:** after `resolve_monthly_option` picks `candidates[0]` (nearest monthly), compute
+its calendar DTE from `signal.trade_date`; if `dte <= 7`, resolve the strike against the
+**next** month's last-Tuesday expiry instead (advance via `get_expiry_candidates` with a
+`min_expiry` past `candidates[0]`, or the next `last_of_month` — whichever the existing helper
+exposes cleanly). Log `option_resolver.monthly_roll` with both expiries + the DTE when it
+fires. Return `None` (no crash) if no next-month contract is listed.
 
-**Option A** — the same 7-column table as the exit message and the EOD PT summary, with
-`Exit` / `P&L` / `Chg` blank (`—`) at entry, SL / target on a line below, and a
-since-inception footer. The table is rendered by a shared `build_position_table(...)` extracted
-from `src/reporting/eod_pt_summary.py::_render_table` to `src/notifications/formatting.py`, so
-reporting and the signal messages use one builder (not a copy):
+**Before any code:** `get_code_snippet("resolve_monthly_option")`,
+`get_code_snippet("get_expiry_candidates")`, `search_graph("last_of_month")`,
+`get_code_snippet("search_options")`.
+
+**Tests:** near-month at 8 DTE → stays; at 7 DTE → rolls to next month; at 7 DTE with no
+next-month contract → `None`; DTE > 7 path unchanged (regression for
+`record_signal_outcome`). `greeks-analyst` review (DTE / expiry logic).
+
+**Commit:** `feat(signals): <=7-DTE roll in resolve_monthly_option`
+
+---
+
+## SPT-3 — Entry executor + `signal_track_v1` strategy
+
+**Intent:** the `DailySignal` → paper entry path.
+
+- **`src/strategy/signal_track_v1.py`** — the `PaperStrategy`, `strategy_name =
+  'paper_signal_track_v1'`. Daily entry hook: if `DailySignal.trade_action == NO_TRADE` or a
+  position is already open → no-op with a logged reason. Otherwise resolve the instrument via
+  `resolve_monthly_option` (carries the SPT-2a roll), build one `LegSpec` (BUY, 65, resolved
+  key), hand to `PaperExecutor` for the simulated entry fill (`PaperFillSimulator` BUY at
+  `mid + s`, `mid = (bid + ask) / 2` from a real quote), freeze the `SignalPaperEntry`
+  (`E`, `sl_price = E × Decimal("0.70")`, `tgt_price = E × Decimal("1.50")`, `sl_pct=0.30`,
+  `tgt_pct=0.50`, VIX, DTE, confidence, `ruleset_version='v1'`), persist via the SPT-2 store,
+  send the Telegram entry message.
+- **Shared table builder** — extract `src/reporting/eod_pt_summary.py::_render_table` to
+  `src/notifications/formatting.py::build_position_table(...)` (public); `eod_pt_summary` now
+  calls it. One builder, not a copy.
+
+**Telegram entry message** (option A — same 7 columns as the exit and the EOD PT summary;
+`Exit` / `P&L` / `Chg` blank at entry; SL / target below; since-inception footer from
+`cumulative_pnl()`; formatter owns its escaping, `FORMATTING.md` per-type rules, blank line
+after the bold header):
 
 ```
 *✅ SIGNAL ENTRY · 29 Sep*
@@ -132,45 +132,77 @@ Signal    NIFTY 23000 29 SEP 26 PE   65   39.52       —      —      —
 Σ Inception  +12,480.50  ·  37 trades  ·  24W / 13L
 ```
 
-**Before any code:** `get_code_snippet("resolve_monthly_option")`, `get_code_snippet("InstrumentLookup")`,
-`get_code_snippet("_render_table")` (the builder to extract), `trace_path("build_notifier")`;
-the SPT-2 model.
+**Before any code:** `get_code_snippet("PaperStrategy")`, `get_code_snippet("PaperExecutor")`,
+`get_code_snippet("LegSpec")`, `get_code_snippet("resolve_monthly_option")`,
+`get_code_snippet("_render_table")`, `trace_path("build_notifier")`,
+`get_code_snippet("assemble_market_snapshot")` (VIX source); the SPT-2 models.
 
-**Tests:** BUY_CALL and BUY_PUT resolve + open one row; NO_TRADE and already-open are no-ops;
-the message renders (no network) for both directions; the since-inception footer renders with
-zero prior trades and with N; `build_position_table` still renders the EOD PT summary
-unchanged after the extraction.
+**Tests:** BUY_CALL and BUY_PUT each resolve + open exactly one `paper_trades` row + one
+`SignalPaperEntry` with the frozen levels; NO_TRADE and already-open are no-ops with the
+logged reason; entry message renders (no network) for both directions; footer at zero prior
+trades and at N; `build_position_table` still renders the EOD PT summary unchanged after the
+extraction.
 
----
-
-## SPT-4 — Intraday monitor loop *(provisional)*
-
-**Intent:** on a cadence during market hours (cadence set by SPT-1), fetch the open position's
-option LTP, update the stored mark / peak, and pass the tick to the SPT-5 exit engine. Holiday
-and outside-market-hours are no-ops. Dedup so one exit condition fires once. If the ruling is
-A, this is a `StrategyMonitor` registration, not a new loop.
-
-**Before any code:** `get_code_snippet("StrategyMonitor")`, `get_code_snippet("get_ltp")` on
-the live market client; SPT-2 Store read methods.
-
-**Tests:** a tick below SL routes to exit; a tick between SL and target is a hold; a second
-tick after an exit does not re-fire.
+**Commit:** `feat(signals-paper-track): SPT-3 entry executor + signal_track_v1`
 
 ---
 
-## SPT-5 — Exit engine *(provisional)*
+## SPT-4 — Monitor registration (30 s) + mark-path logging
 
-**Intent:** pure evaluator — given the position, its params and the current mark, return the
-exit decision: `STOP_LOSS`, `TARGET`, `TRAILING_STOP`, `TIME_EXIT` (15:00), or `HOLD`.
-Trailing logic per SPT-1. On a non-HOLD, take the exit fill, close the row with the reason and
-realised P&L, and send the Telegram exit message. Long option → P&L is `(exit − entry) ×
-lot_size`; `Decimal` throughout; `greeks-analyst` review because the exit interacts with
-theta / gamma near expiry.
+**Intent:** register `paper_signal_track_v1` with the shared `StrategyMonitor` at a **30 s**
+per-strategy cadence (credit spreads stay 90 s — no second daemon). Per due tick, while a
+position is open: fetch the option quote (bid / ask / ltp + quote timestamp), compute
+`mark = (bid + ask) / 2`, update running `mfe_pct` / `mae_pct`, set `stale = 1` when the quote
+timestamp is > 30 s behind now, set `gap_event = 1` when `|mark − prev_mark| / E > 0.20`,
+write a `paper_signal_marks` row, then hand `(entry, mark, now)` to `signal_exit.evaluate`
+(SPT-5). Holiday / outside-market-hours / no-open-position → no-op. Dedup so one exit fires
+once.
 
-**Telegram exit message** — the same `build_position_table` as the entry message; the bold
-header carries the exit reason (`TARGET` / `STOP_LOSS` / `TRAILING_STOP` / `TIME_EXIT`); the
-since-inception footer is updated with this closed trade. Replaces `signals/` S5.5a's interim
-outcome message once this engine is live; S5.5a ships first as the Phase-1 stopgap:
+**Per-strategy cadence:** add a `due_interval_s` to the monitor registration so a strategy is
+evaluated only on ticks where it is due; the base tick stays fast enough to service 30 s;
+quote / chain fetch happens only for strategies due that tick. If chain-fetch latency makes
+30 s impractical, fall back to 90 s **and** keep the `gap_event` flagging — at ≥ 5 gap events
+within 30 trades, raise `signal_track.cadence_review` and notify (per the ruling's fallback).
+
+**Before any code:** `get_code_snippet("StrategyMonitor")`, `get_code_snippet("_tick")`,
+`search_graph("poll_interval_s")`, the quote / bid-ask method on `src/client/upstox_market.py`
+(~line 376), the SPT-2 store.
+
+**Tests:** a due tick with `mark ≤ sl_price` routes to `STOP_LOSS`; a dead-band tick is
+`HOLD` and still writes a mark row; a second tick after an exit does not re-fire; `stale` set
+on an old quote timestamp; `gap_event` set on a > 20 % inter-tick jump; `mfe_pct` / `mae_pct`
+monotonic. `greeks-analyst` review (option-chain / mark handling).
+
+**Commit:** `feat(signals-paper-track): SPT-4 30s monitor registration + mark-path logging`
+
+---
+
+## SPT-5 — Exit engine `signal_exit.py`
+
+**Intent:** **`src/strategy/signal_exit.py`** — a pure function
+`evaluate(entry: SignalPaperEntry, mark: Decimal, now: datetime) -> SignalExitDecision`.
+Priority, no state machine:
+
+```
+1. mark >= entry.tgt_price          -> TARGET
+2. mark <= entry.sl_price           -> STOP_LOSS
+3. now  >= 15:00 IST                -> TIME_EXIT
+4. otherwise                        -> HOLD
+```
+
+`SignalExitReason` enum: `TARGET`, `STOP_LOSS`, `TIME_EXIT` — **plus a reserved
+`TRAILING_STOP`** member (unused in Phase 1, present so the Phase 2 dynamic exit needs no
+migration). The function stays pure — no I/O, no fill, no persistence.
+
+On a non-HOLD the SPT-4 caller: takes the exit fill via `PaperFillSimulator` SELL at
+`mid − s` **on the observed tick's mark, not the threshold price** (gap-through is booked — a
+`0.60·E` mark against a `0.70·E` SL realises −40 %), closes the `paper_trades` row + writes
+`paper_exit_events` with the reason, computes realised P&L `= (X − E) × 65` (`Decimal`
+throughout), sends the Telegram exit message.
+
+**Telegram exit message** — shared `build_position_table`; bold header carries the reason
+(`TARGET` / `STOP_LOSS` / `TIME_EXIT`); footer from `cumulative_pnl()` updated with this
+trade. Replaces `signals/` S5.5a once live (S5.5a ships first as the stopgap):
 
 ```
 *🎯 SIGNAL EXIT · 29 Sep*  ·  TARGET
@@ -185,43 +217,109 @@ Signal    NIFTY 23000 29 SEP 26 PE   65   39.52   55.25  1,022.12  +39.78%
 Σ Inception  +12,480.50  ·  37 trades  ·  24W / 13L
 ```
 
-**Before any code:** `get_code_snippet("ProfitLockEngine")`, `get_code_snippet("ExitSignalEngine")`,
-`get_code_snippet("pnl_emoji")` / `format_money`; the SPT-2 model and its cumulative-P&L read.
+**Before any code:** `get_code_snippet("PaperFillSimulator")`, `get_code_snippet("FillResult")`,
+`get_code_snippet("PaperExitEvent")`, `get_code_snippet("pnl_emoji")` / `format_money`; the
+SPT-2 models + `cumulative_pnl`.
 
-**Tests:** each of SL / target / trailing / time-exit fires on the right mark; HOLD in the
-dead band; P&L math for a win and a loss; the message renders for a win and a loss; the
-inception footer reflects the just-closed trade.
+**Tests:** `TARGET` fires at `mark == tgt_price` and above; `STOP_LOSS` at `mark == sl_price`
+and below; `TIME_EXIT` at exactly 15:00:00 IST and after; `HOLD` in the dead band and at
+14:59; `TARGET` wins when a tick satisfies target and time together; P&L math for a win
+(`X > E`), a loss (`X < E`), and the gap-through case; message renders for a win and a loss;
+`SignalExitReason.TRAILING_STOP` exists but `evaluate` never returns it. `greeks-analyst`
+review (theta / gamma near the roll).
 
----
-
-## SPT-6 — Cron / entrypoint wiring *(provisional)*
-
-**Intent:** entry script (once, post-09:15) and monitor (cadence loop or daemon registration)
-run on trading days only via `is_trading_day(market_today())`, phase from `SIGNAL_PHASE` /
-key set, logging per `LOGGING.md` with an explicit `_SCRIPT_NAME`. No unit tests
-(integration-only, matching `morning_signal.py`).
-
-**Deliver:** the crontab lines + log paths for the runbook, mirroring `scripts/morning_signal.py`.
+**Commit:** `feat(signals-paper-track): SPT-5 signal_exit evaluator + exit message`
 
 ---
 
-## SPT-7 — 6-month evaluation report *(provisional)*
+## SPT-6 — Cron / entrypoint wiring
 
-**Intent:** extend `scripts/signal_report.py` (or a sibling) with a PAPER TRACK section over a
-`--from` / `--to` window: realised P&L, win rate, average win / average loss, max drawdown,
-exit-reason histogram, and an explicit pass/fail against the go-live gate metrics the SPT-1
-ruling defines. Reuses the SPT-2 Store read methods.
+**Intent:** trading-days-only via `is_trading_day(market_today())`, phase from the env
+(`SIGNAL_PHASE` / key set), logging per `LOGGING.md` with an explicit `_SCRIPT_NAME`.
 
-**Tests:** the aggregation over a small fixture set of closed positions; empty-window guard.
+- **`scripts/signal_paper_entry.py`** — runs shortly after the 09:30 `morning_signal` cron has
+  written today's `DailySignal`; loads it, calls the SPT-3 entry hook. Logged no-op on
+  NO_TRADE / already-open / holiday.
+- **Monitor** — `paper_signal_track_v1` is registered inside the existing
+  `scripts/monitor_daemon.py` (no new daemon); SPT-6 wires the registration + the 30 s
+  `due_interval_s` and confirms `monitor_daemon` picks it up.
+
+No unit tests (integration-only, matching `morning_signal.py`).
+
+**Deliver:** the crontab line for `signal_paper_entry.py` + its log path, and the
+`monitor_daemon` note, for the runbook — mirroring the `scripts/morning_signal.py` entries.
+
+**Commit:** `feat(signals-paper-track): SPT-6 entry cron + monitor registration`
 
 ---
 
-## SPT-8 — Docs close *(provisional)*
+## SPT-7 — 6-month evaluation report + go-live gate
 
-`CONTEXT.md` "What Exists" (new module/scripts), `DECISIONS.md` (as-built note under the
-SPT-1 entry), `TODOS.md` session log + backlog pointer, `docs/plan/README.md` status →
-Shipped, `src/signals/CLAUDE.md` (or `src/strategy/CLAUDE.md`) invariants. Then archive per
-§Conventions. Also note in `signals/` S5.5a that SPT-5's exit message now replaces its
-Phase-1 interim outcome message.
+**Intent:** a **PAPER TRACK** section (extend `scripts/signal_report.py`, or a sibling
+`scripts/signal_paper_report.py`) over a `--from` / `--to` window (default: first paper entry
+→ +6 calendar months), grouped by `ruleset_version` (v1 / v2 **never** pooled). Computes the
+metrics, then evaluates the gate.
+
+**Metrics** (all net of the modelled `mid ± s` slippage — do not haircut again): cumulative
+net P&L; expectancy per trade; profit factor; win rate (overall + by BUY_CALL / BUY_PUT);
+average win / average loss; max drawdown of the cumulative-P&L equity curve; longest losing
+streak; exit-reason histogram; MFE / MAE distributions (histograms vs the −30 / +50 lines,
+from `paper_signal_marks`); results bucketed by exit reason / direction / VIX bucket / DTE /
+confidence; inter-tick jump percentiles; quote-staleness + missed-tick counts; an
+advisory-vs-paper disagreement table (sign-match rate + the days `record_signal_outcome` was
+green while the paper trade stopped out).
+
+**Gate — all-pass, no composite score:**
+
+| Gate | Rule |
+|---|---|
+| G1 window | ≥ 6 calendar months **and** ≥ 50 closed trades (`NO_TRADE` days excluded). If fire-rate yields < 50 in 6 months, extend the calendar; hard floor N ≥ 40. |
+| G2 exit-path | ≥ 5 each of `STOP_LOSS`, `TARGET`, `TIME_EXIT` fills (deterministic replay acceptable for the rarest if live observation is structurally unlikely). |
+| G3 regime | ≥ 1 stretch with India VIX > 18 while a position was open; else extend. |
+| G4 net P&L | cumulative net realised P&L > ₹0. |
+| G5 expectancy | mean P&L per closed trade > 0. |
+| G6 profit factor | gross wins / gross losses ≥ 1.20. |
+| G7 win rate | **not gated** — reported only (expected 35–45 %). |
+| G8 drawdown | peak-to-trough of cumulative P&L ≤ 8 × mean losing trade (detail below). |
+| G9 cost sanity | median round-trip slippage `2s / E` < 8 %; above → halt and re-council. |
+| Operational | see the operational list below the table. |
+
+**G8 detail:** also report the longest losing streak. Any single trade losing > 1.5 × the
+expected SL loss gets an incident classification (gap-through / stale quote / monitor failure)
+— a genuine market gap does not fail the gate; an unexplained monitor or stale-data failure
+does.
+
+**Operational (all must hold):** zero unresolved overnight positions; no duplicate entries or
+exits; ≥ 95 % action/date/instrument reconciliation with `record_signal_outcome`; every fill
+reproducible from persisted bid / ask / VIX band / slippage; all exit paths covered by SPT-5
+unit tests.
+
+**Not gates (report, don't block):** advisory-P&L agreement; confidence-/ATR-scaled
+counterfactuals; crash / gap-tail quantiles; seasonal / per-provider attribution.
+
+**Before any code:** `get_code_snippet("signal_report")` / its `main`, the SPT-2 store reads
+(`get_marks`, `get_entries`, `cumulative_pnl`), `get_code_snippet("SignalStore")` for the
+advisory series.
+
+**Tests:** each gate's pass and fail branch over a fixture set of closed `SignalPaperEntry` +
+`paper_signal_marks` rows; empty-window guard; v1 / v2 rows never pooled; profit factor with
+zero losses (pass) and zero wins (fail).
+
+**Commit:** `feat(signals-paper-track): SPT-7 evaluation report + go-live gate`
+
+---
+
+## SPT-8 — Docs close
+
+`CONTEXT.md` "What Exists" — `src/strategy/signal_track_v1.py` + `signal_exit.py`,
+`scripts/signal_paper_entry.py`, the two new tables. `DECISIONS.md` — an as-built note under
+the SPT-1 entry (final module names; 30 s cadence as-shipped, or the 90 s fallback if taken).
+`DB_REGISTRY.md` — `paper_signal_entries` + `paper_signal_marks` rows. `TODOS.md` session log
++ delete the backlog pointer. `docs/plan/README.md` status → ✅ Shipped and the epic-row
+pointer. `src/strategy/CLAUDE.md` (create if absent) — the `paper_signal_track_v1` invariants
+(one position at a time; levels frozen at entry; `signal_exit` stays pure; `TRAILING_STOP`
+reserved). Mark `signals/` S5.5a `won't-do` and point it here. Then archive
+`docs/plan/signals-paper-track/` → `docs/archive/plan/` per `docs/plan/README.md`
+§Conventions *Completion → archive*.
 
 **Commit:** `docs(signals-paper-track): close — <one line>`.

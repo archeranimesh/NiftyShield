@@ -27,9 +27,9 @@ rot them.
 6. **Options Income strategy** — `docs/plan/options_income/` — next **S0** (data audit).
 7. **Backtest Engine** — `docs/plan/backtest-engine/` (`phase1..4/`) — next **1.3a / 1.4** (parallel, `phase1/`). Four chained phases; each phase's GATE task blocks the next dir. Gated on
    `variance-gate`. `BACKTEST_PLAN_PHASE1.md` is the canonical spec; the phase dirs are thin status pointers.
-8. **signals-paper-track** — `docs/plan/signals-paper-track/` — next **SPT-1** (council checkpoint, no code). Turns the `signals/` consensus into a paper-traded strategy:
-    auto-enter as a long weekly option, intraday SL / target / trailing-stop, exit or 15:00 square-off, 6-month evaluation window → go-live gate. SPT-1 rules on module boundary
-    (`src/strategy/`+`src/paper/` reuse vs self-contained `src/signals/` loop) + the rule set, then rewrites SPT-2..SPT-8. Supersedes `signals/` S5.5a.
+8. **signals-paper-track** — `docs/plan/signals-paper-track/` — SPT-1 done (council q17, 2026-09-09); next **SPT-2** (`SignalPaperEntry` / `SignalMark` models + store). Turns the
+    `signals/` consensus into a paper-traded strategy: auto-enter a long monthly option (≤ 7-DTE roll), fixed SL −30 % / target +50 %, exit or 15:00 square-off, full mark-path log,
+    6-month G1–G9 go-live gate. Ruling: `paper_signal_track_v1` `PaperStrategy` on the shared engine + pure `src/strategy/signal_exit.py`; Phase 1 fixed-only. Supersedes `signals/` S5.5a.
 9. **signals-cost-tracking** — `docs/plan/signals-cost-tracking/` — next **SCT-1** (usage model + provider capture). Capture OpenRouter per-call token usage + USD cost via inline
    `usage.include` accounting, persist as 3 new `signal_responses` columns, show today's spend on the 09:30 message, add `get_signal_cost()` aggregate. SCT-1..4, carries `schema.md`.
 10. **backtest-eval-core** — `docs/plan/backtest-eval-core/` — next **B1.1**. Blocked until `backtest-engine` tasks 1.3 + 1.4 land.
@@ -120,6 +120,18 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-09] signals-paper-track SPT-1 closed (`<SHA>`) — council q17 ruled
+  (`docs/archive/council/strategy/2026-09-09_signals-paper-track-execution-layer.md`). Docs-only:
+  `DECISIONS.md` §"Signals Paper Track — Execution Layer" (module boundary A, pure
+  `src/strategy/signal_exit.py`, fixed SL −30 % / target +50 %, Phase 1 fixed-only +
+  `TRAILING_STOP` reserved, 30 s per-strategy cadence, two-tier recalibration, G1–G9 go-live
+  gate, auto-execute 1-lot pilot); new `docs/plan/signals-paper-track/schema.md`
+  (`paper_signal_entries` + `paper_signal_marks`, position stays on `paper_trades` as
+  `paper_signal_track_v1`); `stories.md` / `tasks.md` rewritten SPT-2..SPT-8 concrete + added
+  SPT-2a (`≤ 7-DTE` roll in `resolve_monthly_option`); `prompt.md` scope guard + task overview;
+  `council-question.md` marked closed; `docs/plan/README.md` row → in progress; `git mv` the
+  council file to `docs/archive/council/strategy/`. Deltas from our draft: cadence 30 s not
+  90 s, gate N≥50 not 40, live pilot auto-execute not manual. Next: SPT-2.
 - [2026-09-09] signals S6 (`566e1b0`) — story closed and archived. Docs-only: `CONTEXT.md` `src/signals/`
   bullet rewritten to "shipped" + crons-live, signals crons removed from "What Does NOT Exist
   Yet"; `DECISIONS.md` close bullet (story archived + `phase` column semantics);
