@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from src.db import connect
 from src.signals.models import (
     DailySignal,
     Direction,
@@ -72,7 +73,10 @@ def _response(provider: str = "grok") -> SignalResponse:
     )
 
 
-def _signal(recommended_strike: int | None = ATM) -> DailySignal:
+def _signal(
+    recommended_strike: int | None = ATM,
+    entry_premium: Decimal | None = None,
+) -> DailySignal:
     action = TradeAction.BUY_CALL if recommended_strike is not None else TradeAction.NO_TRADE
     return DailySignal(
         trade_date=TRADE_DATE,
@@ -81,6 +85,7 @@ def _signal(recommended_strike: int | None = ATM) -> DailySignal:
         consensus_confidence=Decimal("4.0"),
         trade_action=action,
         recommended_strike=recommended_strike,
+        entry_premium=entry_premium,
         agreeing_models=["grok", "gemini"],
         dissenting_models=["gpt4o"],
     )
@@ -102,14 +107,60 @@ def _outcome(executed: bool = True, pnl_per_lot: Decimal | None = Decimal("1200"
 
 
 def _rows(store: SignalStore, sql: str, params: tuple = ()) -> list[sqlite3.Row]:
-    from src.db import connect
-
     with connect(store.db_path) as conn:
         return conn.execute(sql, params).fetchall()
 
 
 def test_init_db_is_idempotent(store: SignalStore) -> None:
     store.init_db()  # second call, fixture already ran one
+
+
+def test_init_db_migration_applies_and_hydrates(tmp_path: Path) -> None:
+    db_path = tmp_path / "migration.sqlite"
+    s = SignalStore(str(db_path))
+    s.db_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with connect(s.db_path) as conn:
+        # Create old schema without entry_premium
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS daily_signals (
+                trade_date           TEXT PRIMARY KEY,
+                consensus_direction  TEXT NOT NULL,
+                consensus_confidence TEXT NOT NULL,
+                trade_action         TEXT NOT NULL,
+                recommended_strike   INTEGER,
+                agreeing_models      TEXT NOT NULL,
+                dissenting_models    TEXT NOT NULL,
+                created_at           TEXT NOT NULL
+            );
+            """
+        )
+        conn.execute(
+            "INSERT INTO daily_signals VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                "2026-04-06",
+                "BULLISH",
+                "4.0",
+                "BUY_CALL",
+                22500,
+                "[]",
+                "[]",
+                "2026-04-06T15:00:00Z",
+            ),
+        )
+
+    s.init_db()  # Should run ALTER TABLE successfully
+
+    # Assert column exists and existing row reads back with entry_premium = None
+    with connect(s.db_path) as conn:
+        row = conn.execute("SELECT entry_premium FROM daily_signals").fetchone()
+    assert row["entry_premium"] is None
+
+    # And get_signal should hydrate it as None
+    loaded = s.get_signal(date(2026, 4, 6))
+    assert loaded is not None
+    assert loaded.entry_premium is None
 
 
 def test_record_snapshot_writes_row(store: SignalStore) -> None:
@@ -155,6 +206,17 @@ def test_record_signal_replaces_on_same_date(store: SignalStore) -> None:
     rows = _rows(store, "SELECT recommended_strike FROM daily_signals")
     assert len(rows) == 1
     assert rows[0]["recommended_strike"] is None
+
+
+def test_record_signal_entry_premium_round_trip(store: SignalStore) -> None:
+    store.record_response(_response("grok"))  # for get_signal to hydrate responses
+    store.record_signal(_signal(entry_premium=Decimal("150.75")))
+    got = store.get_signal(TRADE_DATE)
+    assert got is not None
+    assert got.entry_premium == Decimal("150.75")
+
+    rows = _rows(store, "SELECT entry_premium FROM daily_signals")
+    assert rows[0]["entry_premium"] == "150.75"
 
 
 def test_record_outcome_bool_and_null_handling(store: SignalStore) -> None:

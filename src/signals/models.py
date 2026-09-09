@@ -120,6 +120,7 @@ class DailySignal(BaseModel, frozen=True):
     consensus_confidence: Decimal  # avg confidence of agreeing models only
     trade_action: TradeAction
     recommended_strike: int | None  # None when NO_TRADE
+    entry_premium: Decimal | None = None
     agreeing_models: list[str]
     dissenting_models: list[str]
 

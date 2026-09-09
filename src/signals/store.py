@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS daily_signals (
     consensus_confidence TEXT NOT NULL,
     trade_action         TEXT NOT NULL,
     recommended_strike   INTEGER,
+    entry_premium        TEXT,
     agreeing_models      TEXT NOT NULL,
     dissenting_models    TEXT NOT NULL,
     created_at           TEXT NOT NULL
@@ -139,6 +140,11 @@ class SignalStore:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         with connect(self.db_path) as conn:
             conn.executescript(_SCHEMA)
+            try:
+                conn.execute("ALTER TABLE daily_signals ADD COLUMN entry_premium TEXT")
+            except sqlite3.OperationalError as exc:
+                if "duplicate column name" not in str(exc).lower():
+                    raise
 
     def record_snapshot(self, snapshot: MarketSnapshot) -> None:
         """Upsert the assembled market context for one trading day.
@@ -190,15 +196,16 @@ class SignalStore:
             conn.execute(
                 "INSERT OR REPLACE INTO daily_signals ("
                 " trade_date, consensus_direction, consensus_confidence,"
-                " trade_action, recommended_strike, agreeing_models,"
-                " dissenting_models, created_at"
-                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                " trade_action, recommended_strike, entry_premium,"
+                " agreeing_models, dissenting_models, created_at"
+                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     signal.trade_date.isoformat(),
                     signal.consensus_direction.value,
                     str(signal.consensus_confidence),
                     signal.trade_action.value,
                     signal.recommended_strike,
+                    _opt_str(signal.entry_premium),
                     json.dumps(signal.agreeing_models),
                     json.dumps(signal.dissenting_models),
                     _utc_now_iso(),
@@ -301,6 +308,7 @@ class SignalStore:
             consensus_confidence=Decimal(row["consensus_confidence"]),
             trade_action=row["trade_action"],
             recommended_strike=row["recommended_strike"],
+            entry_premium=_opt_decimal(row["entry_premium"]),
             agreeing_models=json.loads(row["agreeing_models"]),
             dissenting_models=json.loads(row["dissenting_models"]),
         )

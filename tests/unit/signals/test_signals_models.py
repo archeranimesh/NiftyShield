@@ -92,6 +92,24 @@ def test_daily_signal_no_trade():
     )
     assert signal.trade_action == TradeAction.NO_TRADE
     assert signal.recommended_strike is None
+    assert signal.entry_premium is None  # default None
+
+
+def test_daily_signal_entry_premium_round_trip():
+    signal = DailySignal(
+        trade_date=date(2026, 4, 6),
+        responses=[],
+        consensus_direction=Direction.BULLISH,
+        consensus_confidence=Decimal("4"),
+        trade_action=TradeAction.BUY_CALL,
+        recommended_strike=22500,
+        entry_premium=Decimal("150.25"),
+        agreeing_models=[],
+        dissenting_models=[],
+    )
+    dumped = signal.model_dump(mode="json")
+    loaded = DailySignal.model_validate(dumped)
+    assert loaded.entry_premium == Decimal("150.25")
 
 
 def test_signal_outcome_skipped():
