@@ -50,16 +50,17 @@
   `assemble_market_snapshot` + `build_providers` + aggregator + store + Telegram (no unit tests) | SHA: e299a6b
 - [x] **S5.3** — `scripts/record_signal_outcome.py`: 03:00 PM outcome recorder (no unit tests) | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: a387349
 - [x] **S5.4** — `scripts/signal_report.py`: on-demand performance report with random baseline (no unit tests) | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: <pending>
-- [ ] **S5.5** — Operational rollout walkthrough (discussion, no code): cron enablement
-  (crontab lines + host + log paths + market-calendar guard for `morning_signal.py` /
-  `record_signal_outcome.py` / `signal_report.py`), Telegram message shapes for signal entry
-  + outcome/close incl. P&L display, LLM response mechanics (OpenRouter vs direct SDK, the
-  JSON schema each model emits, `SIGNAL_PHASE`), and the end-to-end first-run setup (env
-  vars, `config/signals.toml`, `SignalStore.init_db`, `.env.example`). Output: an ops runbook
-  (location decided in the discussion) + `DECISIONS.md` entry. Must land before S6.
-  | Owner: Claude | Model: Sonnet 5 | Review: docs-only | SHA: <pending>
-
-  **Telegram message-format review (discussion 2026-09-08, ongoing — `/work` picks up here):**
+- [x] **S5.5** — Rollout state recorded + Telegram message-format scope settled (discussion,
+  no code). **Runbook dropped** (Animesh 2026-09-09) — all three crons are already live on the
+  Mac host, so a separate enablement runbook is redundant:
+  ```
+  30 09 * * 1-5  scripts.morning_signal             >> logs/morning_signal.log
+  00 16 * * 1-5  scripts.record_signal_outcome --auto >> logs/record_signal_outcome.log
+  35 16 * * 1-5  scripts.signal_report              >> logs/signal_report.log
+  ```
+  Rollout phase: **Phase 1 `openrouter_only`** (single `OPENROUTER_API_KEY`, all three models
+  via OpenRouter). `DECISIONS.md` carries the rollout bullet (2026-09-09). Remaining work is
+  Telegram message formatting, tracked in the boxes below:
   - ✅ **09:15 directional signal** — finalized, spec in S5.5c, on-device validated
     (`scratch/2026-09-08_signal_telegram_messages.py` messages 1–3): CONSENSUS / NO CONSENSUS /
     PIPELINE FAILED, bold header + blank line + emoji lines.
@@ -68,8 +69,10 @@
     the 15:00 "outcome" message is replaced by an actual exit message. Candidates in
     `docs/plan/signals-paper-track/stories.md` §SPT-3 / §SPT-5 — **still to correct/finalize
     there.**
-  - ⬜ **`signal_report.py` digest to Telegram** — not yet reviewed; decide shape when SPT-7
-    (evaluation report) is scoped.
+  - ⬜ **`signal_report.py` 16:35 digest to Telegram** — decided (Animesh 2026-09-09): push
+    **every weekday** run, the **full 5-section report** in a MarkdownV2 fenced code block
+    (escaped per the `FORMATTING.md` boundary contract). Implementation tracked as **S5.5d**.
+  | Owner: Claude | Model: Sonnet 5 | Review: docs-only | SHA: <pending>
 
 - [ ] **S5.5a** — **SUPERSEDED → `signals-paper-track` SPT-5.** The 15:00 `SignalOutcome`
   Telegram message is replaced by SPT-5's exit message now that the track paper-trades for
@@ -130,6 +133,14 @@
   formatter in `tests/unit/notifications/test_escaping_guard.py`. Extend the no-network
   formatter tests (directional + NO_TRADE render). Key reason / key risk: **dropped from the
   message** per discussion 2026-09-08 (kept in `signal_responses` DB rows for the report).
+  | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: <pending>
+
+- [ ] **S5.5d** — `scripts/signal_report.py`: push the full 5-section report to Telegram on
+  every 16:35 weekday run (currently `print()`-only). Wrap the existing `"\n".join(out)` body
+  in a MarkdownV2 fenced code block, escape per the `FORMATTING.md` boundary contract, send
+  via `build_notifier()` after the `print()` (non-fatal if no notifier configured, mirroring
+  `morning_signal._notify`). Keep the `"No signal outcomes recorded"` early-return
+  terminal-only. NSE-holiday guard is S5.5b. Extend the no-network formatter test.
   | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: <pending>
 
 - [ ] **S6** — Docs close: CONTEXT.md tree, DECISIONS.md entry, TODOS.md log

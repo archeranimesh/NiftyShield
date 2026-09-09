@@ -1269,50 +1269,64 @@ No unit tests for this script.
 
 ---
 
-## S5.5 — Operational rollout walkthrough (discussion, no code)
+## S5.5 — Rollout state + Telegram message-format scope (discussion, no code)
 
-**Purpose:** the pipeline is code-complete (S1–S5.4) but has never been run in anger. Before
-the S6 docs close, walk through and record every operational decision needed to turn it on.
-No source or test changes — the output is a runbook plus a `DECISIONS.md` entry.
+**Purpose:** the pipeline is code-complete (S1–S5.4). Record the rollout state and settle
+what Telegram formatting work is still owed. No source or test changes.
 
-**Must resolve:**
+**Resolved (Animesh, 2026-09-09):**
 
-1. **Cron enablement.** Exact crontab lines, host, and log paths (per `LOGGING.md`) for:
-   - `morning_signal.py` — 09:15 IST Mon–Fri, once `assemble_market_snapshot` inputs are live.
-   - `record_signal_outcome.py` — 15:00 IST Mon–Fri; `--auto` (weekly-expiry BOD lookup +
-     live LTP) vs manual `--entry-premium` / `--exit-premium`.
-   - `signal_report.py` — on-demand only, or a scheduled weekly digest?
-   Market-calendar holiday guard, failure alerting, and how `SIGNAL_PHASE` is set in the cron
-   environment.
+1. **Crons — already live** on the Mac host (`crontab -l`); no separate enablement runbook:
+   ```
+   30 09 * * 1-5  scripts.morning_signal              >> logs/morning_signal.log
+   00 16 * * 1-5  scripts.record_signal_outcome --auto  >> logs/record_signal_outcome.log
+   35 16 * * 1-5  scripts.signal_report               >> logs/signal_report.log
+   ```
+   NSE-holiday early-exit guard for `morning_signal.py` / `signal_report.py` is **S5.5b**.
 
-2. **Telegram message shapes.** Exactly what goes out and when:
-   - Signal entry — consensus direction, recommended strike, entry-premium band, consensus
-     confidence, agreeing / dissenting models, key reason + key risk. Separate NO_TRADE
-     message.
-   - Outcome / close — does `record_signal_outcome.py` post one? P&L display: ₹/lot,
-     entry→exit premium, executed vs skipped.
-   - Report — is `signal_report.py` output ever pushed to Telegram, or terminal-only?
-   Escaping via `src/notifications/markdown.py`; per-type formatting per `FORMATTING.md`.
+2. **Rollout phase — Phase 1 `openrouter_only`.** Single `OPENROUTER_API_KEY`; all three
+   models (grok / gpt4o / gemini) via OpenRouter, no web search. Phase 2 (`search_enabled`,
+   xAI + Google AI direct SDKs) is a later flip of `SIGNAL_PHASE` — not part of this rollout.
 
-3. **LLM response mechanics.** How each provider is called and what it must return:
-   - Phase 1 (`openrouter_only`) — single `OPENROUTER_API_KEY`, all three providers via
-     OpenRouter.
-   - Phase 2 (`search_enabled`) — Grok via xAI direct, Gemini via Google AI SDK, both with
-     search enabled; GPT-4o stays on OpenRouter. `SIGNAL_PHASE` selects.
-   - The JSON schema each provider must emit, the aggregator's rejection rules, and the
-     consensus / vote logic that produces the `DailySignal`.
+3. **Telegram messages:**
+   - **09:15 directional** — finalized; `format_directional_v3` in
+     `scratch/2026-09-08_signal_telegram_messages.py` (CONSENSUS / NO CONSENSUS / PIPELINE
+     FAILED), on-device validated 2026-09-08. Implementation = **S5.5c**.
+   - **entry / exit / P&L** — moved to `signals-paper-track` SPT-3 / SPT-5 (the track now
+     paper-trades for real). Not owed here.
+   - **`signal_report.py` 16:35 digest** — push the **full 5-section report every weekday
+     run**, MarkdownV2 fenced code block, escaped per the `FORMATTING.md` boundary contract.
+     Implementation = **S5.5d**.
 
-4. **End-to-end setup.** The full first-run checklist:
-   - env vars — `OPENROUTER_API_KEY`, `XAI_API_KEY`, `GOOGLE_AI_API_KEY`, `SIGNAL_PHASE`,
-     Telegram creds — which are required for Phase 1 vs Phase 2.
-   - `config/signals.toml` knobs (thresholds, per-provider sub-tables).
-   - DB — when and how `SignalStore.init_db()` creates the four tables against
-     `portfolio.sqlite`.
-   - `.env.example` sync (kept local-only per the S5.1 note).
+**DoD:** `signals_tasks.md` S5.5 checked; S5.5c / S5.5d boxes carry the message specs;
+`DECISIONS.md` carries the 2026-09-09 rollout bullet. No `src/`, `scripts/`, or test changes.
 
-**DoD:** every point above has a recorded answer; an ops runbook exists (location chosen in
-the discussion); `DECISIONS.md` carries the rollout entry. No `src/`, `scripts/`, or test
-changes.
+---
+
+## S5.5d — `signal_report.py` digest to Telegram
+
+**Why:** `scripts/signal_report.py` is cron'd at 16:35 Mon–Fri but only `print()`s to
+`logs/signal_report.log`. Push the report to the Telegram channel so the weekday performance
+readout is visible without tailing a log.
+
+**Before any code:** `get_code_snippet` on `signal_report.main`, `morning_signal._notify`
+(the non-fatal `build_notifier()` pattern), and read `FORMATTING.md` §escaping-boundary.
+
+**Scope:**
+- In `main()`, after `print("\n".join(out))`, build the same text as a MarkdownV2 fenced
+  code block (```` ``` ````…```` ``` ````), escape per the boundary contract, and send via
+  `build_notifier()` — non-fatal when no notifier is configured (mirror `morning_signal`).
+- The `"No signal outcomes recorded for the requested window."` early return stays
+  terminal-only — no Telegram push for an empty window.
+- Do **not** add the NSE-holiday guard here — that is S5.5b.
+
+**Tests:** one no-network test that the rendered message is a non-empty fenced block for a
+window with outcomes; one that the empty-window path sends nothing. Register any new
+formatter in `tests/unit/notifications/test_escaping_guard.py` if a `src/` formatter is
+introduced (a pure local helper in the script is acceptable — match how `morning_signal`
+does it).
+
+**Commit:** `feat(signals): push signal_report digest to Telegram`
 
 ---
 
