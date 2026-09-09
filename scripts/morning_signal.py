@@ -33,6 +33,7 @@ from src.market_calendar import is_trading_day, market_today  # noqa: E402
 from src.notifications.formatting import format_money, format_strike  # noqa: E402
 from src.notifications.markdown import escape_markdown  # noqa: E402
 from src.notifications.telegram import build_notifier  # noqa: E402
+from src.paper.constants import DEFAULT_BOD_PATH  # noqa: E402
 from src.signals.factory import build_aggregator, build_providers  # noqa: E402
 from src.signals.models import (  # noqa: E402
     DailySignal,
@@ -40,6 +41,7 @@ from src.signals.models import (  # noqa: E402
     MarketSnapshot,
     TradeAction,
 )
+from src.signals.option_resolver import resolve_monthly_option  # noqa: E402
 from src.signals.snapshot import assemble_market_snapshot  # noqa: E402
 from src.signals.store import SignalStore  # noqa: E402
 from src.utils.logging import setup_logging  # noqa: E402
@@ -210,6 +212,26 @@ async def run() -> None:
         )
 
     signal = build_aggregator().aggregate(snapshot, valid)
+
+    if signal.trade_action is not TradeAction.NO_TRADE:
+        try:
+            option_key = await asyncio.to_thread(resolve_monthly_option, signal, DEFAULT_BOD_PATH)
+            if option_key:
+                ltps = await broker.get_ltp([option_key])
+                if option_key in ltps:
+                    entry_premium = ltps[option_key].quantize(Decimal("0.01"))
+                    signal = signal.model_copy(update={"entry_premium": entry_premium})
+                else:
+                    logger.warning(
+                        "morning_signal.ltp_missing_for_key",
+                        option_key=option_key,
+                    )
+        except Exception as exc:  # noqa: BLE001 -- Intentional: isolate premium capture at cron boundary; pipeline must still record the signal
+            logger.warning(
+                "morning_signal.entry_premium_capture_failed",
+                error=str(exc),
+            )
+
     await asyncio.to_thread(store.record_signal, signal)
 
     notifier = build_notifier()

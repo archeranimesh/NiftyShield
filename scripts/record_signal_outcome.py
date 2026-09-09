@@ -45,6 +45,7 @@ from src.notifications.markdown import escape_markdown
 from src.notifications.telegram import build_notifier
 from src.paper.constants import DEFAULT_BOD_PATH, LOT_SIZE
 from src.signals.models import DailySignal, SignalOutcome, TradeAction
+from src.signals.option_resolver import OPTION_TYPE
 from src.signals.store import SignalStore
 from src.utils.logging import setup_logging
 
@@ -54,7 +55,6 @@ logger = structlog.get_logger(_SCRIPT_NAME)
 load_dotenv()
 
 _NIFTY_SPOT_KEY = "NSE_INDEX|Nifty 50"
-_OPTION_TYPE = {TradeAction.BUY_CALL: "CE", TradeAction.BUY_PUT: "PE"}
 _ACTION_LABEL = {TradeAction.BUY_CALL: "BUY CALL", TradeAction.BUY_PUT: "BUY PUT"}
 _DIRECTION_EMOJI = {"BULLISH": "📈", "BEARISH": "📉"}
 _E = escape_markdown
@@ -164,12 +164,12 @@ def _resolve_option_key(signal: DailySignal, bod_path: Path) -> str:
     matches = lookup.search_options(
         underlying="NIFTY",
         strike=float(signal.recommended_strike),
-        option_type=_OPTION_TYPE[signal.trade_action],
+        option_type=OPTION_TYPE[signal.trade_action],
         expiry=expiry,
     )
     if not matches:
         print(
-            f"ERROR: no {_OPTION_TYPE[signal.trade_action]} at strike "
+            f"ERROR: no {OPTION_TYPE[signal.trade_action]} at strike "
             f"{signal.recommended_strike} expiry {expiry} in BOD.",
             file=sys.stderr,
         )

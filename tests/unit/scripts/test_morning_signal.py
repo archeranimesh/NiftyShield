@@ -233,3 +233,206 @@ async def test_all_providers_failing_logs_no_valid_responses() -> None:
     warn = next(kw for e, kw in calls if e == "morning_signal.no_valid_responses")
     assert warn["dispatched"] == 2
     assert warn["errors"] == 2
+
+
+@pytest.mark.asyncio
+async def test_run_captures_entry_premium_on_directional_signal() -> None:
+    # Setup mock broker that returns LTP for the resolved option
+    fake_broker = AsyncMock()
+    fake_broker.get_ltp.return_value = {"NSE_FO|resolved_monthly_key": Decimal("112.50")}
+
+    aggregator = MagicMock()
+    sig = DailySignal(
+        trade_date=date(2026, 9, 8),
+        responses=[],
+        consensus_direction=Direction.BULLISH,
+        consensus_confidence=Decimal("4"),
+        trade_action=TradeAction.BUY_CALL,
+        recommended_strike=24800,
+        entry_premium=None,
+        agreeing_models=[],
+        dissenting_models=[],
+    )
+    aggregator.aggregate.return_value = sig
+
+    store_mock = MagicMock()
+
+    with (
+        patch.object(morning_signal, "logger"),
+        patch.object(morning_signal, "build_providers", return_value=[_OkProvider(_response())]),
+        patch.object(morning_signal, "create_client", return_value=fake_broker),
+        patch.object(morning_signal, "SignalStore", return_value=store_mock),
+        patch.object(
+            morning_signal,
+            "assemble_market_snapshot",
+            AsyncMock(return_value=_fake_snapshot()),
+        ),
+        patch.object(morning_signal, "build_aggregator", return_value=aggregator),
+        patch.object(morning_signal, "build_notifier", return_value=None),
+        patch.object(morning_signal, "market_today", return_value=date(2026, 9, 8)),
+        patch.object(
+            morning_signal, "resolve_monthly_option", return_value="NSE_FO|resolved_monthly_key"
+        ),
+    ):
+        await morning_signal.run()
+
+    # The signal saved should have entry_premium updated
+    record_call = store_mock.record_signal.call_args[0][0]
+    assert record_call.entry_premium == Decimal("112.50")
+
+
+@pytest.mark.asyncio
+async def test_run_leaves_entry_premium_none_on_fetch_failure() -> None:
+    fake_broker = AsyncMock()
+    # broker raises exception
+    fake_broker.get_ltp.side_effect = Exception("network error")
+
+    aggregator = MagicMock()
+    sig = DailySignal(
+        trade_date=date(2026, 9, 8),
+        responses=[],
+        consensus_direction=Direction.BULLISH,
+        consensus_confidence=Decimal("4"),
+        trade_action=TradeAction.BUY_CALL,
+        recommended_strike=24800,
+        entry_premium=None,
+        agreeing_models=[],
+        dissenting_models=[],
+    )
+    aggregator.aggregate.return_value = sig
+
+    store_mock = MagicMock()
+
+    with (
+        patch.object(morning_signal, "logger"),
+        patch.object(morning_signal, "build_providers", return_value=[_OkProvider(_response())]),
+        patch.object(morning_signal, "create_client", return_value=fake_broker),
+        patch.object(morning_signal, "SignalStore", return_value=store_mock),
+        patch.object(
+            morning_signal,
+            "assemble_market_snapshot",
+            AsyncMock(return_value=_fake_snapshot()),
+        ),
+        patch.object(morning_signal, "build_aggregator", return_value=aggregator),
+        patch.object(morning_signal, "build_notifier", return_value=None),
+        patch.object(morning_signal, "market_today", return_value=date(2026, 9, 8)),
+        patch.object(
+            morning_signal, "resolve_monthly_option", return_value="NSE_FO|resolved_monthly_key"
+        ),
+    ):
+        await morning_signal.run()
+
+    # Pipeline shouldn't crash, entry_premium should remain None
+    record_call = store_mock.record_signal.call_args[0][0]
+    assert record_call.entry_premium is None
+
+
+@pytest.mark.asyncio
+@patch("scripts.morning_signal.assemble_market_snapshot")
+@patch("scripts.morning_signal.build_aggregator")
+@patch("scripts.morning_signal.build_providers")
+@patch("scripts.morning_signal.SignalStore")
+@patch("scripts.morning_signal.build_notifier")
+@patch("scripts.morning_signal.create_client")
+@patch("scripts.morning_signal.resolve_monthly_option")
+@patch("scripts.morning_signal.logger")
+async def test_run_leaves_entry_premium_none_on_resolver_none(
+    mock_logger: MagicMock,
+    mock_resolve: MagicMock,
+    mock_broker_create: MagicMock,
+    mock_build_notifier: MagicMock,
+    mock_signal_store: MagicMock,
+    mock_build_providers: MagicMock,
+    mock_signal_aggregator: MagicMock,
+    mock_assemble_market_snapshot: AsyncMock,
+) -> None:
+    # (a) resolve_monthly_option returns None -> entry_premium stays None, no warning
+    mock_build_notifier.return_value = AsyncMock()
+    mock_store = MagicMock()
+    mock_signal_store.return_value = mock_store
+
+    sig = DailySignal(
+        trade_date=date(2026, 9, 8),
+        responses=[],
+        consensus_direction=Direction.BULLISH,
+        consensus_confidence=Decimal("4"),
+        trade_action=TradeAction.BUY_CALL,
+        recommended_strike=24800,
+        entry_premium=None,
+        agreeing_models=[],
+        dissenting_models=[],
+    )
+
+    mock_agg = MagicMock()
+    mock_agg.aggregate.return_value = sig
+    mock_signal_aggregator.return_value = mock_agg
+    mock_build_providers.return_value = []
+
+    mock_resolve.return_value = None
+
+    await morning_signal.run()
+
+    record_call = mock_store.record_signal.call_args[0][0]
+    assert record_call.entry_premium is None
+
+    # Check no warning was logged for missing LTP
+    for call in mock_logger.warning.call_args_list:
+        assert "morning_signal.ltp_missing_for_key" not in call[0]
+
+
+@pytest.mark.asyncio
+@patch("scripts.morning_signal.assemble_market_snapshot")
+@patch("scripts.morning_signal.build_aggregator")
+@patch("scripts.morning_signal.build_providers")
+@patch("scripts.morning_signal.SignalStore")
+@patch("scripts.morning_signal.build_notifier")
+@patch("scripts.morning_signal.create_client")
+@patch("scripts.morning_signal.resolve_monthly_option")
+@patch("scripts.morning_signal.logger")
+async def test_run_leaves_entry_premium_none_on_missing_key(
+    mock_logger: MagicMock,
+    mock_resolve: MagicMock,
+    mock_broker_create: MagicMock,
+    mock_build_notifier: MagicMock,
+    mock_signal_store: MagicMock,
+    mock_build_providers: MagicMock,
+    mock_signal_aggregator: MagicMock,
+    mock_assemble_market_snapshot: AsyncMock,
+) -> None:
+    # (b) get_ltp returns a dict without the key -> warning logged, entry_premium None.
+    mock_build_notifier.return_value = AsyncMock()
+    mock_store = MagicMock()
+    mock_signal_store.return_value = mock_store
+
+    mock_broker = AsyncMock()
+    mock_broker.get_ltp.return_value = {"NSE_FO|SOME_OTHER_KEY": Decimal("100.00")}
+    mock_broker_create.return_value = mock_broker
+
+    sig = DailySignal(
+        trade_date=date(2026, 9, 8),
+        responses=[],
+        consensus_direction=Direction.BULLISH,
+        consensus_confidence=Decimal("4"),
+        trade_action=TradeAction.BUY_CALL,
+        recommended_strike=24800,
+        entry_premium=None,
+        agreeing_models=[],
+        dissenting_models=[],
+    )
+
+    mock_agg = MagicMock()
+    mock_agg.aggregate.return_value = sig
+    mock_signal_aggregator.return_value = mock_agg
+    mock_build_providers.return_value = []
+
+    mock_resolve.return_value = "NSE_FO|12345"
+
+    await morning_signal.run()
+
+    record_call = mock_store.record_signal.call_args[0][0]
+    assert record_call.entry_premium is None
+
+    mock_logger.warning.assert_any_call(
+        "morning_signal.ltp_missing_for_key",
+        option_key="NSE_FO|12345",
+    )
