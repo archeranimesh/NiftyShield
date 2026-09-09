@@ -38,14 +38,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from dotenv import load_dotenv
 
 from src.config import settings
-from src.instruments.lookup import InstrumentLookup
 from src.market_calendar import market_today
 from src.notifications.formatting import format_money, pnl_emoji
 from src.notifications.markdown import escape_markdown
 from src.notifications.telegram import build_notifier
 from src.paper.constants import DEFAULT_BOD_PATH, LOT_SIZE
 from src.signals.models import DailySignal, SignalOutcome, TradeAction
-from src.signals.option_resolver import OPTION_TYPE
+from src.signals.option_resolver import resolve_monthly_option
 from src.signals.store import SignalStore
 from src.utils.logging import setup_logging
 
@@ -147,34 +146,15 @@ def _fetch_ltp(keys: list[str]) -> dict[str, Decimal]:
 
 def _resolve_option_key(signal: DailySignal, bod_path: Path) -> str:
     """Resolve the recommended option's instrument key from the offline BOD."""
-    if not bod_path.exists():
-        print(f"ERROR: BOD file not found at {bod_path}.", file=sys.stderr)
-        sys.exit(1)
-    if signal.recommended_strike is None:
-        print("ERROR: signal has no recommended strike — cannot resolve option.", file=sys.stderr)
-        sys.exit(1)
-    lookup = InstrumentLookup.from_file(bod_path)
-    candidates = lookup.get_expiry_candidates(
-        underlying="NIFTY", today=signal.trade_date, preference=["weekly"]
-    )
-    if not candidates:
-        print("ERROR: no weekly expiry found in BOD.", file=sys.stderr)
-        sys.exit(1)
-    _, expiry = candidates[0]
-    matches = lookup.search_options(
-        underlying="NIFTY",
-        strike=float(signal.recommended_strike),
-        option_type=OPTION_TYPE[signal.trade_action],
-        expiry=expiry,
-    )
-    if not matches:
+    key = resolve_monthly_option(signal, bod_path)
+    if key is None:
         print(
-            f"ERROR: no {OPTION_TYPE[signal.trade_action]} at strike "
-            f"{signal.recommended_strike} expiry {expiry} in BOD.",
+            f"ERROR: could not resolve monthly option for strike "
+            f"{signal.recommended_strike} — pass --exit-premium explicitly.",
             file=sys.stderr,
         )
         sys.exit(1)
-    return matches[0]["instrument_key"]
+    return key
 
 
 def _pnl_per_lot(entry: Decimal | None, exit_premium: Decimal | None) -> Decimal | None:
@@ -278,7 +258,11 @@ def main() -> None:
 
     if args.auto and is_trade:
         if entry_premium is None:
-            entry_premium = _consensus_entry_premium(signal)
+            entry_premium = (
+                signal.entry_premium
+                if signal.entry_premium is not None
+                else _consensus_entry_premium(signal)
+            )
         try:
             option_key = _resolve_option_key(signal, args.bod_path)
             ltps = _fetch_ltp([option_key, _NIFTY_SPOT_KEY])

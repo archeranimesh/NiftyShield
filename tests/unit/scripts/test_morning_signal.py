@@ -404,7 +404,8 @@ async def test_run_leaves_entry_premium_none_on_missing_key(
     mock_store = MagicMock()
     mock_signal_store.return_value = mock_store
 
-    mock_broker = AsyncMock()
+    mock_broker = MagicMock()
+    mock_broker.get_ltp = AsyncMock()
     mock_broker.get_ltp.return_value = {"NSE_FO|SOME_OTHER_KEY": Decimal("100.00")}
     mock_broker_create.return_value = mock_broker
 
