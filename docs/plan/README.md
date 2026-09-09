@@ -157,7 +157,7 @@ than theta alone predicts.
 Existing 5-min intraday chain Parquet. Monthly bucket only.
 
 **`signals/`** · 🔨 In progress · next: **S5.5b** (NSE-holiday guard; then S6) —
-S4.1 `417cb5f`, S5.1 `80edf53`, S5.2b `e1b5a0a`, S5.2c `b33a43d`, S5.2 `e299a6b`, S5.3 `a387349`, S5.4 `e52679b`, S5.5c `5cbe822`, S5.5a `ce59529`, S5.5d `51d3e59`, S1.1a/S5.2a `<pending>`
+S4.1 `417cb5f`, S5.1 `80edf53`, S5.2b `e1b5a0a`, S5.2c `b33a43d`, S5.2 `e299a6b`, S5.3 `a387349`, S5.4 `e52679b`, S5.5c `5cbe822`, S5.5a `ce59529`, S5.5d `51d3e59`, S1.1a `9d75c1b`, S5.2a `a1c01f5`
 Multi-LLM daily directional signal pipeline: market snapshot → GPT-4o / Grok / Gemini (via
 OpenRouter) → `SignalAggregator` consensus → one `DailySignal` per day, scored forward-only
 against a coin-flip baseline. Self-contained `src/signals/` package with its own SQLite tables

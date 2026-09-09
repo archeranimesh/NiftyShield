@@ -6,7 +6,7 @@ see `stories.md` for the per-task implementation spec.
 
 **Open: PC-2.**
 
-- [x] **PC-1** — Scaffold the `ic-payoff-charts/` epic + both sub-stories; register in `TODOS.md` + README | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <pending>
+- [x] **PC-1** — Scaffold the `ic-payoff-charts/` epic + both sub-stories; register in `TODOS.md` + README | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 7210c31
 - [ ] **PC-2** — `src/strategy/payoff.py`: `ICPayoff` + `compute_ic_payoff` (max P/L, breakevens, R:R), `Decimal` | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: —
 - [ ] **PC-3** — `src/strategy/payoff.py`: `expiry_pnl_at` + `expiry_pnl_series` for the plot line | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: —
 - [ ] **PC-4** — `src/notifications/payoff_chart.py`: `render_expiry_payoff_png` chart body; add matplotlib dep | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: —

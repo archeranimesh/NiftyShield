@@ -83,7 +83,7 @@ eventually supersedes S5.5a.
   no-network formatter tests (directional + NO_TRADE render). Key reason / key risk:
   **dropped from the message** per discussion 2026-09-08 (kept in `signal_responses` DB rows
   for the report).
-  | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: <pending>
+  | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: 5cbe822
 
 ---
 
@@ -157,10 +157,10 @@ eventually supersedes S5.5a.
 - [x] **S1.1a** — `src/signals/models.py` + `src/signals/prompt.py`: redefine `FIIData` from
   index F&O positioning to cash-market net flows (`fii_cash_net_cr`/`dii_cash_net_cr`, NSE
   `fiidiiTradeReact`) + test updates. Split out of S5.2a per Animesh (2026-09-07).
-  | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: <pending>
+  | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: 9d75c1b
 - [x] **S5.2a** — `src/signals/market_inputs.py`: `fetch_gift_nifty` / `fetch_usd_inr` /
   `fetch_fii_data` + offline tests (source-discovery spike `c0208c9`..`a60dc29`).
-  | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: <pending>
+  | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: a1c01f5
 - [x] **S5.2b** — `BrokerClient.get_ohlc(instruments, interval="1d")` across `protocol.py` +
   `upstox_market.py` + `upstox_live.py` + `mock_client.py`, and `SignalStore.get_recent_snapshots(n)`
   + tests. | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: e1b5a0a
@@ -169,7 +169,7 @@ eventually supersedes S5.5a.
 - [x] **S5.2** — `scripts/morning_signal.py`: 09:15 pipeline cron — wiring over
   `assemble_market_snapshot` + `build_providers` + aggregator + store + Telegram (no unit tests) | SHA: e299a6b
 - [x] **S5.3** — `scripts/record_signal_outcome.py`: 16:00 outcome recorder (no unit tests) | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: a387349
-- [x] **S5.4** — `scripts/signal_report.py`: on-demand performance report with random baseline (no unit tests) | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: <pending>
+- [x] **S5.4** — `scripts/signal_report.py`: on-demand performance report with random baseline (no unit tests) | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: e52679b
 - [x] **S5.5** — Rollout state recorded + Telegram message-format scope settled (discussion,
   no code). Runbook dropped 2026-09-09 — all three crons already live on the Mac host:
   ```
