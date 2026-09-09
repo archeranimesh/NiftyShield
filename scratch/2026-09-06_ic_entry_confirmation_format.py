@@ -307,7 +307,10 @@ async def main() -> None:
             if not settings.telegram_bot_token or not settings.telegram_chat_id:
                 print("!! TELEGRAM creds not set — cannot send")
                 continue
-            ok = await _send(f"[SCRATCH ROLL-17 {label}]\n\n{text}")
+            # Escape the debug prefix — "ROLL-17" / "( )" / "[ ]" are all MarkdownV2-reserved
+            # and would 400 the send before the body is even parsed.
+            prefix = escape_markdown(f"[SCRATCH ROLL-17 {label}]")
+            ok = await _send(f"{prefix}\n\n{text}")
             print(f"  send -> {ok}")
 
 
