@@ -140,7 +140,8 @@ realised P&L, and send the Telegram exit message. Long option → P&L is `(exit 
 lot_size`; `Decimal` throughout; `greeks-analyst` review because the exit interacts with
 theta / gamma near expiry.
 
-**Telegram exit message** (candidate — supersedes `signals/` S5.5a):
+**Telegram exit message** (candidate — replaces `signals/` S5.5a's interim outcome message
+once this engine is live; S5.5a ships first as the Phase-1 stopgap):
 
 ```
 *🎯 SIGNAL EXIT · 08 Sep*  ·  TARGET HIT
@@ -187,6 +188,7 @@ ruling defines. Reuses the SPT-2 Store read methods.
 `CONTEXT.md` "What Exists" (new module/scripts), `DECISIONS.md` (as-built note under the
 SPT-1 entry), `TODOS.md` session log + backlog pointer, `docs/plan/README.md` status →
 Shipped, `src/signals/CLAUDE.md` (or `src/strategy/CLAUDE.md`) invariants. Then archive per
-§Conventions. Also close `signals/` S5.5a as `won't-do → signals-paper-track SPT-5`.
+§Conventions. Also note in `signals/` S5.5a that SPT-5's exit message now replaces its
+Phase-1 interim outcome message.
 
 **Commit:** `docs(signals-paper-track): close — <one line>`.

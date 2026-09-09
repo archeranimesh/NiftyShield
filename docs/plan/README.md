@@ -162,8 +162,8 @@ Turns the `signals/` consensus into a live paper-traded strategy: auto-enter the
 trailing-stop, exit on a hit or square off by 15:00, and record every entry + exit for a
 6-month evaluation window that gates go-live. SPT-1 is a mandatory council call on the module
 boundary (reuse `src/strategy/` + `src/paper/` vs a self-contained `src/signals/` loop) and
-the full SL / target / trailing rule set; its ruling rewrites SPT-2..SPT-8. Supersedes
-`signals/` S5.5a (the 15:00 outcome message becomes SPT-5's exit message).
+the full SL / target / trailing rule set; its ruling rewrites SPT-2..SPT-8. SPT-5's exit
+message later replaces `signals/` S5.5a's Phase-1 interim outcome message.
 
 **`full-repo-review/`** · ✅ Complete — see `full-repo-review-followups/`
 One-time multi-model, multi-persona review of design docs, source, tests, the

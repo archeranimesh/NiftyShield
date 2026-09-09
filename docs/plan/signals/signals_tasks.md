@@ -64,22 +64,30 @@
   - ✅ **09:15 directional signal** — finalized, spec in S5.5c, on-device validated
     (`scratch/2026-09-08_signal_telegram_messages.py` messages 1–3): CONSENSUS / NO CONSENSUS /
     PIPELINE FAILED, bold header + blank line + emoji lines.
-  - ⏸ **entry + exit / P&L messages** — moved to `signals-paper-track` SPT-3 (entry) and
-    SPT-5 (exit); the signals track is becoming a real paper trade (Animesh 2026-09-08), so
-    the 15:00 "outcome" message is replaced by an actual exit message. Candidates in
-    `docs/plan/signals-paper-track/stories.md` §SPT-3 / §SPT-5 — **still to correct/finalize
-    there.**
+  - 🔧 **16:00 outcome message** (`record_signal_outcome.py`) — **S5.5a**, revived 2026-09-09
+    as the Phase-1 interim: executed / not-taken (would-be P&L) / NO_TRADE, restyled to the
+    S5.5c vertical layout (scratch messages 6–8). `signals-paper-track` SPT-5's real exit
+    message supersedes it once the paper track goes live.
+  - ⏸ **entry message** — `signals-paper-track` SPT-3, still provisional behind the SPT-1
+    council gate. Not owed here.
   - ⬜ **`signal_report.py` 16:35 digest to Telegram** — decided (Animesh 2026-09-09): push
     **every weekday** run, the **full 5-section report** in a MarkdownV2 fenced code block
     (escaped per the `FORMATTING.md` boundary contract). Implementation tracked as **S5.5d**.
   | Owner: Claude | Model: Sonnet 5 | Review: docs-only | SHA: 0811b65
 
-- [ ] **S5.5a** — **SUPERSEDED → `signals-paper-track` SPT-5.** The 15:00 `SignalOutcome`
-  Telegram message is replaced by SPT-5's exit message now that the track paper-trades for
-  real (entry/exit, not a would-have-done row). Do not implement here. `/work` skips this box;
-  close it in S6 with `SHA: n/a (won't-do → SPT-5)`. Reference renderer
-  `format_outcome_notification` in `scratch/2026-09-08_signal_telegram_messages.py` carries
-  forward to SPT-5. | Owner: Claude | Model: n/a | Review: none | SHA: <pending>
+- [ ] **S5.5a** — **Phase-1 interim outcome message** (revived 2026-09-09; was superseded →
+  SPT-5). `scripts/record_signal_outcome.py` posts a Telegram message on its 16:00 run —
+  executed / not-taken (would-be P&L) / NO_TRADE — restyled to the S5.5c vertical layout
+  (bold header + blank line + one emoji-prefixed line per field). The script currently sends
+  nothing. Would-be P&L for the not-taken case is computed **in the formatter** from
+  `entry_premium` / `exit_premium` (both populated by `--auto` even when `executed=False`);
+  no `SignalOutcome` / `SignalStore` change. Non-fatal send via `build_notifier()` mirroring
+  `morning_signal`. `NO_TRADE` and non-`--auto` runs missing a premium fall back to the
+  close-only render. Reference renderer: `format_outcome_notification` in
+  `scratch/2026-09-08_signal_telegram_messages.py` (messages 6–8, restyled 2026-09-09).
+  Tests: no-network render of all three cases + the empty-premium fallback. **SPT-5 still
+  supersedes this** when the paper track goes live (real exit replaces the would-be row).
+  | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: <pending>
 - [ ] **S5.5b** — NSE-holiday guard: `is_trading_day(market_today())` early-exit (log + return 0)
   at the top of `scripts/morning_signal.py` and `scripts/signal_report.py`, mirroring
   `scripts/pipeline/upstox_chain_snapshot.py`. No new tests (matches existing cron pattern).

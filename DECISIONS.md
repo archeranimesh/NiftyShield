@@ -648,7 +648,9 @@ return annotation `dict[str, Any]` is wrong. Deferred fix — absorb in `parse_u
 - **2026-09-09** — `signals/` rollout: **Phase 1 `openrouter_only`** (all three models via one `OPENROUTER_API_KEY`, no web search); Phase 2
   (`search_enabled`, xAI + Google AI direct SDKs) is a later `SIGNAL_PHASE` flip. All three crons live on the Mac host — `morning_signal`
   09:30, `record_signal_outcome --auto` 16:00, `signal_report` 16:35 (Mon–Fri) — so S5.5's cron-enablement runbook was dropped as
-  redundant. `signal_report` pushes the full 5-section report to Telegram every weekday run (S5.5d). _(source: `docs/plan/signals/signals_stories.md` §S5.5)_
+  redundant. `signal_report` pushes the full 5-section report to Telegram every weekday run (S5.5d). `record_signal_outcome` posts a
+  daily outcome message (executed / not-taken with would-be P&L / NO_TRADE) — S5.5a, revived as the Phase-1 interim; `signals-paper-track`
+  SPT-5's real exit message supersedes it when the paper track goes live. _(source: `docs/plan/signals/signals_stories.md` §S5.5, §S5.5a)_
 - **2026-04-25** — CSP underlying → Nifty 50 index options (NiftyBees rejected: OI <1,000, spread >5% of mid) _(source: `docs/strategies/csp_nifty_v1.md`)_
 - **2026-04-25** — NiftyBees collateral modelled as `long_niftybees` leg in paper P&L; annual reset in January _(source: `docs/strategies/csp_nifty_v1.md`)_
 - **2026-04-26** — NiftyShield integrated: CSP Leg 1 + put spread 4 lots (8–20% OTM) + tail puts 2 lots (5-delta quarterly) _(source: `docs/strategies/niftyshield_integrated_v1.md`)_

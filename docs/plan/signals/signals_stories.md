@@ -1303,6 +1303,78 @@ what Telegram formatting work is still owed. No source or test changes.
 
 ---
 
+## S5.5a — Phase-1 interim outcome message (`record_signal_outcome.py`)
+
+**Why:** `scripts/record_signal_outcome.py` is cron'd at 16:00 Mon–Fri and writes one
+`SignalOutcome` row per day, but sends nothing to Telegram. Until `signals-paper-track` SPT-5
+(real exit engine) lands, post the daily outcome to the channel so the direction call and its
+would-be P&L are visible. **Revived 2026-09-09** (was superseded → SPT-5; SPT-5 still
+supersedes when the paper track goes live).
+
+**Before any code:** `get_code_snippet` on `record_signal_outcome.main`, `SignalOutcome`,
+`morning_signal._notify` (non-fatal `build_notifier()` pattern); read `FORMATTING.md`
+§escaping-boundary. `get_code_snippet('SignalOutcome')` for the exact field list before any
+test helper.
+
+**Message spec** (matches the S5.5c vertical layout — bold header, blank line, one
+emoji-prefixed line per field; formatter owns its escaping, caller sends without re-wrapping):
+
+Executed:
+```
+*📊 SIGNAL OUTCOME · 08 Sep*
+
+📈 BULLISH · BUY CALL 24800
+💰 Entry ₹65.50 → Exit ₹92.00
+✅ P&L: +₹1,722.50 / lot
+
+🏁 Nifty close: 24,842
+🔧 Phase: openrouter_only
+```
+
+Not taken (would-be — `--auto` populated both premiums, `executed=False`):
+```
+*📊 SIGNAL OUTCOME · 08 Sep · NOT TAKEN*
+
+📈 BULLISH · BUY CALL 24800
+💰 Entry ₹65.50 → Exit ₹92.00 (would-be)
+📝 Paper P&L: +₹1,722.50 / lot
+
+🏁 Nifty close: 24,842
+🔧 Phase: openrouter_only
+```
+
+NO_TRADE (or any run missing a premium — close-only fallback):
+```
+*📊 SIGNAL OUTCOME · 08 Sep · NO TRADE*
+
+➖ No signal issued today
+🏁 Nifty close: 24,842
+```
+
+**Rules:**
+- Direction emoji: 📈 BULLISH / 📉 BEARISH. Action label: `BUY CALL` / `BUY PUT`.
+- Would-be P&L computed **in the formatter** — `(exit_premium − entry_premium) × LOT_SIZE`
+  when `pnl_per_lot is None` and both premiums are present. No `SignalOutcome` /
+  `SignalStore` change.
+- Premium via `format_money`; strike via `format_strike` (identifier — no separator);
+  Nifty close via `fmt_inr` / `format_money` without decimals per `FORMATTING.md`.
+- P&L emoji via `pnl_emoji`; sign via `format_money(..., signed=True)`.
+- Missing entry **or** exit premium (non-`--auto` run, or NO_TRADE) → close-only fallback,
+  never a half-populated P&L line.
+- Send via `build_notifier()` after the DB write; non-fatal when no notifier configured
+  (mirror `morning_signal`).
+
+**Reference renderer:** `format_outcome_notification` in
+`scratch/2026-09-08_signal_telegram_messages.py` (messages 6–8, restyled 2026-09-09).
+
+**Tests:** no-network render of executed / not-taken / NO_TRADE + the missing-premium
+fallback. Register the formatter in `tests/unit/notifications/test_escaping_guard.py` if it
+lands in `src/`; a pure local helper in the script is acceptable (match `morning_signal`).
+
+**Commit:** `feat(signals): post daily outcome to Telegram`
+
+---
+
 ## S5.5d — `signal_report.py` digest to Telegram
 
 **Why:** `scripts/signal_report.py` is cron'd at 16:35 Mon–Fri but only `print()`s to

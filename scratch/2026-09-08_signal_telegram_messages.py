@@ -138,27 +138,42 @@ def format_directional_v2(signal: DailySignal) -> str:
 # PROPOSED renderer — S5.5a reference implementation
 # --------------------------------------------------------------------------- #
 def format_outcome_notification(outcome: SignalOutcome, signal: DailySignal) -> str:
-    """PROPOSED S5.5a — formatter owns its escaping; send WITHOUT re-wrapping."""
+    """PROPOSED S5.5a (restyled 2026-09-09) — S5.5c vertical layout.
+
+    Bold header + blank line + one emoji-prefixed line per field. Would-be P&L
+    for the not-taken case is derived here from entry/exit (both populated by
+    ``--auto`` even when ``executed`` is False) — no SignalOutcome change.
+    Formatter owns its escaping; send WITHOUT re-wrapping.
+    """
     day = outcome.trade_date.strftime("%d %b")
-    header = f"*{_E(f'📊 SIGNAL OUTCOME · {day}')}*"
-    close = _E(f"Nifty close {outcome.nifty_close:,.0f}")
+    close = _E(f"🏁 Nifty close: {outcome.nifty_close:,.0f}")
+    entry, exit_ = outcome.entry_premium, outcome.exit_premium
 
-    if outcome.trade_action is TradeAction.NO_TRADE:
-        return f"{header}\n{_E('NO TRADE')}  ·  {close}"
+    # NO_TRADE, or any run missing a premium → close-only fallback.
+    if outcome.trade_action is TradeAction.NO_TRADE or entry is None or exit_ is None:
+        if outcome.trade_action is TradeAction.NO_TRADE:
+            return f"*{_E(f'📊 SIGNAL OUTCOME · {day} · NO TRADE')}*\n\n{_E('➖ No signal issued today')}\n{close}"
+        return f"*{_E(f'📊 SIGNAL OUTCOME · {day}')}*\n\n{_E('➖ Outcome not priced')}\n{close}"
 
+    de = {"BULLISH": "📈", "BEARISH": "📉"}[signal.consensus_direction.value]
     action = _ACTION_LABEL[outcome.trade_action]
-    line1 = _E(f"{signal.consensus_direction.value} · {action} {outcome.recommended_strike}")
+    line_dir = _E(
+        f"{de} {signal.consensus_direction.value} · {action} {outcome.recommended_strike}"
+    )
 
-    if not outcome.executed:
-        exit_str = format_money(outcome.exit_premium) if outcome.exit_premium is not None else "—"
-        return f"{header}\n{line1} · {_E('NOT TAKEN')}\n{_E(f'Exit {exit_str} (would-be)')}  ·  {close}"
+    pnl_val = outcome.pnl_per_lot if outcome.pnl_per_lot is not None else (exit_ - entry) * LOT_SIZE
+    label = "P&L" if outcome.executed else "Paper P&L"
+    pnl_line = f"{pnl_emoji(pnl_val)} {_E(f'{label}: {format_money(pnl_val, signed=True)} / lot')}"
 
-    total = outcome.pnl_per_lot or Decimal("0")
-    pnl = f"{pnl_emoji(total)} {_E(format_money(total, signed=True))} / lot"
+    if outcome.executed:
+        header = f"*{_E(f'📊 SIGNAL OUTCOME · {day}')}*"
+        prem = _E(f"💰 Entry {format_money(entry)} → Exit {format_money(exit_)}")
+    else:
+        header = f"*{_E(f'📊 SIGNAL OUTCOME · {day} · NOT TAKEN')}*"
+        prem = _E(f"💰 Entry {format_money(entry)} → Exit {format_money(exit_)} (would-be)")
+
     return (
-        f"{header}\n{line1}\n"
-        f"{_E(f'Entry {format_money(outcome.entry_premium)} → Exit {format_money(outcome.exit_premium)}')}  ·  {pnl}\n"
-        f"{close}  ·  {_E('phase ' + outcome.phase)}"
+        f"{header}\n\n{line_dir}\n{prem}\n{pnl_line}\n\n{close}\n{_E(f'🔧 Phase: {outcome.phase}')}"
     )
 
 
@@ -205,9 +220,7 @@ _OUT_EXEC = SignalOutcome(
     nifty_close=Decimal("24842.10"),
     executed=True,
 )
-_OUT_SKIP = _OUT_EXEC.model_copy(
-    update={"executed": False, "entry_premium": None, "pnl_per_lot": None}
-)
+_OUT_SKIP = _OUT_EXEC.model_copy(update={"executed": False, "pnl_per_lot": None})
 _OUT_NOTRADE = SignalOutcome(
     trade_date=date(2026, 9, 8),
     trade_action=TradeAction.NO_TRADE,
@@ -235,11 +248,15 @@ MESSAGES: list[tuple[str, str, str]] = [
         "CURRENT baseline · NO_TRADE (for comparison)",
         _E(_format_signal_notification(_SIGNAL_SPLIT)),
     ),
-    ("S5.5a", "PROPOSED · outcome executed", format_outcome_notification(_OUT_EXEC, _SIGNAL_BUY)),
-    ("S5.5a", "PROPOSED · outcome skipped", format_outcome_notification(_OUT_SKIP, _SIGNAL_BUY)),
+    ("S5.5a", "outcome · executed", format_outcome_notification(_OUT_EXEC, _SIGNAL_BUY)),
     (
         "S5.5a",
-        "PROPOSED · outcome NO_TRADE",
+        "outcome · not taken (would-be)",
+        format_outcome_notification(_OUT_SKIP, _SIGNAL_BUY),
+    ),
+    (
+        "S5.5a",
+        "outcome · NO_TRADE",
         format_outcome_notification(_OUT_NOTRADE, _SIGNAL_SPLIT),
     ),
 ]

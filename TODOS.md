@@ -28,7 +28,7 @@ rot them.
 7. **Backtest Engine** — `docs/plan/backtest-engine/` (`phase1..4/`) — next **1.3a / 1.4** (parallel, `phase1/`). Four chained phases; each phase's GATE task blocks the next dir. Gated on
    `variance-gate`. `BACKTEST_PLAN_PHASE1.md` is the canonical spec; the phase dirs are thin status pointers.
 8. **signals: multi-LLM daily signal pipeline** — `docs/plan/signals/` — next **S5.5b** (then S5.5c, S5.5d, S6;
-   S5.5 done, S5.5a superseded → SPT-5). Parallel track — self-contained `src/signals/` package, own SQLite tables, zero
+   S5.5 done; S5.5a/b/c/d remain). Parallel track — self-contained `src/signals/` package, own SQLite tables, zero
    `backtest-engine` / `backtest-eval-core` dependency; runs alongside item 7. `OPENROUTER_API_KEY` needed only for the live 09:15 cron (S5.2); S5.4 baseline stats to
    be reconciled with `backtest-eval-core` later. Unblocked from `signals-eval-core` 2026-09-07 (parallel-track decision).
 8a. **signals-paper-track** — `docs/plan/signals-paper-track/` — next **SPT-1** (council checkpoint, no code). Turns the `signals/` consensus into a paper-traded strategy:
@@ -116,6 +116,12 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-09] signals S5.5a design — revived (was superseded → SPT-5) as the Phase-1 interim
+  16:00 outcome message; `record_signal_outcome.py` currently sends nothing. Restyled messages
+  6–8 in `scratch/2026-09-08_signal_telegram_messages.py` to the S5.5c vertical layout
+  (executed / not-taken with would-be P&L / NO_TRADE); would-be P&L derived in the formatter,
+  no `SignalOutcome` change. Docs: signals_tasks.md, signals_stories.md §S5.5a,
+  signals-paper-track/stories.md SPT-5/SPT-8, DECISIONS.md, TODOS.md. Implementation pending.
 - [2026-09-09] signals S5.5 — rollout state recorded (discussion, no code): all 3 crons already
   live on the Mac host, so the cron-enablement runbook was dropped; rollout phase = Phase 1
   `openrouter_only`. Telegram scope settled — 09:15 message → S5.5c, `signal_report` 16:35
