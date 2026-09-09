@@ -157,7 +157,28 @@ def _resp(
     )
 
 
-def test_format_signal_notification_directional_consensus() -> None:
+def test_format_signal_notification_with_real_entry() -> None:
+    signal = DailySignal(
+        trade_date=date(2026, 9, 8),
+        responses=[
+            _resp("grok", Direction.BULLISH, 4, low="50.00", high="66.00"),
+            _resp("gpt4o", Direction.BULLISH, 3, low="66.00", high="78.00"),
+        ],
+        consensus_direction=Direction.BULLISH,
+        consensus_confidence=Decimal("3.5"),
+        trade_action=TradeAction.BUY_CALL,
+        recommended_strike=24800,
+        agreeing_models=["grok", "gpt4o"],
+        dissenting_models=["gemini"],
+        entry_premium=Decimal("65.40"),
+    )
+    msg = morning_signal._format_signal_notification(signal, 3)
+
+    assert r"💰 Entry: ₹65\.40" in msg
+    assert "Entry band" not in msg
+
+
+def test_format_signal_notification_fallback_band() -> None:
     signal = DailySignal(
         trade_date=date(2026, 9, 8),
         responses=[

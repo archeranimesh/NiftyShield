@@ -115,7 +115,12 @@ def _format_signal_notification(signal: DailySignal, n_providers: int) -> str:
         return f"*{_E('⏸ NO TRADE · NO CONSENSUS')}*\n\n{votes}"
 
     emoji = _DIRECTION_EMOJI[signal.consensus_direction]
-    band_low, band_high = _consensus_entry_band(signal)
+    if signal.entry_premium is not None:
+        entry_line = f"💰 Entry: {format_money(signal.entry_premium)}"
+    else:
+        band_low, band_high = _consensus_entry_band(signal)
+        entry_line = f"💰 Entry band: {format_money(band_low)} – {format_money(band_high)}"
+
     agree = ", ".join(signal.agreeing_models) or "—"
     dissent = ", ".join(signal.dissenting_models) or "—"
     return (
@@ -123,7 +128,7 @@ def _format_signal_notification(signal: DailySignal, n_providers: int) -> str:
         f"\n"
         f"{_E(f'🎯 Strike: {format_strike(signal.recommended_strike)}')}\n"
         f"{_E(f'📊 Confidence: {signal.consensus_confidence:.1f} / 5.0')}\n"
-        f"{_E(f'💰 Entry band: {format_money(band_low)} – {format_money(band_high)}')}\n"
+        f"{_E(entry_line)}\n"
         f"\n"
         f"*{_E('Model Votes:')}*\n"
         f"{_E(f'👍 Agree: {agree}')}\n"

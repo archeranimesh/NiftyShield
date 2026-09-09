@@ -257,7 +257,7 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "be used on it), but this guard only inspects the immediate enclosing function "
         "(_notify), not the builder it calls — same shape as the morning_signal.py:218 entry"
     ),
-    ("scripts/morning_signal.py", 240): (
+    ("scripts/morning_signal.py", 245): (
         "S5.5c — value is fully escaped inside the callee _format_signal_notification() "
         "(the message-builder owns the MarkdownV2 boundary: escape_markdown() per dynamic "
         "value, literal * for bold), but this guard only inspects the immediate enclosing "
