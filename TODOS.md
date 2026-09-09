@@ -604,3 +604,6 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
   `build_healthcheck_alert()` colocated in `healthcheck.py`. 8 new tests, 6 updated. `strategy-rollout/` next: ROLL-12.
 - [2026-09-03] ROLL-12 shipped (`b3bf77a`, `a083fba`, `ecb7d0b`) — position health check alert (`position_health_check.py`) → MarkdownV2 grouped-by-finding-type format; refactored
   `run_position_checks()` → `list[PositionFinding]` (frozen dataclass); colocated `build_position_health_message()` in `src/notifications/formatting.py`. `strategy-rollout/` next: ROLL-13.
+- [2026-09-09] MVP story — reframed from price-vs-target watch to capital-deployment sim (`eaa05de`, docs only). Locked: fixed 6% tranche ladder (25% each at 0/−6/−12/−18%),
+  tipster SL ignored, −30%-on-deployed-capital hard stop. Open questions (whole-share rounding, cost bps, NIFTY benchmark alpha, time stop, portfolio mode, M-A lump-sum phasing,
+  schema council) recorded at top of `docs/plan/mvp/mvp_tasks.md`; M1/M2/M4 need rewrite before implementation. Not started.
