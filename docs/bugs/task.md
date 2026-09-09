@@ -26,6 +26,16 @@
 
 > BUG-041 closed 2026-09-08 — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
+## BUG-042 — `721daf9` MarkdownV2 switch broke every unmigrated `TelegramNotifier` cron caller — silent 400 since 2026-08-25
+
+- [ ] **B042.1** — Grep `logs/` + callers of `TelegramNotifier.send` to enumerate every entrypoint still emitting unescaped MarkdownV2; list them in `bugs.md`.
+- [ ] **B042.2** — Decide fix approach at Step 2b (per-caller call-site escaping vs. defensive auto-escape in `send()` with a `raw=` opt-out); record in `DECISIONS.md` if option 2.
+- [ ] **B042.3** — Implement the chosen fix; audit already-migrated callers for regression to literal backslashes.
+- [ ] **B042.4** — Surface the swallowed Telegram response body: log the 400 payload (entity-parse offset) in `send()`'s except block.
+- [ ] **B042.5** — Tests: one 400/entity-parse regression test per fixed caller (or one for `send()`'s default-escape path); no network.
+- [ ] **B042.6** — Suite green + real `@code-reviewer` clean; one manual live send per fixed entrypoint (or user-confirmed next cron run lands).
+- [ ] **B042.7** — Flip `bugs.md` BUG-042 status to ✅ Fixed + SHA; move both sections to `docs/archive/bugs/{bugs,task}.md`.
+
 ## BUG-040 — signals `_fetch_prev_ohlc` crash: `get_ohlc` shape is fictional + `1d` `prev_ohlc` null intraday
 
 - [x] **B040.1** — Scratch-verify (read-only) the three candidate endpoints and

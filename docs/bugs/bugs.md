@@ -27,6 +27,64 @@
 
 ---
 
+## BUG-042 — `721daf9` MarkdownV2 switch broke every unmigrated `TelegramNotifier` cron caller (CC/PP entry, paper snapshot, monitor daemon, pre-market brief) — silent 400 since 2026-08-25
+
+| Field | Value |
+|---|---|
+| Severity | **High** — see failing callers below |
+| Status | 🔴 Open |
+| Discovered | 2026-09-09 |
+| Location | `src/notifications/telegram.py::TelegramNotifier.send` + unmigrated callers |
+
+**Severity detail:** multiple daily/weekly cron notifications have not reached Telegram on any
+trading day since 2026-08-25. Confirmed dead so far: covered-call entry (`logs/cc_entry.log`),
+protective-put entry (`logs/pp_entry.log`), paper snapshot 15:35 (`logs/paper_snapshot.log`),
+monitor daemon alerts (`logs/monitor_daemon.log`), pre-market brief 09:00
+(`logs/pre_market_brief.log`). Trades still record to the DB — only the notification is lost.
+
+**Discovered:** 2026-09-09, user asked why the covered call hadn't entered; `logs/cc_entry.log`
+showed the CC *did* enter (`trade.INSERTED` 2026-08-26, 2026-09-09) but the 2026-08-26 send
+logged `400 Bad Request`. Grep across `logs/` showed the same signature in ≥5 other cron logs
+from the same 2026-08-25 boundary.
+
+**Location:** `src/notifications/telegram.py::TelegramNotifier.send` (unconditional
+`parse_mode="MarkdownV2"`, no auto-escape); every caller above that builds message text
+without `escape_mdv2()` / `escape_markdown()` / `mdcode()`.
+
+**Root cause:** same as BUG-039 (SHA `2cb67ce`, which fixed `daily_snapshot.py` only) and the
+`eod_summary.py` / `TelegramGateway` sibling it flagged out of scope. Commit `721daf9`
+(2026-08-24 23:00 IST) flipped `TelegramNotifier.send()` from `parse_mode="HTML"` to
+`parse_mode="MarkdownV2"` unconditionally, moving escaping responsibility onto every caller.
+The `telegram-markdown-migration` epic (ROLL-*/MD-* series) migrated the strategy and alert
+callers but never reached these cron entrypoints. Their message text is structurally full of
+MarkdownV2-reserved punctuation — `-` (negative figures, box rules), `.` (decimals, DTE),
+`()` (percentages), `|` (table separators), `!` `+` `=` `#` — so Telegram rejects the whole
+send with `400` ("can't parse entities"), swallowed silently by `send()`'s non-fatal
+contract. The first send under MarkdownV2 was 2026-08-25; every failure dates from then.
+
+**Why the log never shows the real reason:** `send()` logs only `str(exc)` from aiohttp's
+`raise_for_status()`, which stops at `400, message='Bad Request', url=…` and drops the
+response body where Telegram names the byte offset that failed to parse.
+
+**Suggested fix (decide at Step 2b):** two options.
+1. **Per-caller call-site escaping** (BUG-039's approach, per `FORMATTING.md` §6 "escaping
+   happens at the call site"): wrap each assembled `summary_text` in `escape_markdown()` at
+   the `notifier.send()` call site. Correct but must be repeated for every entrypoint and is
+   fragile against the next new caller.
+2. **Defensive default in `send()`**: auto-escape by default, add an explicit
+   `preformatted=True` / `raw=True` opt-out for the already-migrated callers that
+   intentionally emit `*bold*` / tables. One change, closes the class of bug, but requires
+   auditing which existing callers rely on raw MarkdownV2 pass-through.
+
+Recommend option 2 given how many entrypoints are currently broken; confirm no migrated
+caller silently regresses to literal backslashes.
+
+**Related / out of scope here:** `TelegramGateway`'s parallel `eod_summary.py` regression
+(`cd1e554`) — noted in BUG-039, still unfixed, separate sender class. Fold it in if option 2
+is chosen and `TelegramGateway` shares the escape path; otherwise its own bug.
+
+---
+
 ## BUG-040 — signals pipeline crashes at `_fetch_prev_ohlc`: `get_ohlc` expects a response shape Upstox v3 never returns, and `1d` `prev_ohlc` is null intraday
 
 | Field | Value |

@@ -300,6 +300,12 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
   `graph_snippet.py` + `portfolio`/`client`/`notifications` `NOTES.md` references at the archive path, collapsed the `docs/plan/README.md` entry. See `docs/archive/TODOS_ARCHIVE.md` 2026-09-03. Open
   follow-ups: DEBT-8..DEBT-12.
 
+### 2026-09-09
+
+- **Logged BUG-042** — `721daf9`'s unconditional MarkdownV2 switch broke every unmigrated `TelegramNotifier` cron caller (CC/PP entry, paper snapshot, monitor daemon, pre-market brief);
+  silent `400 Bad Request` on every send since 2026-08-25. Same root cause as BUG-039 (which fixed `daily_snapshot.py` only). Full entry + fix options in `docs/bugs/bugs.md`, checklist B042.1–B042.7
+  in `docs/bugs/task.md`. Diagnostic only — CC positions still record to DB, only notifications lost. Docs-only.
+
 ### 2026-09-02
 
 - **MEAS-1 shipped — `scripts/dev/token_audit.py` session token-attribution tool.** SHA `79effcd`. Parses a session transcript JSONL and buckets its tokens: `system_prompt` (real, first-turn
