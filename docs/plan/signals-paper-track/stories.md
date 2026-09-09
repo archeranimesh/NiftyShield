@@ -86,14 +86,17 @@ Name `options-strategist` and `greeks-analyst` perspectives in the draft.
 entry premium + fill ts, size, SL / target / trailing params snapshot, state, exit premium +
 ts + reason, realised P&L per lot and total) stored as `TEXT` monetary values per house rules,
 plus a Store with write (`open`, `close`, `update_mark`) and read (`get_open`, `get_by_date`,
-`get_window`) methods. `schema.md` is the DDL source. Reuses `src/db.py`.
+`get_window`, and `cumulative_pnl()` → `(total, n_trades, wins, losses)` since inception via a
+SQL `SUM` — precedent `get_cumulative_realized_pnl`, the Rule-1 aggregation reference) methods.
+`schema.md` is the DDL source. Reuses `src/db.py`.
 
 **Before any code:** `get_code_snippet` for whichever base the ruling picks (`PaperTrade` /
 `PaperPosition` if A, or a fresh model if B); `search_graph("TradeState")`;
 `get_code_snippet("SignalOutcome")` for the P&L field conventions already in the track.
 
 **Tests:** round-trip open→close persistence; reject double-open for a date; Decimal/TEXT
-boundary on the money columns.
+boundary on the money columns; `cumulative_pnl()` over an empty table and over a mix of
+winning and losing closed rows.
 
 ---
 
@@ -107,23 +110,36 @@ write the open position row, and send the Telegram entry message — the actual 
 the advisory band. NO_TRADE / already-open days are a no-op with a logged reason.
 
 **Telegram entry message** (shape to confirm at SPT-1; candidate — formatter owns its
-escaping, `FORMATTING.md` per-type rules, blank line after the bold header):
+escaping, `FORMATTING.md` per-type rules, blank line after the bold header.
+
+**Option A** — the same 7-column table as the exit message and the EOD PT summary, with
+`Exit` / `P&L` / `Chg` blank (`—`) at entry, SL / target on a line below, and a
+since-inception footer. The table is rendered by a shared `build_position_table(...)` extracted
+from `src/reporting/eod_pt_summary.py::_render_table` to `src/notifications/formatting.py`, so
+reporting and the signal messages use one builder (not a copy):
 
 ```
-*✅ SIGNAL ENTRY · 08 Sep*
+*✅ SIGNAL ENTRY · 29 Sep*
 
-📈 BUY CALL 24800  (monthly, 30 Sep)
-💰 Entry: ₹65.50 / unit  ·  ₹4,257.50 / lot
-🕘 09:18  ·  Nifty 24,760
+Strategy  Instrument                Qty     Avg    Exit    P&L    Chg
+--------  ------------------------  ---  ------  ------  -----  -----
+Signal    NIFTY 23000 29 SEP 26 PE   65   39.52       —      —      —
+--------  ------------------------  ---  ------  ------  -----  -----
+          TOTAL
 
-🛑 SL ₹45.85  ·  🎯 Target ₹98.25
+🛑 SL 27.66   🎯 Target 59.28
+🕘 09:32  ·  Nifty 23,041
+Σ Inception  +12,480.50  ·  37 trades  ·  24W / 13L
 ```
 
 **Before any code:** `get_code_snippet("resolve_monthly_option")`, `get_code_snippet("InstrumentLookup")`,
-`trace_path("build_notifier")`; the SPT-2 model.
+`get_code_snippet("_render_table")` (the builder to extract), `trace_path("build_notifier")`;
+the SPT-2 model.
 
 **Tests:** BUY_CALL and BUY_PUT resolve + open one row; NO_TRADE and already-open are no-ops;
-the message renders (no network) for both directions.
+the message renders (no network) for both directions; the since-inception footer renders with
+zero prior trades and with N; `build_position_table` still renders the EOD PT summary
+unchanged after the extraction.
 
 ---
 
@@ -151,24 +167,30 @@ realised P&L, and send the Telegram exit message. Long option → P&L is `(exit 
 lot_size`; `Decimal` throughout; `greeks-analyst` review because the exit interacts with
 theta / gamma near expiry.
 
-**Telegram exit message** (candidate — replaces `signals/` S5.5a's interim outcome message
-once this engine is live; S5.5a ships first as the Phase-1 stopgap):
+**Telegram exit message** — the same `build_position_table` as the entry message; the bold
+header carries the exit reason (`TARGET` / `STOP_LOSS` / `TRAILING_STOP` / `TIME_EXIT`); the
+since-inception footer is updated with this closed trade. Replaces `signals/` S5.5a's interim
+outcome message once this engine is live; S5.5a ships first as the Phase-1 stopgap:
 
 ```
-*🎯 SIGNAL EXIT · 08 Sep*  ·  TARGET HIT
+*🎯 SIGNAL EXIT · 29 Sep*  ·  TARGET
 
-📈 BUY CALL 24800
-💰 Entry ₹65.50 → Exit ₹98.25
-✅ +₹2,128.75 / lot  ·  +49.9%
+Strategy  Instrument                Qty     Avg    Exit       P&L      Chg
+--------  ------------------------  ---  ------  ------  --------  -------
+Signal    NIFTY 23000 29 SEP 26 PE   65   39.52   55.25  1,022.12  +39.78%
+--------  ------------------------  ---  ------  ------  --------  -------
+          TOTAL                                          1,022.12
 
-🕒 13:42  ·  Nifty close 24,905
+🕒 13:42  ·  Nifty close 23,088
+Σ Inception  +12,480.50  ·  37 trades  ·  24W / 13L
 ```
 
 **Before any code:** `get_code_snippet("ProfitLockEngine")`, `get_code_snippet("ExitSignalEngine")`,
-`get_code_snippet("pnl_emoji")` / `format_money`; SPT-2 model.
+`get_code_snippet("pnl_emoji")` / `format_money`; the SPT-2 model and its cumulative-P&L read.
 
 **Tests:** each of SL / target / trailing / time-exit fires on the right mark; HOLD in the
-dead band; P&L math for a win and a loss; both message variants render.
+dead band; P&L math for a win and a loss; the message renders for a win and a loss; the
+inception footer reflects the just-closed trade.
 
 ---
 
