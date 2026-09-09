@@ -186,9 +186,10 @@ eventually supersedes S5.5a.
 
 ### 6 · S6 — Docs close
 
-- [ ] **S6** — Docs close: `CONTEXT.md` tree, `DECISIONS.md` entry, `TODOS.md` log,
-  `docs/plan/README.md` status. Then the `signals/` story is done — move to
-  `docs/plan/signals-paper-track/` (SPT-1).
+- [x] **S6** — Docs close: `CONTEXT.md` tree, `DECISIONS.md` entry, `TODOS.md` log,
+  `docs/plan/README.md` status, story folder archived to `docs/archive/plan/signals/`. The
+  `signals/` story is done — next signals work is `docs/plan/signals-paper-track/` (SPT-1).
+  | Owner: Claude | Model: Sonnet 5 | Review: docs-only | SHA: <pending>
 
 ---
 

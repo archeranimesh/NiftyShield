@@ -5,6 +5,19 @@
 
 ---
 
+## 2026-09-09 — `signals` story archived
+
+Moved to `docs/archive/plan/signals/`. **S1.1–S6** — the multi-LLM daily directional signal
+pipeline: market snapshot → GPT-4o / Grok / Gemini via OpenRouter → `SignalAggregator`
+consensus → one `DailySignal` per day, scored forward-only against a `hash(trade_date) % 2`
+coin-flip baseline. Self-contained `src/signals/` package with its own SQLite tables
+(`signal_inputs` / `signal_responses` / `daily_signals` / `signal_outcomes`) — no
+`backtest-engine` / `backtest-eval-core` dependency. All three crons live on the Mac host
+(Phase 1 `openrouter_only`): `morning_signal` 09:30, `record_signal_outcome --auto` 16:00,
+`signal_report` 16:35 (Mon–Fri), each pushing a Telegram message. Phase 2 (`search_enabled`,
+xAI + Google AI direct SDKs) is a later `SIGNAL_PHASE` flip. Next signals work is
+`signals-paper-track` (SPT-1). S6 close SHA: `<pending>`.
+
 ## 2026-09-07 — `ic-yearly-expiry-fix` story archived
 
 Moved to `docs/archive/plan/ic-yearly-expiry-fix/`. **YE-1..YE-4** (June/December yearly-label

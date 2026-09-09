@@ -27,11 +27,7 @@ rot them.
 6. **Options Income strategy** — `docs/plan/options_income/` — next **S0** (data audit).
 7. **Backtest Engine** — `docs/plan/backtest-engine/` (`phase1..4/`) — next **1.3a / 1.4** (parallel, `phase1/`). Four chained phases; each phase's GATE task blocks the next dir. Gated on
    `variance-gate`. `BACKTEST_PLAN_PHASE1.md` is the canonical spec; the phase dirs are thin status pointers.
-8. **signals: multi-LLM daily signal pipeline** — `docs/plan/signals/` — next **S5.6** (real
-   entry premium + P&L; then S6 close; S5.5/S5.5c/S5.5a/S5.5d/S5.5b done). Parallel track — self-contained `src/signals/` package, own SQLite tables, zero
-   `backtest-engine` / `backtest-eval-core` dependency; runs alongside item 7. `OPENROUTER_API_KEY` needed only for the live 09:15 cron (S5.2); S5.4 baseline stats to
-   be reconciled with `backtest-eval-core` later. Unblocked from `signals-eval-core` 2026-09-07 (parallel-track decision).
-8a. **signals-paper-track** — `docs/plan/signals-paper-track/` — next **SPT-1** (council checkpoint, no code). Turns the `signals/` consensus into a paper-traded strategy:
+8. **signals-paper-track** — `docs/plan/signals-paper-track/` — next **SPT-1** (council checkpoint, no code). Turns the `signals/` consensus into a paper-traded strategy:
     auto-enter as a long weekly option, intraday SL / target / trailing-stop, exit or 15:00 square-off, 6-month evaluation window → go-live gate. SPT-1 rules on module boundary
     (`src/strategy/`+`src/paper/` reuse vs self-contained `src/signals/` loop) + the rule set, then rewrites SPT-2..SPT-8. Supersedes `signals/` S5.5a.
 9. **backtest-eval-core** — `docs/plan/backtest-eval-core/` — next **B1.1**. Blocked until `backtest-engine` tasks 1.3 + 1.4 land.
@@ -122,6 +118,16 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-09] signals S6 — story closed and archived. Docs-only: `CONTEXT.md` `src/signals/`
+  bullet rewritten to "shipped" + crons-live, signals crons removed from "What Does NOT Exist
+  Yet"; `DECISIONS.md` close bullet (story archived + `phase` column semantics);
+  `docs/plan/README.md` entry collapsed to a `✅ Archived` pointer; `git mv docs/plan/signals/
+  → docs/archive/plan/signals/`; backlog item deleted here, appended to `TODOS_ARCHIVE.md`.
+  The `signals/` story (S1.1–S6) is complete; next signals work is `signals-paper-track` SPT-1.
+  Also this session: fixed a S5.6 deploy gap — the `entry_premium` column was added to
+  `daily_signals` in code (`5bebf92`) but never `ALTER`-ed onto the live DB, so the 16:00
+  `record_signal_outcome` cron failed with `IndexError`; `ALTER TABLE daily_signals ADD COLUMN
+  entry_premium TEXT` run against `data/portfolio/portfolio.sqlite`, read + write paths verified.
 - [2026-09-09] signals S5.6 filed — the 09:15 "Entry band" is an LLM guess
   (`_consensus_entry_band`), and `record_signal_outcome --auto` books P&L against it while
   fetching the exit LTP on the *weekly* option though the strike was picked on the *monthly*
