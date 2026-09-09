@@ -30,43 +30,45 @@ rot them.
 8. **signals-paper-track** — `docs/plan/signals-paper-track/` — next **SPT-1** (council checkpoint, no code). Turns the `signals/` consensus into a paper-traded strategy:
     auto-enter as a long weekly option, intraday SL / target / trailing-stop, exit or 15:00 square-off, 6-month evaluation window → go-live gate. SPT-1 rules on module boundary
     (`src/strategy/`+`src/paper/` reuse vs self-contained `src/signals/` loop) + the rule set, then rewrites SPT-2..SPT-8. Supersedes `signals/` S5.5a.
-9. **backtest-eval-core** — `docs/plan/backtest-eval-core/` — next **B1.1**. Blocked until `backtest-engine` tasks 1.3 + 1.4 land.
-10. **signals-eval-core** — `docs/plan/signals-eval-core/` — next **SE1.1**.
+9. **signals-cost-tracking** — `docs/plan/signals-cost-tracking/` — next **SCT-1** (usage model + provider capture). Capture OpenRouter per-call token usage + USD cost via inline
+   `usage.include` accounting, persist as 3 new `signal_responses` columns, show today's spend on the 09:30 message, add `get_signal_cost()` aggregate. SCT-1..4, carries `schema.md`.
+10. **backtest-eval-core** — `docs/plan/backtest-eval-core/` — next **B1.1**. Blocked until `backtest-engine` tasks 1.3 + 1.4 land.
+11. **signals-eval-core** — `docs/plan/signals-eval-core/` — next **SE1.1**.
     Blocked until `backtest-eval-core` + `backtest-engine` 1.12.
     Covers Track A (swing) + Track B (investment), SE1–SE8.
-11. **risk-gamma-phase-a** — `docs/plan/risk-gamma-phase-a/` — next **B2.2**
+12. **risk-gamma-phase-a** — `docs/plan/risk-gamma-phase-a/` — next **B2.2**
     (chain fetch + field computation). Track A + B1 / B2.1 shipped.
-12. **greeks-parity-validation** —
+13. **greeks-parity-validation** —
     `docs/plan/full-repo-review-followups/greeks-parity-validation/` — next **T1**.
     P3, council-gated: do not implement directly — needs an `options-strategist` /
     `greeks-analyst` consult first (tolerance-band decision).
-13. **paper-pnl-golden-tests** —
+14. **paper-pnl-golden-tests** —
     `docs/plan/full-repo-review-followups/paper-pnl-golden-tests/` — next **T1**
     (exact-value golden assertions for `_compute_leg_unrealized_pnl`). P3.
-14. **suppression-hygiene-triage** —
+15. **suppression-hygiene-triage** —
     `docs/plan/full-repo-review-followups/suppression-hygiene-triage/` — next **T1**
     (REVIEW.md carve-out for self-describing `# noqa` codes). P3.
-15. **Fix dead IC EOD report query** — `scripts/strategies/ic/paper_ic_snapshot.py`
+16. **Fix dead IC EOD report query** — `scripts/strategies/ic/paper_ic_snapshot.py`
     (no story folder) — the "Intraday actions" query is dead code, found in the DT-3a audit.
-16. **Chain delta/decay analysis** — `docs/plan/chain-decay-analysis/` — next **CDA-1**.
+17. **Chain delta/decay analysis** — `docs/plan/chain-decay-analysis/` — next **CDA-1**.
     Exploratory / read-only, independent.
     Monthly bucket only (yearly excluded — see `greeks-bs-fallback` GF-1 findings).
-17. **Entry event filter R4** — `docs/plan/entry-event-filter/` — next **EF-1**.
+18. **Entry event filter R4** — `docs/plan/entry-event-filter/` — next **EF-1**.
     Good-to-have, not compulsory; soft-warning only (logged, non-blocking, mirrors
     `GateViolation`). `events.yaml` needs ad-hoc upkeep.
     Revisit once entries run unattended on live capital (post `backtest-engine` Phase 2), and
     reconsider hard-block then.
-18. **Broker abstraction** — `docs/plan/broker-abstraction/` — next **BA-0**
+19. **Broker abstraction** — `docs/plan/broker-abstraction/` — next **BA-0**
     (probe scripts + decision matrix).
     LOW priority; storage format frozen, only fetch + parse change.
     BA-14 / BA-15 blocked until `src/execution/` (`phase2-integrations` OE-1) exists.
     Do not start until the Phase 0.8 gate clears.
-19. **Historical data abstraction** — `docs/plan/historical-data-abstraction/` — next
+20. **Historical data abstraction** — `docs/plan/historical-data-abstraction/` — next
     **HD-0** (cost-bounded probe scripts). LOW priority.
     `HistoricalCandleFetcher` protocol so VIX + OHLC fetching can switch brokers without
     touching storage. HD-6 / HD-7 conditional on the HD-0 decision matrix.
     Do not start until the Phase 0.8 gate clears.
-20. **Phase 2 — Research Pipelines & Integrations** — `docs/plan/phase2-integrations/` —
+21. **Phase 2 — Research Pipelines & Integrations** — `docs/plan/phase2-integrations/` —
     next **PV-1** (P&L visualization — not gated, can be pulled forward).
     ZK-1 / OE-1 / PT-1 gated per the story file. 2027+.
     Excludes the swing / investment signal pipelines — those are `signals`.

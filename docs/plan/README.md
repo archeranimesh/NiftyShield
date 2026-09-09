@@ -161,6 +161,11 @@ Multi-LLM daily directional signal pipeline: market snapshot → GPT-4o / Grok /
 against a `hash(trade_date) % 2` coin-flip baseline. Self-contained `src/signals/` package with its own SQLite tables — no `backtest-engine` / `backtest-eval-core` dependency. All three
 crons live on the Mac host (Phase 1 `openrouter_only`): `morning_signal` 09:30, `record_signal_outcome --auto` 16:00, `signal_report` 16:35 (Mon–Fri). Next signals work → `signals-paper-track/`.
 
+**`signals-cost-tracking/`** · ⬜ Not started · next: **SCT-1** (usage model + provider capture)
+Capture OpenRouter per-call token usage + credit cost (`"usage": {"include": true}` inline accounting — no `/generation` call) on every signal provider response, persist it as three
+new nullable columns on `signal_responses`, show today's three-call spend on the 09:30 morning Telegram message, and add `SignalStore.get_signal_cost(from, to)` SQL-aggregate. Four
+tasks SCT-1..4. Carries a `schema.md`. Month-to-date cost → future `signal_report.py` change, out of scope. Requested by Animesh 2026-09-09.
+
 **`signals-paper-track/`** · ⬜ Not started · next: **SPT-1** (council checkpoint — no code)
 Turns the `signals/` consensus into a live paper-traded strategy: auto-enter the daily
 `DailySignal` as a long weekly option, manage it intraday against a stop-loss / target /
