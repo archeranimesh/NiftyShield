@@ -25,6 +25,7 @@ Judgment calls (spec gaps in docs/plan/signals/signals_stories.md §S5.4):
 from __future__ import annotations
 
 import argparse
+import asyncio
 import hashlib
 import sys
 from collections import defaultdict
@@ -40,6 +41,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from dotenv import load_dotenv
 
 from src.config import settings
+from src.notifications.telegram import build_notifier
 from src.paper.constants import LOT_SIZE
 from src.signals.models import (
     DailySignal,
@@ -285,6 +287,34 @@ def _phase_section(outcomes: list[SignalOutcome]) -> list[str]:
     return lines
 
 
+def _format_report_message(body: str) -> str:
+    """Wrap the plain-text report in a MarkdownV2 fenced code block.
+
+    Telegram does not parse entities inside a fence, so only ``\\`` and
+    ````` need escaping (a backslash renders literally inside a fence — the
+    general ``escape_markdown`` must NOT be used on fence content).
+
+    Args:
+        body: The already-rendered ``"\\n".join(out)`` report text.
+
+    Returns:
+        The body wrapped as ```` ``` ````-fenced MarkdownV2, fence-safe.
+    """
+    safe = body.replace("\\", "\\\\").replace("`", "\\`")
+    return f"```\n{safe}\n```"
+
+
+def _notify(body: str) -> None:
+    """Push the report to Telegram; non-fatal when no notifier is configured."""
+    notifier = build_notifier()
+    if notifier is None:
+        return
+    try:
+        asyncio.run(notifier.send(_format_report_message(body)))
+    except Exception as exc:  # noqa: BLE001 — report already printed; send failure must not crash the cron
+        logger.warning("signal_report_notify_failed", error=str(exc))
+
+
 def main() -> None:
     """CLI entry point — load outcomes for the window and print the report."""
     args = _parse_args()
@@ -319,7 +349,9 @@ def main() -> None:
         if i < len(sections) - 1:
             out.append("")
     out.append(_RULE)
-    print("\n".join(out))
+    report = "\n".join(out)
+    print(report)
+    _notify(report)
 
     logger.info(
         "signal_report_generated",

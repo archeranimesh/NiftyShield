@@ -250,6 +250,13 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "value, literal * for bold), but this guard only inspects the immediate enclosing "
         "function (_notify), not the builder it calls — same shape as the morning_signal.py:215 entry"
     ),
+    ("scripts/signal_report.py", 313): (
+        "S5.5d — report body is wrapped as a MarkdownV2 fenced code block inside the "
+        "callee _format_report_message() (fence content only needs backslash/backtick "
+        "escaping; a fence renders backslashes literally so escape_markdown() must NOT "
+        "be used on it), but this guard only inspects the immediate enclosing function "
+        "(_notify), not the builder it calls — same shape as the morning_signal.py:215 entry"
+    ),
     ("scripts/morning_signal.py", 215): (
         "S5.5c — value is fully escaped inside the callee _format_signal_notification() "
         "(the message-builder owns the MarkdownV2 boundary: escape_markdown() per dynamic "
