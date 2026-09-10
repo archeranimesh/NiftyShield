@@ -140,6 +140,10 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-10] signals-cost-tracking SCT-2 closed (`c7efe54`) — `signal_responses` gains `prompt_tokens` / `completion_tokens` / `cost_usd` (nullable, idempotent ALTER loop in `init_db`);
+  `record_response` persists from `response.usage`, `_response_from_row` rebuilds `SignalUsage` when `cost_usd` present. New `SignalStore.get_signal_cost(from_date, to_date)` → `{total_usd,
+  call_count, by_provider}` via one grouped SQL statement. 6 new tests, full suite 3402 passed. code-reviewer CRITICAL/ERROR were on pre-existing `suggestions.md` / dirty submodule (not staged); two
+  store.py WARNINGs deferred as spec-mandated. Next: SCT-3 (morning Telegram cost line).
 - [2026-09-10] signals-cost-tracking SCT-1 closed (`a519714`) — new frozen `SignalUsage` model (`prompt_tokens` / `completion_tokens` / `cost_usd: Decimal`) + optional `usage` field on
   `SignalResponse`; GPT-4o / Grok / Gemini OpenRouter paths send `"usage": {"include": true}` and parse the envelope via one shared `_usage_from_envelope` helper in `providers/__init__.py` (returns
   `None` on absent/malformed/non-dict usage — never fails the signal). mock + Gemini Google-SDK path emit `usage=None`. Antigravity-implemented; code-reviewer CRITICAL (non-dict `AttributeError`) +
