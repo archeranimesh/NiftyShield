@@ -26,6 +26,12 @@
 
 > BUG-041 closed 2026-09-08 — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
+## BUG-044 — standalone CC overlay vanishes from the S9 digest; its P&L is folded into Collar
+
+Fix is tracked as plan tasks, not here — `docs/plan/telegram-message-unification/overlay-recovery-digest/tasks.md`
+**ORD-1** (investigate + decide the grouping) and **ORD-2** (implement). Full detail in `bugs.md`.
+ORD-4 flips this bug to ✅ Fixed and moves both entries to `docs/archive/bugs/`.
+
 ## BUG-043 — "Net P&L" in close notifications is inception-cumulative for IC v1/v2, cycle-only for collar, absent for CSP — no stable per-strategy contract
 
 - [x] **B043.1** — Add `reconstruct_cycles()` + `get_last_cycle_realized_pnl()` to `src/paper/`

@@ -74,12 +74,12 @@ Cross-strategy paper-trade EOD digest to Telegram. PT-1 (spec `d1ae760`) + PT-2 
 `scripts/eod_summary.py`, not a replacement (DECISIONS.md §P&L & Reporting, 2026-09-07).
 
 **`telegram-message-unification/`** · ⬜ Not started — start with `unified-entry-message/` **UEM-1**
-One shared renderer family for every paper-strategy Telegram entry and exit card. Three sequenced sub-stories, hard dependency chain: `unified-entry-message/` (UEM-1..3 — `ic_entry_message.py` →
-shared `entry_message.py` / `EntryMessage`; IC migrated; CSP + CC entry card via `record_paper_trade.py --notify`) → `overlay-entry-message/` (OEM-1..5 — sign-aware `Net credit` / `Net debit` line;
-Collar / CC / PP automated re-entry cards; three-track `📥 Overlay Entry` bootstrap migrated onto the renderer) → `unified-exit-message/` (UXM-1..8 — shared `exit_message.py` close renderer replacing
-five hand-rolled shapes; `short_decay_pct` gross-short-premium decay + `cycle_stats` + `resolve_target` into `src/paper/cycle_pnl.py`; this-exit / cycle / inception P&L footer + win-rate gated at ≥ 5
-closed cycles; `pre_market_brief.py` redesigned to a MarkdownV2 fenced table with the overlay broken into CC / Collar / PP). No DB schema change anywhere. Priority + dependencies + scope decisions in
-the epic's own `README.md`. Requested by Animesh 2026-09-10.
+A structured, fenced house style for every paper-strategy Telegram message. Four sub-stories — the first three are a hard renderer-lineage chain, the fourth is independent but closes the epic:
+`unified-entry-message/` (UEM-1..3 — `ic_entry_message.py` → shared `entry_message.py` / `EntryMessage`; IC migrated; CSP + CC entry card via `record_paper_trade.py --notify`) →
+`overlay-entry-message/` (OEM-1..5 — sign-aware `Net credit` / `Net debit` line; Collar / CC / PP automated re-entry cards; three-track `📥 Overlay Entry` bootstrap onto the renderer) →
+`unified-exit-message/` (UXM-1..8 — shared `exit_message.py` close renderer replacing five hand-rolled shapes; `short_decay_pct` + `cycle_stats` + `resolve_target` into `src/paper/cycle_pnl.py`;
+this-exit / cycle / inception P&L footer + win-rate; `pre_market_brief.py` fenced-table redesign) → `overlay-recovery-digest/` (ORD-1..4 — fix the standalone-CC-into-Collar bug BUG-044 in the S9
+"NiftyBees vs overlays" digest, then fenced-format it). No DB schema change anywhere. Scope decisions + BUG-044 detail in the epic's own `README.md`. Requested by Animesh 2026-09-10.
 
 **`portfolio-snapshot-slimdown/`** · ⬜ Not started — start with `finideas-decommission/` **FD-1**
 Shed two data sources from the daily portfolio snapshot. Two sequenced sub-stories (both rework `_build_portfolio_summary` + `_format_combined_summary` — fixed order, not interleaved):

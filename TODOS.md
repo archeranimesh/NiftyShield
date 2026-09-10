@@ -82,15 +82,16 @@ rot them.
     (T+0 curve + ±1σ/±2σ bands + POP — blocked on `greeks-bs-fallback/` GF-2 + GF-3).
     Priority relative to items 13–21 is Animesh's call.
 23. **Telegram message unification** — `docs/plan/telegram-message-unification/` — next **UEM-1**
-    (generalize `ic_entry_message.py` → shared `entry_message.py` / `EntryMessage`). Epic, three
-    sequenced sub-stories on a hard dependency chain: `unified-entry-message/` (UEM-1..3 — shared entry
-    renderer; IC migrated; CSP + CC entry card via `record_paper_trade.py --notify`) →
-    `overlay-entry-message/` (OEM-1..5 — sign-aware `Net credit` / `Net debit` line; Collar / CC / PP
-    re-entry cards; three-track `📥 Overlay Entry` bootstrap onto the renderer) → `unified-exit-message/`
-    (UXM-1..8 — shared `exit_message.py` close renderer replacing five hand-rolled shapes;
-    `short_decay_pct` + `cycle_stats` + `resolve_target` into `src/paper/cycle_pnl.py`; this-exit /
-    cycle / inception P&L footer + win-rate; `pre_market_brief.py` redesign). No DB schema change.
-    `/work` routes via the epic `prompt.md`. Requested by Animesh 2026-09-10.
+    (generalize `ic_entry_message.py` → shared `entry_message.py` / `EntryMessage`). Epic, four
+    sub-stories (first three a hard renderer-lineage chain, fourth independent + closes the epic):
+    `unified-entry-message/` (UEM-1..3 — shared entry renderer; IC migrated; CSP + CC entry card via
+    `record_paper_trade.py --notify`) → `overlay-entry-message/` (OEM-1..5 — sign-aware net line;
+    Collar / CC / PP re-entry cards; three-track bootstrap onto the renderer) → `unified-exit-message/`
+    (UXM-1..8 — shared `exit_message.py` close renderer; `short_decay_pct` + `cycle_stats` +
+    `resolve_target` into `src/paper/cycle_pnl.py`; P&L + win-rate footer; `pre_market_brief.py`
+    redesign) → `overlay-recovery-digest/` (ORD-1..4 — fix BUG-044 standalone-CC-into-Collar in the S9
+    digest, then fenced-format it). No DB schema change. `/work` routes via the epic `prompt.md`.
+    Requested by Animesh 2026-09-10.
 24. **Portfolio snapshot slimdown** — `docs/plan/portfolio-snapshot-slimdown/` — next **FD-1**
     (pre-delete audit). Epic, two sequenced sub-stories that both rework `_build_portfolio_summary` +
     `_format_combined_summary`: `finideas-decommission/` (FD-1..7 — full removal of `finideas_ilts` +

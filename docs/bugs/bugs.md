@@ -27,6 +27,53 @@
 
 ---
 
+## BUG-044 — standalone CC overlay vanishes from the S9 "NiftyBees vs overlays" digest and its P&L is silently added to the Collar line
+
+| Field | Value |
+|---|---|
+| Severity | **Medium** — wrong data on a daily Telegram: a live overlay shows `No data`, and the Collar recovery figure is overstated by the CC's P&L |
+| Status | 🔴 Open — fix tracked under `docs/plan/telegram-message-unification/overlay-recovery-digest/` ORD-1 (investigate + decide) / ORD-2 (fix) |
+| Discovered | 2026-09-10 (Animesh, from the 09 Sep digest) |
+| Location | `scripts/strategies/three_track/paper_3track_snapshot.py::_overlay_type_groups` (~L1157) → `_compute_overlay_pnl_snapshots` → `_build_recovery_digest` |
+
+**Symptom:** the 2026-09-09 digest rendered `CC   No data` while `PP` and `Collar` had figures
+and `Best: PP`.
+
+**Verified evidence (`logs/`):**
+- `cc_entry.log` 2026-09-09 10:30:21 — `trade.INSERTED strategy=paper_nifty_overlay leg=overlay_cc`
+  (CC bootstrap, SELL @ 53.90).
+- `paper_snapshot.log` 2026-09-09 15:35:08 — `Overlay leg snapshot saved: overlay_cc 2026-09-09`
+  (the `paper_leg_snapshots` row was written).
+- Same run's printed comparison table — `paper_nifty_overlay / CC  ₹+793 / ₹+5,957 / ₹+6,750`
+  (CC P&L is computed).
+- Then — `WARNING protection_recovery.overlay_source_missing … overlay_type=cc date=2026-09-09`
+  (also fires 2026-09-08).
+
+**Root cause:** `_overlay_type_groups`, the BUG-030 fix branch —
+
+```python
+elif has_cc and has_put:
+    groups["collar"] = ["overlay_cc", "overlay_collar_put"]
+```
+
+On 09 Sep the open roles were `{overlay_cc, overlay_pp, overlay_collar_put}` (no
+`overlay_collar_call`). This branch folds `overlay_cc` into the `collar` group, so
+`_compute_overlay_pnl_snapshots` writes no standalone `cc` `OverlayPnLSnapshot` row —
+`_build_recovery_digest` reads back nothing → `CC No data`. And because the collar group sums
+both roles, the standalone CC's P&L is added to the digest's `Collar` figure.
+
+**Why BUG-030's fix doesn't cover this:** BUG-030 assumed a coexisting `overlay_cc` + collar
+put means the `overlay_cc` *is* the collar's shared call leg (the collar entry dedups a
+second short call against an existing CC). It does not distinguish that case from a
+**standalone CC bootstrap running alongside a separate collar** — the current live state.
+
+**Fix:** ORD-1 determines whether the two can genuinely coexist and whether a reliable marker
+distinguishes "collar call tagged `overlay_cc`" from "standalone `overlay_cc`", then decides
+the correct `_overlay_type_groups` behaviour; ORD-2 implements it so a standalone CC gets its
+own group/row and the collar total excludes it, without regressing BUG-030's own test.
+
+---
+
 ## BUG-043 — "Net P&L" in close notifications has no stable meaning: inception-cumulative for IC v1/v2, cycle-only for collar, absent for CSP
 
 | Field | Value |

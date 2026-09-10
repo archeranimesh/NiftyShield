@@ -5,11 +5,11 @@
 > After each task: set `SHA:` on the task line + tick the box, flip this sub-story's row in the
 > epic `README.md` **Stories** table, add one line to `TODOS.md` Session Log.
 
-Sub-story 3 (last) of the `telegram-message-unification/` epic. Depends on `unified-entry-message/` +
+Sub-story 3 of the `telegram-message-unification/` epic. Depends on `unified-entry-message/` +
 `overlay-entry-message/` (both shipped — sub-stories are not individually archived) — this story
 assumes `src/notifications/entry_message.py` and the sign-aware `_credit_line` already exist and
-mirrors their structure. UXM-8 is the epic close: it archives the whole `telegram-message-unification/`
-folder.
+mirrors their structure. UXM-8 is a sub-story close only; `overlay-recovery-digest/` ORD-4 archives
+the whole `telegram-message-unification/` folder.
 
 No DB schema change — no `schema.md`. Cycles are reconstructed from the `paper_trades`
 ledger; exit reasons come from `paper_exit_events`, which already exists.
@@ -393,11 +393,11 @@ PP components. Depends on UXM-1's `resolve_target` / `LegGroup` in `src/paper/cy
 
 ---
 
-## UXM-8 — Docs close
+## UXM-8 — Sub-story docs close
 
 **Files to change:** `CONTEXT.md`, `src/notifications/CLAUDE.md`, `DECISIONS.md`,
-`docs/plan/telegram-message-unification/README.md`, `docs/plan/README.md`, `TODOS.md`,
-`docs/archive/TODOS_ARCHIVE.md`, plus the epic-folder `git mv`. Targeted `Edit` only, never `Write`.
+`docs/plan/telegram-message-unification/README.md`, `TODOS.md`. Targeted `Edit` only, never `Write`.
+**No epic archive** — `overlay-recovery-digest/` ORD-4 archives the whole epic folder.
 
 1. `CONTEXT.md` "What Exists" `src/notifications/` bullet — add
    `exit_message.py (shared close-confirmation renderer — IC/CSP/CC/PP/Collar + this-exit /
@@ -413,15 +413,10 @@ PP components. Depends on UXM-1's `resolve_target` / `LegGroup` in `src/paper/cy
    (`short_decay_pct`, `None` for pure-long PP) not the net `decay_pct`; `auto_close.py` +
    strategy-class + recorder all on one renderer; `pre_market_brief.py` migrated off HTML
    with the overlay broken into CC / Collar / PP.
-4. Epic close (UXM-8 is the last sub-story — archive the **whole epic**, per `docs/plan/README.md`
-   §Conventions *Completion → archive*):
-   - `docs/plan/telegram-message-unification/README.md` — flip the `unified-exit-message/` Stories row
-     to ✅ and set the **Epic done when** block satisfied.
-   - `git mv docs/plan/telegram-message-unification docs/archive/plan/telegram-message-unification`.
-   - `docs/plan/README.md` — collapse the `telegram-message-unification/` epic entry under
-     `## Active Epics` to a one-line `✅ Archived → docs/archive/plan/telegram-message-unification/`.
-   - `TODOS.md` — delete the Feature Backlog epic line, append it to `docs/archive/TODOS_ARCHIVE.md`
-     under a dated heading; add a Session Log line.
-   One commit.
+4. `docs/plan/telegram-message-unification/README.md` — flip the `unified-exit-message/` row in the
+   **Stories** table to ✅ with the closing SHA. Do **not** touch the `docs/plan/README.md` epic row,
+   the **Epic done when** block, or archive anything — `overlay-recovery-digest/` is still open.
+5. `TODOS.md` — add a Session Log line (the Feature Backlog line is the epic's — it stays until
+   ORD-4).
 
-**Commit:** `docs: close telegram-message-unification epic (UEM/OEM/UXM)`
+One commit. **Commit:** `docs: close unified-exit-message sub-story (UXM-1..8)`

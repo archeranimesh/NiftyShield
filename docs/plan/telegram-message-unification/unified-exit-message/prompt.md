@@ -119,10 +119,9 @@ broken into CC / Collar / PP.
 - **UXM-7** — Redesign `scripts/pre_market_brief.py`: drop the broken `<b>` HTML, MarkdownV2
   fenced table, `strategy_label()` names, `paper_nifty_overlay` broken into a parent row +
   CC / Collar / PP sub-rows (via UXM-1's `resolve_target`), a portfolio `Total` row.
-- **UXM-8** — Epic close: `CONTEXT.md`, `src/notifications/CLAUDE.md`, `DECISIONS.md`, the epic
-  `README.md` (last Stories row + **Epic done when**); `git mv` the whole
-  `telegram-message-unification/` folder to `docs/archive/plan/`; collapse the `docs/plan/README.md`
-  epic entry to a pointer; move the `TODOS.md` Feature Backlog line to `TODOS_ARCHIVE.md`.
+- **UXM-8** — Sub-story docs close: `CONTEXT.md`, `src/notifications/CLAUDE.md`, `DECISIONS.md`; flip
+  the `unified-exit-message/` row in the epic `README.md` **Stories** table to ✅; `TODOS.md` Session
+  Log. No folder archive — `overlay-recovery-digest/` ORD-4 archives the epic.
 
 ## Definition of done
 
@@ -133,7 +132,8 @@ PP, Collar) and both paths (strategy-class + `auto_close.py`) emit it; `record_p
 `src/strategy/`. Win rate is shown only at `closed_count >= 5`. Send failure is logged and
 never crashes a tick or a recording. `pre_market_brief.py` sends a MarkdownV2 fenced table
 (no `<b>`) with the overlay split into CC / Collar / PP and a portfolio total. All unit tests
-green. Docs updated; at UXM-8 the whole `telegram-message-unification/` epic folder is archived.
+green. Sub-story docs updated and its epic `README.md` Stories-table row flipped to ✅ — the epic
+folder is archived only after `overlay-recovery-digest/` ORD-4.
 
 ## Perspectives not covered
 

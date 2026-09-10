@@ -4,9 +4,10 @@ Work top-down. Find the first unchecked `- [ ]` and do only that task.
 Each task = one commit unless noted. See `prompt.md` for why the story exists;
 see `stories.md` for the per-task implementation spec.
 
-Sub-story 3 (last) of the `telegram-message-unification/` epic. Depends on `unified-entry-message/` +
+Sub-story 3 of the `telegram-message-unification/` epic. Depends on `unified-entry-message/` +
 `overlay-entry-message/` — do not start UXM-1 before every UEM and OEM box is ticked (both
-Stories-table rows in the epic `README.md` are ✅). UXM-8 is the epic close.
+Stories-table rows in the epic `README.md` are ✅). UXM-8 is a sub-story close only —
+`overlay-recovery-digest/` ORD-4 archives the epic.
 
 **Open: UXM-1, UXM-2, UXM-3, UXM-4, UXM-5, UXM-6, UXM-7, UXM-8.**
 
@@ -33,10 +34,10 @@ Stories-table rows in the epic `README.md` are ✅). UXM-8 is the epic close.
       house-style table, `strategy_label()` names, `paper_nifty_overlay` broken into CC /
       Collar / PP sub-rows (via UXM-1's `resolve_target`), portfolio total row.
       | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
-- [ ] **UXM-8** — Epic close: `CONTEXT.md` / `src/notifications/CLAUDE.md` / `DECISIONS.md`; flip the
-      last epic `README.md` Stories row + **Epic done when**; `git mv` the whole
-      `telegram-message-unification/` folder to `docs/archive/plan/`; collapse the `docs/plan/README.md`
-      epic entry to a pointer; move the `TODOS.md` Feature Backlog line to `TODOS_ARCHIVE.md`.
+- [ ] **UXM-8** — Sub-story docs close: `CONTEXT.md` / `src/notifications/CLAUDE.md` / `DECISIONS.md`;
+      flip the `unified-exit-message/` row in the epic `README.md` **Stories** table to ✅ with the
+      closing SHA; `TODOS.md` Session Log line. No folder archive — `overlay-recovery-digest/` ORD-4
+      archives the epic.
       | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: —
 
 ## Story done when
@@ -67,14 +68,13 @@ Stories-table rows in the epic `README.md` are ✅). UXM-8 is the epic close.
   (empty sub-group → `—`), and a portfolio `Total` row that counts the overlay once; tests
   green.
 - **UXM-8** — `CONTEXT.md`, `src/notifications/CLAUDE.md`, `DECISIONS.md` reflect the shared exit
-  renderer + `cycle_stats` + the brief redesign; every epic `README.md` Stories row is ✅ and its
-  **Epic done when** block is satisfied; the epic folder is archived to
-  `docs/archive/plan/telegram-message-unification/`; the `docs/plan/README.md` epic entry is a
-  one-line pointer; the `TODOS.md` Feature Backlog line moved to `TODOS_ARCHIVE.md`.
+  renderer + `cycle_stats` + the brief redesign; the `unified-exit-message/` row in the epic
+  `README.md` **Stories** table is ✅ with the closing SHA; `TODOS.md` Session Log line added. The
+  epic folder is **not** archived here — `overlay-recovery-digest/` ORD-4 does that.
 
 ## After each task
 
 Set `SHA:` to the real commit SHA on the task line and tick the box.
 Then flip this sub-story's row in the epic `README.md` **Stories** table and add one line to
-`TODOS.md` Session Log. At UXM-8, follow `docs/plan/README.md` §Conventions *Completion → archive*
-for the whole epic folder.
+`TODOS.md` Session Log. The epic folder is archived only after the last sub-story
+(`overlay-recovery-digest/` ORD-4) — see the epic `prompt.md` Step 4.
