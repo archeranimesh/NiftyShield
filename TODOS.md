@@ -99,6 +99,11 @@ rot them.
     (DHR-1..4 — remove Dhan holdings / P&L / the Dhan Options block from the snapshot; keep the Dhan
     login flow + client + tables wired). No `schema.md`. `/work` routes via the epic `prompt.md`.
     Requested by Animesh 2026-09-10.
+25. **signals-entrypoint-consolidation** — `docs/plan/signals-entrypoint-consolidation/` — next **SEC-1**.
+    **Blocked until `signals-paper-track/` is archived.** One trading-day guard + one `DailySignal.is_actionable`
+    predicate across the four signal entrypoints, merge `record_signal_outcome` + `signal_report` → one 16:00
+    `signal_eod` (2 crons → 1), no pipeline / execution-layer behaviour change. From the 2026-09-10 SPT-plan review.
+    No `schema.md`. Requested by Animesh 2026-09-10.
 
 ## Open Bugs
 
@@ -138,6 +143,12 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-10] Planning — signals-paper-track SPT-6/7 rewritten + follow-up story `signals-entrypoint-consolidation` created. A Plan-agent review of the entrypoint topology (asked by Animesh: too
+  many overlapping signal crons, logic will diverge) concluded the paper track adds **zero** new crons — SPT-6 becomes a guarded paper-entry tail-call inside `morning_signal` (not a 09:35 cron),
+  `signal_paper_entry.py` a manual backfill tool, SPT-7 a manual report. `src/strategy/signal_exit.py` becomes the single SL/target-constants + evaluator home (created in SPT-3, extended in SPT-5);
+  all `65` literals → `paper.constants.LOT_SIZE`. Deferred to the new story: `DailySignal.is_actionable` predicate, `market_calendar.guard_trading_day()`, merge `record_signal_outcome` +
+  `signal_report` → one 16:00 `signal_eod` (2 crons → 1). New story is blocked until `signals-paper-track/` is archived. Docs-only: `signals-paper-track/{prompt,tasks,stories}.md`,
+  `signals-entrypoint-consolidation/{prompt,tasks,stories}.md`, `TODOS.md`, `docs/plan/README.md`.
 - [2026-09-10] Ops fix (`a8e74f3`) — 16:00 `record_signal_outcome --auto` cron crashed with `IndexError: No item with that key` on `row["cost_usd"]`: SCT-2 (`c7efe54`, deployed 13:34)
   added the `signal_responses` cost columns via `init_db`'s idempotent ALTER loop, but `record_signal_outcome` / `signal_report` construct `SignalStore` and never call `init_db()`, so the
   ALTERs never hit the live DB (yesterday's manual `ALTER` covered only `daily_signals.entry_premium`). Fixed live DB with the three `ALTER TABLE signal_responses` columns, backfilled today's

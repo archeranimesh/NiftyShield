@@ -123,7 +123,13 @@ as three nullable columns on `signal_responses`, aggregated by `SignalStore.get_
 daily `DailySignal` as a long monthly option (near-month, ≤ 7-DTE roll), manage it intraday against a fixed SL −30 % / target +50 %, exit on a hit or square off by 15:00, log the full mark path, and
 record every entry + exit for a 6-month evaluation window that gates go-live. SPT-1 ruled 2026-09-09 (council q17, `docs/archive/council/strategy/2026-09-09_signals-paper-track-execution-layer.md`):
 module boundary **A** — `paper_signal_track_v1` `PaperStrategy` on the shared `StrategyMonitor` / `PaperExecutor` / `PaperStore`; pure `src/strategy/signal_exit.py`; Phase 1 fixed-only
-(`TRAILING_STOP` reserved); 30 s cadence; two-tier recalibration; go-live gate G1–G9 all-pass. SPT-5's exit message replaces `signals/` S5.5a's Phase-1 interim outcome message.
+(`TRAILING_STOP` reserved); 30 s cadence; two-tier recalibration; go-live gate G1–G9 all-pass. SPT-5's exit message replaces `signals/` S5.5a's Phase-1 interim outcome message. SPT-6 adds **no new
+cron** — the paper entry is a guarded tail-call inside the 09:30 `morning_signal` run, `scripts/signal_paper_entry.py` is a manual backfill tool, SPT-7 a manual report (2026-09-10 Plan-agent topology
+review). Entrypoint-dedup cleanup deferred to `signals-entrypoint-consolidation/`.
+
+**`signals-entrypoint-consolidation/`** · ⬜ Not started · **blocked until `signals-paper-track/` archived** · next: **SEC-1** One trading-day guard (`market_calendar.guard_trading_day`) + one
+`DailySignal.is_actionable` predicate across the four signal entrypoints, and merge `record_signal_outcome.py` + `signal_report.py` into one 16:00 `scripts/signal_eod.py` (2 crons → 1). No
+signal-pipeline or SPT-execution-layer behaviour change — the idealized `SignalOutcome` baseline row is written unchanged. From the 2026-09-10 SPT-plan review. No `schema.md`.
 
 **`full-repo-review/`** · ✅ Complete — see `full-repo-review-followups/` One-time multi-model, multi-persona review of design docs, source, tests, the AI-collaboration protocol, and per-job-type
 surface routing (FR-1..9).
