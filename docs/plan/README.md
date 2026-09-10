@@ -73,6 +73,13 @@ Cross-strategy paper-trade EOD digest to Telegram. PT-1 (spec `d1ae760`) + PT-2 
 + `scripts/eod_pt_summary.py` + `43 15` cron, `77dc160`) + PT-3 (docs close, `dac18ea`). Runs alongside
 `scripts/eod_summary.py`, not a replacement (DECISIONS.md §P&L & Reporting, 2026-09-07).
 
+**`unified-entry-message/`** · ⬜ Not started · next: **UEM-1** (generalize the IC entry renderer)
+One shared lean entry-confirmation renderer for all paper strategies. `src/notifications/ic_entry_message.py`
+→ `entry_message.py` / `EntryMessage` with a `headline_label` field and optional `ivr`/`mode`/`expiry_type`
+(UEM-1, IC output unchanged) → lean CSP entry Telegram card from `scripts/record/record_paper_trade.py`
+behind `--notify`, on a successful open only (UEM-2) → docs close (UEM-3). IC + CSP only; overlays and
+`nifty_track_comparison_v1` are a deliberate follow-up. No DB schema change. Requested by Animesh 2026-09-10.
+
 **`risk-gamma-phase-a/`** · 🔄 In progress · next: **B2.2** (chain fetch + field computation)
 Risk delta gate (done) + Near-Expiry Gamma Buy `gamma_daily_watch.py`.
 

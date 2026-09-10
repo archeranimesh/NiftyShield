@@ -81,6 +81,11 @@ rot them.
     audit / close, one chart per IC variation — no option model, ships now) → `chart-model-overlay/`
     (T+0 curve + ±1σ/±2σ bands + POP — blocked on `greeks-bs-fallback/` GF-2 + GF-3).
     Priority relative to items 13–21 is Animesh's call.
+23. **Unified entry message** — `docs/plan/unified-entry-message/` — next **UEM-1** (generalize
+    `ic_entry_message.py` → shared `entry_message.py` / `EntryMessage`). One lean entry-confirmation
+    renderer for all paper strategies; IC migrated onto it, CSP given the entry Telegram card it lacks
+    (via `record_paper_trade.py --notify`). IC + CSP only — overlays / track-comparison deferred.
+    Requested by Animesh 2026-09-10.
 
 ## Open Bugs
 
