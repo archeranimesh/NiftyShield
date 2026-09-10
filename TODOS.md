@@ -91,6 +91,13 @@ rot them.
     `short_decay_pct` + `cycle_stats` + `resolve_target` into `src/paper/cycle_pnl.py`; this-exit /
     cycle / inception P&L footer + win-rate; `pre_market_brief.py` redesign). No DB schema change.
     `/work` routes via the epic `prompt.md`. Requested by Animesh 2026-09-10.
+24. **Finideas decommission** — `docs/plan/finideas-decommission/` — next **FD-1** (pre-delete audit).
+    Full removal of the `finideas_ilts` + `finrakshak` strategies after Animesh wound down the Finideas
+    product 2026-09-10: delete the `src/portfolio/strategies/` provider layer, strip options / hedge /
+    ETF from `_build_portfolio_summary` + the daily-snapshot Telegram message, `scripts/dev/
+    decommission_finideas.py` CLI to hard-delete every Finideas row from `strategies` / `legs` /
+    `trades` / `daily_snapshots` (history option A — no archive), purge seed + reference docs. No
+    `schema.md`. FD-1..FD-7, single story. Requested by Animesh 2026-09-10.
 
 ## Open Bugs
 

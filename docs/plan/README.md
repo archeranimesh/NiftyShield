@@ -81,6 +81,12 @@ five hand-rolled shapes; `short_decay_pct` gross-short-premium decay + `cycle_st
 closed cycles; `pre_market_brief.py` redesigned to a MarkdownV2 fenced table with the overlay broken into CC / Collar / PP). No DB schema change anywhere. Priority + dependencies + scope decisions in
 the epic's own `README.md`. Requested by Animesh 2026-09-10.
 
+**`finideas-decommission/`** · ⬜ Not started · next: **FD-1** (pre-delete audit)
+Full removal of the Finideas strategies (`finideas_ilts`, `finrakshak`) — Animesh wound down the product 2026-09-10. Deletes the `src/portfolio/strategies/` provider layer (finideas is the only
+provider), strips the options / FinRakshak-hedge / ETF terms from `_build_portfolio_summary` + the daily-snapshot Telegram message, adds a `scripts/dev/decommission_finideas.py` CLI that hard-deletes
+every Finideas row from `strategies` / `legs` / `trades` / `daily_snapshots` (history option A — no archive), and purges the seed / reference docs. All-time `Total P&L` is recomputed without Finideas.
+No `schema.md` (straight `DELETE`). FD-1..FD-7, single story. Requested by Animesh 2026-09-10.
+
 **`risk-gamma-phase-a/`** · 🔄 In progress · next: **B2.2** (chain fetch + field computation)
 Risk delta gate (done) + Near-Expiry Gamma Buy `gamma_daily_watch.py`.
 
