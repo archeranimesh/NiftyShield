@@ -62,17 +62,23 @@ value, and `daily_snapshot.py` no longer calls the Dhan portfolio or options fet
 
 ## Task overview
 
-- **DHR-1** — Remove the `dhan` term from `PortfolioSummary` and the `dhan_summary` parameter
-  + all equity/bond value/basis/pnl/day-delta contributions from `_build_portfolio_summary`
-  (`total_value`, `total_invested`, `total_pnl`, `total_day_delta`, the `any_delta` guard).
-- **DHR-2** — Remove Dhan from `_format_combined_summary` (both paths): the `├ Dhan Equity` /
-  `└ Dhan Bonds` waterfall lines, the fallback `Dhan Equity` / `Dhan Bonds` sections, the
-  `NOTE: Dhan unavailable` line, the `[unavailable]` placeholders; drop the appended
-  `📊 Dhan Options (Intraday)` section and the `_print_combined_summary` `dhan_summary` arg.
+Target: the epic README **Target message format** — read it first; it is the spec for
+DHR-1's totals math and DHR-2's layout.
+
+- **DHR-1** — `PortfolioSummary` + `_build_portfolio_summary`: drop the `dhan` field +
+  `dhan_summary` param + every Dhan term; move Nuvama options `net_pnl` **out of**
+  `total_value` / `total_pnl` / `total_invested` and **into** `total_day_delta` + the
+  `has_deltas` guard (decisions 2 + the options-in-Today fix).
+- **DHR-2** — Rewrite `_format_combined_summary` to the Target message format: one fenced
+  block, `📊 Today` / `📦 Holdings` / `📈 Nuvama options`, no Dhan, no waterfall/fallback
+  split, no `▲/▼` weight-percent; `Realized month` MTD-inclusive; `Nifty H/L` when both
+  present. Replace the golden-string tests wholesale. Drop the `_print_combined_summary`
+  `dhan_summary` arg.
 - **DHR-3** — `scripts/portfolio/daily_snapshot.py`: remove the Dhan portfolio
   snapshot-fetch/record blocks (both paths), the Dhan options blocks (both paths), the
   `dhan_summary` / `dhan_options_section` wiring, and the Dhan holdings pre-fetch + piggyback
-  (nothing consumes the keys once Finideas + Dhan holdings are gone). Keep
+  (nothing consumes the keys once Finideas + Dhan holdings are gone). Send the now-fenced
+  `summary_text` as-is — no `escape_markdown` of the whole string. Keep
   `load_dhan_credentials` importable; leave `src/auth/dhan_verify` + `src/dhan/` untouched.
 - **DHR-4** — Epic close: `CONTEXT.md`, `src/portfolio/CLAUDE.md`, `DECISIONS.md`,
   `DB_REGISTRY.md`, the epic `README.md` (last Stories row + **Epic done when**); `git mv`
@@ -82,13 +88,15 @@ value, and `daily_snapshot.py` no longer calls the Dhan portfolio or options fet
 
 ## Definition of done
 
-The daily portfolio snapshot (waterfall and fallback) renders with no `Dhan Equity` / `Dhan
-Bonds` line, no `NOTE: Dhan unavailable`, no `[unavailable]` Dhan placeholder, and no
-`📊 Dhan Options (Intraday)` block — MF + Nuvama bonds + Nuvama options only.
+The daily portfolio snapshot matches the epic README **Target message format** exactly — one
+fenced block, `📊 Today` / `📦 Holdings` / `📈 Nuvama options`, no Dhan anything, Nuvama
+options P&L out of `Total` value, `Realized month` MTD-inclusive, `Nifty H/L` when available.
 `PortfolioSummary` has no `dhan` field; `_build_portfolio_summary` and
-`_format_combined_summary` take no `dhan_summary` argument. `scripts/portfolio/daily_snapshot.py`
-makes no Dhan portfolio or options fetch call. `src/auth/dhan_verify` and every `src/dhan/`
-module import cleanly and their tests pass unchanged. The Dhan DB tables still exist. All
+`_format_combined_summary` take no `dhan_summary` argument; `total_value` / `total_pnl`
+exclude options P&L; `total_day_delta` includes it. `scripts/portfolio/daily_snapshot.py`
+makes no Dhan portfolio or options fetch call and sends the fenced message without
+`escape_markdown`. `src/auth/dhan_verify` and every `src/dhan/` module import cleanly and
+their tests pass unchanged. The Dhan DB tables still exist. All
 unit tests green. Epic docs updated and the whole epic folder archived per §Conventions
 *Completion → archive*.
 

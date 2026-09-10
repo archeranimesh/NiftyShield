@@ -126,7 +126,12 @@ Session Log).
 
 ---
 
-## FD-4 — Rework the snapshot formatter
+## FD-4 — Remove Finideas lines from the snapshot formatter
+
+**Interim step.** FD-4 only *deletes* the Finideas/hedge/ETF lines — Dhan lines stay, the
+waterfall/fallback split stays. `dhan-holdings-removal/` DHR-2 then rewrites the whole
+function to the epic README **Target message format**. Do not reshape here; just remove and
+keep the rest byte-stable.
 
 **Files to change:**
 - `src/portfolio/formatting.py` — `_format_combined_summary` (waterfall + fallback),
@@ -152,8 +157,8 @@ Session Log).
    term. If MF is then the only Equity child, collapse `Equity` into a single `MF` line
    (decide + note).
 4. The `equity_pct` / `bonds_pct` weight figures: recompute against the new `total_value`.
-   (Out of scope to fix the "arrow + weight%" confusion — that is a separate cleanup; keep
-   the existing format, just correct inputs.)
+   Do **not** redesign the "arrow + weight%" here — `dhan-holdings-removal/` DHR-2 drops it
+   when it rewrites the formatter to the Target message format. Just correct the inputs.
 
 **Fallback path:**
 

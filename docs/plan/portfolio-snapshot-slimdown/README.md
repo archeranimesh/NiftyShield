@@ -43,10 +43,60 @@ Status: ⬜ Not started · 🔄 In progress · ✅ Done. This column is the epic
   functions in.
 - **The snapshot must render with a single remaining source.** After each removal, a snapshot with only MF (or only MF + one bond source) must be well-formed — no empty section headers, no dangling
   separators, no `NOTE:` line referring to a removed source.
-- **`total_value` / `total_invested` / `total_pnl` / `total_day_delta` recompute** from the surviving terms only. `total_pnl_pct` stays `total_pnl / total_invested`.
-- **The waterfall and fallback formatter paths both change** in each sub-story — do not fix one and leave the other.
+- **`total_value` / `total_invested` / `total_pnl` recompute** from MF + Nuvama bonds only (Nuvama options P&L is **not** a value term — see *Target message format*). `total_day_delta` = MF delta +
+  bond delta + Nuvama options `net_pnl`. `total_pnl_pct` stays `total_pnl / total_invested`.
+- **The waterfall and fallback formatter paths both change** in each sub-story — do not fix one and leave the other. `dhan-holdings-removal/` DHR-2 then collapses the two into the single *Target
+  message format* layout.
 - **Golden-string / snapshot tests are updated in the same commit** as the code that changes the output — never a separate "fix the tests" commit.
 - **Sub-stories are not individually archived.** Each sub-story close flips its row in this file's **Stories** table; the whole epic folder is archived in one move at DHR-4.
+
+## Target message format
+
+The north-star output after both sub-stories. `finideas-decommission/` FD-4 is an interim step toward this (Dhan lines still present); `dhan-holdings-removal/` DHR-1 + DHR-2 land it exactly. This
+supersedes the current waterfall / fallback split — there is now **one layout** (the "no prior-day data" case just omits the `📊 Today` block).
+
+Decisions confirmed with Animesh, 2026-09-10: (1) render as a single MarkdownV2 **fenced code block** — content emitted literally, no per-value escaping, columns align; (2) Nuvama options P&L is
+**not** a portfolio-value term — `💰 Total` is MF value + Nuvama bond value only, and its P&L excludes options; (3) `Realized month` is **month-to-date including today** (`monthly_realized_pnl +
+total_realized_pnl_today`); (4) show a `Nifty H/L` line when `nifty_high` / `nifty_low` are both present.
+
+```
+🟢 NiftyShield · 2026-09-09
+
+📊 Today                     +2,52,265
+   Mutual funds              +2,45,120
+   Nuvama bonds                 +5,126
+   Nuvama options               +2,019
+   ──────────────────────────────────
+   Net                      +2,52,265
+
+📦 Holdings
+   Mutual funds    ₹41,90,300   +6,05,900   +16.9%
+   Nuvama bonds    ₹ 2,22,882     +12,656    +6.0%
+   ──────────────────────────────────
+   Total           ₹44,13,182   +6,18,556   +16.3%
+
+📈 Nuvama options
+   Open M2M                     +2,019
+   M2M today  H/L        +2,019 / -3,460
+   Nifty      H/L      24,150 / 23,980
+   Realized today                   +0
+   Realized month (MTD)        +25,683
+   Realized total            +1,41,865
+```
+
+Field sources: `📊 Today` = `total_day_delta` = `mf_day_delta` + `nuvama_bonds.total_day_delta` + `nuvama_options.net_pnl` (`net_pnl` = `total_unrealized_pnl + total_realized_pnl_today` — **newly
+wired into the daily total**; today it feeds `total_value` / `total_pnl` but not the delta). `📦 Holdings` rows = `mf_pnl.total_current_value` / `.total_pnl` / `.total_pnl_pct` and
+`nuvama_bonds.total_value` / `.total_pnl` / `.total_pnl_pct`; `Total` = their sums (`total_value` = MF value + bond value; `total_pnl` likewise; `total_pnl_pct` = `total_pnl / total_invested` where
+`total_invested` = MF invested + bond basis). `📈 Nuvama options`: `Open M2M` = `total_unrealized_pnl`; `M2M today H/L` = `intraday_high` / `intraday_low`; `Nifty H/L` = `nifty_high` / `nifty_low`
+(omit the line if either is `None`); `Realized today` = `total_realized_pnl_today`; `Realized month (MTD)` = `monthly_realized_pnl + total_realized_pnl_today`; `Realized total` =
+`total_realized_pnl_today + cumulative_realized_pnl`.
+
+Degraded states: a failed source renders `[fetch failed]` on its `📊 Today` and `📦 Holdings` lines, is excluded from `Net` and `Total`, and adds one `⚠ <source> excluded` line under `Total`. Nuvama
+options unavailable → omit the whole `📈 Nuvama options` section and the `Nuvama options` row in `📊 Today`. No prior-day data (`has_deltas` false) → omit the entire `📊 Today` block; lead with
+`📦 Holdings`. The header 🟢/🔴 follows the sign of `total_day_delta` (or `total_pnl` when there is no delta).
+
+Not in this epic's scope but noted: the fenced block means `daily_snapshot.py` must stop wrapping the whole string in `escape_markdown()` and instead emit ```` ``` ```` fences with literal content
+(DHR-2 / DHR-3).
 
 ## Supersession / coordination
 
@@ -59,6 +109,7 @@ Status: ⬜ Not started · 🔄 In progress · ✅ Done. This column is the epic
 - **`finideas-decommission`** — `get_all_strategies()` returns `[]`; the `src/portfolio/strategies/finideas/` package is gone; the snapshot (both paths) has no `Finideas P&L`, no `Derivatives` line,
   no `🛡 Hedge (FinRakshak)` block, no ETF value; `scripts/dev/decommission_finideas.py --apply` has removed every Finideas row from `strategies` / `legs` / `trades` / `daily_snapshots`;
   `DB_REGISTRY.md` updated.
-- **`dhan-holdings-removal`** — the snapshot (both paths) has no `Dhan Equity` / `Dhan Bonds` line, no `NOTE: Dhan unavailable`, and no `📊 Dhan Options (Intraday)` block; `PortfolioSummary` has no
-  `dhan` term; `_build_portfolio_summary` / `_format_combined_summary` take no `dhan_summary` argument; `daily_snapshot.py` no longer builds a Dhan section; `src/auth/dhan_verify` and `src/dhan/` are
-  untouched and still import cleanly; the Dhan DB tables are retained.
+- **`dhan-holdings-removal`** — the daily snapshot matches the *Target message format* above exactly: one fenced block, `📊 Today` / `📦 Holdings` / `📈 Nuvama options`, no Dhan anything, options P&L out
+  of `Total` value, `Realized month` MTD-inclusive, `Nifty H/L` when available. `PortfolioSummary` has no `dhan` term; `_build_portfolio_summary` / `_format_combined_summary` take no `dhan_summary`
+  argument; `daily_snapshot.py` builds no Dhan section and fences the message instead of `escape_markdown`-ing it; `src/auth/dhan_verify` and `src/dhan/` are untouched and still import cleanly; the
+  Dhan DB tables are retained.

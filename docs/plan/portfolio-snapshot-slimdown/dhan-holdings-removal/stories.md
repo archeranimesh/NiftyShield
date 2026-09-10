@@ -11,6 +11,12 @@ Sub-story 2 (last) of the `portfolio-snapshot-slimdown/` epic. Depends on
 and `_format_combined_summary` in. No `schema.md` — no table is dropped; the Dhan tables are
 retained and simply stop being written. DHR-4 is the epic close.
 
+**This sub-story lands the epic README *Target message format*.** Read that section before
+DHR-1 — it is the authoritative spec for the final layout, the field sources, the degraded
+states, and the four confirmed decisions (fenced block · options P&L out of `Total` value ·
+`Realized month` MTD-inclusive · `Nifty H/L` when available). DHR-1 = the summary-model side,
+DHR-2 = the formatter side, DHR-3 = the send-path (fence, not escape).
+
 Commit order = task order: DHR-1 (summary model) → DHR-2 (formatter) → DHR-3 (orchestration)
 → DHR-4 (docs + epic archive).
 
@@ -31,79 +37,101 @@ Commit order = task order: DHR-1 (summary model) → DHR-2 (formatter) → DHR-3
 - `search_graph("DhanPortfolioSummary")` — confirm the only summary-layer consumer is here
   (the `src/dhan/` producers stay).
 
-**What to implement:**
+**What to implement (target: epic README *Target message format*, field-sources paragraph):**
 
 1. Remove the `dhan` field from `PortfolioSummary` and the `dhan_summary` parameter from
    `_build_portfolio_summary`.
-2. Drop every Dhan term:
-   - `dhan_eq_value` / `dhan_eq_basis` / `dhan_bd_value` / `dhan_bd_basis` locals
-   - the `dhan_summary.equity_pnl` / `.bond_pnl` additions in `total_pnl`
-   - the `dhan_summary.equity_day_delta` / `.bond_day_delta` additions in `total_day_delta`
-     and the `any_delta` guard
-   - `total_value` / `total_invested` lose the Dhan additions
-3. After this, `_build_portfolio_summary` sums: MF + Nuvama bonds + Nuvama options for
-   `total_value` / `total_pnl`; MF + Nuvama bond deltas for `total_day_delta`.
-4. Fix the callers' signatures (they are updated fully in DHR-3, but the module must import
-   and type-check now — drop the `dhan_summary=` kwarg at the call sites in
-   `_format_combined_summary` and `daily_snapshot.py` in this commit if needed to keep green,
-   or land DHR-1..DHR-3 as one sequence and note it).
+2. Drop every Dhan term: `dhan_eq_value` / `dhan_eq_basis` / `dhan_bd_value` /
+   `dhan_bd_basis` locals; the `dhan_summary.equity_pnl` / `.bond_pnl` additions in
+   `total_pnl`; the `dhan_summary.equity_day_delta` / `.bond_day_delta` additions in
+   `total_day_delta` and the `any_delta` guard; the Dhan additions in `total_value` /
+   `total_invested`.
+3. **Move Nuvama options out of the portfolio-value terms** (decision 2): `total_value` =
+   MF value + Nuvama bond value; `total_pnl` = `mf_pnl.total_pnl` +
+   `nuvama_bonds.total_pnl` — **remove** the `nuvama_options_summary.net_pnl` term from both.
+   `total_invested` = MF invested + Nuvama bond basis.
+4. **Wire Nuvama options into `total_day_delta`** (it is absent today): `total_day_delta` =
+   `mf_day_delta` + `nuvama_bonds.total_day_delta` + `nuvama_options.net_pnl`. Add
+   `nuvama_options` presence to the `any_delta` / `has_deltas` guard so a run with only an
+   options move still shows the `📊 Today` block.
+5. If the summary needs a field for the options daily contribution, expose
+   `nuvama_options.net_pnl` via a `@property` on `PortfolioSummary` or read it straight from
+   `summary.nuvama_options` in the formatter — do not duplicate the value into a stored
+   field.
+6. `strategies` / `strategy_pnls` / `prices` params of `_build_portfolio_summary` are dead
+   after `finideas-decommission/` FD-3 — if FD-3 did not already remove them, do it here and
+   fix the `daily_snapshot.py` + `SnapshotService` callers.
 
 **Tests (no network, no real DB):**
-- `test_build_summary_mf_and_bonds_only` — MF + Nuvama bonds input → correct `total_value` /
-  `total_pnl` / `total_day_delta`, no `dhan` attribute.
+- `test_build_summary_mf_and_bonds_only` — MF + Nuvama bonds input → `total_value` /
+  `total_pnl` = MF + bond sums, no `dhan` attribute.
+- `test_total_excludes_options_pnl` — with a non-zero `nuvama_options.net_pnl`, `total_value`
+  and `total_pnl` are unchanged vs. the options-absent case.
+- `test_today_includes_options_net_pnl` — `total_day_delta` = MF delta + bond delta + options
+  `net_pnl`; an options-only move still sets `has_deltas` true.
 - `test_build_summary_all_none` — every source `None` → zeros, `has_deltas` false path holds.
 
-**Commit:** `refactor(portfolio): drop Dhan terms from PortfolioSummary`
+**Commit:** `refactor(portfolio): drop Dhan + reshape totals for the slimmed snapshot`
 
 ---
 
-## DHR-2 — Remove Dhan from the snapshot formatter
+## DHR-2 — Rewrite the formatter to the Target message format
+
+`_format_combined_summary` is rebuilt to emit the single layout in the epic README *Target
+message format* — this replaces the waterfall / fallback split, drops all Dhan lines, and
+adds the `📦 Holdings` + promoted `📈 Nuvama options` sections. The fence characters are
+added here (the string starts with ```` ``` ```` and ends with ```` ``` ````); DHR-3 stops
+`daily_snapshot.py` from escaping it.
 
 **Files to change:**
-- `src/portfolio/formatting.py` — `_format_combined_summary` (waterfall + fallback)
-- `scripts/portfolio/daily_snapshot.py` — `_print_combined_summary` helper signature
-  (`dhan_summary` param removed) — coordinate with DHR-3
-- `tests/unit/portfolio/test_formatting*.py` — every golden-string assertion
+- `src/portfolio/formatting.py` — `_format_combined_summary` (rewrite; `_delta` / `_pnl_str`
+  / `fmt_inr` helpers reused), delete `_format_protection_stats` if `finideas-decommission/`
+  FD-4 somehow left it
+- `scripts/portfolio/daily_snapshot.py` — `_print_combined_summary` helper: drop the
+  `dhan_summary` param (full Dhan-fetch removal is DHR-3)
+- `tests/unit/portfolio/test_formatting*.py` — replace the golden strings wholesale
 
 **Before any code:**
-- `sed -n` the waterfall Equity / Bonds blocks and the fallback `── Equity ──` /
-  `── Bonds ──` sections as FD-4 left them — you are deleting specific Dhan lines, keep the
-  rest byte-stable.
-- `search_graph("format_options_section")` — confirm the only caller to remove is in
-  `daily_snapshot.py` (the function itself stays in `src/dhan/positions.py`).
+- Re-read the epic README *Target message format* — the layout, the field-sources
+  paragraph, and the degraded-state rules are the spec.
+- `get_code_snippet("_format_combined_summary")` — as `finideas-decommission/` FD-4 left it.
 
-**What to implement (waterfall path):**
+**What to implement:**
 
-1. Delete the `├ Dhan Equity` / `└ Dhan Bonds` child lines and their `elif not
-   summary.dhan_available: … [unavailable]` branches.
-2. `eq_subtotal` / `bonds_subtotal` / `eq_day` / `bd_day` lose their Dhan terms. If a segment
-   then has only one contributor (e.g. Bonds = Nuvama only), keep the parent + single child
-   for consistency with the other segments, or collapse — match whatever FD-4 chose for the
-   MF-only Equity case, and note it.
-3. Remove the `NOTE: Dhan unavailable — Dhan values excluded from total` line.
+1. **One layout.** Build the three sections in order: `📊 Today` (omit the whole block when
+   `not has_deltas`), `📦 Holdings`, `📈 Nuvama options` (omit when `nuvama_options` is
+   `None`). No waterfall/fallback branch.
+2. `📊 Today` — rows for Mutual funds (`mf_day_delta`), Nuvama bonds
+   (`nuvama_bonds.total_day_delta`), Nuvama options (`nuvama_options.net_pnl`), then a rule
+   and `Net` (`total_day_delta`). Omit a row whose source is unavailable. No `▲/▼` arrow, no
+   weight-percent.
+3. `📦 Holdings` — `Mutual funds` and `Nuvama bonds` rows with `₹value   +pnl   +pct%`
+   (right-aligned columns), a rule, then `Total` = `total_value` / `total_pnl` /
+   `total_pnl_pct`. A failed source → `[fetch failed]` in place of its numbers, excluded from
+   `Total`, plus one `⚠ <source> excluded` line under `Total`.
+4. `📈 Nuvama options` — `Open M2M` (`total_unrealized_pnl`); `M2M today  H/L`
+   (`intraday_high` / `intraday_low`); `Nifty      H/L` (`nifty_high` / `nifty_low`) — omit
+   this line when either is `None`; `Realized today` (`total_realized_pnl_today`);
+   `Realized month (MTD)` (`monthly_realized_pnl + total_realized_pnl_today`); `Realized
+   total` (`total_realized_pnl_today + cumulative_realized_pnl`).
+5. Header line `🟢 NiftyShield · {date}` as the first line inside the fence; 🟢/🔴 from the
+   sign of `total_day_delta` (or `total_pnl` when `not has_deltas`).
+6. Wrap the whole body in ```` ``` ```` fences. Column widths: pick fixed widths that fit the
+   realistic magnitudes (crores for MF value, lakhs for P&L) and lock them with the golden
+   tests.
 
-**Fallback path:**
+**Tests (replace the old golden strings):**
+- `test_format_all_three_sources` — MF + Nuvama bonds + Nuvama options → exact-string match
+  against the Target format; fenced; `Total` excludes options; `Today` includes options.
+- `test_format_no_prior_day` — `has_deltas=False` → no `📊 Today` block, leads with
+  `📦 Holdings`.
+- `test_format_options_unavailable` — no `📈 Nuvama options` section, no `Nuvama options`
+  row in `📊 Today`.
+- `test_format_mf_fetch_failed` — `[fetch failed]` on the MF rows, `⚠ Mutual funds excluded`
+  under `Total`, `Total` = bonds only.
+- `test_format_nifty_hl_absent` — `Nifty H/L` line omitted when `nifty_high` is `None`.
 
-4. In `── Equity ──`: remove the `Dhan Equity` line + its P&L line + the `dhan_available`
-   guard. In `── Bonds ──`: remove the `Dhan Bonds` line + P&L line + the `[unavailable]`
-   branch; keep the `_has_any_bonds` logic working for Nuvama-only.
-5. Remove the `NOTE: Dhan unavailable` line here too.
-
-**Both paths / caller:**
-
-6. The `📊 Dhan Options (Intraday)` block is appended by `daily_snapshot.py`
-   (`summary_text + "\n\n" + dhan_options_section`), not by `_format_combined_summary` — its
-   removal is DHR-3. In this commit only remove the `dhan_summary` parameter from
-   `_format_combined_summary` and `_print_combined_summary` and every `summary.dhan*`
-   reference.
-
-**Tests:**
-- `test_waterfall_no_dhan` — MF + Nuvama bonds + Nuvama options → output has no `Dhan`, no
-  `NOTE: Dhan`, no `[unavailable]`; `Net` and `💰 Total` correct.
-- `test_fallback_no_dhan` — same for `has_deltas=False`.
-- `test_snapshot_mf_and_nuvama_only` — well-formed minimal message, no empty section headers.
-
-**Commit:** `refactor(portfolio): remove Dhan holdings lines from snapshot message`
+**Commit:** `refactor(portfolio): rebuild snapshot message to the slimmed 3-source format`
 
 ---
 
@@ -146,16 +174,25 @@ Commit order = task order: DHR-1 (summary model) → DHR-2 (formatter) → DHR-3
    `format_options_section` stays in `src/dhan/positions.py`.
 5. If the `--dhan-trades` / `dhan_trade_count` plumbing is removed, update `main()` argparse
    and its tests.
+6. **Send path — stop escaping the whole string** (DHR-2 made the message a fenced block):
+   in the live-path Telegram send, replace `notifier.send(escape_markdown(summary_text))`
+   with a send of the fenced `summary_text` as-is. `_format_combined_summary` already emits
+   ```` ``` ```` fences and literal content; the only values that could break a fenced block
+   are a literal backtick or backslash in an interpolated string, and none of the numeric /
+   date fields here can contain one — assert that with a test rather than escaping. Update
+   the stale `<pre>`-era comment above the send. `_historical_main` prints only (no send).
 
 **Tests:**
 - `test_historical_main_no_dhan_section` — run `_historical_main` against a seeded stored
   snapshot (MF + Nuvama only) → output has no Dhan content, exit 0.
 - `test_async_main_skips_dhan` (mock the clients) — the run makes no Dhan call and the
   assembled message has no Dhan block.
+- `test_async_main_sends_fenced_unescaped` — the string handed to `notifier.send` starts and
+  ends with ```` ``` ```` and is not double-escaped (no `\-` / `\.` sequences).
 - `test_dhan_modules_still_import` — `import src.dhan.reader`, `src.dhan.positions`,
   `src.dhan.store`, `src.auth.dhan_verify` all succeed.
 
-**Commit:** `refactor(snapshot): stop fetching Dhan portfolio + options in daily_snapshot`
+**Commit:** `refactor(snapshot): stop fetching Dhan + send the snapshot as a fenced block`
 
 ---
 
