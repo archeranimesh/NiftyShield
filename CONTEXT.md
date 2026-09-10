@@ -48,7 +48,9 @@ Top-level `src/` packages, one line each (detail → `CONTEXT_TREE.md`):
   (`MarketSnapshot`/`SignalResponse`/`DailySignal`/`SignalOutcome`, `Direction`/`TradeAction`), `SignalProvider` protocol, pure `build_prompt`, pure
   `SignalAggregator` consensus, `option_resolver.py`, `market_inputs.py` (gift_nifty / usd_inr / fii fetchers), `snapshot.py` `assemble_market_snapshot`,
   `SignalStore` (own SQLite tables `signal_inputs`/`signal_responses`/`daily_signals`/`signal_outcomes`). Three GPT-4o / Grok / Gemini providers via
-  OpenRouter + `build_providers` factory. All three crons live on the Mac host (Phase 1 `openrouter_only`): `scripts/morning_signal.py` 09:30,
+  OpenRouter + `build_providers` factory. Each provider response records OpenRouter token usage + USD cost (`signal_responses.prompt_tokens`/`completion_tokens`/`cost_usd`,
+  inline `usage.include`; `NULL` for mock / Google-SDK paths), aggregated by `SignalStore.get_signal_cost()` and surfaced as today's total on the 09:30 message (`signals-cost-tracking/`,
+  cost data trustworthy from 2026-09-11). All three crons live on the Mac host (Phase 1 `openrouter_only`): `scripts/morning_signal.py` 09:30,
   `scripts/record_signal_outcome.py --auto` 16:00, `scripts/signal_report.py` 16:35 (Mon–Fri), each pushing a Telegram message.
 - `src/risk/` — portfolio-level delta controls: `PortfolioDelta` frozen dataclass,
   `PortfolioDeltaTracker.aggregate_delta(...)` (chain-derived `position_deltas` used as-is, else

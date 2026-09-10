@@ -81,6 +81,7 @@ Nuvama-side live positions/holdings mirror. Third broker surface — do not conf
 | `paper_action_audit` | `PaperStore` → adjustment/roll scripts | Append-only audit trail of executed adjustment actions (price, qty, rationale). |
 | `gate_violations` | `PaperStore.record_gate_violation()` → `paper_ic_entry.py` / `_v2.py`, `ic_entry_gates.py` | THRESHOLD entry-gate violations under `--log-only-gates` — see note below. |
 | `warn_signal_state` | `PaperStore` | Dedup/state tracking so a WARN-severity signal doesn't re-fire every cron tick. |
+| `signal_responses` | `SignalStore` → `morning_signal.py` | One row per `(trade_date, provider)` — raw multi-LLM directional response via OpenRouter; also token counts + `cost_usd` (see note). |
 | `paper_margin_snapshots` | `PaperStore` → IC entry scripts, `capture_entry_margin()` | One row per `(strategy_name, entry_date)` — margin at entry. **IC-only** — see note below. |
 | `paper_proxy_delta_log` | `PaperStore` → 3-track proxy monitoring | Daily log of Proxy deep-ITM-call delta breach state. |
 | `paper_strategies` | `PaperStore` | One row per strategy — mutable state (breach counts, profit-lock zone flags, active wing widths, `cycle_id`). Not snapshot history; current state only. |
@@ -96,6 +97,15 @@ The full writer set is `PaperStore` → `scripts/record/record_paper_trade.py` p
 
 **Note — `gate_violations`:** the four THRESHOLD gates logged are IVR floor, DTE window, liquidity floor, delta cap.
 STRUCTURAL gates never write here — they hard-block instead.
+
+**Note — `signal_responses` cost columns:** `prompt_tokens` / `completion_tokens` / `cost_usd`
+(Decimal as `TEXT`) added by `signals-cost-tracking/` SCT-2 (`c7efe54`). Sourced from OpenRouter
+inline usage accounting (`"usage": {"include": true}`). `NULL` on rows written by the `mock`
+provider or Gemini's Google-SDK path (no OpenRouter `usage` object), and on every row written
+before that SHA landed — no backfill (envelopes not retained). `get_signal_cost()` therefore
+under-counts any window including days before **2026-09-11**, the first trading morning whose
+09:30 run followed the SCT-2 deploy; cost aggregates are trustworthy from that date on. The
+sibling `signal_inputs` / `daily_signals` / `signal_outcomes` tables are not yet registered here.
 
 **Note — `paper_margin_snapshots`:** **IC-only** — 3-track futures notional is computed separately (`qty * 1.0`), never from this table.
 

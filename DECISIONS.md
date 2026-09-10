@@ -654,6 +654,10 @@ return annotation `dict[str, Any]` is wrong. Deferred fix — absorb in `parse_u
 - **2026-09-09** — `signals/` story closed and archived (`docs/archive/plan/signals/`, S1.1–S6). The `phase` column on `signal_outcomes` records the
   `SIGNAL_PHASE` in force when each row was written, so the forward evaluation can later isolate the contribution of Phase 2's web-search capability
   from Phase 1's no-search baseline. Next signals work is `signals-paper-track/` (SPT-1, council checkpoint). _(source: `docs/archive/plan/signals/signals_stories.md` §S6)_
+- **2026-09-09** — `signals/` LLM cost capture: chose OpenRouter **inline usage accounting** (`"usage": {"include": true}` in the request body → `usage.cost` + native token counts on the same
+  response envelope) over the `GET /generation?id=` lookup (one extra HTTP call per provider, response lag, needs a retry) and over `/credits` + `/activity` (key-lifetime totals, no per-run grain).
+  Zero added calls, exact per-call cost, pipeline already parses the envelope; aggregation is a local SQLite `SUM` over three new `signal_responses` columns. Requested by Animesh.
+  _(source: `docs/plan/signals-cost-tracking/prompt.md`)_
 - **2026-04-25** — CSP underlying → Nifty 50 index options (NiftyBees rejected: OI <1,000, spread >5% of mid) _(source: `docs/strategies/csp_nifty_v1.md`)_
 - **2026-04-25** — NiftyBees collateral modelled as `long_niftybees` leg in paper P&L; annual reset in January _(source: `docs/strategies/csp_nifty_v1.md`)_
 - **2026-04-26** — NiftyShield integrated: CSP Leg 1 + put spread 4 lots (8–20% OTM) + tail puts 2 lots (5-delta quarterly) _(source: `docs/strategies/niftyshield_integrated_v1.md`)_
