@@ -140,6 +140,10 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-10] signals-cost-tracking SCT-1 closed (`a519714`) — new frozen `SignalUsage` model (`prompt_tokens` / `completion_tokens` / `cost_usd: Decimal`) + optional `usage` field on
+  `SignalResponse`; GPT-4o / Grok / Gemini OpenRouter paths send `"usage": {"include": true}` and parse the envelope via one shared `_usage_from_envelope` helper in `providers/__init__.py` (returns
+  `None` on absent/malformed/non-dict usage — never fails the signal). mock + Gemini Google-SDK path emit `usage=None`. Antigravity-implemented; code-reviewer CRITICAL (non-dict `AttributeError`) +
+  ERROR (untyped param) resolved, test-runner 3396 passed. Next: SCT-2 (persist + `get_signal_cost` aggregate).
 - [2026-09-10] BUG-043 logged (`abc2d60`) — "Net P&L" in strategy close notifications has no stable meaning (inception-cumulative for IC v1/v2, cycle-only for collar, absent for CSP). B043.1 closed
   (`74bf1c4`): new `src/paper/cycle_pnl.py` (`reconstruct_cycles` / `get_last_cycle_realized_pnl`) + `scripts/dev/cycle_pnl_report.py` (per-cycle P&L / exit reason / days-in-trade for IC-all / cc / pp
   / collar). 10 tests. code-reviewer CRITICAL+ERROR resolved, greeks-analyst clean. Next: B043.2 — standardise the five close paths to `Cycle P&L` + `Since inception`.
