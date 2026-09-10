@@ -1,0 +1,211 @@
+#!/usr/bin/env python3
+"""Per-cycle P&L / exit-reason / days-in-trade report for paper strategies.
+
+Reconstructs each round-trip cycle from ``paper_trades`` (see
+``src/paper/cycle_pnl.py`` — a cycle boundary is every point where all legs of
+the group return to net-zero), then prints per cycle: entry date, exit date,
+days in trade, realized cycle P&L, and the exit reason (from
+``paper_exit_events`` where recorded, else the closing trade's note). Ends each
+strategy block with the total realized across closed cycles.
+
+Read-only. No network, no writes.
+
+Usage:
+    python -m scripts.dev.cycle_pnl_report ic-weekly
+    python -m scripts.dev.cycle_pnl_report ic-all
+    python -m scripts.dev.cycle_pnl_report cc
+    python -m scripts.dev.cycle_pnl_report collar
+    python -m scripts.dev.cycle_pnl_report all
+    python -m scripts.dev.cycle_pnl_report paper_ic_nifty_v2_monthly
+    python -m scripts.dev.cycle_pnl_report ic-all --db-path /path/to/db.sqlite
+
+Targets:
+    ic-weekly / ic-monthly / ic-leaps / ic-v2   single IC strategy
+    ic-all                                       all four IC strategies
+    cc / pp / collar                             overlay group in paper_nifty_overlay
+    overlay-all                                  cc + pp + collar
+    all                                          ic-all + overlay-all
+    <exact paper_* strategy name>                that strategy, all legs as one group
+"""
+
+from __future__ import annotations
+
+import argparse
+import sqlite3
+import sys
+from dataclasses import dataclass
+from datetime import date
+from decimal import Decimal
+from pathlib import Path
+
+import structlog
+
+from src.notifications.formatting import format_money
+from src.paper.constants import DEFAULT_DB_PATH
+from src.paper.cycle_pnl import Cycle, reconstruct_cycles
+from src.paper.store import PaperStore
+from src.utils.logging import setup_logging
+
+_SCRIPT_NAME = "scripts.dev.cycle_pnl_report"
+logger = structlog.get_logger(_SCRIPT_NAME)
+
+_IC_STRATEGIES = {
+    "ic-weekly": "paper_ic_nifty_v1_weekly",
+    "ic-monthly": "paper_ic_nifty_v1_monthly",
+    "ic-leaps": "paper_ic_nifty_v1_leaps",
+    "ic-v2": "paper_ic_nifty_v2_monthly",
+}
+_OVERLAY_STRATEGY = "paper_nifty_overlay"
+_OVERLAY_GROUPS = {
+    "cc": ("overlay_cc",),
+    "pp": ("overlay_pp",),
+    "collar": ("overlay_collar_put", "overlay_collar_call"),
+}
+
+
+@dataclass(frozen=True)
+class _Group:
+    """One reportable leg group: a label, its strategy, and its leg-role filter."""
+
+    label: str
+    strategy_name: str
+    leg_roles: tuple[str, ...] | None  # None = every leg of the strategy
+
+
+def resolve_target(target: str) -> list[_Group]:
+    """Map a CLI target token to the leg groups it selects.
+
+    Args:
+        target: One of the alias tokens (``ic-all``, ``cc`` …) or an exact
+            ``paper_*`` strategy name.
+
+    Returns:
+        Ordered list of groups to report.
+
+    Raises:
+        ValueError: If the target is not a known alias or ``paper_*`` name.
+    """
+    if target in _IC_STRATEGIES:
+        name = _IC_STRATEGIES[target]
+        return [_Group(name, name, None)]
+    if target in _OVERLAY_GROUPS:
+        return [_Group(f"{_OVERLAY_STRATEGY}:{target}", _OVERLAY_STRATEGY, _OVERLAY_GROUPS[target])]
+    if target == "ic-all":
+        return [_Group(n, n, None) for n in _IC_STRATEGIES.values()]
+    if target == "overlay-all":
+        return [
+            _Group(f"{_OVERLAY_STRATEGY}:{k}", _OVERLAY_STRATEGY, v)
+            for k, v in _OVERLAY_GROUPS.items()
+        ]
+    if target == "all":
+        return resolve_target("ic-all") + resolve_target("overlay-all")
+    if target.startswith("paper_"):
+        return [_Group(target, target, None)]
+    raise ValueError(
+        f"unknown target {target!r} — use an alias "
+        f"(ic-all, ic-weekly, cc, pp, collar, overlay-all, all) or a paper_* strategy name"
+    )
+
+
+def _load_exit_signals(conn: sqlite3.Connection, strategy_name: str) -> list[tuple[date, str]]:
+    """Combined-signal exit events for a strategy, oldest first.
+
+    Only ``leg_name = 'ALL'`` rows — those are the whole-position exit signals
+    (PROFIT_TARGET / LOSS_STOP / TIME_STOP); per-leg rows are entry annotations.
+    All statuses are included: the acted rows are not reliably flipped to
+    ``ACTED`` in the live DB.
+    """
+    rows = conn.execute(
+        "SELECT event_time, exit_signal FROM paper_exit_events "
+        "WHERE strategy_name = ? AND leg_name = 'ALL' "
+        "ORDER BY event_time ASC, id ASC",
+        (strategy_name,),
+    ).fetchall()
+    out: list[tuple[date, str]] = []
+    for event_time, exit_signal in rows:
+        signal = str(exit_signal or "").strip()
+        if not signal or signal == "NONE":
+            continue
+        out.append((date.fromisoformat(str(event_time)[:10]), signal))
+    return out
+
+
+def _exit_reason(cycle: Cycle, exit_signals: list[tuple[date, str]]) -> str:
+    """Best available exit reason for a closed cycle.
+
+    Prefers a ``paper_exit_events`` signal dated within the cycle window;
+    falls back to the closing trade's note, then a generic label.
+    """
+    if cycle.is_open or cycle.exit_date is None:
+        return "—"
+    matches = [sig for dt, sig in exit_signals if cycle.entry_date <= dt <= cycle.exit_date]
+    if matches:
+        return matches[-1]
+    note = cycle.trades[-1].notes.strip()
+    if note:
+        # e.g. "ic_nifty_v1 auto-close: CLOSE_FULL" -> "CLOSE_FULL (auto-close)"
+        if "auto-close:" in note:
+            return f"{note.split('auto-close:')[-1].strip()} (auto-close)"
+        return note
+    return "flat close (no signal recorded)"
+
+
+def _print_group(group: _Group, store: PaperStore, conn: sqlite3.Connection) -> None:
+    trades = store.get_trades(group.strategy_name)
+    if group.leg_roles is not None:
+        wanted = set(group.leg_roles)
+        trades = [t for t in trades if t.leg_role in wanted]
+    if not trades:
+        print(f"\n{group.label}: no trades found.")
+        logger.warning("no_trades", group=group.label)
+        return
+
+    cycles = reconstruct_cycles(trades)
+    exit_signals = _load_exit_signals(conn, group.strategy_name)
+    closed = [c for c in cycles if not c.is_open]
+    open_count = len(cycles) - len(closed)
+
+    print(f"\n{group.label} — {len(closed)} closed cycle(s), {open_count} open")
+    print(f"  {'#':>2}  {'Entry':<10}  {'Exit':<10}  {'Days':>4}  {'Cycle P&L':>14}  Exit reason")
+    for cycle in cycles:
+        exit_str = cycle.exit_date.isoformat() if cycle.exit_date else "(open)"
+        days_str = "—" if cycle.days_in_trade is None else str(cycle.days_in_trade)
+        pnl_str = "(unrealized)" if cycle.is_open else format_money(cycle.realized_pnl, signed=True)
+        print(
+            f"  {cycle.index:>2}  {cycle.entry_date.isoformat():<10}  {exit_str:<10}  "
+            f"{days_str:>4}  {pnl_str:>14}  {_exit_reason(cycle, exit_signals)}"
+        )
+    total = sum((c.realized_pnl for c in closed), Decimal("0"))
+    print(f"  {'-' * 60}")
+    print(f"  Total realized ({len(closed)} closed cycle(s)): {format_money(total, signed=True)}")
+
+
+def main() -> None:
+    """CLI entry point."""
+    setup_logging(json=False, level="INFO")
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("target", help="alias (ic-all, cc, …) or an exact paper_* strategy name")
+    parser.add_argument("--db-path", type=Path, default=DEFAULT_DB_PATH)
+    args = parser.parse_args()
+
+    if not args.db_path.exists():
+        print(f"ERROR: DB not found at {args.db_path}", file=sys.stderr)
+        raise SystemExit(1)
+
+    try:
+        groups = resolve_target(args.target)
+    except ValueError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc
+
+    store = PaperStore(args.db_path)
+    with sqlite3.connect(args.db_path) as conn:
+        for group in groups:
+            _print_group(group, store, conn)
+
+
+if __name__ == "__main__":
+    main()
