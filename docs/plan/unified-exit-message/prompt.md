@@ -38,12 +38,23 @@ message and add cycle + inception P&L and win-rate stats.
 - **This exit** — P&L of the legs closed in *this* action. Equals the cycle for a full close;
   differs for a partial / single-leg close (CC closing one collar leg).
 - **Cycle** — the current round trip. `get_last_cycle_realized_pnl(trades)` for the
-  just-closed one; `decay_pct` + hold days come from the same `Cycle`
+  just-closed one; hold days + the decay figure come from the same `Cycle`
   (`src/paper/cycle_pnl.py::reconstruct_cycles`).
 - **Inception** — `get_strategy_realized_pnl(store, strategy_name)`. Use this for the headline
   number, **not** the sum of cycle `realized_pnl` — cycle reconstruction is an approximation
   (mid-cycle defends not fully captured) and the two drift. Cycles drive the *stats*, the
   store call drives the *number*.
+
+## Decay basis — gross short premium (decided with Animesh 2026-09-10)
+
+The existing `Cycle.decay_pct` divides by the **net** entry premium (short legs minus
+hedges), which is `None` for a net-debit entry — it goes unstable for a near-zero collar net
+and inverts for a long put. UXM-1 adds a `short_decay_pct` computed against the **gross
+premium of the short legs only** (hedges / longs excluded): `100 * (short_credit −
+short_buyback) / short_credit`. This is stable and carries one meaning — *how much of the
+premium you sold did you keep* — for IC, CSP, CC and Collar (all have a short leg), and is
+correctly `None` for PP (a pure long has no premium-capture story). Every exit card and
+`cycle_stats` uses `short_decay_pct`; the net `decay_pct` stays on `Cycle` for the report CLI.
 
 Win rate / avg-win / avg-loss / best / worst / avg-hold / avg-decay are a pure helper over
 `[c for c in reconstruct_cycles(trades) if not c.is_open]`.
@@ -84,10 +95,12 @@ sends an exit card.
 
 ## Task overview
 
-- **UXM-1** — `cycle_stats(trades) -> CycleStats` pure helper in `src/paper/cycle_pnl.py`
-  (closed-count, wins, losses, win_rate, avg_win, avg_loss, best, worst, avg_hold_days,
-  avg_decay_pct); move `resolve_target` + `_Group` there from the report CLI; fix the CLI
-  import. `greeks-analyst` gate (`src/paper/`).
+- **UXM-1** — gross-short-premium `short_decay_pct` (+ `short_credit_per_unit` /
+  `short_buyback_per_unit`) on `Cycle`; `cycle_stats(trades) -> CycleStats` pure helper in
+  `src/paper/cycle_pnl.py` (closed-count, wins, losses, win_rate, avg_win, avg_loss, best,
+  worst, avg_hold_days, avg_decay_pct over `short_decay_pct`); move `resolve_target` +
+  `_Group` there from the report CLI; fix the CLI import (CLI output unchanged).
+  `greeks-analyst` gate (`src/paper/`).
 - **UXM-2** — `src/notifications/exit_message.py`: `ExitMessage` + `format_exit_message` +
   `ExitKind` enum; `build_close_leg_table` in `formatting.py`. Renderer + tests only, no
   callers. Footer: this-exit / cycle (+ decay, held) / inception / win-rate (gated

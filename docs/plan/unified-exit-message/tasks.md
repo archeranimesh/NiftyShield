@@ -9,9 +9,10 @@ both have landed and archived.
 
 **Open: UXM-1, UXM-2, UXM-3, UXM-4, UXM-5, UXM-6, UXM-7.**
 
-- [ ] **UXM-1** — `cycle_stats(trades) -> CycleStats` in `src/paper/cycle_pnl.py` (win_rate,
+- [ ] **UXM-1** — gross-short-premium `short_decay_pct` (+ `short_credit_per_unit` /
+      `short_buyback_per_unit`) on `Cycle`; `cycle_stats(trades) -> CycleStats` (win_rate,
       avg_win/loss, best/worst, avg_hold_days, avg_decay_pct); move `resolve_target` +
-      `LegGroup` in from `scripts/dev/cycle_pnl_report.py`; fix the CLI import.
+      `LegGroup` in from `scripts/dev/cycle_pnl_report.py`; fix the CLI import (output unchanged).
       | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer + greeks-analyst | SHA: —
 - [ ] **UXM-2** — `src/notifications/exit_message.py` (`ExitMessage` / `ExitKind` /
       `format_exit_message`) + `build_close_leg_table` in `formatting.py`. Renderer + tests
@@ -33,10 +34,11 @@ both have landed and archived.
 
 ## Story done when
 
-- **UXM-1** — `cycle_stats` returns correct win_rate / avg / best / worst for a mixed
-  closed-cycle list and all-zero / `None` for an empty one; `resolve_target` imported from
-  `src.paper.cycle_pnl` gives the CLI its unchanged output; tests green; `greeks-analyst`
-  clean.
+- **UXM-1** — `Cycle.short_decay_pct` is the gross-short-premium ratio (defined for
+  IC/CSP/CC/Collar, `None` for PP), net `decay_pct` unchanged; `cycle_stats` returns correct
+  win_rate / avg / best / worst / avg_decay_pct for a mixed closed-cycle list and all-zero /
+  `None` for an empty one; `resolve_target` imported from `src.paper.cycle_pnl` gives the CLI
+  its unchanged output; tests green; `greeks-analyst` clean.
 - **UXM-2** — `format_exit_message` renders the Act/Instrument/Entry/Exit/P&L table + the
   this-exit / cycle / inception footer; the cycle line carries entry-credit → exit-cost →
   decay% for a credit cycle and drops that segment for a net-debit one; win-rate row appears

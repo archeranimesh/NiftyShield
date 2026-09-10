@@ -91,9 +91,10 @@ rot them.
     `Net credit` / `Net debit` line in `entry_message.py`). Extends the shared renderer to the automated
     overlay entries: Collar / CC / PP re-entry cards from the strategy classes + the three-track
     `📥 Overlay Entry` bootstrap message. Depends on #23. Requested by Animesh 2026-09-10.
-25. **Unified exit message** — `docs/plan/unified-exit-message/` — next **UXM-1** (`cycle_stats` helper +
-    move `resolve_target` / `LegGroup` into `src/paper/cycle_pnl.py`). One shared close-confirmation
-    renderer for IC/CSP/CC/PP/Collar with a this-exit / cycle / inception P&L footer + win-rate stats;
+25. **Unified exit message** — `docs/plan/unified-exit-message/` — next **UXM-1** (gross-short-premium
+    `short_decay_pct` on `Cycle` + `cycle_stats` + move `resolve_target` / `LegGroup` into
+    `src/paper/cycle_pnl.py`). One shared close-confirmation renderer for IC/CSP/CC/PP/Collar with a
+    this-exit / cycle / inception P&L footer + win-rate + avg-decay stats;
     `src/notifications/exit_message.py` + `build_close_leg_table`; migrates both the strategy-class and
     `auto_close.py` close paths + `record_paper_trade --close`. Depends on #23 + #24. Requested by
     Animesh 2026-09-10.

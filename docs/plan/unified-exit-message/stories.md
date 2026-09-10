@@ -14,23 +14,27 @@ ledger; exit reasons come from `paper_exit_events`, which already exists.
 
 ---
 
-## UXM-1 — `cycle_stats` helper + shared leg-group resolver
+## UXM-1 — `cycle_stats` helper + gross-short-premium decay + shared leg-group resolver
 
 **Files to change:**
-- `src/paper/cycle_pnl.py` — add `CycleStats` frozen dataclass + `cycle_stats(trades)`;
-  move `resolve_target` + `_Group` (and any private helper they need) in from
-  `scripts/dev/cycle_pnl_report.py`.
+- `src/paper/cycle_pnl.py` — add three `Cycle` fields (`short_credit_per_unit`,
+  `short_buyback_per_unit`, `short_decay_pct`); add `CycleStats` frozen dataclass +
+  `cycle_stats(trades)`; move `resolve_target` + `_Group` (and any private helper they need)
+  in from `scripts/dev/cycle_pnl_report.py`.
 - `scripts/dev/cycle_pnl_report.py` — replace the local `resolve_target` / `_Group` with an
-  import from `src.paper.cycle_pnl`. No behaviour change to the CLI output.
+  import from `src.paper.cycle_pnl`. **No change to the CLI output** — the report keeps
+  rendering the existing net `decay_pct` column; the new short-basis field is additive.
 - `tests/unit/paper/test_cycle_pnl.py` — extend.
 
 **Before any code (graph queries):**
 - `get_code_snippet("Cycle")` + `get_code_snippet("reconstruct_cycles")` +
-  `get_code_snippet("get_last_cycle_realized_pnl")` — the `Cycle` field list
-  (`realized_pnl`, `entry_date`, `exit_date`, `days_in_trade`, `entry_credit_per_unit`,
-  `exit_cost_per_unit`, `decay_pct`, `is_open`, `index`). `entry_credit_per_unit` /
-  `exit_cost_per_unit` / `decay_pct` are already first-class fields — the exit footer reads
-  them off the just-closed `Cycle`, no new math.
+  `get_code_snippet("_build_cycle")` + `get_code_snippet("_signed_premium_per_unit")` +
+  `get_code_snippet("_entry_exit_legs")` — the current `Cycle` fields (`realized_pnl`,
+  `entry_date`, `exit_date`, `days_in_trade`, `entry_credit_per_unit`, `exit_cost_per_unit`,
+  `decay_pct`, `is_open`, `index`, `trades`) and exactly how `entry_credit_per_unit` /
+  `exit_cost_per_unit` are computed, so the short-only variant mirrors that logic.
+- `get_code_snippet("PaperTrade")` — the fields that identify a leg as a short (a
+  SELL-to-open) vs a hedge/long leg, and the per-unit price.
 - `get_code_snippet("resolve_target")` + `search_code("_Group")` in
   `scripts/dev/cycle_pnl_report.py` — the full definition + every reference, so the move is
   complete.
@@ -41,26 +45,47 @@ ledger; exit reasons come from `paper_exit_events`, which already exists.
 1. Move `resolve_target(target: str) -> list[_Group]` and the `_Group` dataclass verbatim to
    `src/paper/cycle_pnl.py` (rename `_Group` → `LegGroup`, public — `src/` and the CLI both
    import it). Keep the alias table (`ic-all`, `cc`, `pp`, `collar`, `overlay-all`, …) as-is.
-2. `CycleStats` frozen dataclass:
+2. Gross-short-premium decay — three new `Cycle` fields, set in `_build_cycle`, leaving the
+   existing net `entry_credit_per_unit` / `exit_cost_per_unit` / `decay_pct` untouched:
+   - `short_credit_per_unit: Decimal` — sum of the per-unit SELL-to-open prices of the
+     cycle's **short** legs only (hedges / long legs excluded). `0` when the cycle has no
+     short leg (a pure long PP).
+   - `short_buyback_per_unit: Decimal | None` — sum of the per-unit BUY-to-close prices of
+     those same short legs. `None` while the cycle is open.
+   - `short_decay_pct: Decimal | None` —
+     `100 * (short_credit_per_unit - short_buyback_per_unit) / short_credit_per_unit`.
+     `None` when the cycle is open **or** `short_credit_per_unit <= 0` (no short leg). This
+     is the basis every exit card and `cycle_stats` uses — stable across IC / CSP / CC /
+     Collar (all have a short leg), correctly absent for PP.
+3. `CycleStats` frozen dataclass:
    `closed_count: int`, `wins: int`, `losses: int`, `win_rate: float | None`
    (`None` when `closed_count == 0`), `avg_win: Decimal`, `avg_loss: Decimal`
    (signed, ≤ 0), `best: Decimal`, `worst: Decimal`, `avg_hold_days: float`,
-   `avg_decay_pct: float | None`.
-3. `cycle_stats(trades: Sequence[PaperTrade]) -> CycleStats` — pure, over
+   `avg_decay_pct: Decimal | None` (mean of `short_decay_pct` over the closed cycles that
+   have one; `None` when none do).
+4. `cycle_stats(trades: Sequence[PaperTrade]) -> CycleStats` — pure, over
    `[c for c in reconstruct_cycles(trades) if not c.is_open]`. A cycle is a win when
-   `realized_pnl > 0`. `avg_decay_pct` skips cycles whose `decay_pct is None`.
+   `realized_pnl > 0`. `avg_decay_pct` skips cycles whose `short_decay_pct is None`.
    Empty closed list → all-zero / `None` stats, never raises.
 
 **Tests (no network, no real DB — build `PaperTrade` lists via a fixture helper; run
 `get_code_snippet("PaperTrade")` first, do not construct from memory):**
+- `test_short_decay_pct_single_short` — CSP-shaped cycle sold @ 88, bought back @ 12 →
+  `short_decay_pct == Decimal("86.36...")` (2-dp tolerance), net `decay_pct` still populated.
+- `test_short_decay_pct_multi_short` — IC-shaped: short put 12 + short call 11 (credit 23),
+  bought back 5 + 3 → `short_decay_pct` over the 23 base, hedges ignored.
+- `test_short_decay_pct_none_for_pure_long` — PP-shaped (BUY-to-open only) →
+  `short_credit_per_unit == 0`, `short_decay_pct is None`.
+- `test_short_decay_pct_collar` — collar: short call basis only, long put excluded → a
+  sensible 40–70% figure where the net `decay_pct` would have been `None`.
 - `test_cycle_stats_happy` — 3 wins / 2 losses → `win_rate == 0.6`, `avg_win` / `avg_loss`
-  correct, `best` / `worst` correct.
+  / `best` / `worst` correct, `avg_decay_pct` = mean of the cycles' `short_decay_pct`.
 - `test_cycle_stats_empty` — no closed cycles → `closed_count == 0`, `win_rate is None`,
-  no exception.
+  `avg_decay_pct is None`, no exception.
 - `test_resolve_target_moved` — `resolve_target("cc")` from `src.paper.cycle_pnl` returns the
   same group(s) the CLI produced before the move.
 
-**Commit:** `refactor(paper): cycle_stats helper + shared LegGroup resolver in cycle_pnl`
+**Commit:** `feat(paper): gross-short-premium decay + cycle_stats + shared LegGroup resolver`
 
 ---
 
@@ -103,12 +128,13 @@ ledger; exit reasons come from `paper_exit_events`, which already exists.
    - `this_exit_pnl: Decimal` — required. `per_lot: bool = False` — IC passes `True` to also
      show `(₹X/lot)`.
    - `cycle_pnl: Decimal | None`, `cycle_index: int | None`, `cycle_decay_pct: Decimal | None`,
-     `cycle_entry_credit: Decimal | None`, `cycle_exit_cost: Decimal | None`,
+     `cycle_short_credit: Decimal | None`, `cycle_short_buyback: Decimal | None`,
      `cycle_held_days: int | None` — read straight off the just-closed `Cycle`
-     (`realized_pnl` / `index` / `decay_pct` / `entry_credit_per_unit` / `exit_cost_per_unit`
-     / `days_in_trade`). All `None` for a partial close where no cycle closed. `decay_pct` /
-     the credit/cost pair are also `None` for a net-debit cycle (Collar, PP) — the cycle line
-     then shows only P&L + held days.
+     (`realized_pnl` / `index` / `short_decay_pct` / `short_credit_per_unit` /
+     `short_buyback_per_unit` / `days_in_trade` — the **gross-short-premium** basis from
+     UXM-1, not the net `decay_pct`). All `None` for a partial close where no cycle closed.
+     `cycle_decay_pct` / the credit→buyback pair are additionally `None` for a pure-long
+     cycle with no short leg (PP) — the cycle line then shows only P&L + held days.
    - `inception_pnl: Decimal` — required (`get_strategy_realized_pnl`).
    - `stats: CycleStats | None` — win-rate row rendered only when
      `stats is not None and stats.closed_count >= 5`.
@@ -125,7 +151,7 @@ ledger; exit reasons come from `paper_exit_events`, which already exists.
    <blank>
    ━━━━━━━━━━━━━━━━━━━━━━━━
    💰 *This exit:* {+₹this}   [(₹x/lot) when per_lot]
-   🔁 *Cycle #{i}:* {+₹cycle}  ·  ₹{credit} → ₹{cost}  ·  {d}% decay  ·  {h}d
+   🔁 *Cycle #{i}:* {+₹cycle}  ·  ₹{short_credit} → ₹{short_buyback}  ·  {d}% decay  ·  {h}d
    📈 *Inception:* {+₹inception}
    🎯 *Win rate:* {r}%  ({W}W / {L}L)   {D}% avg decay   avg {+₹aw} / {-₹al}
    📊 *Overlay P&L (total realized):* {₹overlay}              [only when overlay_total_pnl set]
@@ -133,23 +159,25 @@ ledger; exit reasons come from `paper_exit_events`, which already exists.
    ```
    Cycle-line rules:
    - Omit the whole `🔁` line when `cycle_pnl is None` (partial close).
-   - Drop the `₹{credit} → ₹{cost}  ·  {d}% decay` middle segment when `cycle_decay_pct is
-     None` (net-debit cycle) — the line becomes `🔁 *Cycle #{i}:* {+₹cycle}  ·  {h}d`.
+   - Drop the `₹{short_credit} → ₹{short_buyback}  ·  {d}% decay` middle segment when
+     `cycle_decay_pct is None` (pure-long cycle, no short leg — PP) — the line becomes
+     `🔁 *Cycle #{i}:* {+₹cycle}  ·  {h}d`. IC / CSP / CC / Collar all keep the segment
+     (the gross-short-premium basis is defined for every cycle with a short leg).
    - Collapse `This exit` + `Cycle` into one when `cycle_pnl is not None and
      abs(this_exit_pnl - cycle_pnl) < Decimal("1")` — keep the `🔁` line, drop the `💰` one.
    Win-rate line:
    - Rendered only when `stats is not None and stats.closed_count >= 5`.
    - The `{D}% avg decay` segment is shown only when `stats.avg_decay_pct is not None`
-     (some closed cycles were credit structures).
+     (at least one closed cycle had a short leg).
    Every interpolated value pre-escaped; the fenced table emitted literally.
 
 **Tests (no network, no real DB):**
 - `test_full_close_collapses_this_exit_and_cycle` — equal values → one combined row.
 - `test_partial_close_omits_cycle_row` — `cycle_pnl=None` → no `🔁` line, `💰 This exit` shown.
-- `test_cycle_line_shows_credit_cost_decay` — credit cycle → `₹142.50 → ₹42.00  ·  78% decay`
-  segment present on the `🔁` line.
-- `test_cycle_line_drops_decay_segment_for_debit_cycle` — `cycle_decay_pct=None` → `🔁` line
-  is just P&L + `{h}d`, no `→` / `decay`.
+- `test_cycle_line_shows_short_credit_cost_decay` — cycle with a short leg →
+  `₹142.50 → ₹42.00  ·  70% decay` segment present on the `🔁` line.
+- `test_cycle_line_drops_decay_segment_for_pure_long` — `cycle_decay_pct=None` (PP) → `🔁`
+  line is just P&L + `{h}d`, no `→` / `decay`.
 - `test_win_rate_hidden_below_five_cycles` — `stats.closed_count == 4` → no `🎯` line.
 - `test_win_rate_shown_at_five` — `closed_count == 5` → `🎯 *Win rate:*` present, correct %.
 - `test_win_rate_line_omits_avg_decay_when_none` — `stats.avg_decay_pct=None` → no
@@ -186,7 +214,7 @@ ledger; exit reasons come from `paper_exit_events`, which already exists.
 1. Build `legs: list[CloseLegRow]` from `closed_trades` — `entry` from the opening fill
    (`t.entry` / the position `avg_*`), `exit` from the close fill, `pnl` per-leg realized.
 2. `this_exit_pnl` = sum of the per-leg P&L in this action; the `cycle_*` fields
-   (`cycle_pnl` / `cycle_index` / `cycle_decay_pct` / `cycle_entry_credit` / `cycle_exit_cost`
+   (`cycle_pnl` / `cycle_index` / `cycle_decay_pct` / `cycle_short_credit` / `cycle_short_buyback`
    / `cycle_held_days`) read straight off the just-closed `Cycle`; `inception_pnl` from the
    existing `get_strategy_realized_pnl`; `stats` from `cycle_stats`.
 3. `headline_label="IC v1"` / `"IC v2"`, `per_lot=True`, `kind` from `action_type`.
@@ -310,14 +338,16 @@ STRATEGY_OVERLAY)`.
 
 1. `CONTEXT.md` "What Exists" `src/notifications/` bullet — add
    `exit_message.py (shared close-confirmation renderer — IC/CSP/CC/PP/Collar + this-exit /
-   cycle / inception P&L + win-rate, UXM-1..6)`; note `cycle_pnl.py` gained `cycle_stats` +
-   `LegGroup` / `resolve_target`.
+   cycle / inception P&L + win-rate, UXM-1..6)`; note `cycle_pnl.py` gained `short_decay_pct`
+   on `Cycle`, `cycle_stats`, and `LegGroup` / `resolve_target`.
 2. `src/notifications/CLAUDE.md` — the close card is `format_exit_message`; the footer's
    inception number is `get_strategy_realized_pnl` (authoritative), cycle stats are the
    approximation; win rate gated at `closed_count >= 5`.
 3. `DECISIONS.md` §P&L & Reporting — one dated line: unified exit renderer; three P&L levels
    (this-exit / cycle / inception) with inception from the store not the cycle sum; win-rate
-   stats from `cycle_stats`; `auto_close.py` + strategy-class + recorder all on one renderer.
+   + avg-decay stats from `cycle_stats`; decay on the **gross-short-premium** basis
+   (`short_decay_pct`, `None` for pure-long PP) not the net `decay_pct`; `auto_close.py` +
+   strategy-class + recorder all on one renderer.
 4. `docs/plan/README.md` — `unified-exit-message/` row → ✅ Shipped/Archived with the SHAs;
    `TODOS.md` Feature Backlog line deleted, Session Log line added.
 5. `git mv docs/plan/unified-exit-message docs/archive/plan/unified-exit-message` — one commit.
