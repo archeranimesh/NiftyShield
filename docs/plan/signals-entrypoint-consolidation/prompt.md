@@ -43,12 +43,13 @@ Beyond `CONTEXT.md`:
 
 ## Task overview
 
-- **SEC-1** — `market_calendar.guard_trading_day()` + `is_market_session_now()`; adopt at every signal entrypoint (gives `record_signal_outcome` the guard it lacks) and in `StrategyMonitor`.
-- **SEC-2** — `DailySignal.is_actionable` property; refactor the four `trade_action is not NO_TRADE` call sites onto it.
-- **SEC-3** — merge `record_signal_outcome.py` + `signal_report.py` → `scripts/signal_eod.py` (record then report, one 16:00 cron, one guard); crontab 2 lines → 1.
-- **SEC-4** — extract `morning_signal`'s pipeline body into `src/signals/` so the script is orchestration-only (discretionary — see the spec).
-- **SEC-5** — decide `scripts/signal_paper_entry.py` keep-or-delete from the tail-call's track record; act on the decision.
-- **SEC-6** — docs close + archive.
+- **SEC-1** *(Antigravity)* — `market_calendar.guard_trading_day()` + `is_market_session_now()`; adopt at every signal entrypoint (gives `record_signal_outcome` the guard it lacks) and in
+  `StrategyMonitor`.
+- **SEC-2** *(Antigravity)* — `DailySignal.is_actionable` property; refactor the four `trade_action is not NO_TRADE` call sites onto it.
+- **SEC-3** *(Antigravity)* — merge `record_signal_outcome.py` + `signal_report.py` → `scripts/signal_eod.py` (record then report, one 16:00 cron, one guard); crontab 2 lines → 1.
+- **SEC-4** *(Claude)* — extract `morning_signal`'s pipeline body into `src/signals/` so the script is orchestration-only (discretionary — see the spec).
+- **SEC-5** *(Claude)* — decide `scripts/signal_paper_entry.py` keep-or-delete from the tail-call's track record; act on the decision.
+- **SEC-6** *(Claude)* — docs close + archive.
 
 ## Definition of done
 

@@ -8,6 +8,9 @@ spec; `schema.md` is the sole DDL source.
 > SPT-1 (council checkpoint) is closed — ruled 2026-09-09, `docs/archive/council/strategy/2026-09-09_signals-paper-track-execution-layer.md`, absorbed into `DECISIONS.md` §"Signals Paper Track —
 > Execution Layer". SPT-2..SPT-8 below are the rewrite from that ruling — no longer provisional.
 
+> **Routing:** SPT-2a is `Owner: Antigravity` (bounded single-function change, airtight spec, TDD-shaped). Its `greeks-analyst` gate is a **real Claude subagent run**, not Antigravity's persona
+> approximation (CLAUDE.md §AutoTrigger — financial logic). Everything else is `Owner: Claude` — model / design calls or graph queries land mid-implementation.
+
 - [x] **SPT-1** — Council checkpoint (no code): module boundary (A — `paper_signal_track_v1` on the shared `StrategyMonitor` / `PaperExecutor` / `PaperStore`); pure `src/strategy/signal_exit.py`;
   fixed SL −30 % / target +50 %; Phase 1 fixed-only, `TRAILING_STOP` reserved; 30 s cadence; mark-path telemetry from day one; two-tier recalibration; go-live gate G1–G9; auto-execute live pilot.
   Output: `DECISIONS.md` entry + `schema.md` + this rewrite.
@@ -16,7 +19,7 @@ spec; `schema.md` is the sole DDL source.
   `get_entries` / `cumulative_pnl`). Position rides `paper_trades` as `paper_signal_track_v1`, `quantity` = `paper.constants.LOT_SIZE` (import, not the literal `65`). | Owner: Claude | Model:
   claude-sonnet-5 | Review: code-reviewer | SHA: <—>
 - [ ] **SPT-2a** — `<= 7-DTE` roll in `src/signals/option_resolver.py::resolve_monthly_option` (next-month contract in the current month's final week; `get_expiry_candidates` untouched).
-  | Owner: Claude | Model: claude-sonnet-5 | Review: greeks-analyst | SHA: <—>
+  | Owner: Antigravity | Model: n/a | Review: greeks-analyst | SHA: <—>
 - [ ] **SPT-3** — Entry executor: `src/strategy/signal_track_v1.py` `PaperStrategy` — `DailySignal` → `resolve_monthly_option` → `LegSpec` → `PaperExecutor` fill → frozen `SignalPaperEntry` → Telegram
   entry message. Also creates `src/strategy/signal_exit.py` as the SL/target constants home (`SL_PCT` / `TGT_PCT` / `RULESET_VERSION` / `derive_levels`), imports `paper.constants.LOT_SIZE`, and
   exposes the entry path as a plain `open_signal_paper_entry(signal, snapshot, broker, store)` callable (shared with SPT-6, no hardcoded level literals). Extract `_render_table` →

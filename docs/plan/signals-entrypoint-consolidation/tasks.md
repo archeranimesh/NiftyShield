@@ -5,13 +5,17 @@ spec.
 
 **Open: SEC-1.** Blocked until `docs/plan/signals-paper-track/` is archived (see `prompt.md` §"Hard precondition").
 
+> **Routing:** SEC-1 / SEC-2 / SEC-3 are `Owner: Antigravity` — mechanical, airtight specs, TDD-shaped (SEC-3 is regression-fixture-gated on a byte-identical `SignalOutcome` row). Each `code-reviewer`
+> gate is a **real Claude subagent run**, not Antigravity's persona approximation — SEC-2 and SEC-3 touch signal / P&L-adjacent paths (CLAUDE.md §AutoTrigger). SEC-4 (discretionary), SEC-5 (a
+> keep/delete decision) and SEC-6 (docs close) stay `Owner: Claude`.
+
 - [ ] **SEC-1** — `src/market_calendar.guard_trading_day(logger, script_name) -> bool` (guard-log-return in one call) + `is_market_session_now() -> bool` (09:15–15:30 IST on a trading day); adopt in
-  `morning_signal`, `record_signal_outcome`, `signal_report`, `signal_paper_entry`, and `StrategyMonitor`'s session check. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: <—>
+  `morning_signal`, `record_signal_outcome`, `signal_report`, `signal_paper_entry`, and `StrategyMonitor`'s session check. | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: <—>
 - [ ] **SEC-2** — `DailySignal.is_actionable` property on `src/signals/models.py` (`return self.trade_action is not TradeAction.NO_TRADE`); refactor the four call sites (`morning_signal`,
-  `record_signal_outcome`, `signal_report`, `signal_track_v1`). | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: <—>
+  `record_signal_outcome`, `signal_report`, `signal_track_v1`). | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: <—>
 - [ ] **SEC-3** — merge `scripts/record_signal_outcome.py` + `scripts/signal_report.py` → `scripts/signal_eod.py` (phase 1 = write the `SignalOutcome` row via the current `--auto` logic, unchanged;
-  phase 2 = the report), one 16:00 cron, one `guard_trading_day`. Retire the two old crontab lines, add the one new line. Keep `--auto` / report-only flags for manual use. | Owner: Claude | Model:
-  claude-sonnet-5 | Review: code-reviewer | SHA: <—>
+  phase 2 = the report), one 16:00 cron, one `guard_trading_day`. Retire the two old crontab lines, add the one new line. Keep `--auto` / report-only flags for manual use. | Owner: Antigravity |
+  Model: n/a | Review: code-reviewer | SHA: <—>
 - [ ] **SEC-4** — extract `morning_signal.run()`'s pipeline body into `src/signals/pipeline.py::run_morning_signal_pipeline(...)` so `scripts/morning_signal.py` is orchestration + Telegram only.
   Discretionary — if the body does not cleanly separate from the cron-boundary I/O, record why in the commit and tick with that note. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer |
   SHA: <—>
