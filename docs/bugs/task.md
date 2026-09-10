@@ -15,14 +15,7 @@
 
 > BUG-041 closed 2026-09-08 — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
-## BUG-045 — `formatting.py` position-health helpers pass `Optional` fields into non-`Optional` APIs (mypy hook red for every `src/paper` / `src/client` commit)
-
-- [ ] **B045.1** — Confirm scope with the graph: `trace_path` `_resolved_label` and the `overdue` sort in `build_position_health_message` to verify every caller passes a fully-resolved
-  `PositionFinding` (no live wrong-output path).
-- [ ] **B045.2** — Fix: narrow at both call sites — assert/guard the resolved fields in `_resolved_label` (never a bare `assert` — REVIEW.md G6) or add a resolved view type; `days_overdue or 0` (or
-  filter+assert) for the sort key. No live behaviour change.
-- [ ] **B045.3** — Verify: `pre-commit run mypy --all-files` (or stage a `src/paper/` file) is green; add a regression note. Suite green.
-- [ ] **B045.4** — Commit, flip `bugs.md` BUG-045 to ✅ Fixed + SHA, move both sections to `docs/archive/bugs/`, add a `TODOS.md` session-log line.
+> BUG-045 closed 2026-09-10 (SHA `pending`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
 ## BUG-046 — `test_escaping_guard.py` 3 failures: `scripts/morning_signal.py` `.send()` call sites drifted from `_BASELINE_UNESCAPED`
 

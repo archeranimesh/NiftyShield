@@ -12,39 +12,7 @@
 
 ---
 
-## BUG-045 — `formatting.py` position-health helpers pass `Optional` fields into non-`Optional` APIs (mypy hook red, blocks every `src/paper` / `src/client` commit)
-
-| Field | Value |
-|---|---|
-| Severity | **Low / high-friction** — no known wrong output (callers pass resolved findings), but the mypy pre-commit hook now fails for any commit staging a `src/paper/` / `src/client/` file |
-| Status | 🔴 Open |
-| Discovered | 2026-09-10 (SPT-2 commit; committed with `SKIP=mypy`) |
-| Location | `src/notifications/formatting.py` — `_resolved_label` (L628 `date.fromisoformat`, L634 `format_option_label`) and `build_position_health_message` (L648 `sorted` key `f.days_overdue`) |
-
-**Symptom:** `pre-commit run mypy` reports 7 errors, all in `src/notifications/formatting.py`:
-
-```
-L628: Argument 1 to "fromisoformat" of "date" has incompatible type "str | None"; expected "str"
-L634: Argument 1 to "format_option_label" has incompatible type "str | None"; expected "str"
-L634: Argument 2 has incompatible type "float | None"; expected "float"
-L634: Argument 3 has incompatible type "str | None"; expected "str"
-L634: Argument 4 has incompatible type "str | None"; expected "str | date"
-L648: Argument "key" to "sorted" has incompatible type "Callable[[PositionFinding], int | None]"; ...
-L648: Incompatible return value type (got "int | None", expected "SupportsDunderLT[Any] | SupportsDunderGT[Any]")
-```
-
-**Root cause:** `PositionFinding` (added `574457a`, 2026-09-03) declares `expiry_str: str | None`, `strike_price: float | None`, `instrument_type: str | None`, `days_overdue: int | None` — all
-optional because a bare "unresolved instrument" finding carries none of them. `_resolved_label` is only ever called for findings where those fields are populated, and the `overdue` list is filtered to
-`finding_type == "roll_overdue"` (which always has `days_overdue`), but neither path narrows the type — the optionals are handed straight to `date.fromisoformat`, `format_option_label`, and a `sorted`
-key. Introduced by `b3bf77a` / `a083fba` (2026-09-03, position-health MarkdownV2 migration).
-
-**Why it stayed latent until 2026-09-10:** the mypy hook is scoped `files: ^src/(client|paper)/` and follows imports transitively into `formatting.py` via `src/paper/store.py` →
-`src/strategy/profit_lock_engine` → `src/notifications`. No `src/paper/` or `src/client/` commit landed between 2026-09-03 and SPT-2, so nothing ran mypy over that import graph. SPT-2 (`58e0b08`) and
-its SHA-backfill (`984a77d`) both used `SKIP=mypy` with a documented reason.
-
-**Suggested fix:** narrow at the two call sites — either assert the resolved fields are non-`None` at the top of `_resolved_label` (with a clear message; never a bare `assert` — REVIEW.md G6), or
-introduce a `ResolvedPositionFinding` view type; use `key=lambda f: f.days_overdue or 0` (or filter+assert) for the `overdue` sort. Add a mypy-level regression (the pre-commit hook itself is the guard
-once green). No live behaviour change intended.
+## BUG-045 [MOVED] — see `docs/archive/bugs/bugs.md` (closed 2026-09-10, SHA `pending`)
 
 ---
 

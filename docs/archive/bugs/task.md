@@ -726,3 +726,10 @@ P&L whenever an overlay role has two open positions
 - [x] **B041.5** — Tests for slug/env override + defaults and error-body capture landed across the B041.1–B041.3 commits; suite green (115 signals tests); live 3-provider `morning_signal` run 2026-09-08 16:37 confirmed 3/3 respond. | SHA `4b5aed2`
 - [x] **B041.6** — Flipped `bugs.md` BUG-041 status ✅ + SHA; moved both sections to `docs/archive/bugs/{bugs,task}.md`; `TODOS.md` session-log line. | SHA `4b5aed2`
 
+## BUG-045 — `formatting.py` position-health helpers pass `Optional` fields into non-`Optional` APIs (mypy hook red for every `src/paper` / `src/client` commit)
+
+- [x] **B045.1** — Confirmed scope via graph: `_resolved_label` has one call site (the `roll_overdue`-filtered `overdue` loop); sole producer `run_position_checks` always populates the resolved fields; no live wrong-output path. | SHA `pending`
+- [x] **B045.2** — Narrowed both call sites in `_resolved_label` with explicit `ValueError` guards (REVIEW.md G6) + `days_overdue or 0` for the sort key. No behaviour change. | SHA `pending`
+- [x] **B045.3** — `pre-commit run mypy` green on `src/notifications/formatting.py`; 2 regression tests added; unit suite green bar the 3 pre-existing BUG-046 failures. | SHA `pending`
+- [x] **B045.4** — Committed; `bugs.md` BUG-045 flipped ✅ Fixed; both sections moved to `docs/archive/bugs/`; `TODOS.md` session-log line. | SHA `pending`
+

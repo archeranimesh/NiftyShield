@@ -269,3 +269,40 @@ def test_position_health_unmapped_strategy_raises():
     ]
     with pytest.raises(ValueError):
         build_position_health_message(findings)
+
+
+def test_position_health_roll_overdue_missing_resolved_fields_raises():
+    # BUG-045: _resolved_label must reject a roll_overdue finding whose
+    # resolved fields were never populated rather than pass None onward.
+    findings = [
+        PositionFinding(
+            "roll_overdue",
+            "paper_csp_nifty_v1",
+            "short_put",
+            "NSE_FO|48530",
+            -25,
+            days_overdue=3,
+        ),
+    ]
+    with pytest.raises(ValueError, match="needs a resolved finding"):
+        build_position_health_message(findings)
+
+
+def test_position_health_roll_overdue_missing_strike_raises():
+    # BUG-045: an option finding resolved except for strike_price must
+    # raise rather than pass None into format_option_label.
+    findings = [
+        PositionFinding(
+            "roll_overdue",
+            "paper_csp_nifty_v1",
+            "short_put",
+            "NSE_FO|48530",
+            -25,
+            expiry_str="2026-08-18",
+            days_overdue=3,
+            underlying_symbol="NIFTY",
+            instrument_type="PE",
+        ),
+    ]
+    with pytest.raises(ValueError, match="no strike_price"):
+        build_position_health_message(findings)

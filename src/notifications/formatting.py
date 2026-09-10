@@ -625,10 +625,20 @@ def _direction_and_qty(net_qty: int) -> tuple[str, int]:
 
 
 def _resolved_label(f: PositionFinding) -> str:
+    # Only ever called for "roll_overdue" findings, which the producer
+    # (scripts/position_health_check.py) always builds with these fields
+    # populated. Guard explicitly so the type checker can narrow the
+    # Optional fields and a future unresolved caller fails loudly (BUG-045).
+    if f.expiry_str is None or f.underlying_symbol is None or f.instrument_type is None:
+        raise ValueError(f"_resolved_label needs a resolved finding, got {f!r}")
+
     expiry_fmt = format_expiry(date.fromisoformat(f.expiry_str))
 
     if f.instrument_type == "FUT":
         return f"{f.underlying_symbol} FUT ({expiry_fmt})"
+
+    if f.strike_price is None:
+        raise ValueError(f"_resolved_label finding has no strike_price: {f!r}")
 
     label = format_option_label(
         f.underlying_symbol, f.strike_price, f.instrument_type, f.expiry_str
@@ -645,7 +655,8 @@ def build_position_health_message(findings: list[PositionFinding]) -> str:
 
     overdue = sorted(
         (f for f in findings if f.finding_type == "roll_overdue"),
-        key=lambda f: f.days_overdue,
+        # days_overdue is always set for roll_overdue; `or 0` narrows (BUG-045)
+        key=lambda f: f.days_overdue or 0,
         reverse=True,
     )
     unresolved = [f for f in findings if f.finding_type == "unresolved_instrument"]

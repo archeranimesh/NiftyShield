@@ -149,26 +149,26 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
   `test_escaping_guard.py` failures from `scripts/morning_signal.py` `.send()` drift (L282 new, L245 stale baseline) across the 2026-09-10 signal-cost commits. `chore` (`f8685f6`) gitignored
   `docs/council/pending/` + dropped the stale SPT-1 prompt. `docs(technical-debt)` (`06f43a5`) committed the pre-existing uncommitted DEBT-16 + `suggestions.md` session-close maintenance.
 - [2026-09-10] signals-paper-track SPT-2 closed (`58e0b08`) — `SignalPaperEntry` / `SignalMark` frozen Pydantic models + `paper_signal_entries` / `paper_signal_marks` tables (non-STRICT, per
-  `schema.md`) added to `PaperStore._SCHEMA`, plus `open_signal_entry` / `get_open_signal_entry` / `record_mark` / `get_marks` / `close_signal_entry` / `get_entries` / `cumulative_pnl`. Position
-  rides `paper_trades` as `paper_signal_track_v1` (`STRATEGY_SIGNAL_TRACK` constant, `quantity = LOT_SIZE`). `close_signal_entry` does the state-flip + `paper_exit_events` insert in one
-  transaction (code-review: no half-closed state); `cumulative_pnl` pairs closed entries to SELL rows in chronological order (safe under the one-position-at-a-time guard) with a length-mismatch
-  raise. code-reviewer 3 CRITICAL + 3 ERROR → 5 fixed, STRICT-table finding rejected (`schema.md` is the DDL source and has none; siblings `paper_trades` / `paper_exit_events` are non-STRICT).
-  12 new tests. Next: SPT-2a (`≤ 7-DTE` roll in `resolve_monthly_option`, Owner Antigravity).
-- [2026-09-10] Planning — signals-paper-track SPT-6/7 rewritten + follow-up story `signals-entrypoint-consolidation` created. A Plan-agent review of the entrypoint topology (asked by Animesh: too
-  many overlapping signal crons, logic will diverge) concluded the paper track adds **zero** new crons — SPT-6 becomes a guarded paper-entry tail-call inside `morning_signal` (not a 09:35 cron),
+  `schema.md`) added to `PaperStore._SCHEMA`, plus `open_signal_entry` / `get_open_signal_entry` / `record_mark` / `get_marks` / `close_signal_entry` / `get_entries` / `cumulative_pnl`. Position rides
+  `paper_trades` as `paper_signal_track_v1` (`STRATEGY_SIGNAL_TRACK` constant, `quantity = LOT_SIZE`). `close_signal_entry` does the state-flip + `paper_exit_events` insert in one transaction
+  (code-review: no half-closed state); `cumulative_pnl` pairs closed entries to SELL rows in chronological order (safe under the one-position-at-a-time guard) with a length-mismatch raise.
+  code-reviewer 3 CRITICAL + 3 ERROR → 5 fixed, STRICT-table finding rejected (`schema.md` is the DDL source and has none; siblings `paper_trades` / `paper_exit_events` are non-STRICT). 12 new tests.
+  Next: SPT-2a (`≤ 7-DTE` roll in `resolve_monthly_option`, Owner Antigravity).
+- [2026-09-10] Planning — signals-paper-track SPT-6/7 rewritten + follow-up story `signals-entrypoint-consolidation` created. A Plan-agent review of the entrypoint topology (asked by Animesh: too many
+  overlapping signal crons, logic will diverge) concluded the paper track adds **zero** new crons — SPT-6 becomes a guarded paper-entry tail-call inside `morning_signal` (not a 09:35 cron),
   `signal_paper_entry.py` a manual backfill tool, SPT-7 a manual report. `src/strategy/signal_exit.py` becomes the single SL/target-constants + evaluator home (created in SPT-3, extended in SPT-5);
   all `65` literals → `paper.constants.LOT_SIZE`. Deferred to the new story: `DailySignal.is_actionable` predicate, `market_calendar.guard_trading_day()`, merge `record_signal_outcome` +
   `signal_report` → one 16:00 `signal_eod` (2 crons → 1). New story is blocked until `signals-paper-track/` is archived. Docs-only: `signals-paper-track/{prompt,tasks,stories}.md`,
   `signals-entrypoint-consolidation/{prompt,tasks,stories}.md`, `TODOS.md`, `docs/plan/README.md`.
-- [2026-09-10] Ops fix (`a8e74f3`) — 16:00 `record_signal_outcome --auto` cron crashed with `IndexError: No item with that key` on `row["cost_usd"]`: SCT-2 (`c7efe54`, deployed 13:34)
-  added the `signal_responses` cost columns via `init_db`'s idempotent ALTER loop, but `record_signal_outcome` / `signal_report` construct `SignalStore` and never call `init_db()`, so the
-  ALTERs never hit the live DB (yesterday's manual `ALTER` covered only `daily_signals.entry_premium`). Fixed live DB with the three `ALTER TABLE signal_responses` columns, backfilled today's
-  outcome + report (both green), and added `store.init_db()` after construction in both scripts (mirrors `morning_signal.py:205`). Today's 3 response rows keep NULL cost — this morning's run
-  predates the code; self-heals 2026-09-11.
+- [2026-09-10] Ops fix (`a8e74f3`) — 16:00 `record_signal_outcome --auto` cron crashed with `IndexError: No item with that key` on `row["cost_usd"]`: SCT-2 (`c7efe54`, deployed 13:34) added the
+  `signal_responses` cost columns via `init_db`'s idempotent ALTER loop, but `record_signal_outcome` / `signal_report` construct `SignalStore` and never call `init_db()`, so the ALTERs never hit the
+  live DB (yesterday's manual `ALTER` covered only `daily_signals.entry_premium`). Fixed live DB with the three `ALTER TABLE signal_responses` columns, backfilled today's outcome + report (both
+  green), and added `store.init_db()` after construction in both scripts (mirrors `morning_signal.py:205`). Today's 3 response rows keep NULL cost — this morning's run predates the code; self-heals
+  2026-09-11.
 - [2026-09-10] signals-cost-tracking SCT-4 closed (`b70f8fa`) — docs: added a `signal_responses` row to `DB_REGISTRY.md` (it was never registered when `signals/` shipped — an add, not the spec's
-  "edit"; the sibling `signal_inputs` / `daily_signals` / `signal_outcomes` tables are still unregistered), extended the `CONTEXT.md` `src/signals/` bullet with cost capture, added the
-  2026-09-09 inline-`usage.include`-over-`/generation` decision to `DECISIONS.md`. Trustworthy-from date: 2026-09-11 (first 09:30 run after SCT-2 `c7efe54` deployed 2026-09-10 13:34 IST).
-  Story complete — `git mv` to `docs/archive/plan/signals-cost-tracking/`, Feature Backlog item removed, `docs/plan/README.md` collapsed to archived pointer.
+  "edit"; the sibling `signal_inputs` / `daily_signals` / `signal_outcomes` tables are still unregistered), extended the `CONTEXT.md` `src/signals/` bullet with cost capture, added the 2026-09-09
+  inline-`usage.include`-over-`/generation` decision to `DECISIONS.md`. Trustworthy-from date: 2026-09-11 (first 09:30 run after SCT-2 `c7efe54` deployed 2026-09-10 13:34 IST). Story complete — `git
+  mv` to `docs/archive/plan/signals-cost-tracking/`, Feature Backlog item removed, `docs/plan/README.md` collapsed to archived pointer.
 - [2026-09-10] signals-cost-tracking SCT-3 closed (`1078397`) — `morning_signal.run()` sums `cost_usd` over today's priced responses and threads `(day_cost, n_priced)` into
   `_format_signal_notification`, which appends an escaped `💵 LLM cost: $X.XXXX (N calls)` line to all three variants (consensus / no-consensus / pipeline-failure). New local `_format_usd` 4dp-USD
   helper; `morning_signal.llm_cost` log line. Next: SCT-4 (docs).
@@ -347,6 +347,12 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
 - **2026-09-03** — `token-efficiency` epic archived → `docs/archive/plan/token-efficiency/` (all three stories shipped; closing SHA `2d896a9`). Backfilled the SWEEP-7 SHA, repointed the
   `graph_snippet.py` + `portfolio`/`client`/`notifications` `NOTES.md` references at the archive path, collapsed the `docs/plan/README.md` entry. See `docs/archive/TODOS_ARCHIVE.md` 2026-09-03. Open
   follow-ups: DEBT-8..DEBT-12.
+
+### 2026-09-10
+- **BUG-045 fixed** (SHA `pending`) — `src/notifications/formatting.py` position-health helpers passed `Optional` `PositionFinding` fields into non-`Optional` APIs, red-lining the mypy pre-commit hook
+  for every `src/paper` / `src/client` commit. Narrowed both call sites in `_resolved_label` with explicit `ValueError` guards (REVIEW.md G6) + `days_overdue or 0` for the `overdue` sort key; 2
+  regression tests. B045.1 graph trace confirmed no live wrong-output path. `@code-reviewer` 0 CRITICAL/ERROR. mypy green; suite green bar the 3 pre-existing BUG-046 `test_escaping_guard` failures.
+  Both sections moved to `docs/archive/bugs/`.
 
 ### 2026-09-09
 - **S5.6 completed.** Real entry premium fetch implemented and plugged into the 09:15 signal formatter and outcome P&L calculator; strike selection pinned to monthly option. (SHA `402db00`).
