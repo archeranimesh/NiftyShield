@@ -30,27 +30,25 @@ rot them.
 8. **signals-paper-track** — `docs/plan/signals-paper-track/` — SPT-1 done (council q17, 2026-09-09); next **SPT-2** (`SignalPaperEntry` / `SignalMark` models + store). Turns the
     `signals/` consensus into a paper-traded strategy: auto-enter a long monthly option (≤ 7-DTE roll), fixed SL −30 % / target +50 %, exit or 15:00 square-off, full mark-path log,
     6-month G1–G9 go-live gate. Ruling: `paper_signal_track_v1` `PaperStrategy` on the shared engine + pure `src/strategy/signal_exit.py`; Phase 1 fixed-only. Supersedes `signals/` S5.5a.
-9. **signals-cost-tracking** — `docs/plan/signals-cost-tracking/` — next **SCT-4** (docs). Capture OpenRouter per-call token usage + USD cost via inline `usage.include`
-   accounting, persist as 3 new `signal_responses` columns, show today's spend on the 09:30 message, add `get_signal_cost()` aggregate. SCT-1..4, carries `schema.md`.
-10. **backtest-eval-core** — `docs/plan/backtest-eval-core/` — next **B1.1**. Blocked until `backtest-engine` tasks 1.3 + 1.4 land.
-11. **signals-eval-core** — `docs/plan/signals-eval-core/` — next **SE1.1**.
+9. **backtest-eval-core** — `docs/plan/backtest-eval-core/` — next **B1.1**. Blocked until `backtest-engine` tasks 1.3 + 1.4 land.
+10. **signals-eval-core** — `docs/plan/signals-eval-core/` — next **SE1.1**.
     Blocked until `backtest-eval-core` + `backtest-engine` 1.12.
     Covers Track A (swing) + Track B (investment), SE1–SE8.
-12. **risk-gamma-phase-a** — `docs/plan/risk-gamma-phase-a/` — next **B2.2**
+11. **risk-gamma-phase-a** — `docs/plan/risk-gamma-phase-a/` — next **B2.2**
     (chain fetch + field computation). Track A + B1 / B2.1 shipped.
-13. **greeks-parity-validation** —
+12. **greeks-parity-validation** —
     `docs/plan/full-repo-review-followups/greeks-parity-validation/` — next **T1**.
     P3, council-gated: do not implement directly — needs an `options-strategist` /
     `greeks-analyst` consult first (tolerance-band decision).
-14. **paper-pnl-golden-tests** —
+13. **paper-pnl-golden-tests** —
     `docs/plan/full-repo-review-followups/paper-pnl-golden-tests/` — next **T1**
     (exact-value golden assertions for `_compute_leg_unrealized_pnl`). P3.
-15. **suppression-hygiene-triage** —
+14. **suppression-hygiene-triage** —
     `docs/plan/full-repo-review-followups/suppression-hygiene-triage/` — next **T1**
     (REVIEW.md carve-out for self-describing `# noqa` codes). P3.
-16. **Fix dead IC EOD report query** — `scripts/strategies/ic/paper_ic_snapshot.py`
+15. **Fix dead IC EOD report query** — `scripts/strategies/ic/paper_ic_snapshot.py`
     (no story folder) — the "Intraday actions" query is dead code, found in the DT-3a audit.
-17. **Chain delta/decay analysis** — `docs/plan/chain-decay-analysis/` — next **CDA-1**.
+16. **Chain delta/decay analysis** — `docs/plan/chain-decay-analysis/` — next **CDA-1**.
     Exploratory / read-only, independent.
     Monthly bucket only (yearly excluded — see `greeks-bs-fallback` GF-1 findings).
 18. **Entry event filter R4** — `docs/plan/entry-event-filter/` — next **EF-1**.
@@ -140,6 +138,10 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-10] signals-cost-tracking SCT-4 closed (`b70f8fa`) — docs: added a `signal_responses` row to `DB_REGISTRY.md` (it was never registered when `signals/` shipped — an add, not the spec's
+  "edit"; the sibling `signal_inputs` / `daily_signals` / `signal_outcomes` tables are still unregistered), extended the `CONTEXT.md` `src/signals/` bullet with cost capture, added the
+  2026-09-09 inline-`usage.include`-over-`/generation` decision to `DECISIONS.md`. Trustworthy-from date: 2026-09-11 (first 09:30 run after SCT-2 `c7efe54` deployed 2026-09-10 13:34 IST).
+  Story complete — `git mv` to `docs/archive/plan/signals-cost-tracking/`, Feature Backlog item removed, `docs/plan/README.md` collapsed to archived pointer.
 - [2026-09-10] signals-cost-tracking SCT-3 closed (`1078397`) — `morning_signal.run()` sums `cost_usd` over today's priced responses and threads `(day_cost, n_priced)` into
   `_format_signal_notification`, which appends an escaped `💵 LLM cost: $X.XXXX (N calls)` line to all three variants (consensus / no-consensus / pipeline-failure). New local `_format_usd` 4dp-USD
   helper; `morning_signal.llm_cost` log line. Next: SCT-4 (docs).
