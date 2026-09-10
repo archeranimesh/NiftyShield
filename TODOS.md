@@ -30,7 +30,7 @@ rot them.
 8. **signals-paper-track** — `docs/plan/signals-paper-track/` — SPT-1 done (council q17, 2026-09-09); next **SPT-2** (`SignalPaperEntry` / `SignalMark` models + store). Turns the
     `signals/` consensus into a paper-traded strategy: auto-enter a long monthly option (≤ 7-DTE roll), fixed SL −30 % / target +50 %, exit or 15:00 square-off, full mark-path log,
     6-month G1–G9 go-live gate. Ruling: `paper_signal_track_v1` `PaperStrategy` on the shared engine + pure `src/strategy/signal_exit.py`; Phase 1 fixed-only. Supersedes `signals/` S5.5a.
-9. **signals-cost-tracking** — `docs/plan/signals-cost-tracking/` — next **SCT-1** (usage model + provider capture). Capture OpenRouter per-call token usage + USD cost via inline `usage.include`
+9. **signals-cost-tracking** — `docs/plan/signals-cost-tracking/` — next **SCT-4** (docs). Capture OpenRouter per-call token usage + USD cost via inline `usage.include`
    accounting, persist as 3 new `signal_responses` columns, show today's spend on the 09:30 message, add `get_signal_cost()` aggregate. SCT-1..4, carries `schema.md`.
 10. **backtest-eval-core** — `docs/plan/backtest-eval-core/` — next **B1.1**. Blocked until `backtest-engine` tasks 1.3 + 1.4 land.
 11. **signals-eval-core** — `docs/plan/signals-eval-core/` — next **SE1.1**.
@@ -140,6 +140,9 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-10] signals-cost-tracking SCT-3 closed (`1078397`) — `morning_signal.run()` sums `cost_usd` over today's priced responses and threads `(day_cost, n_priced)` into
+  `_format_signal_notification`, which appends an escaped `💵 LLM cost: $X.XXXX (N calls)` line to all three variants (consensus / no-consensus / pipeline-failure). New local `_format_usd` 4dp-USD
+  helper; `morning_signal.llm_cost` log line. Next: SCT-4 (docs).
 - [2026-09-10] signals-cost-tracking SCT-2 closed (`c7efe54`) — `signal_responses` gains `prompt_tokens` / `completion_tokens` / `cost_usd` (nullable, idempotent ALTER loop in `init_db`);
   `record_response` persists from `response.usage`, `_response_from_row` rebuilds `SignalUsage` when `cost_usd` present. New `SignalStore.get_signal_cost(from_date, to_date)` → `{total_usd,
   call_count, by_provider}` via one grouped SQL statement. 6 new tests, full suite 3402 passed. code-reviewer CRITICAL/ERROR were on pre-existing `suggestions.md` / dirty submodule (not staged); two

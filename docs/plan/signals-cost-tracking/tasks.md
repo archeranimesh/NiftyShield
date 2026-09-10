@@ -3,13 +3,14 @@
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
 spec.
 
-**Open: SCT-3, SCT-4.**
+**Open: SCT-4.**
 
 - [x] **SCT-1** — `SignalUsage` model + `usage` field on `SignalResponse`; providers send `usage.include`, parse it tolerantly | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA:
   a519714
 - [x] **SCT-2** — `signal_responses` + 3 cost columns (idempotent ALTER); write + read-back; new `get_signal_cost()` aggregate | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA:
   c7efe54
-- [ ] **SCT-3** — `morning_signal.py` sums today's `cost_usd`, adds an escaped `💵 LLM cost` line to all 3 message variants | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
+- [x] **SCT-3** — `morning_signal.py` sums today's `cost_usd`, adds an escaped `💵 LLM cost` line to all 3 message variants | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA:
+  1078397
 - [ ] **SCT-4** — docs: `DB_REGISTRY.md` row edit, `CONTEXT.md` signals bullet, `DECISIONS.md` inline-usage decision, trustworthy-from date note | Owner: Claude | Model: n/a | Review: none | SHA: —
 
 ## Story done when

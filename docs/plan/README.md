@@ -116,7 +116,7 @@ persistent residual — and which moneyness bands decay faster than theta alone 
 `backtest-engine` / `backtest-eval-core` dependency. All three crons live on the Mac host (Phase 1 `openrouter_only`): `morning_signal` 09:30, `record_signal_outcome --auto` 16:00, `signal_report`
 16:35 (Mon–Fri). Next signals work → `signals-paper-track/`.
 
-**`signals-cost-tracking/`** · 🔨 In progress · SCT-1 (`a519714`), SCT-2 (`c7efe54`) done · next: **SCT-3** (morning Telegram cost line) Capture OpenRouter per-call token usage + credit cost (`"usage":
+**`signals-cost-tracking/`** · 🔨 In progress · SCT-1 (`a519714`), SCT-2 (`c7efe54`), SCT-3 (`1078397`) done · next: **SCT-4** (docs) Capture OpenRouter per-call token usage + credit cost (`"usage":
 {"include": true}` inline accounting — no `/generation` call) on every signal provider response, persist it as three new nullable columns on `signal_responses`, show today's three-call spend on the
 09:30 morning Telegram message, and add `SignalStore.get_signal_cost(from, to)` SQL-aggregate. Four tasks SCT-1..4. Carries a `schema.md`. Month-to-date cost → future `signal_report.py` change, out of
 scope. Requested by Animesh 2026-09-09.
