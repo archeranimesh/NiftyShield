@@ -18,7 +18,7 @@ spec; `schema.md` is the sole DDL source.
 - [x] **SPT-2** — Signal paper models (`SignalPaperEntry`, `SignalMark`) + store methods (`open_signal_entry` / `get_open_signal_entry` / `record_mark` / `get_marks` / `close_signal_entry` /
   `get_entries` / `cumulative_pnl`). Position rides `paper_trades` as `paper_signal_track_v1`, `quantity` = `paper.constants.LOT_SIZE` (import, not the literal `65`); `STRATEGY_SIGNAL_TRACK` constant
   added. Tables `paper_signal_entries` / `paper_signal_marks` in `_SCHEMA` (non-STRICT, matching `schema.md` + sibling `paper_trades`). `close_signal_entry` runs the state-flip + exit-event insert in
-  one transaction; `cumulative_pnl` pairs closed entries to SELL rows in order with a length-mismatch guard. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: <—>
+  one transaction; `cumulative_pnl` pairs closed entries to SELL rows in order with a length-mismatch guard. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 58e0b08
 - [ ] **SPT-2a** — `<= 7-DTE` roll in `src/signals/option_resolver.py::resolve_monthly_option` (next-month contract in the current month's final week; `get_expiry_candidates` untouched).
   | Owner: Antigravity | Model: n/a | Review: greeks-analyst | SHA: <—>
 - [ ] **SPT-3** — Entry executor: `src/strategy/signal_track_v1.py` `PaperStrategy` — `DailySignal` → `resolve_monthly_option` → `LegSpec` → `PaperExecutor` fill → frozen `SignalPaperEntry` → Telegram

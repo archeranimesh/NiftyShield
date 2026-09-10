@@ -119,7 +119,7 @@ persistent residual — and which moneyness bands decay faster than theta alone 
 **`signals-cost-tracking/`** · ✅ Archived → `docs/archive/plan/signals-cost-tracking/` (SCT-1..4, 2026-09-10) OpenRouter per-call token usage + USD cost captured via inline `usage.include`, persisted
 as three nullable columns on `signal_responses`, aggregated by `SignalStore.get_signal_cost()`, and shown as today's spend on the 09:30 message. Cost trustworthy from 2026-09-11.
 
-**`signals-paper-track/`** · 🔨 In progress · SPT-1..2 done (SPT-2 `<pending>`) · next: **SPT-2a** (`≤ 7-DTE` roll, Owner Antigravity). Turns the `signals/` consensus into a live paper-traded strategy:
+**`signals-paper-track/`** · 🔨 In progress · SPT-1..2 done (SPT-2 `58e0b08`) · next: **SPT-2a** (`≤ 7-DTE` roll, Owner Antigravity). Turns the `signals/` consensus into a live paper-traded strategy:
 auto-enter the daily `DailySignal` as a long monthly option (near-month, ≤ 7-DTE roll), manage it intraday against a fixed SL −30 % / target +50 %, exit on a hit or square off by 15:00, log the full
 mark path, and record every entry + exit for a 6-month evaluation window that gates go-live. SPT-1 ruled 2026-09-09 (council q17,
 `docs/archive/council/strategy/2026-09-09_signals-paper-track-execution-layer.md`): module boundary **A** — `paper_signal_track_v1` `PaperStrategy` on the shared `StrategyMonitor` / `PaperExecutor` /

@@ -143,7 +143,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
-- [2026-09-10] signals-paper-track SPT-2 closed (`<pending>`) — `SignalPaperEntry` / `SignalMark` frozen Pydantic models + `paper_signal_entries` / `paper_signal_marks` tables (non-STRICT, per
+- [2026-09-10] signals-paper-track SPT-2 closed (`58e0b08`) — `SignalPaperEntry` / `SignalMark` frozen Pydantic models + `paper_signal_entries` / `paper_signal_marks` tables (non-STRICT, per
   `schema.md`) added to `PaperStore._SCHEMA`, plus `open_signal_entry` / `get_open_signal_entry` / `record_mark` / `get_marks` / `close_signal_entry` / `get_entries` / `cumulative_pnl`. Position
   rides `paper_trades` as `paper_signal_track_v1` (`STRATEGY_SIGNAL_TRACK` constant, `quantity = LOT_SIZE`). `close_signal_entry` does the state-flip + `paper_exit_events` insert in one
   transaction (code-review: no half-closed state); `cumulative_pnl` pairs closed entries to SELL rows in chronological order (safe under the one-position-at-a-time guard) with a length-mismatch
