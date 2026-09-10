@@ -127,6 +127,9 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
   reason / days-in-trade for IC-all / cc / pp / collar). 10 tests. code-reviewer CRITICAL+ERROR
   resolved, greeks-analyst clean. Next: B043.2 — standardise the five close paths to
   `Cycle P&L` + `Since inception`.
+- [2026-09-10] cycle_pnl_report follow-up (`2d7412e`) — `Cycle` gains
+  `entry_credit_per_unit` / `exit_cost_per_unit` / `decay_pct`; report shows the three as
+  columns. code-reviewer clean, test-runner 3382 passed.
 - [2026-09-09] signals-paper-track SPT-1 closed (`636c190`) — council q17 ruled
   (`docs/archive/council/strategy/2026-09-09_signals-paper-track-execution-layer.md`). Docs-only:
   `DECISIONS.md` §"Signals Paper Track — Execution Layer" (module boundary A, pure
