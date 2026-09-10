@@ -120,6 +120,13 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-10] BUG-043 logged (`abc2d60`) — "Net P&L" in strategy close notifications has no
+  stable meaning (inception-cumulative for IC v1/v2, cycle-only for collar, absent for CSP).
+  B043.1 closed (`74bf1c4`): new `src/paper/cycle_pnl.py` (`reconstruct_cycles` /
+  `get_last_cycle_realized_pnl`) + `scripts/dev/cycle_pnl_report.py` (per-cycle P&L / exit
+  reason / days-in-trade for IC-all / cc / pp / collar). 10 tests. code-reviewer CRITICAL+ERROR
+  resolved, greeks-analyst clean. Next: B043.2 — standardise the five close paths to
+  `Cycle P&L` + `Since inception`.
 - [2026-09-09] signals-paper-track SPT-1 closed (`636c190`) — council q17 ruled
   (`docs/archive/council/strategy/2026-09-09_signals-paper-track-execution-layer.md`). Docs-only:
   `DECISIONS.md` §"Signals Paper Track — Execution Layer" (module boundary A, pure

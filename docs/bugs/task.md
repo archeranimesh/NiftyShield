@@ -28,9 +28,9 @@
 
 ## BUG-043 — "Net P&L" in close notifications is inception-cumulative for IC v1/v2, cycle-only for collar, absent for CSP — no stable per-strategy contract
 
-- [ ] **B043.1** — Add `reconstruct_cycles()` + `get_last_cycle_realized_pnl()` to `src/paper/`
+- [x] **B043.1** — Add `reconstruct_cycles()` + `get_last_cycle_realized_pnl()` to `src/paper/`
   (all-legs-flat cycle boundaries from `paper_trades`); happy-path + open-trailing-cycle +
-  single-leg-overlay tests.
+  single-leg-overlay tests. Also shipped `scripts/dev/cycle_pnl_report.py`. | SHA `74bf1c4`
 - [ ] **B043.2** — Standardise the five close paths (`ic_nifty_v1`, `ic_nifty_v2`,
   `collar_overlay_v1`, `auto_close.py`, `csp_nifty_v1`) to fixed labels `Cycle P&L` +
   `Since inception`; add both to the CSP close message.

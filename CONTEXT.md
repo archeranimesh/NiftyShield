@@ -35,7 +35,9 @@ Top-level `src/` packages, one line each (detail → `CONTEXT_TREE.md`):
   `PaperLegSnapshot`, `PaperExitEvent`, `TrackComparisonSnapshot`, `TradeState` enum. `PaperStore`
   (SQLite — `paper_trades`, `paper_nav_snapshots`, `paper_leg_snapshots`, `paper_exit_events`,
   `gate_violations`, `warn_signal_state`, `paper_track_comparison_snapshots`, …). `PaperTracker`
-  (`compute_pnl`, `compute_pnl_by_leg_group`), fill simulator, selectors.
+  (`compute_pnl`, `compute_pnl_by_leg_group`), fill simulator, selectors. `cycle_pnl.py`
+  (`reconstruct_cycles` / `get_last_cycle_realized_pnl` — round-trip cycle boundaries from the
+  `paper_trades` ledger; shared with `scripts/dev/cycle_pnl_report.py` and BUG-043).
 - `src/strategy/` — paper-backbone strategy layer. `PaperStrategy` protocol,
   `SignalEvent`/`ApprovedAction`/`LegSpec`/`LegClose`, `StrategyMonitor` daemon (tick loop, WARN
   dedup, auto-execute dispatch), `PaperExecutor`, `ReEntryMixin`. 7 strategies: `CSPNiftyV1`,
