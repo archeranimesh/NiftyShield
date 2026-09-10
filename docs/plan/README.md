@@ -90,6 +90,15 @@ PP re-entry paths (OEM-3) → migrate the `📥 Overlay Entry — {TYPE} Bootstr
 `paper_3track_overlay_entry.py` onto the renderer (OEM-4) → docs close (OEM-5). Depends on
 `unified-entry-message/`. No DB schema change. Requested by Animesh 2026-09-10.
 
+**`unified-exit-message/`** · ⬜ Not started · next: **UXM-1** (`cycle_stats` helper + shared LegGroup resolver)
+One shared close-confirmation renderer for IC v1/v2, CSP, CC, PP, Collar — replaces four divergent
+hand-rolled close f-strings. `cycle_stats` + `resolve_target` move into `src/paper/cycle_pnl.py` (UXM-1) →
+`src/notifications/exit_message.py` / `ExitMessage` / `format_exit_message` + `build_close_leg_table`,
+with a this-exit / cycle / inception P&L footer + win-rate row gated at ≥ 5 closed cycles (UXM-2) →
+migrate IC (UXM-3), CSP + `record_paper_trade --close` (UXM-4), CC/PP/Collar strategy classes (UXM-5),
+`auto_close.py` daemon (UXM-6) → docs close (UXM-7). Depends on `unified-entry-message/` +
+`overlay-entry-message/`. No DB schema change. Requested by Animesh 2026-09-10.
+
 **`risk-gamma-phase-a/`** · 🔄 In progress · next: **B2.2** (chain fetch + field computation)
 Risk delta gate (done) + Near-Expiry Gamma Buy `gamma_daily_watch.py`.
 

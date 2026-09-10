@@ -1,0 +1,303 @@
+# Unified exit message — story specs
+
+> One task per session. Find the first unchecked item in `tasks.md`. That is your only task.
+> Full implementation rules in `CLAUDE.md` and `REVIEW.md`.
+> After each task: set `SHA:` on the task line + tick the box, update the story status in
+> `docs/plan/README.md`, add one line to `TODOS.md` Session Log.
+
+Depends on `unified-entry-message/` + `overlay-entry-message/` (both shipped + archived) —
+this story assumes `src/notifications/entry_message.py` and the sign-aware `_credit_line`
+already exist and mirrors their structure.
+
+No DB schema change — no `schema.md`. Cycles are reconstructed from the `paper_trades`
+ledger; exit reasons come from `paper_exit_events`, which already exists.
+
+---
+
+## UXM-1 — `cycle_stats` helper + shared leg-group resolver
+
+**Files to change:**
+- `src/paper/cycle_pnl.py` — add `CycleStats` frozen dataclass + `cycle_stats(trades)`;
+  move `resolve_target` + `_Group` (and any private helper they need) in from
+  `scripts/dev/cycle_pnl_report.py`.
+- `scripts/dev/cycle_pnl_report.py` — replace the local `resolve_target` / `_Group` with an
+  import from `src.paper.cycle_pnl`. No behaviour change to the CLI output.
+- `tests/unit/paper/test_cycle_pnl.py` — extend.
+
+**Before any code (graph queries):**
+- `get_code_snippet("Cycle")` + `get_code_snippet("reconstruct_cycles")` +
+  `get_code_snippet("get_last_cycle_realized_pnl")` — the `Cycle` field list
+  (`realized_pnl`, `entry_date`, `exit_date`, `decay_pct`, `is_open`, `index`).
+- `get_code_snippet("resolve_target")` + `search_code("_Group")` in
+  `scripts/dev/cycle_pnl_report.py` — the full definition + every reference, so the move is
+  complete.
+- `trace_path("resolve_target")` — confirm the CLI is the only caller today.
+
+**What to implement:**
+
+1. Move `resolve_target(target: str) -> list[_Group]` and the `_Group` dataclass verbatim to
+   `src/paper/cycle_pnl.py` (rename `_Group` → `LegGroup`, public — `src/` and the CLI both
+   import it). Keep the alias table (`ic-all`, `cc`, `pp`, `collar`, `overlay-all`, …) as-is.
+2. `CycleStats` frozen dataclass:
+   `closed_count: int`, `wins: int`, `losses: int`, `win_rate: float | None`
+   (`None` when `closed_count == 0`), `avg_win: Decimal`, `avg_loss: Decimal`
+   (signed, ≤ 0), `best: Decimal`, `worst: Decimal`, `avg_hold_days: float`,
+   `avg_decay_pct: float | None`.
+3. `cycle_stats(trades: Sequence[PaperTrade]) -> CycleStats` — pure, over
+   `[c for c in reconstruct_cycles(trades) if not c.is_open]`. A cycle is a win when
+   `realized_pnl > 0`. `avg_decay_pct` skips cycles whose `decay_pct is None`.
+   Empty closed list → all-zero / `None` stats, never raises.
+
+**Tests (no network, no real DB — build `PaperTrade` lists via a fixture helper; run
+`get_code_snippet("PaperTrade")` first, do not construct from memory):**
+- `test_cycle_stats_happy` — 3 wins / 2 losses → `win_rate == 0.6`, `avg_win` / `avg_loss`
+  correct, `best` / `worst` correct.
+- `test_cycle_stats_empty` — no closed cycles → `closed_count == 0`, `win_rate is None`,
+  no exception.
+- `test_resolve_target_moved` — `resolve_target("cc")` from `src.paper.cycle_pnl` returns the
+  same group(s) the CLI produced before the move.
+
+**Commit:** `refactor(paper): cycle_stats helper + shared LegGroup resolver in cycle_pnl`
+
+---
+
+## UXM-2 — The shared exit renderer
+
+**Files to change / create:**
+- `src/notifications/exit_message.py` — **new**. `ExitMessage`, `ExitKind`,
+  `format_exit_message`.
+- `src/notifications/formatting.py` — add `build_close_leg_table` (Act / Instrument / Entry /
+  Exit / P&L). `build_leg_table` and `LegRow` are **not** touched.
+- `tests/unit/notifications/test_exit_message.py` — **new**.
+
+**Before any code (graph queries):**
+- `get_code_snippet("build_leg_table")` + `get_code_snippet("LegRow")` — mirror the column /
+  width / fence approach; the close table needs its own row type.
+- `get_code_snippet("format_money")` + `get_code_snippet("format_expiry")` +
+  `search_graph("format_greek")` — reused helpers (no delta column in the close table, so
+  `format_greek` is not needed here).
+- `get_code_snippet("CycleStats")` + `get_code_snippet("get_last_cycle_realized_pnl")` +
+  `get_code_snippet("get_strategy_realized_pnl")` — the footer inputs.
+- `get_code_snippet("_credit_line")` in `entry_message.py` — the sign-aware `Net credit` /
+  `Net debit` pattern; the exit footer's P&L lines follow the same `+₹` / `-₹` convention
+  (use `format_money(v, signed=True)` — `cycle_pnl_report.py` already does).
+
+**What to implement:**
+
+1. `ExitKind(str, Enum)` — `CLOSE` / `ROLL` / `CRASH_MONETIZE` / `WAITING`. Maps to the
+   headline emoji: `✅` / `🔄` / `💰` / `⛔`. Caller passes it explicitly (derived from
+   `action.action_type` at the call site, not string-sniffed in the renderer).
+2. `CloseLegRow` frozen dataclass for `build_close_leg_table`:
+   `role: str` (`[S]` when `startswith("Short")`, else `[B]` — same rule as `LegRow`),
+   `instrument: str`, `entry: float`, `exit: float`, `pnl: Decimal`.
+   `build_close_leg_table(rows: list[CloseLegRow]) -> str` — fenced-ready, right-aligned
+   numerics, `pnl` via `format_money(signed=True)`. Raises on empty (mirror `build_leg_table`).
+3. `ExitMessage` frozen dataclass:
+   - `headline_label: str` (`"IC v1"` / `"CSP"` / `"CC"` / `"PP"` / `"Collar"`),
+     `kind: ExitKind`, `signal: str` (free-text exit reason, escaped).
+   - `dte: int`, `held_days: int` — required.
+   - `legs: list[CloseLegRow]` — 1..N.
+   - `this_exit_pnl: Decimal` — required. `per_lot: bool = False` — IC passes `True` to also
+     show `(₹X/lot)`.
+   - `cycle_pnl: Decimal | None`, `cycle_index: int | None`, `cycle_decay_pct: float | None` —
+     the just-closed `Cycle`; `None` for a partial close where no cycle closed.
+   - `inception_pnl: Decimal` — required (`get_strategy_realized_pnl`).
+   - `stats: CycleStats | None` — win-rate row rendered only when
+     `stats is not None and stats.closed_count >= 5`.
+   - `overlay_total_pnl: Decimal | None = None` — the `📊 Overlay P&L (total realized)` row,
+     overlay strategies only.
+   - `state_line: str | None = None` — the `→ *State:* …` line (PP crash-monetize keeps its
+     `RE_ENTRY_PENDING` note).
+4. `format_exit_message(msg) -> str` layout:
+   ```
+   {emoji} *{label} Closed* — {signal}          (ROLL → "Rolled", WAITING → "Closed — waiting")
+   *Signal:* {signal}   *DTE:* {dte}   *Held:* {held}d
+   <blank>
+   ```{close leg table}```
+   <blank>
+   ━━━━━━━━━━━━━━━━━━━━━━━━
+   💰 *This exit:* {+₹this}   [(₹x/lot) when per_lot]
+   🔁 *Cycle #{i}:* {+₹cycle}   (decay {d}%, held {h}d)      [omit line if cycle_pnl is None]
+   📈 *Inception:* {+₹inception}
+   🎯 *Win rate:* {r}%  ({W}W / {L}L)   avg {+₹aw} / {-₹al}   [only when stats.closed_count >= 5]
+   📊 *Overlay P&L (total realized):* {₹overlay}              [only when overlay_total_pnl set]
+   → *State:* {state_line}                                    [only when state_line set]
+   ```
+   Collapse the `This exit` / `Cycle` rows into one when
+   `cycle_pnl is not None and abs(this_exit_pnl - cycle_pnl) < Decimal("1")` — render just
+   `🔁 *Cycle #{i}:* {+₹} (decay …, held …)`.
+   Every interpolated value pre-escaped; the fenced table emitted literally.
+
+**Tests (no network, no real DB):**
+- `test_full_close_collapses_this_exit_and_cycle` — equal values → one combined row.
+- `test_partial_close_omits_cycle_row` — `cycle_pnl=None` → no `🔁` line, `💰 This exit` shown.
+- `test_win_rate_hidden_below_five_cycles` — `stats.closed_count == 4` → no `🎯` line.
+- `test_win_rate_shown_at_five` — `closed_count == 5` → `🎯 *Win rate:*` present, correct %.
+- `test_net_loss_renders_minus_sign` — negative `inception_pnl` → `-₹` not `₹-`.
+- `test_overlay_total_line_only_when_set` — both branches.
+- `test_close_leg_table_badges` — a `[S]` and a `[B]` row render correctly, P&L signed.
+- `test_roll_kind_headline` — `ExitKind.ROLL` → `🔄 *CSP Rolled* — …`.
+
+**Commit:** `feat(notifications): shared exit-confirmation renderer (ExitMessage)`
+
+---
+
+## UXM-3 — Migrate IC v1 + v2 close notifications
+
+**Files to change:**
+- `src/strategy/ic_nifty_v1.py` (~805–838) and `src/strategy/ic_nifty_v2.py` (~2205–2238) —
+  replace the hand-rolled `text = (...)` with `format_exit_message(ExitMessage(...))`.
+- `tests/unit/strategy/test_ic_nifty_v1.py`, `test_ic_nifty_v2.py`.
+
+**Before any code (graph queries):**
+- `get_code_snippet("ICNiftyV1._send_close_notification")` (and v2's equivalent) — the
+  `closed_trades` shape, where `triggering_signal` / `action_type` come from, the existing
+  `get_strategy_realized_pnl` call (reuse it for `inception_pnl`).
+- `get_code_snippet("resolve_target")` / `get_code_snippet("cycle_stats")` — build the IC
+  leg group (`resolve_target(self.strategy_name)` or the `ic-*` alias), then
+  `reconstruct_cycles` + `cycle_stats` + `get_last_cycle_realized_pnl` off
+  `self._store.get_trades(self.strategy_name)`.
+- `get_code_snippet("ApprovedAction")` — the `action_type` values, to map `→ ExitKind`
+  (`CLOSE_FULL` → `CLOSE`, `ROLL_*` → `ROLL`).
+
+**What to implement:**
+
+1. Build `legs: list[CloseLegRow]` from `closed_trades` — `entry` from the opening fill
+   (`t.entry` / the position `avg_*`), `exit` from the close fill, `pnl` per-leg realized.
+2. `this_exit_pnl` = sum of the per-leg P&L in this action; `cycle_pnl` /
+   `cycle_index` / `cycle_decay_pct` from the just-closed `Cycle`; `inception_pnl` from the
+   existing `get_strategy_realized_pnl`; `stats` from `cycle_stats`.
+3. `headline_label="IC v1"` / `"IC v2"`, `per_lot=True`, `kind` from `action_type`.
+4. Keep the non-fatal `try/except` + `ic_nifty_v*.send_notification*` log. Deferred import of
+   `cycle_pnl` if a circular import appears (the module already does this for `tracker`).
+
+**Tests:** happy close → body has `✅ *IC v1 Closed*`, the 4-leg table, `📈 *Inception:*`;
+notify failure → non-fatal, close still completes.
+
+**Commit:** `refactor(strategy): IC v1/v2 close message onto shared exit renderer`
+
+---
+
+## UXM-4 — Migrate CSP + the recorder `--close` path
+
+**Files to change:**
+- `src/strategy/csp_nifty_v1.py` (~635 `_reentry_notification`, ~460–475 `⛔ waiting`).
+- `scripts/record/record_paper_trade.py` — the `--notify` flag (added in UEM-2) currently
+  no-ops on `--close`; make it send an exit card on a successful close.
+- `tests/unit/strategy/test_csp_nifty_v1.py`, `tests/unit/scripts/test_record_paper_trade.py`.
+
+**Before any code (graph queries):**
+- `get_code_snippet("CSPNiftyV1._reentry_notification")` + `search_code("CSP closed — waiting")`
+  — both message sites, and what leg / price / signal data is in scope at each.
+- `get_code_snippet("record_trade")` in `record_paper_trade.py` + the `--close` branch
+  (~684–908) — where `net qty = 0` is confirmed; the close fill price; the resolved leg.
+- `get_code_snippet("cycle_stats")` / `reconstruct_cycles` — same footer construction as UXM-3.
+
+**What to implement:**
+
+1. CSP `_reentry_notification`: `format_exit_message(ExitMessage(headline_label="CSP",
+   kind=ExitKind.CLOSE, ...))` with the single short-put `CloseLegRow`, this-exit P&L, the
+   cycle + inception + stats footer. Drop the `New position opened. Re-entry eligibility …`
+   prose — the re-entry gets its own entry card (UEM-2). The `⛔ waiting` variant is
+   `kind=ExitKind.WAITING` (headline `⛔ *CSP Closed — waiting*`), same footer.
+2. `record_paper_trade.py`: at the confirmed `net qty = 0` close point, if `args.notify`,
+   build an `ExitMessage` (one leg, `kind=CLOSE`, cycle + inception footer off
+   `store.get_trades`) and send via `TelegramNotifier` in the existing non-fatal block.
+   `--close` without `--notify` stays stdout-only.
+
+**Tests:**
+- `test_csp_close_sends_exit_card` — `✅ *CSP Closed*`, one `[S]` row, `📈 *Inception:*`.
+- `test_csp_waiting_uses_waiting_kind` — `⛔ *CSP Closed — waiting*`.
+- `test_record_close_notify_sends_exit_card` / `test_record_close_no_notify_silent`.
+
+**Commit:** `feat(strategy): CSP close message + record_paper_trade --close exit card`
+
+---
+
+## UXM-5 — Migrate CC + PP + Collar strategy-class close notifications
+
+**Files to change:**
+- `src/strategy/cc_overlay_v1.py` (~333–390), `pp_overlay_v1.py` (~352–410),
+  `collar_overlay_v1.py` (~641–735) — `_send_close_notification` bodies.
+- `tests/unit/strategy/test_cc_overlay_v1.py`, `test_pp_overlay_v1.py`,
+  `test_collar_overlay_v1.py`.
+
+**Before any code (graph queries):**
+- `get_code_snippet` on each `_send_close_notification` — the `pos` / `action.metadata`
+  (`mark`, `delta`, `dte`) shape, the `format_leg_label` call, the dispatch chain.
+- `get_code_snippet("resolve_target")` — the `cc` / `pp` / `collar` aliases give the leg
+  group for `reconstruct_cycles` / `cycle_stats`.
+- `search_graph("get_strategy_realized_pnl")` — `overlay_total_pnl` =
+  `get_strategy_realized_pnl(store, STRATEGY_OVERLAY)` (what `auto_close.py` uses).
+
+**What to implement:**
+
+1. Each `_send_close_notification` builds an `ExitMessage`:
+   - CC: one `CloseLegRow(role="Short Call", …)`, `headline_label="CC"`.
+   - PP: one `CloseLegRow(role="Long Put", …)`, `headline_label="PP"`;
+     `kind=ExitKind.CRASH_MONETIZE` + `state_line="RE_ENTRY_PENDING (monitoring IVR ≤ 0.60,
+     DTE ≥ 14)"` when `action.action_type` is the crash path, else `ROLL` / `CLOSE`.
+   - Collar: two rows (`"Short Call"` then `"Long Put"`), `headline_label="Collar"`.
+   - `this_exit_pnl` from the closed leg(s); `overlay_total_pnl` set; cycle + inception +
+     stats footer as UXM-3.
+2. Keep every non-fatal `try/except` + `<class>.send_close_notification_failed` log and the
+   `send_notification` → `send_plain_message` → `send` dispatch chain.
+
+**Tests (per class):** close → `✅ *CC Closed*` / `💰 *PP Closed*` / `✅ *Collar Closed*`,
+right leg count, `📊 *Overlay P&L (total realized):*` present, footer P&L lines; PP crash
+path → `state_line` rendered; notify failure non-fatal.
+
+**Commit:** `refactor(strategy): CC/PP/Collar close messages onto shared exit renderer`
+
+---
+
+## UXM-6 — Migrate the `auto_close.py` daemon paths
+
+**Files to change:**
+- `src/strategy/auto_close.py` (~270–360) — the Collar / CC / PP `msg = (...)` branches.
+- `tests/unit/strategy/test_auto_close.py`.
+
+**Before any code (graph queries):**
+- `get_code_snippet` on the `_notify` / message-building function (~240–365) — the
+  `legs` dict shape (`key`, `entry`, `exit`, `pnl`, `role`, `delta`), `net_pnl`,
+  `realized_pnl` (already `get_strategy_realized_pnl`), `exit_signal`, `_label`, `_fmt_pnl`.
+- Confirm the `overlay_pp` `CRASH_MONETIZE` branch's `→ RE_ENTRY_PENDING` state text — carry
+  it into `state_line` verbatim.
+
+**What to implement:**
+
+1. Replace the three hand-rolled `msg` branches with one `format_exit_message` call —
+   `legs` → `CloseLegRow` list, `this_exit_pnl = net_pnl`, `overlay_total_pnl = realized_pnl`,
+   `headline_label` / leg roles from the `legs` dict, `kind` + `state_line` from
+   `exit_signal`. Cycle + `cycle_stats` footer off `store.get_trades(strategy_name)` filtered
+   by the overlay leg group (`resolve_target`).
+2. `await notifier.send(msg)` in the existing non-fatal `try/except` — unchanged.
+
+**Tests:** each overlay type → the shared card; `CRASH_MONETIZE` → `state_line`; the
+`Overlay P&L (total realized)` figure matches `get_strategy_realized_pnl(store,
+STRATEGY_OVERLAY)`.
+
+**Commit:** `refactor(strategy): auto_close daemon messages onto shared exit renderer`
+
+---
+
+## UXM-7 — Docs close
+
+**Files to change:** `CONTEXT.md`, `src/notifications/CLAUDE.md`, `DECISIONS.md`,
+`docs/plan/README.md`, `TODOS.md`. Targeted `Edit` only, never `Write`.
+
+1. `CONTEXT.md` "What Exists" `src/notifications/` bullet — add
+   `exit_message.py (shared close-confirmation renderer — IC/CSP/CC/PP/Collar + this-exit /
+   cycle / inception P&L + win-rate, UXM-1..6)`; note `cycle_pnl.py` gained `cycle_stats` +
+   `LegGroup` / `resolve_target`.
+2. `src/notifications/CLAUDE.md` — the close card is `format_exit_message`; the footer's
+   inception number is `get_strategy_realized_pnl` (authoritative), cycle stats are the
+   approximation; win rate gated at `closed_count >= 5`.
+3. `DECISIONS.md` §P&L & Reporting — one dated line: unified exit renderer; three P&L levels
+   (this-exit / cycle / inception) with inception from the store not the cycle sum; win-rate
+   stats from `cycle_stats`; `auto_close.py` + strategy-class + recorder all on one renderer.
+4. `docs/plan/README.md` — `unified-exit-message/` row → ✅ Shipped/Archived with the SHAs;
+   `TODOS.md` Feature Backlog line deleted, Session Log line added.
+5. `git mv docs/plan/unified-exit-message docs/archive/plan/unified-exit-message` — one commit.
+
+**Commit:** `docs: close unified-exit-message (UXM-1..7)`
