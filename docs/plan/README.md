@@ -76,9 +76,19 @@ Cross-strategy paper-trade EOD digest to Telegram. PT-1 (spec `d1ae760`) + PT-2 
 **`unified-entry-message/`** · ⬜ Not started · next: **UEM-1** (generalize the IC entry renderer)
 One shared lean entry-confirmation renderer for all paper strategies. `src/notifications/ic_entry_message.py`
 → `entry_message.py` / `EntryMessage` with a `headline_label` field and optional `ivr`/`mode`/`expiry_type`
-(UEM-1, IC output unchanged) → lean CSP entry Telegram card from `scripts/record/record_paper_trade.py`
-behind `--notify`, on a successful open only (UEM-2) → docs close (UEM-3). IC + CSP only; overlays and
-`nifty_track_comparison_v1` are a deliberate follow-up. No DB schema change. Requested by Animesh 2026-09-10.
+(UEM-1, IC output unchanged) → lean CSP / CC entry Telegram card from `scripts/record/record_paper_trade.py`
+behind `--notify` (headline from `--strategy`), on a successful open only (UEM-2) → docs close (UEM-3).
+IC + CSP + CC (all through the recorder). Overlay automated re-entry + the three-track bootstrap message
+are the `overlay-entry-message/` follow-up; `nifty_track_comparison_v1` stays deferred. No DB schema
+change. Requested by Animesh 2026-09-10.
+
+**`overlay-entry-message/`** · ⬜ Not started · next: **OEM-1** (sign-aware net credit/debit line)
+Extends the shared `entry_message.py` renderer to the automated overlay entries. OEM-1 makes the net line
+sign-aware (`Net debit` when negative — collar / PP; IC / CSP / CC byte-identical) → `✅ *Collar Entry*`
+card from `CollarOverlayV1._reenter_collar` (OEM-2) → `✅ *CC Entry*` / `✅ *PP Entry*` cards from the CC /
+PP re-entry paths (OEM-3) → migrate the `📥 Overlay Entry — {TYPE} Bootstrap` message in
+`paper_3track_overlay_entry.py` onto the renderer (OEM-4) → docs close (OEM-5). Depends on
+`unified-entry-message/`. No DB schema change. Requested by Animesh 2026-09-10.
 
 **`risk-gamma-phase-a/`** · 🔄 In progress · next: **B2.2** (chain fetch + field computation)
 Risk delta gate (done) + Near-Expiry Gamma Buy `gamma_daily_watch.py`.

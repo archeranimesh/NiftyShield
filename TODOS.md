@@ -83,9 +83,14 @@ rot them.
     Priority relative to items 13–21 is Animesh's call.
 23. **Unified entry message** — `docs/plan/unified-entry-message/` — next **UEM-1** (generalize
     `ic_entry_message.py` → shared `entry_message.py` / `EntryMessage`). One lean entry-confirmation
-    renderer for all paper strategies; IC migrated onto it, CSP given the entry Telegram card it lacks
-    (via `record_paper_trade.py --notify`). IC + CSP only — overlays / track-comparison deferred.
-    Requested by Animesh 2026-09-10.
+    renderer for all paper strategies; IC migrated onto it, CSP + CC given the entry Telegram card they
+    lack (via `record_paper_trade.py --notify`, headline from `--strategy`). IC + CSP + CC — overlay
+    automated re-entry + three-track bootstrap are the `overlay-entry-message` follow-up (#24),
+    track-comparison deferred. Requested by Animesh 2026-09-10.
+24. **Overlay entry message** — `docs/plan/overlay-entry-message/` — next **OEM-1** (sign-aware
+    `Net credit` / `Net debit` line in `entry_message.py`). Extends the shared renderer to the automated
+    overlay entries: Collar / CC / PP re-entry cards from the strategy classes + the three-track
+    `📥 Overlay Entry` bootstrap message. Depends on #23. Requested by Animesh 2026-09-10.
 
 ## Open Bugs
 
