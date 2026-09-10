@@ -50,14 +50,19 @@ Commit order = task order: DHR-1 (summary model) → DHR-2 (formatter) → DHR-3
    MF value + Nuvama bond value; `total_pnl` = `mf_pnl.total_pnl` +
    `nuvama_bonds.total_pnl` — **remove** the `nuvama_options_summary.net_pnl` term from both.
    `total_invested` = MF invested + Nuvama bond basis.
-4. **Wire Nuvama options into `total_day_delta`** (it is absent today): `total_day_delta` =
-   `mf_day_delta` + `nuvama_bonds.total_day_delta` + `nuvama_options.net_pnl`. Add
-   `nuvama_options` presence to the `any_delta` / `has_deltas` guard so a run with only an
-   options move still shows the `📊 Today` block.
-5. If the summary needs a field for the options daily contribution, expose
-   `nuvama_options.net_pnl` via a `@property` on `PortfolioSummary` or read it straight from
-   `summary.nuvama_options` in the formatter — do not duplicate the value into a stored
-   field.
+4. **Add a true Nuvama-options daily delta** (decision 5). `_build_portfolio_summary` takes
+   a new `prev_nuvama_options_unrealized: Decimal | None` param (a scalar, like `prev_mf_pnl`
+   — DHR-3 computes it in `daily_snapshot.py` from
+   `NuvamaStore.get_options_snapshot_for_date(prev_trading_day(snap_date))`, summing
+   `unrealized_pnl`). Then:
+   `nuvama_options_day_delta = (nuvama_options.total_unrealized_pnl − prev_unrealized) +
+   nuvama_options.total_realized_pnl_today` — `None` when either `nuvama_options` or the
+   prior snapshot is missing.
+5. `total_day_delta` = `mf_day_delta` + `nuvama_bonds.total_day_delta` +
+   `nuvama_options_day_delta` (each term `or Decimal("0")`). Add `nuvama_options_day_delta`
+   presence to the `any_delta` / `has_deltas` guard. Store `nuvama_options_day_delta` on
+   `PortfolioSummary` (the formatter reads it for the `📊 Today` row); do **not** touch the
+   model's `net_pnl` property — other callers may use it, it is just no longer used here.
 6. `strategies` / `strategy_pnls` / `prices` params of `_build_portfolio_summary` are dead
    after `finideas-decommission/` FD-3 — if FD-3 did not already remove them, do it here and
    fix the `daily_snapshot.py` + `SnapshotService` callers.
@@ -67,8 +72,11 @@ Commit order = task order: DHR-1 (summary model) → DHR-2 (formatter) → DHR-3
   `total_pnl` = MF + bond sums, no `dhan` attribute.
 - `test_total_excludes_options_pnl` — with a non-zero `nuvama_options.net_pnl`, `total_value`
   and `total_pnl` are unchanged vs. the options-absent case.
-- `test_today_includes_options_net_pnl` — `total_day_delta` = MF delta + bond delta + options
-  `net_pnl`; an options-only move still sets `has_deltas` true.
+- `test_options_day_delta_true_delta` — with `prev_nuvama_options_unrealized` set,
+  `nuvama_options_day_delta` = `(unrealized_now − prev) + realized_today`, and `total_day_delta`
+  includes it; an options-only move still sets `has_deltas` true.
+- `test_options_day_delta_none_without_prev` — no prior options snapshot →
+  `nuvama_options_day_delta` is `None`, the `📊 Today` `Nuvama options` row is omitted.
 - `test_build_summary_all_none` — every source `None` → zeros, `has_deltas` false path holds.
 
 **Commit:** `refactor(portfolio): drop Dhan + reshape totals for the slimmed snapshot`
@@ -102,9 +110,9 @@ added here (the string starts with ```` ``` ```` and ends with ```` ``` ````); D
    `not has_deltas`), `📦 Holdings`, `📈 Nuvama options` (omit when `nuvama_options` is
    `None`). No waterfall/fallback branch.
 2. `📊 Today` — rows for Mutual funds (`mf_day_delta`), Nuvama bonds
-   (`nuvama_bonds.total_day_delta`), Nuvama options (`nuvama_options.net_pnl`), then a rule
-   and `Net` (`total_day_delta`). Omit a row whose source is unavailable. No `▲/▼` arrow, no
-   weight-percent.
+   (`nuvama_bonds.total_day_delta`), Nuvama options (`summary.nuvama_options_day_delta` — the
+   true delta from DHR-1, **not** `net_pnl`), then a rule and `Net` (`total_day_delta`). Omit
+   a row whose delta is `None`. No `▲/▼` arrow, no weight-percent.
 3. `📦 Holdings` — `Mutual funds` and `Nuvama bonds` rows with `₹value   +pnl   +pct%`
    (right-aligned columns), a rule, then `Total` = `total_value` / `total_pnl` /
    `total_pnl_pct`. A failed source → `[fetch failed]` in place of its numbers, excluded from
@@ -174,7 +182,13 @@ added here (the string starts with ```` ``` ```` and ends with ```` ``` ````); D
    `format_options_section` stays in `src/dhan/positions.py`.
 5. If the `--dhan-trades` / `dhan_trade_count` plumbing is removed, update `main()` argparse
    and its tests.
-6. **Send path — stop escaping the whole string** (DHR-2 made the message a fenced block):
+6. **Prior-day options unrealized** (for DHR-1's `nuvama_options_day_delta`): in both
+   `_historical_main` and `_async_main`, after the Nuvama options snapshot is
+   fetched/loaded, read `NuvamaStore.get_options_snapshot_for_date(prev_trading_day(snap_date))`,
+   sum `unrealized_pnl` across the returned positions (→ `None` if the list is empty), and
+   pass it as `prev_nuvama_options_unrealized=` to `_build_portfolio_summary` /
+   `_format_combined_summary`. Pure DB read, no network.
+7. **Send path — stop escaping the whole string** (DHR-2 made the message a fenced block):
    in the live-path Telegram send, replace `notifier.send(escape_markdown(summary_text))`
    with a send of the fenced `summary_text` as-is. `_format_combined_summary` already emits
    ```` ``` ```` fences and literal content; the only values that could break a fenced block

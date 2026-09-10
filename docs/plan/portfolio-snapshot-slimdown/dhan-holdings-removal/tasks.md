@@ -13,8 +13,10 @@ format** (read it first). DHR-4 is the epic close. No `schema.md`.
 **Open: DHR-1, DHR-2, DHR-3, DHR-4.**
 
 - [ ] **DHR-1** — `PortfolioSummary` + `_build_portfolio_summary`: drop the `dhan` field +
-      `dhan_summary` param + every Dhan term; move Nuvama options `net_pnl` **out of**
-      `total_value` / `total_pnl` and **into** `total_day_delta` + the `has_deltas` guard.
+      `dhan_summary` param + every Dhan term; Nuvama options P&L **out of** `total_value` /
+      `total_pnl` / `total_invested`; add a `nuvama_options_day_delta` field = `(unrealized
+      now − unrealized prev day) + realized today` (new `prev_nuvama_options_unrealized`
+      param) and fold it into `total_day_delta` + the `has_deltas` guard.
       | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
 - [ ] **DHR-2** — Rewrite `_format_combined_summary` to the epic README **Target message
       format**: one fenced layout — `📊 Today` / `📦 Holdings` / `📈 Nuvama options` — no
@@ -39,18 +41,21 @@ format** (read it first). DHR-4 is the epic close. No `schema.md`.
 
 - **DHR-1** — `PortfolioSummary` has no `dhan` attribute; `_build_portfolio_summary` has no
   `dhan_summary` parameter; `total_value` / `total_pnl` / `total_invested` are MF + Nuvama
-  bonds only (options P&L excluded); `total_day_delta` = MF delta + bond delta + Nuvama
-  options `net_pnl`, and an options-only move sets `has_deltas` true; tests green.
+  bonds only (options P&L excluded); `nuvama_options_day_delta` = `(unrealized now −
+  unrealized prev day) + realized today` (or `None` without a prior snapshot);
+  `total_day_delta` = MF delta + bond delta + `nuvama_options_day_delta`; an options-only
+  move sets `has_deltas` true; tests green.
 - **DHR-2** — `_format_combined_summary` emits exactly the epic README **Target message
   format**: one fenced block, `📊 Today` / `📦 Holdings` / `📈 Nuvama options`, no Dhan, no
   weight-percent, `Realized month (MTD)` = month + today, `Nifty H/L` shown when both
   present; degraded states per the spec; the old waterfall/fallback golden tests are
   replaced with exact-string matches; tests green.
 - **DHR-3** — `daily_snapshot.py` makes no Dhan portfolio or options fetch in either path;
-  no `dhan_summary` / `dhan_options_section` / `_dhan_holdings_prefetched` symbol remains;
-  the live-path send hands the fenced `summary_text` to `notifier.send` without
-  `escape_markdown`; `load_dhan_credentials` and every `src/dhan/` module still import
-  cleanly; tests green.
+  both paths pass `prev_nuvama_options_unrealized` (summed from
+  `get_options_snapshot_for_date(prev_trading_day(...))`) into the summary; no `dhan_summary`
+  / `dhan_options_section` / `_dhan_holdings_prefetched` symbol remains; the live-path send
+  hands the fenced `summary_text` to `notifier.send` without `escape_markdown`;
+  `load_dhan_credentials` and every `src/dhan/` module still import cleanly; tests green.
 - **DHR-4** — `CONTEXT.md`, `src/portfolio/CLAUDE.md`, `DECISIONS.md`, `DB_REGISTRY.md`
   (Dhan tables marked frozen, not removed) reflect the change; every epic `README.md`
   Stories row is ✅ and its **Epic done when** block is satisfied; the epic folder is

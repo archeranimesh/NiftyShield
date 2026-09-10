@@ -66,9 +66,12 @@ Target: the epic README **Target message format** — read it first; it is the s
 DHR-1's totals math and DHR-2's layout.
 
 - **DHR-1** — `PortfolioSummary` + `_build_portfolio_summary`: drop the `dhan` field +
-  `dhan_summary` param + every Dhan term; move Nuvama options `net_pnl` **out of**
-  `total_value` / `total_pnl` / `total_invested` and **into** `total_day_delta` + the
-  `has_deltas` guard (decisions 2 + the options-in-Today fix).
+  `dhan_summary` param + every Dhan term; Nuvama options P&L **out of** `total_value` /
+  `total_pnl` / `total_invested` (decision 2); add a `nuvama_options_day_delta` field —
+  `(unrealized now − unrealized on prev trading day) + realized today`, via a new
+  `prev_nuvama_options_unrealized` param — and fold it into `total_day_delta` + the
+  `has_deltas` guard (decision 5, the true-daily-delta fix). No schema change — the prior
+  unrealized comes from the existing `nuvama_options_snapshots` rows.
 - **DHR-2** — Rewrite `_format_combined_summary` to the Target message format: one fenced
   block, `📊 Today` / `📦 Holdings` / `📈 Nuvama options`, no Dhan, no waterfall/fallback
   split, no `▲/▼` weight-percent; `Realized month` MTD-inclusive; `Nifty H/L` when both
@@ -93,7 +96,8 @@ fenced block, `📊 Today` / `📦 Holdings` / `📈 Nuvama options`, no Dhan an
 options P&L out of `Total` value, `Realized month` MTD-inclusive, `Nifty H/L` when available.
 `PortfolioSummary` has no `dhan` field; `_build_portfolio_summary` and
 `_format_combined_summary` take no `dhan_summary` argument; `total_value` / `total_pnl`
-exclude options P&L; `total_day_delta` includes it. `scripts/portfolio/daily_snapshot.py`
+exclude options P&L; `total_day_delta` includes a true Nuvama-options daily delta
+(`nuvama_options_day_delta`). `scripts/portfolio/daily_snapshot.py`
 makes no Dhan portfolio or options fetch call and sends the fenced message without
 `escape_markdown`. `src/auth/dhan_verify` and every `src/dhan/` module import cleanly and
 their tests pass unchanged. The Dhan DB tables still exist. All

@@ -44,7 +44,8 @@ Status: ⬜ Not started · 🔄 In progress · ✅ Done. This column is the epic
 - **The snapshot must render with a single remaining source.** After each removal, a snapshot with only MF (or only MF + one bond source) must be well-formed — no empty section headers, no dangling
   separators, no `NOTE:` line referring to a removed source.
 - **`total_value` / `total_invested` / `total_pnl` recompute** from MF + Nuvama bonds only (Nuvama options P&L is **not** a value term — see *Target message format*). `total_day_delta` = MF delta +
-  bond delta + Nuvama options `net_pnl`. `total_pnl_pct` stays `total_pnl / total_invested`.
+  bond delta + Nuvama options **daily delta** (`(unrealized today − unrealized prev day) + realized today`, prior day from the stored options snapshot — no schema change). `total_pnl_pct` stays
+  `total_pnl / total_invested`.
 - **The waterfall and fallback formatter paths both change** in each sub-story — do not fix one and leave the other. `dhan-holdings-removal/` DHR-2 then collapses the two into the single *Target
   message format* layout.
 - **Golden-string / snapshot tests are updated in the same commit** as the code that changes the output — never a separate "fix the tests" commit.
@@ -57,7 +58,8 @@ supersedes the current waterfall / fallback split — there is now **one layout*
 
 Decisions confirmed with Animesh, 2026-09-10: (1) render as a single MarkdownV2 **fenced code block** — content emitted literally, no per-value escaping, columns align; (2) Nuvama options P&L is
 **not** a portfolio-value term — `💰 Total` is MF value + Nuvama bond value only, and its P&L excludes options; (3) `Realized month` is **month-to-date including today** (`monthly_realized_pnl +
-total_realized_pnl_today`); (4) show a `Nifty H/L` line when `nifty_high` / `nifty_low` are both present.
+total_realized_pnl_today`); (4) show a `Nifty H/L` line when `nifty_high` / `nifty_low` are both present; (5) every `📊 Today` row is a **true since-previous-trading-day delta**, including Nuvama
+options; (6) `📦 Holdings` P&L is lifetime since purchase — `mf_transactions` / Nuvama bond basis hold the full purchase history (confirmed), so the label is a plain `P&L`, no "since 2026" qualifier.
 
 ```
 🟢 NiftyShield · 2026-09-09
@@ -84,12 +86,21 @@ total_realized_pnl_today`); (4) show a `Nifty H/L` line when `nifty_high` / `nif
    Realized total            +1,41,865
 ```
 
-Field sources: `📊 Today` = `total_day_delta` = `mf_day_delta` + `nuvama_bonds.total_day_delta` + `nuvama_options.net_pnl` (`net_pnl` = `total_unrealized_pnl + total_realized_pnl_today` — **newly
-wired into the daily total**; today it feeds `total_value` / `total_pnl` but not the delta). `📦 Holdings` rows = `mf_pnl.total_current_value` / `.total_pnl` / `.total_pnl_pct` and
-`nuvama_bonds.total_value` / `.total_pnl` / `.total_pnl_pct`; `Total` = their sums (`total_value` = MF value + bond value; `total_pnl` likewise; `total_pnl_pct` = `total_pnl / total_invested` where
-`total_invested` = MF invested + bond basis). `📈 Nuvama options`: `Open M2M` = `total_unrealized_pnl`; `M2M today H/L` = `intraday_high` / `intraday_low`; `Nifty H/L` = `nifty_high` / `nifty_low`
-(omit the line if either is `None`); `Realized today` = `total_realized_pnl_today`; `Realized month (MTD)` = `monthly_realized_pnl + total_realized_pnl_today`; `Realized total` =
-`total_realized_pnl_today + cumulative_realized_pnl`.
+Field sources — **`📊 Today` = `total_day_delta` = the sum of three since-previous-trading-day deltas:**
+
+- `mf_day_delta` = today's MF value − MF value on `prev_trading_day(snap_date)` (from `mf_nav_snapshots`; carries the known AMFI-publish-lag caveat).
+- `nuvama_bonds.total_day_delta` = Σ (`current_value × chgP%`) — Nuvama's own broker day-change percent, so already a since-yesterday figure.
+- `nuvama_options_day_delta` = `(Σ unrealized_pnl today − Σ unrealized_pnl on prev_trading_day) + Σ realized_pnl_today`. The prior-day unrealized comes from
+  `NuvamaStore.get_options_snapshot_for_date(prev_trading_day(snap_date))` — the `nuvama_options_snapshots` table already stores per-position `unrealized_pnl` / `realized_pnl_today`, so **no schema
+  change**. This replaces the `net_pnl` property for the daily total (`net_pnl` = lifetime-open + today-realized was *not* a true daily delta). `net_pnl` stays on the model for any other caller.
+
+`📦 Holdings` rows = `mf_pnl.total_current_value` / `.total_pnl` / `.total_pnl_pct` and `nuvama_bonds.total_value` / `.total_pnl` / `.total_pnl_pct` — **lifetime since purchase** (`mf_transactions`
+BUY−SELL and the Nuvama bond basis are full history). `Total` = their sums: `total_value` = MF value + bond value; `total_pnl` likewise; `total_pnl_pct` = `total_pnl / total_invested` where
+`total_invested` = MF invested + bond basis. Nuvama options P&L is **excluded** from all three `Total` terms.
+
+`📈 Nuvama options` — this section still shows the *position-level* figures (not deltas): `Open M2M` = `total_unrealized_pnl` (lifetime paper P&L on the open book); `M2M today H/L` = `intraday_high` /
+`intraday_low`; `Nifty H/L` = `nifty_high` / `nifty_low` (omit the line if either is `None`); `Realized today` = `total_realized_pnl_today`; `Realized month (MTD)` = `monthly_realized_pnl +
+total_realized_pnl_today`; `Realized total` = `total_realized_pnl_today + cumulative_realized_pnl`. Only the `Nuvama options` row up in `📊 Today` is the delta.
 
 Degraded states: a failed source renders `[fetch failed]` on its `📊 Today` and `📦 Holdings` lines, is excluded from `Net` and `Total`, and adds one `⚠ <source> excluded` line under `Total`. Nuvama
 options unavailable → omit the whole `📈 Nuvama options` section and the `Nuvama options` row in `📊 Today`. No prior-day data (`has_deltas` false) → omit the entire `📊 Today` block; lead with
@@ -110,6 +121,6 @@ Not in this epic's scope but noted: the fenced block means `daily_snapshot.py` m
   no `🛡 Hedge (FinRakshak)` block, no ETF value; `scripts/dev/decommission_finideas.py --apply` has removed every Finideas row from `strategies` / `legs` / `trades` / `daily_snapshots`;
   `DB_REGISTRY.md` updated.
 - **`dhan-holdings-removal`** — the daily snapshot matches the *Target message format* above exactly: one fenced block, `📊 Today` / `📦 Holdings` / `📈 Nuvama options`, no Dhan anything, options P&L out
-  of `Total` value, `Realized month` MTD-inclusive, `Nifty H/L` when available. `PortfolioSummary` has no `dhan` term; `_build_portfolio_summary` / `_format_combined_summary` take no `dhan_summary`
-  argument; `daily_snapshot.py` builds no Dhan section and fences the message instead of `escape_markdown`-ing it; `src/auth/dhan_verify` and `src/dhan/` are untouched and still import cleanly; the
-  Dhan DB tables are retained.
+  of `Total` value, every `📊 Today` row a true since-previous-trading-day delta (including a `nuvama_options_day_delta` computed from the stored options snapshot — no schema change), `Realized month`
+  MTD-inclusive, `Nifty H/L` when available. `PortfolioSummary` has no `dhan` term; the summary functions take no `dhan_summary` argument; `daily_snapshot.py` builds no Dhan section and fences the
+  message instead of `escape_markdown`-ing it; `src/auth/dhan_verify` and `src/dhan/` are untouched and still import cleanly; the Dhan DB tables are retained.
