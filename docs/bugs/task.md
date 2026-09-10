@@ -15,6 +15,24 @@
 
 > BUG-041 closed 2026-09-08 — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
+## BUG-045 — `formatting.py` position-health helpers pass `Optional` fields into non-`Optional` APIs (mypy hook red for every `src/paper` / `src/client` commit)
+
+- [ ] **B045.1** — Confirm scope with the graph: `trace_path` `_resolved_label` and the `overdue` sort in `build_position_health_message` to verify every caller passes a fully-resolved
+  `PositionFinding` (no live wrong-output path).
+- [ ] **B045.2** — Fix: narrow at both call sites — assert/guard the resolved fields in `_resolved_label` (never a bare `assert` — REVIEW.md G6) or add a resolved view type; `days_overdue or 0` (or
+  filter+assert) for the sort key. No live behaviour change.
+- [ ] **B045.3** — Verify: `pre-commit run mypy --all-files` (or stage a `src/paper/` file) is green; add a regression note. Suite green.
+- [ ] **B045.4** — Commit, flip `bugs.md` BUG-045 to ✅ Fixed + SHA, move both sections to `docs/archive/bugs/`, add a `TODOS.md` session-log line.
+
+## BUG-046 — `test_escaping_guard.py` 3 failures: `scripts/morning_signal.py` `.send()` call sites drifted from `_BASELINE_UNESCAPED`
+
+- [ ] **B046.1** — Read `scripts/morning_signal.py` around L245 and L282; determine whether the L282 dynamic value is actually escaped (enclosing function routes it through `escape_markdown()` /
+  `mdcode()`) or genuinely unescaped.
+- [ ] **B046.2** — Fix: if safe, add L282 to `_BASELINE_UNESCAPED` with a one-line documented reason per the test's maintenance contract; else wrap the value. Remove or repoint the stale L245 baseline
+  entry in the same change.
+- [ ] **B046.3** — Verify: `pytest tests/unit/notifications/test_escaping_guard.py` green; full unit suite green.
+- [ ] **B046.4** — Commit, flip `bugs.md` BUG-046 to ✅ Fixed + SHA, move both sections to `docs/archive/bugs/`, add a `TODOS.md` session-log line.
+
 ## BUG-044 — standalone CC overlay vanishes from the S9 digest; its P&L is folded into Collar
 
 Fix is tracked as plan tasks, not here — `docs/plan/telegram-message-unification/overlay-recovery-digest/tasks.md` **ORD-1** (investigate + decide the grouping) and **ORD-2** (implement). Full detail

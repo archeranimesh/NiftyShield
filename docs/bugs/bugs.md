@@ -12,6 +12,68 @@
 
 ---
 
+## BUG-045 — `formatting.py` position-health helpers pass `Optional` fields into non-`Optional` APIs (mypy hook red, blocks every `src/paper` / `src/client` commit)
+
+| Field | Value |
+|---|---|
+| Severity | **Low / high-friction** — no known wrong output (callers pass resolved findings), but the mypy pre-commit hook now fails for any commit staging a `src/paper/` / `src/client/` file |
+| Status | 🔴 Open |
+| Discovered | 2026-09-10 (SPT-2 commit; committed with `SKIP=mypy`) |
+| Location | `src/notifications/formatting.py` — `_resolved_label` (L628 `date.fromisoformat`, L634 `format_option_label`) and `build_position_health_message` (L648 `sorted` key `f.days_overdue`) |
+
+**Symptom:** `pre-commit run mypy` reports 7 errors, all in `src/notifications/formatting.py`:
+
+```
+L628: Argument 1 to "fromisoformat" of "date" has incompatible type "str | None"; expected "str"
+L634: Argument 1 to "format_option_label" has incompatible type "str | None"; expected "str"
+L634: Argument 2 has incompatible type "float | None"; expected "float"
+L634: Argument 3 has incompatible type "str | None"; expected "str"
+L634: Argument 4 has incompatible type "str | None"; expected "str | date"
+L648: Argument "key" to "sorted" has incompatible type "Callable[[PositionFinding], int | None]"; ...
+L648: Incompatible return value type (got "int | None", expected "SupportsDunderLT[Any] | SupportsDunderGT[Any]")
+```
+
+**Root cause:** `PositionFinding` (added `574457a`, 2026-09-03) declares `expiry_str: str | None`, `strike_price: float | None`, `instrument_type: str | None`, `days_overdue: int | None` — all
+optional because a bare "unresolved instrument" finding carries none of them. `_resolved_label` is only ever called for findings where those fields are populated, and the `overdue` list is filtered to
+`finding_type == "roll_overdue"` (which always has `days_overdue`), but neither path narrows the type — the optionals are handed straight to `date.fromisoformat`, `format_option_label`, and a `sorted`
+key. Introduced by `b3bf77a` / `a083fba` (2026-09-03, position-health MarkdownV2 migration).
+
+**Why it stayed latent until 2026-09-10:** the mypy hook is scoped `files: ^src/(client|paper)/` and follows imports transitively into `formatting.py` via `src/paper/store.py` →
+`src/strategy/profit_lock_engine` → `src/notifications`. No `src/paper/` or `src/client/` commit landed between 2026-09-03 and SPT-2, so nothing ran mypy over that import graph. SPT-2 (`58e0b08`) and
+its SHA-backfill (`984a77d`) both used `SKIP=mypy` with a documented reason.
+
+**Suggested fix:** narrow at the two call sites — either assert the resolved fields are non-`None` at the top of `_resolved_label` (with a clear message; never a bare `assert` — REVIEW.md G6), or
+introduce a `ResolvedPositionFinding` view type; use `key=lambda f: f.days_overdue or 0` (or filter+assert) for the `overdue` sort. Add a mypy-level regression (the pre-commit hook itself is the guard
+once green). No live behaviour change intended.
+
+---
+
+## BUG-046 — `test_escaping_guard.py` 3 failures: `scripts/morning_signal.py` gained/moved `.send()` call sites without updating `_BASELINE_UNESCAPED`
+
+| Field | Value |
+|---|---|
+| Severity | **Low–Medium** — unit suite not green on `main` (3 failures); if L282's value is genuinely unescaped, a dynamic value in the 09:30 Telegram would silently 400 (non-fatal `send()`) |
+| Status | 🔴 Open |
+| Discovered | 2026-09-10 (SPT-2 `@test-runner` run) |
+| Location | `tests/unit/notifications/test_escaping_guard.py` vs `scripts/morning_signal.py` L282 (new dynamic `.send()`) + the stale `_BASELINE_UNESCAPED` entry for L245 |
+
+**Symptom:** `python -m pytest tests/unit/notifications/test_escaping_guard.py` — 3 failures:
+
+- `test_no_new_unescaped_send_call_sites` — `scripts/morning_signal.py:282` is a `.send()` with dynamic values whose enclosing function shows no `escape_markdown()` / `mdcode()` call and which is not
+  in `_BASELINE_UNESCAPED`.
+- `test_baseline_entries_are_still_unescaped` — the `_BASELINE_UNESCAPED` entry for `scripts/morning_signal.py:245` no longer reproduces (the line moved or was fixed).
+- `test_baseline_has_no_duplicate_or_unused_entries` — same stale line-245 entry, flagged as unused.
+
+**Root cause:** the 2026-09-10 `morning_signal` changes — `dc4701b` (fetch real entry premium), `402db00` (show real entry price), `1078397` (show daily LLM spend) — added and shifted `.send()` call
+sites in `run()` / `_format_signal_notification`. The test's own maintenance contract (docstring: *"remove a baseline entry in the same commit that lands its real escaping fix"*, and keep new call
+sites either escaped or explicitly whitelisted) was not followed in those commits.
+
+**Suggested fix:** read `scripts/morning_signal.py` around L245 and L282; if `_format_signal_notification` (or the sending function) already routes every dynamic value through `escape_markdown()` /
+`mdcode()`, the guard's single-function heuristic just needs the enclosing function to *contain* such a call — confirm and, if the value is safe, add L282 to `_BASELINE_UNESCAPED` with a one-line
+documented reason per the contract; otherwise wrap the value. Remove or repoint the stale L245 baseline entry in the same commit. Verify with `pytest tests/unit/notifications/test_escaping_guard.py`.
+
+---
+
 ## BUG-044 — standalone CC overlay vanishes from the S9 "NiftyBees vs overlays" digest and its P&L is silently added to the Collar line
 
 | Field | Value |
