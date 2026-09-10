@@ -81,6 +81,31 @@ def test_reconstruct_empty_input_returns_empty() -> None:
     assert reconstruct_cycles([]) == []
 
 
+def test_cycle_credit_cost_and_decay() -> None:
+    # entry credit 10 - 4 = 6/unit ; exit cost 3 - 4 = -1/unit
+    trades = _ic_cycle("2026-07-08", "2026-07-16", "10.0", "3.0")
+
+    cycle = reconstruct_cycles(trades)[0]
+
+    assert cycle.entry_credit_per_unit == Decimal("6")
+    assert cycle.exit_cost_per_unit == Decimal("-1")
+    # (6 - (-1)) / 6 * 100
+    assert cycle.decay_pct == Decimal("7") / Decimal("6") * Decimal("100")
+
+
+def test_open_cycle_has_no_exit_cost_or_decay() -> None:
+    trades = [
+        _t("short_put", TradeAction.SELL, "10.0", "2026-07-08"),
+        _t("long_put_hedge", TradeAction.BUY, "4.0", "2026-07-08"),
+    ]
+
+    cycle = reconstruct_cycles(trades)[0]
+
+    assert cycle.entry_credit_per_unit == Decimal("6")
+    assert cycle.exit_cost_per_unit is None
+    assert cycle.decay_pct is None
+
+
 def test_single_leg_overlay_cycle() -> None:
     trades = [
         _t("overlay_cc", TradeAction.SELL, "50.0", "2026-08-12"),
@@ -131,12 +156,17 @@ def test_resolve_target_rejects_unknown() -> None:
 
 
 def _cycle(is_open: bool, note: str) -> Cycle:
+    # Premium fields are internally self-consistent (10, 3, 70%) but are not
+    # derived from `trades` — consumed only by _exit_reason tests.
     trades = (_t("short_put", TradeAction.BUY, "3.0", "2026-07-16", notes=note),)
     return Cycle(
         index=1,
         entry_date=date(2026, 7, 8),
         exit_date=None if is_open else date(2026, 7, 16),
         days_in_trade=None if is_open else 8,
+        entry_credit_per_unit=Decimal("10"),
+        exit_cost_per_unit=None if is_open else Decimal("3"),
+        decay_pct=None if is_open else Decimal("70"),
         realized_pnl=Decimal("0"),
         is_open=is_open,
         trades=trades,

@@ -166,14 +166,21 @@ def _print_group(group: _Group, store: PaperStore, conn: sqlite3.Connection) -> 
     open_count = len(cycles) - len(closed)
 
     print(f"\n{group.label} — {len(closed)} closed cycle(s), {open_count} open")
-    print(f"  {'#':>2}  {'Entry':<10}  {'Exit':<10}  {'Days':>4}  {'Cycle P&L':>14}  Exit reason")
+    print(
+        f"  {'#':>2}  {'Entry':<10}  {'Exit':<10}  {'Days':>4}  {'Credit/u':>9}  "
+        f"{'Cost/u':>8}  {'Decay%':>7}  {'Cycle P&L':>14}  Exit reason"
+    )
     for cycle in cycles:
         exit_str = cycle.exit_date.isoformat() if cycle.exit_date else "(open)"
         days_str = "—" if cycle.days_in_trade is None else str(cycle.days_in_trade)
         pnl_str = "(unrealized)" if cycle.is_open else format_money(cycle.realized_pnl, signed=True)
+        credit_str = f"{cycle.entry_credit_per_unit:.2f}"
+        cost_str = "—" if cycle.exit_cost_per_unit is None else f"{cycle.exit_cost_per_unit:.2f}"
+        decay_str = "—" if cycle.decay_pct is None else f"{cycle.decay_pct:.1f}%"
         print(
             f"  {cycle.index:>2}  {cycle.entry_date.isoformat():<10}  {exit_str:<10}  "
-            f"{days_str:>4}  {pnl_str:>14}  {_exit_reason(cycle, exit_signals)}"
+            f"{days_str:>4}  {credit_str:>9}  {cost_str:>8}  {decay_str:>7}  "
+            f"{pnl_str:>14}  {_exit_reason(cycle, exit_signals)}"
         )
     total = sum((c.realized_pnl for c in closed), Decimal("0"))
     print(f"  {'-' * 60}")
