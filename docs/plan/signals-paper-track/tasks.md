@@ -3,7 +3,7 @@
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
 spec; `schema.md` is the sole DDL source.
 
-**Open: SPT-2.**
+**Open: SPT-2a.**
 
 > SPT-1 (council checkpoint) is closed — ruled 2026-09-09, `docs/archive/council/strategy/2026-09-09_signals-paper-track-execution-layer.md`, absorbed into `DECISIONS.md` §"Signals Paper Track —
 > Execution Layer". SPT-2..SPT-8 below are the rewrite from that ruling — no longer provisional.
@@ -15,9 +15,10 @@ spec; `schema.md` is the sole DDL source.
   fixed SL −30 % / target +50 %; Phase 1 fixed-only, `TRAILING_STOP` reserved; 30 s cadence; mark-path telemetry from day one; two-tier recalibration; go-live gate G1–G9; auto-execute live pilot.
   Output: `DECISIONS.md` entry + `schema.md` + this rewrite.
   | Owner: Animesh | Model: n/a | Review: none | SHA: 636c190
-- [ ] **SPT-2** — Signal paper models (`SignalPaperEntry`, `SignalMark`) + store methods (`open_signal_entry` / `get_open_signal_entry` / `record_mark` / `get_marks` / `close_signal_entry` /
-  `get_entries` / `cumulative_pnl`). Position rides `paper_trades` as `paper_signal_track_v1`, `quantity` = `paper.constants.LOT_SIZE` (import, not the literal `65`). | Owner: Claude | Model:
-  claude-sonnet-5 | Review: code-reviewer | SHA: <—>
+- [x] **SPT-2** — Signal paper models (`SignalPaperEntry`, `SignalMark`) + store methods (`open_signal_entry` / `get_open_signal_entry` / `record_mark` / `get_marks` / `close_signal_entry` /
+  `get_entries` / `cumulative_pnl`). Position rides `paper_trades` as `paper_signal_track_v1`, `quantity` = `paper.constants.LOT_SIZE` (import, not the literal `65`); `STRATEGY_SIGNAL_TRACK` constant
+  added. Tables `paper_signal_entries` / `paper_signal_marks` in `_SCHEMA` (non-STRICT, matching `schema.md` + sibling `paper_trades`). `close_signal_entry` runs the state-flip + exit-event insert in
+  one transaction; `cumulative_pnl` pairs closed entries to SELL rows in order with a length-mismatch guard. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: <—>
 - [ ] **SPT-2a** — `<= 7-DTE` roll in `src/signals/option_resolver.py::resolve_monthly_option` (next-month contract in the current month's final week; `get_expiry_candidates` untouched).
   | Owner: Antigravity | Model: n/a | Review: greeks-analyst | SHA: <—>
 - [ ] **SPT-3** — Entry executor: `src/strategy/signal_track_v1.py` `PaperStrategy` — `DailySignal` → `resolve_monthly_option` → `LegSpec` → `PaperExecutor` fill → frozen `SignalPaperEntry` → Telegram

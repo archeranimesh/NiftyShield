@@ -27,6 +27,7 @@ STRATEGY_CC_OVERLAY = "paper_covered_call_v1"
 STRATEGY_PP_OVERLAY = "paper_protective_put_v1"
 STRATEGY_COLLAR_OVERLAY = "paper_collar_v1"
 STRATEGY_IC = "paper_ic_nifty_v1"
+STRATEGY_SIGNAL_TRACK = "paper_signal_track_v1"
 
 # Track-independent overlay namespace (S1r, 2026-07-29, SHA 8c41cca) — the single
 # live copy of CC/PP/Collar overlay legs, no longer owned by any one of the three

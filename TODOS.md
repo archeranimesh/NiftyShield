@@ -143,6 +143,12 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-10] signals-paper-track SPT-2 closed (`<pending>`) — `SignalPaperEntry` / `SignalMark` frozen Pydantic models + `paper_signal_entries` / `paper_signal_marks` tables (non-STRICT, per
+  `schema.md`) added to `PaperStore._SCHEMA`, plus `open_signal_entry` / `get_open_signal_entry` / `record_mark` / `get_marks` / `close_signal_entry` / `get_entries` / `cumulative_pnl`. Position
+  rides `paper_trades` as `paper_signal_track_v1` (`STRATEGY_SIGNAL_TRACK` constant, `quantity = LOT_SIZE`). `close_signal_entry` does the state-flip + `paper_exit_events` insert in one
+  transaction (code-review: no half-closed state); `cumulative_pnl` pairs closed entries to SELL rows in chronological order (safe under the one-position-at-a-time guard) with a length-mismatch
+  raise. code-reviewer 3 CRITICAL + 3 ERROR → 5 fixed, STRICT-table finding rejected (`schema.md` is the DDL source and has none; siblings `paper_trades` / `paper_exit_events` are non-STRICT).
+  12 new tests. Next: SPT-2a (`≤ 7-DTE` roll in `resolve_monthly_option`, Owner Antigravity).
 - [2026-09-10] Planning — signals-paper-track SPT-6/7 rewritten + follow-up story `signals-entrypoint-consolidation` created. A Plan-agent review of the entrypoint topology (asked by Animesh: too
   many overlapping signal crons, logic will diverge) concluded the paper track adds **zero** new crons — SPT-6 becomes a guarded paper-entry tail-call inside `morning_signal` (not a 09:35 cron),
   `signal_paper_entry.py` a manual backfill tool, SPT-7 a manual report. `src/strategy/signal_exit.py` becomes the single SL/target-constants + evaluator home (created in SPT-3, extended in SPT-5);

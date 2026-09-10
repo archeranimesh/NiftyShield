@@ -516,3 +516,98 @@ class GateViolation(BaseModel):
     logged_at: datetime
 
     model_config = {"frozen": True}
+
+
+class SignalPaperEntry(BaseModel):
+    """Frozen entry metadata for one signals-paper-track position.
+
+    Mirrors the ``paper_signal_entries`` table (`schema.md`). One row per
+    ``paper_signal_track_v1`` position; ``trade_id`` is the ``paper_trades.id``
+    of the opening BUY leg. SL / target levels are frozen at entry off the
+    simulated fill and are the source of truth for the live position — the
+    module constants in ``src/strategy/signal_exit.py`` are only the current
+    default cohort.
+
+    Attributes:
+        trade_id: ``paper_trades.id`` of the opening BUY leg.
+        signal_date: ``DailySignal.trade_date``.
+        trade_action: ``BUY_CALL`` or ``BUY_PUT``.
+        instrument_key: Resolved monthly option instrument key.
+        expiry: Resolved monthly expiry.
+        entry_dte: Calendar DTE at entry.
+        entry_ts: Fill timestamp (IST).
+        entry_premium: ``E`` — the simulated BUY fill (mid + s).
+        entry_bid: Bid at entry.
+        entry_ask: Ask at entry.
+        entry_slippage: ``s`` applied at entry.
+        entry_vix: India VIX at entry; ``None`` if unavailable.
+        entry_underlying: Nifty spot at entry.
+        signal_confidence: Consensus confidence (1-5).
+        sl_pct: Stop-loss fraction (0.30 for v1).
+        tgt_pct: Target fraction (0.50 for v1).
+        sl_price: ``E * (1 - sl_pct)``, frozen.
+        tgt_price: ``E * (1 + tgt_pct)``, frozen.
+        ruleset_version: Cohort tag; recalibrated levels ship as ``v2``.
+    """
+
+    trade_id: int
+    signal_date: date
+    trade_action: Literal["BUY_CALL", "BUY_PUT"]
+    instrument_key: str = Field(..., min_length=1)
+    expiry: date
+    entry_dte: int
+    entry_ts: datetime
+    entry_premium: Decimal = Field(..., gt=0)
+    entry_bid: Decimal = Field(..., ge=0)
+    entry_ask: Decimal = Field(..., ge=0)
+    entry_slippage: Decimal = Field(..., ge=0)
+    entry_vix: Decimal | None = None
+    entry_underlying: Decimal = Field(..., gt=0)
+    signal_confidence: int = Field(..., ge=1, le=5)
+    sl_pct: Decimal = Field(..., gt=0)
+    tgt_pct: Decimal = Field(..., gt=0)
+    sl_price: Decimal = Field(..., gt=0)
+    tgt_price: Decimal = Field(..., gt=0)
+    ruleset_version: str = Field(default="v1", min_length=1)
+
+    model_config = {"frozen": True}
+
+
+class SignalMark(BaseModel):
+    """One monitor-tick telemetry row for a signals-paper-track position.
+
+    Mirrors the ``paper_signal_marks`` table (`schema.md`). Written every
+    monitor tick (30 s cadence) by SPT-4 while the position is open; the
+    Phase 2 dataset and the 6-month go-live gate input.
+
+    Attributes:
+        id: Row id; ``None`` before insert.
+        trade_id: ``paper_trades.id`` of the position.
+        ts: Tick evaluation time (IST).
+        quote_ts: Broker quote timestamp; ``None`` if not supplied.
+        stale: True if ``quote_ts`` is > 30 s older than ``ts``.
+        ltp: Last traded price at the tick.
+        bid: Bid at the tick.
+        ask: Ask at the tick.
+        mark: ``(bid + ask) / 2`` — the value compared to sl / tgt.
+        unrealised_pct: ``(mark / E) - 1``.
+        mfe_pct: Running max favourable excursion, fraction of ``E``.
+        mae_pct: Running max adverse excursion, fraction of ``E``.
+        gap_event: True if ``|mark - prev_mark| / E > 0.20``.
+    """
+
+    id: int | None = None
+    trade_id: int
+    ts: datetime
+    quote_ts: datetime | None = None
+    stale: bool = False
+    ltp: Decimal = Field(..., ge=0)
+    bid: Decimal = Field(..., ge=0)
+    ask: Decimal = Field(..., ge=0)
+    mark: Decimal = Field(..., ge=0)
+    unrealised_pct: Decimal
+    mfe_pct: Decimal
+    mae_pct: Decimal
+    gap_event: bool = False
+
+    model_config = {"frozen": True}

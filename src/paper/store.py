@@ -27,17 +27,24 @@ import structlog
 from src.db import connect as _connect
 from src.instruments.lookup import InstrumentLookup
 from src.models.portfolio import TradeAction
-from src.paper.constants import DEFAULT_BOD_PATH, NIFTYBEES_KEY
+from src.paper.constants import (
+    DEFAULT_BOD_PATH,
+    NIFTYBEES_KEY,
+    STRATEGY_SIGNAL_TRACK,
+)
 from src.paper.models import (
     ExitSignal,
     GateViolation,
     MarginSnapshot,
     OverlayPnLSnapshot,
+    PaperExitEvent,
     PaperLegSnapshot,
     PaperNavSnapshot,
     PaperPosition,
     PaperTrade,
     ProtectionRecoverySnapshot,
+    SignalMark,
+    SignalPaperEntry,
     TrackComparisonSnapshot,
     TradeState,
 )
@@ -280,6 +287,48 @@ CREATE TABLE IF NOT EXISTS warn_signal_state (
     updated_at      TEXT    NOT NULL,
     PRIMARY KEY (strategy_name, event_type, leg_role, expiry)
 ) STRICT;
+
+CREATE TABLE IF NOT EXISTS paper_signal_entries (
+    trade_id          INTEGER PRIMARY KEY REFERENCES paper_trades(id),
+    signal_date       TEXT NOT NULL,
+    trade_action      TEXT NOT NULL,
+    instrument_key    TEXT NOT NULL,
+    expiry            TEXT NOT NULL,
+    entry_dte         INTEGER NOT NULL,
+    entry_ts          TEXT NOT NULL,
+    entry_premium     TEXT NOT NULL,
+    entry_bid         TEXT NOT NULL,
+    entry_ask         TEXT NOT NULL,
+    entry_slippage    TEXT NOT NULL,
+    entry_vix         TEXT,
+    entry_underlying  TEXT NOT NULL,
+    signal_confidence INTEGER NOT NULL,
+    sl_pct            TEXT NOT NULL,
+    tgt_pct           TEXT NOT NULL,
+    sl_price          TEXT NOT NULL,
+    tgt_price         TEXT NOT NULL,
+    ruleset_version   TEXT NOT NULL DEFAULT 'v1'
+);
+
+CREATE TABLE IF NOT EXISTS paper_signal_marks (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    trade_id       INTEGER NOT NULL REFERENCES paper_trades(id),
+    ts             TEXT NOT NULL,
+    quote_ts       TEXT,
+    stale          INTEGER NOT NULL DEFAULT 0,
+    ltp            TEXT NOT NULL,
+    bid            TEXT NOT NULL,
+    ask            TEXT NOT NULL,
+    mark           TEXT NOT NULL,
+    unrealised_pct TEXT NOT NULL,
+    mfe_pct        TEXT NOT NULL,
+    mae_pct        TEXT NOT NULL,
+    gap_event      INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(trade_id, ts)
+);
+
+CREATE INDEX IF NOT EXISTS idx_paper_signal_marks_trade
+    ON paper_signal_marks(trade_id, ts);
 """
 
 
@@ -295,6 +344,50 @@ def _row_to_trade(row: sqlite3.Row) -> PaperTrade:
         notes=row["notes"],
         ivr_at_entry=row["ivr_at_entry"],
         state=TradeState(row["state"]) if row["state"] else TradeState.OPEN,
+    )
+
+
+def _row_to_signal_entry(row: sqlite3.Row) -> SignalPaperEntry:
+    vix = row["entry_vix"]
+    return SignalPaperEntry(
+        trade_id=row["trade_id"],
+        signal_date=date.fromisoformat(row["signal_date"]),
+        trade_action=row["trade_action"],
+        instrument_key=row["instrument_key"],
+        expiry=date.fromisoformat(row["expiry"]),
+        entry_dte=row["entry_dte"],
+        entry_ts=datetime.fromisoformat(row["entry_ts"]),
+        entry_premium=Decimal(row["entry_premium"]),
+        entry_bid=Decimal(row["entry_bid"]),
+        entry_ask=Decimal(row["entry_ask"]),
+        entry_slippage=Decimal(row["entry_slippage"]),
+        entry_vix=Decimal(vix) if vix is not None else None,
+        entry_underlying=Decimal(row["entry_underlying"]),
+        signal_confidence=row["signal_confidence"],
+        sl_pct=Decimal(row["sl_pct"]),
+        tgt_pct=Decimal(row["tgt_pct"]),
+        sl_price=Decimal(row["sl_price"]),
+        tgt_price=Decimal(row["tgt_price"]),
+        ruleset_version=row["ruleset_version"],
+    )
+
+
+def _row_to_signal_mark(row: sqlite3.Row) -> SignalMark:
+    quote_ts = row["quote_ts"]
+    return SignalMark(
+        id=row["id"],
+        trade_id=row["trade_id"],
+        ts=datetime.fromisoformat(row["ts"]),
+        quote_ts=datetime.fromisoformat(quote_ts) if quote_ts is not None else None,
+        stale=bool(row["stale"]),
+        ltp=Decimal(row["ltp"]),
+        bid=Decimal(row["bid"]),
+        ask=Decimal(row["ask"]),
+        mark=Decimal(row["mark"]),
+        unrealised_pct=Decimal(row["unrealised_pct"]),
+        mfe_pct=Decimal(row["mfe_pct"]),
+        mae_pct=Decimal(row["mae_pct"]),
+        gap_event=bool(row["gap_event"]),
     )
 
 
@@ -1999,6 +2092,231 @@ class PaperStore:
             raw = d.get(field)
             d[field] = Decimal(raw) if raw is not None else None
         return d
+
+    # ------------------------------------------------------------------
+    # Signals paper track (paper_signal_track_v1) — SPT-2
+    # ------------------------------------------------------------------
+
+    def open_signal_entry(self, entry: SignalPaperEntry) -> None:
+        """Freeze the entry metadata for one signals-paper-track position.
+
+        The opening ``paper_trades`` BUY leg must already exist (``entry.trade_id``
+        is its ``id``). Only one position may be open at a time.
+
+        Args:
+            entry: The frozen entry metadata to persist.
+
+        Raises:
+            ValueError: If a signals-paper-track position is already open.
+        """
+        with _connect(self.db_path) as conn:
+            open_row = conn.execute(
+                """SELECT 1 FROM paper_signal_entries e
+                   JOIN paper_trades t ON t.id = e.trade_id
+                   WHERE t.state != 'CLOSED' LIMIT 1""",
+            ).fetchone()
+            if open_row is not None:
+                raise ValueError("A signals-paper-track position is already open")
+            conn.execute(
+                """INSERT INTO paper_signal_entries
+                   (trade_id, signal_date, trade_action, instrument_key, expiry,
+                    entry_dte, entry_ts, entry_premium, entry_bid, entry_ask,
+                    entry_slippage, entry_vix, entry_underlying, signal_confidence,
+                    sl_pct, tgt_pct, sl_price, tgt_price, ruleset_version)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    entry.trade_id,
+                    entry.signal_date.isoformat(),
+                    entry.trade_action,
+                    entry.instrument_key,
+                    entry.expiry.isoformat(),
+                    entry.entry_dte,
+                    entry.entry_ts.isoformat(),
+                    str(entry.entry_premium),
+                    str(entry.entry_bid),
+                    str(entry.entry_ask),
+                    str(entry.entry_slippage),
+                    str(entry.entry_vix) if entry.entry_vix is not None else None,
+                    str(entry.entry_underlying),
+                    entry.signal_confidence,
+                    str(entry.sl_pct),
+                    str(entry.tgt_pct),
+                    str(entry.sl_price),
+                    str(entry.tgt_price),
+                    entry.ruleset_version,
+                ),
+            )
+
+    def get_open_signal_entry(self) -> SignalPaperEntry | None:
+        """Return the currently-open signals-paper-track entry, or ``None``.
+
+        A position is open while its opening ``paper_trades`` row is not
+        ``CLOSED``.
+        """
+        with _connect(self.db_path) as conn:
+            row = conn.execute(
+                """SELECT e.* FROM paper_signal_entries e
+                   JOIN paper_trades t ON t.id = e.trade_id
+                   WHERE t.state != 'CLOSED'
+                   ORDER BY e.trade_id DESC LIMIT 1""",
+            ).fetchone()
+        return _row_to_signal_entry(row) if row is not None else None
+
+    def record_mark(self, mark: SignalMark) -> None:
+        """Persist one monitor-tick telemetry row. Idempotent on ``(trade_id, ts)``."""
+        with _connect(self.db_path) as conn:
+            conn.execute(
+                """INSERT INTO paper_signal_marks
+                   (trade_id, ts, quote_ts, stale, ltp, bid, ask, mark,
+                    unrealised_pct, mfe_pct, mae_pct, gap_event)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(trade_id, ts) DO NOTHING""",
+                (
+                    mark.trade_id,
+                    mark.ts.isoformat(),
+                    mark.quote_ts.isoformat() if mark.quote_ts is not None else None,
+                    int(mark.stale),
+                    str(mark.ltp),
+                    str(mark.bid),
+                    str(mark.ask),
+                    str(mark.mark),
+                    str(mark.unrealised_pct),
+                    str(mark.mfe_pct),
+                    str(mark.mae_pct),
+                    int(mark.gap_event),
+                ),
+            )
+
+    def get_marks(self, trade_id: int) -> list[SignalMark]:
+        """Return every telemetry row for a position, oldest first."""
+        with _connect(self.db_path) as conn:
+            rows = conn.execute(
+                "SELECT * FROM paper_signal_marks WHERE trade_id = ? ORDER BY ts",
+                (trade_id,),
+            ).fetchall()
+        return [_row_to_signal_mark(r) for r in rows]
+
+    def close_signal_entry(self, trade_id: int, exit_event: PaperExitEvent) -> int:
+        """Close a signals-paper-track position: mark the leg CLOSED + log the exit.
+
+        The closing ``paper_trades`` SELL leg is recorded by the caller (the
+        existing close path) before this is called.
+
+        The state update and the exit-event insert run in a single transaction
+        so a failure can never leave a half-closed position (which the
+        ``open_signal_entry`` guard would then treat as no open position).
+
+        Args:
+            trade_id: ``paper_trades.id`` of the opening BUY leg. Must match
+                ``exit_event.trade_id``.
+            exit_event: The exit event to persist to ``paper_exit_events``.
+
+        Returns:
+            The generated ``paper_exit_events`` row id.
+
+        Raises:
+            ValueError: If ``trade_id`` and ``exit_event.trade_id`` disagree, or
+                no ``paper_trades`` row has that id.
+        """
+        if str(trade_id) != exit_event.trade_id:
+            raise ValueError(f"trade_id {trade_id} != exit_event.trade_id {exit_event.trade_id}")
+        ev = exit_event
+        with _connect(self.db_path) as conn:
+            cur = conn.execute(
+                "UPDATE paper_trades SET state = ? WHERE id = ?",
+                (TradeState.CLOSED.value, trade_id),
+            )
+            if cur.rowcount == 0:
+                raise ValueError(f"No paper trade found with id={trade_id}")
+            cur = conn.execute(
+                """INSERT INTO paper_exit_events
+                   (strategy_name, leg_name, trade_id, snapshot_id, event_time,
+                    detected_by, exit_signal, severity, ltp, mid, bid, ask,
+                    delta, dte, entry_price, threshold_value,
+                    status, notes)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?)""",
+                (
+                    ev.strategy_name,
+                    ev.leg_name,
+                    ev.trade_id,
+                    ev.snapshot_id,
+                    ev.event_time.isoformat(),
+                    ev.detected_by,
+                    ev.exit_signal.value,
+                    ev.severity,
+                    str(ev.ltp) if ev.ltp is not None else None,
+                    str(ev.mid) if ev.mid is not None else None,
+                    str(ev.bid) if ev.bid is not None else None,
+                    str(ev.ask) if ev.ask is not None else None,
+                    ev.delta,
+                    ev.dte,
+                    str(ev.entry_price),
+                    str(ev.threshold_value) if ev.threshold_value is not None else None,
+                    ev.notes,
+                ),
+            )
+            if cur.lastrowid is None:
+                raise ValueError("Failed to insert paper exit event")
+            return cur.lastrowid
+
+    def get_entries(self, from_: date, to: date) -> list[SignalPaperEntry]:
+        """Return every signals-paper-track entry with ``signal_date`` in ``[from_, to]``."""
+        with _connect(self.db_path) as conn:
+            rows = conn.execute(
+                """SELECT * FROM paper_signal_entries
+                   WHERE signal_date >= ? AND signal_date <= ?
+                   ORDER BY signal_date, trade_id""",
+                (from_.isoformat(), to.isoformat()),
+            ).fetchall()
+        return [_row_to_signal_entry(r) for r in rows]
+
+    def cumulative_pnl(self) -> tuple[Decimal, int, int, int]:
+        """Aggregate realised P&L over closed signals-paper-track cycles.
+
+        Pairs each closed entry (opening BUY leg ``CLOSED``) with its closing
+        SELL leg in chronological order; realised P&L per cycle is
+        ``(sell_price - entry_premium) * quantity``. Pairing by order is sound
+        because ``open_signal_entry`` enforces one position at a time, so cycles
+        never overlap and the i-th closed entry always maps to the i-th SELL.
+
+        Returns:
+            ``(total_pnl, n_closed, wins, losses)``.
+
+        Raises:
+            ValueError: If the closed-entry count and the SELL count disagree
+                (a half-closed position or an orphan SELL — a data-integrity bug).
+        """
+        with _connect(self.db_path) as conn:
+            entries = conn.execute(
+                """SELECT e.entry_premium FROM paper_signal_entries e
+                   JOIN paper_trades t ON t.id = e.trade_id
+                   WHERE t.strategy_name = ? AND t.state = 'CLOSED'
+                   ORDER BY e.signal_date, e.trade_id""",
+                (STRATEGY_SIGNAL_TRACK,),
+            ).fetchall()
+            sells = conn.execute(
+                """SELECT price, quantity FROM paper_trades
+                   WHERE strategy_name = ? AND action = 'SELL'
+                   ORDER BY trade_date, id""",
+                (STRATEGY_SIGNAL_TRACK,),
+            ).fetchall()
+        if len(entries) != len(sells):
+            raise ValueError(
+                f"signals-paper-track ledger inconsistent: {len(entries)} closed "
+                f"entries vs {len(sells)} SELL rows"
+            )
+        total = Decimal("0")
+        wins = losses = 0
+        for entry_row, sell_row in zip(entries, sells, strict=True):
+            entry_premium = Decimal(entry_row["entry_premium"])
+            qty = Decimal(str(sell_row["quantity"]))
+            pnl = (Decimal(sell_row["price"]) - entry_premium) * qty
+            total += pnl
+            if pnl > 0:
+                wins += 1
+            elif pnl < 0:
+                losses += 1
+        return total, len(entries), wins, losses
 
     def create_exit_event(
         self,
