@@ -9,8 +9,12 @@
 
 ## DFM-6 — widen the md-line-length hook repo-wide
 
+**Already partly done (2026-09-10, out of band):** a `md-reflow` hook was added to `.pre-commit-config.yaml` — `reflow_md.py --check` on changed `docs/(plan|bugs)/**` `.md` (minus `_TEMPLATE/`). It
+gates fill-to-≤200 *style* (not just the 200-char cap) on new/edited plan+bug docs. DFM-6 now also **widens `md-reflow`** the same way it widens `md-line-length`: extend its `files:` to every `.md`
+bar `docs/archive/` + `_TEMPLATE/`, and get `pre-commit run --all-files md-reflow` green (needs `repo-wide-reflow/` done first — hence this story's blocked-until gate).
+
 **Files to change:**
-- `.pre-commit-config.yaml` — the `md-line-length` hook `files:` regex.
+- `.pre-commit-config.yaml` — the `md-line-length` **and** `md-reflow` hook `files:` regexes.
 - `scripts/dev/hooks/check_md_line_length.py` — only if it needs an exclude for `docs/archive/` / `_TEMPLATE/` when invoked in `--all` style (today it takes explicit paths from pre-commit).
 - `tests/unit/scripts/dev/hooks/test_check_md_line_length.py` — cover the new scope.
 
@@ -20,12 +24,13 @@
 
 **What to implement:**
 
-1. Change `files:` to match every `.md` except `docs/archive/**` and `docs/plan/_TEMPLATE/**`.
+1. Change both hooks' `files:` to match every `.md` except `docs/archive/**` and `docs/plan/_TEMPLATE/**`.
 2. If a repo `.md` legitimately needs a long line (base64, URL), add `<!-- lint-ignore-length -->` on the preceding line as part of this task — `pre-commit run --all-files md-line-length` must be
    green before commit.
-3. Tests: a path under `docs/archive/` is skipped; a path under `.claude/` is checked; the existing cap + ignore-marker tests still pass.
+3. `pre-commit run --all-files md-reflow` green too — any repo-wide narrow file the widened scope now catches gets a `reflow_md` pass (should already be handled by `repo-wide-reflow/`).
+4. Tests: a path under `docs/archive/` is skipped; a path under `.claude/` is checked; the existing cap + ignore-marker tests still pass.
 
-**Commit:** `chore(hooks): DFM-6 — md-line-length covers the whole tree`
+**Commit:** `chore(hooks): DFM-6 — md-line-length + md-reflow cover the whole tree`
 
 ---
 

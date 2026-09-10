@@ -11,8 +11,9 @@ either upstream story has an unchecked box, stop and say so.
 ## Why this story exists
 
 The format is advisory for legacy content today: `check_story_structure.py` runs `--staged-added` (new folders only), `check_checkbox_consistency.py` is not in `.pre-commit-config.yaml` at all,
-`md-line-length` only covers root `.md` + `docs/plan/**` + `docs/bugs/**` staged files, and `ci.yml` runs none of the three. Once the batch conversion lands, nothing stops a folder drifting back. This
-story closes that: the hooks cover the whole tree, CI fails on any finding, and a new folder starts conforming because it was stamped from `_TEMPLATE/`.
+`md-line-length` + `md-reflow` cover only staged files under root `.md` (line-length only) / `docs/plan/**` / `docs/bugs/**`, and `ci.yml` runs none of them. Once the batch conversion lands, nothing
+stops a folder drifting back. This story closes that: the hooks cover the whole tree, CI fails on any finding, and a new folder starts conforming because it was stamped from `_TEMPLATE/`. (`md-reflow`
+was added 2026-09-10, out of band — DFM-6 widens it alongside `md-line-length`.)
 
 ## Scope guard
 
@@ -32,7 +33,8 @@ story closes that: the hooks cover the whole tree, CI fails on any finding, and 
 
 ## Task overview
 
-- **DFM-6** — widen `md-line-length` hook `files:` to every `.md` in the repo except `docs/archive/` and `_TEMPLATE/`; keep the 200-char cap and the `<!-- lint-ignore-length -->` escape.
+- **DFM-6** — widen the `md-line-length` **and** `md-reflow` hook `files:` regexes to every `.md` in the repo except `docs/archive/` and `_TEMPLATE/`; keep the 200-char cap and the `<!--
+  lint-ignore-length -->` escape.
 - **DFM-7** — `check_story_structure.py` gains a `--staged` mode (added **or** modified folders) and drops the legacy grandfather for any folder not on a shrinking allowlist; wire `--staged` into
   pre-commit in place of `--staged-added`.
 - **DFM-8** — add `check_checkbox_consistency.py` to `.pre-commit-config.yaml` (staged `tasks.md` / `task.md` + the `## Story done when` blocks).

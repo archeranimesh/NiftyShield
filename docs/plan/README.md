@@ -1,215 +1,142 @@
 # `docs/plan/` — Story Index
 
-> Each story folder is self-contained. Start from its `prompt.md`.
-> Archived original files: `docs/archive/plan/`.
-> Confirmed defects in shipped code (not forward spec work): [`docs/bugs/`](../bugs/) — same
-> folder conventions, separate registry. See also the archived legacy registry
-> [`BUGS_LEGACY.md`](../archive/BUGS_LEGACY.md) (superseded).
+> Each story folder is self-contained. Start from its `prompt.md`. Archived original files: `docs/archive/plan/`. Confirmed defects in shipped code (not forward spec work): [`docs/bugs/`](../bugs/) —
+> same folder conventions, separate registry. See also the archived legacy registry [`BUGS_LEGACY.md`](../archive/BUGS_LEGACY.md) (superseded).
 
-The **status** and **next** markers below are a *summary* of each story's `tasks.md`.
-`tasks.md` is canonical; if they disagree, `tasks.md` wins and this file is stale.
-Format per entry: `**\`folder/\`** · <status> · next: **<task id>**` then a short blurb.
+The **status** and **next** markers below are a *summary* of each story's `tasks.md`. `tasks.md` is canonical; if they disagree, `tasks.md` wins and this file is stale. Format per entry:
+`**\`folder/\`** · <status> · next: **<task id>**` then a short blurb.
 
 ---
 
 ## Active Epics
 
-**`ic-payoff-charts/`** · ⬜ Not started — start with `chart-core/` **PC-2**
-Stockmock-style payoff diagram (one PNG per IC variation) attached to the entry, EOD-audit,
-and close Telegram messages. Two sub-stories: `chart-core/` (PC-1..15 — payoff math +
-matplotlib expiry-payoff renderer + `sendPhoto` on `TelegramNotifier`/`TelegramGateway` +
-wire into `paper_ic_entry`/`_v2`, `paper_ic_snapshot`, both `_send_close_notification`; no
-option model, ships now) → `chart-model-overlay/` (MO-1..9 — blue T+0 curve + ±1σ/±2σ bands
+**`ic-payoff-charts/`** · ⬜ Not started — start with `chart-core/` **PC-2** Stockmock-style payoff diagram (one PNG per IC variation) attached to the entry, EOD-audit, and close Telegram messages. Two
+sub-stories: `chart-core/` (PC-1..15 — payoff math + matplotlib expiry-payoff renderer + `sendPhoto` on `TelegramNotifier`/`TelegramGateway` + wire into `paper_ic_entry`/`_v2`, `paper_ic_snapshot`,
+both `_send_close_notification`; no option model, ships now) → `chart-model-overlay/` (MO-1..9 — blue T+0 curve + ±1σ/±2σ bands
 + POP; **blocked on `greeks-bs-fallback/` GF-2 + GF-3** for the shared `src/pricing/` pricer
-+ IV solver). Modeling decisions (rate / DTE convention / delta tolerance) inherited from
-`greeks-bs-fallback/`. No DB schema change. Requested by Animesh 2026-09-09.
++ IV solver). Modeling decisions (rate / DTE convention / delta tolerance) inherited from `greeks-bs-fallback/`. No DB schema change. Requested by Animesh 2026-09-09.
 
-**`token-efficiency/`** · ✅ Shipped/Archived 2026-09-03 → `docs/archive/plan/token-efficiency/`
-`measurement/` (MEAS-1..2) + `fixed-overhead/` (FIX-1..4) + `suggestions-sweep/` (SWEEP-1..7)
-all shipped. `token_audit.py`, the `CLAUDE.md`/`AGENTS.md` skill-ification, `session-close`
-off the fork, the SWEEP `PreToolUse` hooks + `commit_preflight.py`, and the Step 4b drain
-path (`Count >= 5` → `technical-debt/` DEBT-8..12) all landed. Closing SHA `2d896a9`.
+**`token-efficiency/`** · ✅ Shipped/Archived 2026-09-03 → `docs/archive/plan/token-efficiency/` `measurement/` (MEAS-1..2) + `fixed-overhead/` (FIX-1..4) + `suggestions-sweep/` (SWEEP-1..7) all
+shipped. `token_audit.py`, the `CLAUDE.md`/`AGENTS.md` skill-ification, `session-close` off the fork, the SWEEP `PreToolUse` hooks + `commit_preflight.py`, and the Step 4b drain path (`Count >= 5` →
+`technical-debt/` DEBT-8..12) all landed. Closing SHA `2d896a9`.
 
-**`doc-format-migration/`** · ⬜ Not started — start with `plan-folders/` **DFM-1**
-Batch-converts every legacy `docs/plan/` folder to the canonical format and reflows every
-other `.md` in the repo to fill-to-≤200, then hardens the hooks + adds a CI `--all` gate so
-new docs cannot drift. Three sub-stories: `plan-folders/` (tiered A/B/C/D conversion) →
-`repo-wide-reflow/` (everything outside `plan/` and `archive/`) → `enforcement/` (repo-wide
-hooks, CI job, `new_plan_folder.py` + `/new-story` scaffold).
-Answers `root-doc-organization/` RDO-17.8; built on `reflow_md.py` (RDO-17.7, `526e431`).
+**`doc-format-migration/`** · ⬜ Not started — start with `plan-folders/` **DFM-1** Batch-converts every legacy `docs/plan/` folder to the canonical format and reflows every other `.md` in the repo to
+fill-to-≤200, then hardens the hooks + adds a CI `--all` gate so new docs cannot drift. Three sub-stories: `plan-folders/` (tiered A/B/C/D conversion) → `repo-wide-reflow/` (everything outside `plan/`
+and `archive/`) → `enforcement/` (repo-wide hooks, CI job, `new_plan_folder.py` + `/new-story` scaffold). Answers `root-doc-organization/` RDO-17.8; built on `reflow_md.py` (RDO-17.7, `526e431`).
 
-**`dev-foundation/`** · ✅ Shipped/Archived
-Engineering-excellence epic — tooling, CI, code health (3 sub-stories).
+**`dev-foundation/`** · ✅ Shipped/Archived Engineering-excellence epic — tooling, CI, code health (3 sub-stories).
 
-**`full-repo-review-followups/`** · ⬜ Not started — start with the P0 folders
-9 stories from the full-repo-review FR-7 synthesis (7 CRITICAL + 2 ERROR).
-P0: portfolio P&L fix, DB backup cron.
-P1: docs staleness, Telegram auth fix.
-P2: CLAUDE.md/REVIEW.md reconcile, logging migration.
-P3: Greeks/parity validation (council-gated), golden tests, suppression hygiene.
-Priority + dependencies in the epic's own `README.md`.
-`telegram-approval-auth-fix/` already shipped (SHA `5cafc3c`).
+**`full-repo-review-followups/`** · ⬜ Not started — start with the P0 folders 9 stories from the full-repo-review FR-7 synthesis (7 CRITICAL + 2 ERROR). P0: portfolio P&L fix, DB backup cron. P1: docs
+staleness, Telegram auth fix. P2: CLAUDE.md/REVIEW.md reconcile, logging migration. P3: Greeks/parity validation (council-gated), golden tests, suppression hygiene. Priority + dependencies in the
+epic's own `README.md`. `telegram-approval-auth-fix/` already shipped (SHA `5cafc3c`).
 
-**`telegram-markdown-migration/`** · ✅ Shipped/Archived 2026-09-06 → `docs/archive/plan/telegram-markdown-migration/`
-All Telegram messaging switched to `parse_mode=MarkdownV2` across three sequenced sub-stories: `backbone/` (parse-mode switch + escaping audit, `57c1c3c`),
-`formatting-rules/` (value/table spec → `FORMATTING.md`, `75cc123`), `strategy-rollout/` (per-message-family migration incl. ROLL-17 IC entry unify `26527c2`; docs close ROLL-5 `b55773d`).
-Superseded `telegram-ic-comparison-formatting/` TGFMT-2..9.
+**`telegram-markdown-migration/`** · ✅ Shipped/Archived 2026-09-06 → `docs/archive/plan/telegram-markdown-migration/` All Telegram messaging switched to `parse_mode=MarkdownV2` across three sequenced
+sub-stories: `backbone/` (parse-mode switch + escaping audit, `57c1c3c`), `formatting-rules/` (value/table spec → `FORMATTING.md`, `75cc123`), `strategy-rollout/` (per-message-family migration incl.
+ROLL-17 IC entry unify `26527c2`; docs close ROLL-5 `b55773d`). Superseded `telegram-ic-comparison-formatting/` TGFMT-2..9.
 
-**`telegram-ic-comparison-formatting/`** · ✅ Archived 2026-09-06 → `docs/archive/plan/telegram-ic-comparison-formatting/`
-TGFMT-1 shipped (`a69d817`, `build_comparison_report()` dynamic-width fix).
-TGFMT-2..9 superseded by `telegram-markdown-migration/` (now itself archived) — the Legs row
-and Bkd/Flt month-inception split landed there as ROLL-2c.
+**`telegram-ic-comparison-formatting/`** · ✅ Archived 2026-09-06 → `docs/archive/plan/telegram-ic-comparison-formatting/` TGFMT-1 shipped (`a69d817`, `build_comparison_report()` dynamic-width fix).
+TGFMT-2..9 superseded by `telegram-markdown-migration/` (now itself archived) — the Legs row and Bkd/Flt month-inception split landed there as ROLL-2c.
 
-**`3track-consolidation/`** · ✅ Shipped/Archived 2026-08-04 → `docs/archive/plan/3track-consolidation/`
-Overlay (CC/PP/Collar) retired on Futures/Proxy, live only on NiftyBees; base-leg-only daily
+**`3track-consolidation/`** · ✅ Shipped/Archived 2026-08-04 → `docs/archive/plan/3track-consolidation/` Overlay (CC/PP/Collar) retired on Futures/Proxy, live only on NiftyBees; base-leg-only daily
 comparison snapshot; automated base-leg rolling; full unattended automation.
 
 ---
 
 ## Active Stories
 
-**`eod-pt-summary/`** · ✅ Shipped/Archived 2026-09-07 (PT-1..PT-3) → `docs/archive/plan/eod-pt-summary/`
-Cross-strategy paper-trade EOD digest to Telegram. PT-1 (spec `d1ae760`) + PT-2 (`src/reporting/eod_pt_summary.py`
-+ `scripts/eod_pt_summary.py` + `43 15` cron, `77dc160`) + PT-3 (docs close, `dac18ea`). Runs alongside
-`scripts/eod_summary.py`, not a replacement (DECISIONS.md §P&L & Reporting, 2026-09-07).
+**`eod-pt-summary/`** · ✅ Shipped/Archived 2026-09-07 (PT-1..PT-3) → `docs/archive/plan/eod-pt-summary/` Cross-strategy paper-trade EOD digest to Telegram. PT-1 (spec `d1ae760`) + PT-2
+(`src/reporting/eod_pt_summary.py`
++ `scripts/eod_pt_summary.py` + `43 15` cron, `77dc160`) + PT-3 (docs close, `dac18ea`). Runs alongside `scripts/eod_summary.py`, not a replacement (DECISIONS.md §P&L & Reporting, 2026-09-07).
 
-**`telegram-message-unification/`** · ⬜ Not started — start with `unified-entry-message/` **UEM-1**
-A structured, fenced house style for every paper-strategy Telegram message. Four sub-stories — the first three are a hard renderer-lineage chain, the fourth is independent but closes the epic:
-`unified-entry-message/` (UEM-1..3 — `ic_entry_message.py` → shared `entry_message.py` / `EntryMessage`; IC migrated; CSP + CC entry card via `record_paper_trade.py --notify`) →
-`overlay-entry-message/` (OEM-1..5 — sign-aware `Net credit` / `Net debit` line; Collar / CC / PP automated re-entry cards; three-track `📥 Overlay Entry` bootstrap onto the renderer) →
-`unified-exit-message/` (UXM-1..8 — shared `exit_message.py` close renderer replacing five hand-rolled shapes; `short_decay_pct` + `cycle_stats` + `resolve_target` into `src/paper/cycle_pnl.py`;
-this-exit / cycle / inception P&L footer + win-rate; `pre_market_brief.py` fenced-table redesign) → `overlay-recovery-digest/` (ORD-1..4 — fix the standalone-CC-into-Collar bug BUG-044 in the S9
-"NiftyBees vs overlays" digest, then fenced-format it). No DB schema change anywhere. Scope decisions + BUG-044 detail in the epic's own `README.md`. Requested by Animesh 2026-09-10.
+**`telegram-message-unification/`** · ⬜ Not started — start with `unified-entry-message/` **UEM-1** A structured, fenced house style for every paper-strategy Telegram message. Four sub-stories — the
+first three are a hard renderer-lineage chain, the fourth is independent but closes the epic: `unified-entry-message/` (UEM-1..3 — `ic_entry_message.py` → shared `entry_message.py` / `EntryMessage`;
+IC migrated; CSP + CC entry card via `record_paper_trade.py --notify`) → `overlay-entry-message/` (OEM-1..5 — sign-aware `Net credit` / `Net debit` line; Collar / CC / PP automated re-entry cards;
+three-track `📥 Overlay Entry` bootstrap onto the renderer) → `unified-exit-message/` (UXM-1..8 — shared `exit_message.py` close renderer replacing five hand-rolled shapes; `short_decay_pct` +
+`cycle_stats` + `resolve_target` into `src/paper/cycle_pnl.py`; this-exit / cycle / inception P&L footer + win-rate; `pre_market_brief.py` fenced-table redesign) → `overlay-recovery-digest/` (ORD-1..4
+— fix the standalone-CC-into-Collar bug BUG-044 in the S9 "NiftyBees vs overlays" digest, then fenced-format it). No DB schema change anywhere. Scope decisions + BUG-044 detail in the epic's own
+`README.md`. Requested by Animesh 2026-09-10.
 
-**`portfolio-snapshot-slimdown/`** · ⬜ Not started — start with `finideas-decommission/` **FD-1**
-Shed two data sources from the daily portfolio snapshot. Two sequenced sub-stories (both rework `_build_portfolio_summary` + `_format_combined_summary` — fixed order, not interleaved):
-`finideas-decommission/` (FD-1..7 — full removal of `finideas_ilts` + `finrakshak`: the `src/portfolio/strategies/` provider layer, the options / FinRakshak-hedge / ETF snapshot terms, and every
-Finideas row in `strategies` / `legs` / `trades` / `daily_snapshots` via a `scripts/dev/decommission_finideas.py` CLI — history option A, hard delete, no archive) → `dhan-holdings-removal/`
-(DHR-1..4 — remove the Dhan equity/bond holdings, their P&L, and the `📊 Dhan Options (Intraday)` block from the snapshot; keep the Dhan login flow + `src/dhan/` client + DB tables wired). After both,
-the snapshot reports MF + Nuvama bonds + Nuvama options only. No `schema.md`. Requested by Animesh 2026-09-10.
+**`portfolio-snapshot-slimdown/`** · ⬜ Not started — start with `finideas-decommission/` **FD-1** Shed two data sources from the daily portfolio snapshot. Two sequenced sub-stories (both rework
+`_build_portfolio_summary` + `_format_combined_summary` — fixed order, not interleaved): `finideas-decommission/` (FD-1..7 — full removal of `finideas_ilts` + `finrakshak`: the
+`src/portfolio/strategies/` provider layer, the options / FinRakshak-hedge / ETF snapshot terms, and every Finideas row in `strategies` / `legs` / `trades` / `daily_snapshots` via a
+`scripts/dev/decommission_finideas.py` CLI — history option A, hard delete, no archive) → `dhan-holdings-removal/` (DHR-1..4 — remove the Dhan equity/bond holdings, their P&L, and the `📊 Dhan Options
+(Intraday)` block from the snapshot; keep the Dhan login flow + `src/dhan/` client + DB tables wired). After both, the snapshot reports MF + Nuvama bonds + Nuvama options only. No `schema.md`.
+Requested by Animesh 2026-09-10.
 
-**`risk-gamma-phase-a/`** · 🔄 In progress · next: **B2.2** (chain fetch + field computation)
-Risk delta gate (done) + Near-Expiry Gamma Buy `gamma_daily_watch.py`.
+**`risk-gamma-phase-a/`** · 🔄 In progress · next: **B2.2** (chain fetch + field computation) Risk delta gate (done) + Near-Expiry Gamma Buy `gamma_daily_watch.py`.
 
-**`variance-gate/`** · ⬜ Not started · next: **VG0** (CSP v1 spec reconciliation)
-CSP v1 Phase 0.8 deployment gate — spec reconciliation + gate criteria A–D.
+**`variance-gate/`** · ⬜ Not started · next: **VG0** (CSP v1 spec reconciliation) CSP v1 Phase 0.8 deployment gate — spec reconciliation + gate criteria A–D.
 
-**`root-doc-organization/`** · 🔄 In progress · next: **RDO-16** (loop-closure check — one real
-session confirms the doc-freshness mechanism end to end; RDO-11 also open, date-gated ≥ 2026-09-03)
-Token-efficiency cleanup of the ~22 root `.md` files + doc-maintenance automation.
-Docs + tooling only. RDO-1..17 + an acceptance-criteria list in `tasks.md`.
-RDO-1/2/4/5/6/7/8/9/10/12/13/14/15 + RDO-17.1..17.7 shipped, RDO-3 closed-partial;
-RDO-16, RDO-11 open; RDO-17.8 decided (pending close).
-RDO-17.8 (2026-08-29): legacy-folder rule decided — batch-convert all; execution moved to the
-new `doc-format-migration/` epic (above).
-RDO-17.7 (2026-08-29): swept `root-doc-organization/` + `telegram-markdown-migration/` (all 16 `.md`)
-to fill-to-≤200; added reusable `scripts/dev/reflow_md.py` + 10 tests. Whitespace-only — zero word
-changes. RDO-17.7 §B → **RDO-17.8** (legacy-folder conversion rule, Owner: Animesh). `526e431`.
-RDO-17.6 (2026-08-29): full-converted `telegram-markdown-migration/` — the epic POC (after 17.5's
-flat-story POC). Root `README.md` → `_TEMPLATE/epic/` shape (Stories table w/ Status + Closing SHA);
-`prompt.md` → epic router; all 3 sub-stories' `tasks.md` → canonical one-liner task lines,
-forensic detail folded into `stories.md` As-built paragraphs. `cf46ff4`.
-RDO-17.5 (2026-08-29): full-converted `root-doc-organization/` to the canonical format — every
-task line a one-liner with the 5-field tail, `stories.md` covering every task, `prompt.md`
-realigned to `_TEMPLATE/story/`; folded in RDO-17.7 §A (retire semantic linefeeds for fill-to-≤200).
-RDO-17 (2026-08-29): standardized the `docs/plan/` story & epic folder format —
-flat single-story vs epic-with-sub-stories, required `stories.md`, conditional `schema.md`,
-`| Owner | Model | Review | SHA` task line, `/work` epic descent; `_TEMPLATE/` gets
-`story/` + `epic/` variants. 17.4 did a partial retrofit of the two validation folders;
-17.5/17.6 supersede it with a full POC conversion (shipped task lines included) to calibrate
-converting the remaining ~25 legacy folders.
-RDO-6 (2026-08-29): `md-cleanup` → `md-organize` skill rewrite; `.agents/` mirror re-synced;
-`CLAUDE.md`/`AGENTS.md` long-line wrap + Step 5a task-line pointer; whole-repo
-`md-line-length` backlog (~700 lines / ~70 files) cleared, `--all-files` green.
-RDO-7 (2026-08-29): `session-close` gains a report-only `DOC STALENESS` content-gap check.
-RDO-10 (2026-08-28): reconciled RDO-7/Phase 7 with the two shipped doc-freshness hooks —
-RDO-7 narrowed to content gaps only, `md-organize` name settled, `#4` → future read-only
-Telegram digest, `state_doc_freshness.sh` thresholds tuned.
+**`root-doc-organization/`** · 🔄 In progress · next: **RDO-16** (loop-closure check — one real session confirms the doc-freshness mechanism end to end; RDO-11 also open, date-gated ≥ 2026-09-03)
+Token-efficiency cleanup of the ~22 root `.md` files + doc-maintenance automation. Docs + tooling only. RDO-1..17 + an acceptance-criteria list in `tasks.md`. RDO-1/2/4/5/6/7/8/9/10/12/13/14/15 +
+RDO-17.1..17.7 shipped, RDO-3 closed-partial; RDO-16, RDO-11 open; RDO-17.8 decided (pending close). RDO-17.8 (2026-08-29): legacy-folder rule decided — batch-convert all; execution moved to the new
+`doc-format-migration/` epic (above). RDO-17.7 (2026-08-29): swept `root-doc-organization/` + `telegram-markdown-migration/` (all 16 `.md`) to fill-to-≤200; added reusable `scripts/dev/reflow_md.py` +
+10 tests. Whitespace-only — zero word changes. RDO-17.7 §B → **RDO-17.8** (legacy-folder conversion rule, Owner: Animesh). `526e431`. RDO-17.6 (2026-08-29): full-converted
+`telegram-markdown-migration/` — the epic POC (after 17.5's flat-story POC). Root `README.md` → `_TEMPLATE/epic/` shape (Stories table w/ Status + Closing SHA); `prompt.md` → epic router; all 3
+sub-stories' `tasks.md` → canonical one-liner task lines, forensic detail folded into `stories.md` As-built paragraphs. `cf46ff4`. RDO-17.5 (2026-08-29): full-converted `root-doc-organization/` to the
+canonical format — every task line a one-liner with the 5-field tail, `stories.md` covering every task, `prompt.md` realigned to `_TEMPLATE/story/`; folded in RDO-17.7 §A (retire semantic linefeeds
+for fill-to-≤200). RDO-17 (2026-08-29): standardized the `docs/plan/` story & epic folder format — flat single-story vs epic-with-sub-stories, required `stories.md`, conditional `schema.md`, `| Owner
+| Model | Review | SHA` task line, `/work` epic descent; `_TEMPLATE/` gets `story/` + `epic/` variants. 17.4 did a partial retrofit of the two validation folders; 17.5/17.6 supersede it with a full
+POC conversion (shipped task lines included) to calibrate converting the remaining ~25 legacy folders. RDO-6 (2026-08-29): `md-cleanup` → `md-organize` skill rewrite; `.agents/` mirror re-synced;
+`CLAUDE.md`/`AGENTS.md` long-line wrap + Step 5a task-line pointer; whole-repo `md-line-length` backlog (~700 lines / ~70 files) cleared, `--all-files` green. RDO-7 (2026-08-29): `session-close` gains
+a report-only `DOC STALENESS` content-gap check. RDO-10 (2026-08-28): reconciled RDO-7/Phase 7 with the two shipped doc-freshness hooks — RDO-7 narrowed to content gaps only, `md-organize` name
+settled, `#4` → future read-only Telegram digest, `state_doc_freshness.sh` thresholds tuned.
 
-**`session-entry-point/`** · ✅ Archived 2026-08-28 → `docs/archive/plan/session-entry-point/`
-Unified manual `/work` skill (SEP-1..4) — routes a task session to Feature or Bug, loads the
-right prompt + first unchecked task, hands to `CLAUDE.md` Step 2b.
+**`session-entry-point/`** · ✅ Archived 2026-08-28 → `docs/archive/plan/session-entry-point/` Unified manual `/work` skill (SEP-1..4) — routes a task session to Feature or Bug, loads the right
+prompt + first unchecked task, hands to `CLAUDE.md` Step 2b.
 
-**`paper-backbone/`** · ✅ Shipped/Archived
-Strategy Monitor daemon + pluggable strategy backbone (`src/strategy/`, `TelegramGateway`).
+**`paper-backbone/`** · ✅ Shipped/Archived Strategy Monitor daemon + pluggable strategy backbone (`src/strategy/`, `TelegramGateway`).
 
-**`mvp/`** · ⬜ Not started · next: **M1** (models + store)
-Multi-bagger Value Picks Tracker (`src/mvp/`, `scripts/mvp.py`, `scripts/mvp_watch.py`).
+**`mvp/`** · ⬜ Not started · next: **M1** (models + store) Multi-bagger Value Picks Tracker (`src/mvp/`, `scripts/mvp.py`, `scripts/mvp_watch.py`).
 
-**`council-refactor/`** · ✅ Shipped/Archived
-Remove `RapidCouncil` from the daemon approval path; fix `send_approval_request` signature
-bug; add deterministic backtestable roll rules to `ExitSignalEngine`.
+**`council-refactor/`** · ✅ Shipped/Archived Remove `RapidCouncil` from the daemon approval path; fix `send_approval_request` signature bug; add deterministic backtestable roll rules to
+`ExitSignalEngine`.
 
-**`ic-nifty-v2/`** · ✅ Shipped/Archived
-IronCondorV2 — 25Δ/22Δ high-delta IC with 10Δ wings, partial-roll adjustment, DTE-tiered exit.
+**`ic-nifty-v2/`** · ✅ Shipped/Archived IronCondorV2 — 25Δ/22Δ high-delta IC with 10Δ wings, partial-roll adjustment, DTE-tiered exit.
 
-**`paper-exit-codification/`** · ✅ Shipped/Archived 2026-08-04 → `docs/archive/plan/paper-exit-codification/`
-Codify q11+q12 council rulings: TIME_STOP/DTE_REVIEW priority fix in `evaluate_cc`;
+**`paper-exit-codification/`** · ✅ Shipped/Archived 2026-08-04 → `docs/archive/plan/paper-exit-codification/` Codify q11+q12 council rulings: TIME_STOP/DTE_REVIEW priority fix in `evaluate_cc`;
 StrategyMonitor observability logs.
 
-**`telegram-leg-labels/`** · ✅ Shipped/Archived 2026-08-07 (TL-1..5) → `docs/archive/plan/telegram-leg-labels/`
-Replace raw Upstox instrument keys in Telegram prose with human-readable
-`NIFTY 22000 CE 07 JUL 26` labels; CLI command lines untouched.
+**`telegram-leg-labels/`** · ✅ Shipped/Archived 2026-08-07 (TL-1..5) → `docs/archive/plan/telegram-leg-labels/` Replace raw Upstox instrument keys in Telegram prose with human-readable `NIFTY 22000 CE
+07 JUL 26` labels; CLI command lines untouched.
 
-**`ic-yearly-expiry-fix/`** · ✅ Shipped/Archived 2026-09-07 → `docs/archive/plan/ic-yearly-expiry-fix/`
-Fix `InstrumentLookup.get_expiry_candidates()`'s `"yearly"` label resolving June instead of
-December — NSE Nifty's annual contract is always December's last Tuesday.
-YE-1..4 superseded 2026-07-22 (DECISIONS.md BUG-015); WG-1 shipped `761af8e`
-(`ic_nifty_v1.leg_greeks` INFO line; weekly Parquet bucket already in `a38e53f`).
+**`ic-yearly-expiry-fix/`** · ✅ Shipped/Archived 2026-09-07 → `docs/archive/plan/ic-yearly-expiry-fix/` Fix `InstrumentLookup.get_expiry_candidates()`'s `"yearly"` label resolving June instead of
+December — NSE Nifty's annual contract is always December's last Tuesday. YE-1..4 superseded 2026-07-22 (DECISIONS.md BUG-015); WG-1 shipped `761af8e` (`ic_nifty_v1.leg_greeks` INFO line; weekly
+Parquet bucket already in `a38e53f`).
 
-**`greeks-bs-fallback/`** · 🔄 Partially scoped · next: **GF-1** (audit scope)
-Upstox returns all-zero `option_greeks` for far-dated NIFTY contracts despite liquid
-`ltp`/`bid`/`ask`/`oi` — a data gap, not illiquidity.
-Blocks delta-based IC entry for the yearly bucket.
-Decision: compute Greeks ourselves (BS pricer + Newton-Raphson IV solver), not a cruder
-OTM heuristic.
-3 modeling decisions (risk-free rate, DTE convention, delta tolerance) still need Animesh.
+**`greeks-bs-fallback/`** · 🔄 Partially scoped · next: **GF-1** (audit scope) Upstox returns all-zero `option_greeks` for far-dated NIFTY contracts despite liquid `ltp`/`bid`/`ask`/`oi` — a data gap,
+not illiquidity. Blocks delta-based IC entry for the yearly bucket. Decision: compute Greeks ourselves (BS pricer + Newton-Raphson IV solver), not a cruder OTM heuristic. 3 modeling decisions
+(risk-free rate, DTE convention, delta tolerance) still need Animesh.
 
-**`chain-decay-analysis/`** · ⬜ Not started · next: **CDA-1** (paired-snapshot reader)
-Empirical check: does intraday option premium move track delta (+ gamma/theta/vega
-decomposition), or is there a persistent residual — and which moneyness bands decay faster
-than theta alone predicts.
-Existing 5-min intraday chain Parquet. Monthly bucket only.
+**`chain-decay-analysis/`** · ⬜ Not started · next: **CDA-1** (paired-snapshot reader) Empirical check: does intraday option premium move track delta (+ gamma/theta/vega decomposition), or is there a
+persistent residual — and which moneyness bands decay faster than theta alone predicts. Existing 5-min intraday chain Parquet. Monthly bucket only.
 
-**`signals/`** · ✅ Shipped/Archived 2026-09-09 (S1.1–S6) → `docs/archive/plan/signals/`
-Multi-LLM daily directional signal pipeline: market snapshot → GPT-4o / Grok / Gemini (via OpenRouter) → `SignalAggregator` consensus → one `DailySignal` per day, scored forward-only
-against a `hash(trade_date) % 2` coin-flip baseline. Self-contained `src/signals/` package with its own SQLite tables — no `backtest-engine` / `backtest-eval-core` dependency. All three
-crons live on the Mac host (Phase 1 `openrouter_only`): `morning_signal` 09:30, `record_signal_outcome --auto` 16:00, `signal_report` 16:35 (Mon–Fri). Next signals work → `signals-paper-track/`.
+**`signals/`** · ✅ Shipped/Archived 2026-09-09 (S1.1–S6) → `docs/archive/plan/signals/` Multi-LLM daily directional signal pipeline: market snapshot → GPT-4o / Grok / Gemini (via OpenRouter) →
+`SignalAggregator` consensus → one `DailySignal` per day, scored forward-only against a `hash(trade_date) % 2` coin-flip baseline. Self-contained `src/signals/` package with its own SQLite tables — no
+`backtest-engine` / `backtest-eval-core` dependency. All three crons live on the Mac host (Phase 1 `openrouter_only`): `morning_signal` 09:30, `record_signal_outcome --auto` 16:00, `signal_report`
+16:35 (Mon–Fri). Next signals work → `signals-paper-track/`.
 
-**`signals-cost-tracking/`** · ⬜ Not started · next: **SCT-1** (usage model + provider capture)
-Capture OpenRouter per-call token usage + credit cost (`"usage": {"include": true}` inline accounting — no `/generation` call) on every signal provider response, persist it as three
-new nullable columns on `signal_responses`, show today's three-call spend on the 09:30 morning Telegram message, and add `SignalStore.get_signal_cost(from, to)` SQL-aggregate. Four
-tasks SCT-1..4. Carries a `schema.md`. Month-to-date cost → future `signal_report.py` change, out of scope. Requested by Animesh 2026-09-09.
+**`signals-cost-tracking/`** · ⬜ Not started · next: **SCT-1** (usage model + provider capture) Capture OpenRouter per-call token usage + credit cost (`"usage": {"include": true}` inline accounting —
+no `/generation` call) on every signal provider response, persist it as three new nullable columns on `signal_responses`, show today's three-call spend on the 09:30 morning Telegram message, and add
+`SignalStore.get_signal_cost(from, to)` SQL-aggregate. Four tasks SCT-1..4. Carries a `schema.md`. Month-to-date cost → future `signal_report.py` change, out of scope. Requested by Animesh 2026-09-09.
 
-**`signals-paper-track/`** · 🔨 In progress · SPT-1 done (`636c190`) · next: **SPT-2** (signal paper models + store)
-Turns the `signals/` consensus into a live paper-traded strategy: auto-enter the daily
-`DailySignal` as a long monthly option (near-month, ≤ 7-DTE roll), manage it intraday against
-a fixed SL −30 % / target +50 %, exit on a hit or square off by 15:00, log the full mark path,
-and record every entry + exit for a 6-month evaluation window that gates go-live. SPT-1 ruled
-2026-09-09 (council q17, `docs/archive/council/strategy/2026-09-09_signals-paper-track-execution-layer.md`):
-module boundary **A** — `paper_signal_track_v1` `PaperStrategy` on the shared
-`StrategyMonitor` / `PaperExecutor` / `PaperStore`; pure `src/strategy/signal_exit.py`; Phase 1
-fixed-only (`TRAILING_STOP` reserved); 30 s cadence; two-tier recalibration; go-live gate
-G1–G9 all-pass. SPT-5's exit message replaces `signals/` S5.5a's Phase-1 interim outcome message.
+**`signals-paper-track/`** · 🔨 In progress · SPT-1 done (`636c190`) · next: **SPT-2** (signal paper models + store) Turns the `signals/` consensus into a live paper-traded strategy: auto-enter the
+daily `DailySignal` as a long monthly option (near-month, ≤ 7-DTE roll), manage it intraday against a fixed SL −30 % / target +50 %, exit on a hit or square off by 15:00, log the full mark path, and
+record every entry + exit for a 6-month evaluation window that gates go-live. SPT-1 ruled 2026-09-09 (council q17, `docs/archive/council/strategy/2026-09-09_signals-paper-track-execution-layer.md`):
+module boundary **A** — `paper_signal_track_v1` `PaperStrategy` on the shared `StrategyMonitor` / `PaperExecutor` / `PaperStore`; pure `src/strategy/signal_exit.py`; Phase 1 fixed-only
+(`TRAILING_STOP` reserved); 30 s cadence; two-tier recalibration; go-live gate G1–G9 all-pass. SPT-5's exit message replaces `signals/` S5.5a's Phase-1 interim outcome message.
 
-**`full-repo-review/`** · ✅ Complete — see `full-repo-review-followups/`
-One-time multi-model, multi-persona review of design docs, source, tests, the
-AI-collaboration protocol, and per-job-type surface routing (FR-1..9).
+**`full-repo-review/`** · ✅ Complete — see `full-repo-review-followups/` One-time multi-model, multi-persona review of design docs, source, tests, the AI-collaboration protocol, and per-job-type
+surface routing (FR-1..9).
 
-**`ic-time-stop-dte-tiering/`** · ✅ Shipped/Archived 2026-08-05 (DT-1..4) → `docs/archive/plan/ic-time-stop-dte-tiering/`
-Council-ruled fix (`docs/council/2026-08-05_...`): de-tier per-bucket
-`time_stop_dte`/`dte_warn` to a uniform terminal rule; forward-only counterfactual DTE-mark
-logging on `paper_exit_events`.
+**`ic-time-stop-dte-tiering/`** · ✅ Shipped/Archived 2026-08-05 (DT-1..4) → `docs/archive/plan/ic-time-stop-dte-tiering/` Council-ruled fix (`docs/council/2026-08-05_...`): de-tier per-bucket
+`time_stop_dte`/`dte_warn` to a uniform terminal rule; forward-only counterfactual DTE-mark logging on `paper_exit_events`.
 
-**`monitor-and-close-hardening/`** · ✅ Shipped/Archived 2026-08-06 → `docs/archive/plan/monitor-and-close-hardening/`
-StrategyMonitor tick-loop observability + auto-close leg-resolution hardening — dedupe
-`expiry_unresolved` logging, BOD-resolve replacement-leg keys, atomic close+open, shared
-BOD-fallback finder (MC-1..MC-6).
+**`monitor-and-close-hardening/`** · ✅ Shipped/Archived 2026-08-06 → `docs/archive/plan/monitor-and-close-hardening/` StrategyMonitor tick-loop observability + auto-close leg-resolution hardening —
+dedupe `expiry_unresolved` logging, BOD-resolve replacement-leg keys, atomic close+open, shared BOD-fallback finder (MC-1..MC-6).
 
-**`paper-ic-daily-snapshot/`** · ✅ Shipped/Archived 2026-08-07 → `docs/archive/plan/paper-ic-daily-snapshot/`
-IC daily P&L snapshot wiring (SNAP-1..5): confirmed realized/unrealized semantics, built
-`scripts/reporting/paper_pnl_report.py`, fixed `paper_nav_snapshots.total_pnl` invariant +
-backfilled 42 rows.
+**`paper-ic-daily-snapshot/`** · ✅ Shipped/Archived 2026-08-07 → `docs/archive/plan/paper-ic-daily-snapshot/` IC daily P&L snapshot wiring (SNAP-1..5): confirmed realized/unrealized semantics, built
+`scripts/reporting/paper_pnl_report.py`, fixed `paper_nav_snapshots.total_pnl` invariant + backfilled 42 rows.
 
 ---
 
@@ -224,27 +151,19 @@ backfilled 42 rows.
 
 ## Conventions
 
-This section is canonical and self-contained — there is no pointer to
-`docs/archive/plan/README.md` (that file documents the retired one-file-per-task scheme and
-is dead for convention purposes).
+This section is canonical and self-contained — there is no pointer to `docs/archive/plan/README.md` (that file documents the retired one-file-per-task scheme and is dead for convention purposes).
 
 ### Folder shapes — size to scope
 
 Work under `docs/plan/` takes one of two shapes.
 
-- **Single story** — one coherent goal, however many tasks.
-  A flat folder `docs/plan/<slug>/` (`<slug>` kebab-case — no date prefix, no `<slug>_`
-  filename prefix). `risk-gamma-phase-a/` is the model.
+- **Single story** — one coherent goal, however many tasks. A flat folder `docs/plan/<slug>/` (`<slug>` kebab-case — no date prefix, no `<slug>_` filename prefix). `risk-gamma-phase-a/` is the model.
   Start it by copying `docs/plan/_TEMPLATE/story/`.
-- **Epic** — two or more related stories shipped together.
-  `docs/plan/<slug>/` with a router `prompt.md` + `README.md` at the root and one sub-story
-  folder per story **directly under it** — `docs/plan/<slug>/<story-slug>/`, no `stories/`
-  layer. `telegram-markdown-migration/` is the model.
-  Start it by copying `docs/plan/_TEMPLATE/epic/`.
+- **Epic** — two or more related stories shipped together. `docs/plan/<slug>/` with a router `prompt.md` + `README.md` at the root and one sub-story folder per story **directly under it** —
+  `docs/plan/<slug>/<story-slug>/`, no `stories/` layer. `telegram-markdown-migration/` is the model. Start it by copying `docs/plan/_TEMPLATE/epic/`.
 
-A single story that grows a second story is promoted: create `<slug>/<story-a>/` and
-`<slug>/<story-b>/`, move the original three files into `<story-a>/`, add the root
-`prompt.md` router + `README.md`.
+A single story that grows a second story is promoted: create `<slug>/<story-a>/` and `<slug>/<story-b>/`, move the original three files into `<story-a>/`, add the root `prompt.md` router +
+`README.md`.
 
 ### Story-folder file set
 
@@ -258,9 +177,8 @@ Applies to a flat single-story folder and to each epic sub-story folder.
 | `schema.md` | conditional — see *When a story needs `schema.md`* | DDL + the `DB_REGISTRY.md` row, when the story changes DB schema. |
 | `plan.md` / `spec.md` | optional | File-by-file plan / wire formats / gate criteria for a large story — no task checkboxes (see *Extra files*). |
 
-Legacy folders may still carry `<name>_tasks.md` / `<name>_stories.md`, a `stories/<ID>.md`
-one-file-per-story layout, or `phaseN/` sub-folders — do not mass-rename; each converts to
-the shape above on its next substantive touch.
+Legacy folders may still carry `<name>_tasks.md` / `<name>_stories.md`, a `stories/<ID>.md` one-file-per-story layout, or `phaseN/` sub-folders — do not mass-rename; each converts to the shape above
+on its next substantive touch.
 
 ### Epic-folder file set
 
@@ -271,15 +189,11 @@ The epic root carries **only what is common to every sub-story** — never task 
 | `prompt.md` | yes | The **router** — `/work` loads this, not a sub-story `prompt.md`. See *Epic router* below. |
 | `README.md` | yes | The shared brief — see *Epic README* below. |
 
-**Epic router (`prompt.md`)** — states the fixed story order; walks each sub-story's
-`tasks.md` for the first unchecked `- [ ]`; confirms that task line's `Owner` / `Model` /
-`Review`; hands to that sub-story's own `prompt.md` + `stories.md`.
-One task per session, then stop.
+**Epic router (`prompt.md`)** — states the fixed story order; walks each sub-story's `tasks.md` for the first unchecked `- [ ]`; confirms that task line's `Owner` / `Model` / `Review`; hands to that
+sub-story's own `prompt.md` + `stories.md`. One task per session, then stop.
 
-**Epic README** — why the epic exists, the scope decisions (and with whom), the ordered
-story list with a status column (⬜ / 🔄 / ✅ + closing SHA) and per-story dependency, the
-cross-cutting constraints every sub-story must honour, supersession / coordination notes.
-A fact needed by only one story belongs in that story's files.
+**Epic README** — why the epic exists, the scope decisions (and with whom), the ordered story list with a status column (⬜ / 🔄 / ✅ + closing SHA) and per-story dependency, the cross-cutting
+constraints every sub-story must honour, supersession / coordination notes. A fact needed by only one story belongs in that story's files.
 
 ### When a story needs `schema.md`
 
@@ -289,27 +203,18 @@ Decide at planning time, while writing `stories.md`. A story needs a `schema.md`
 - adds / renames / drops a column, or changes a column's type or constraint;
 - introduces a new `*Store` class with its own `init_db()` DDL;
 - adds a contract index (query-critical, not incidental);
-- changes how a stored value is encoded in a way a future reader must know — a new enum
-  value in a `TEXT` column, a units change, a new composite-key format.
+- changes how a stored value is encoded in a way a future reader must know — a new enum value in a `TEXT` column, a units change, a new composite-key format.
 
-It is **not** needed when the story only reads existing tables, writes rows into existing
-tables with no shape change, or is pure computation / formatting / notification /
-script-wiring.
+It is **not** needed when the story only reads existing tables, writes rows into existing tables with no shape change, or is pure computation / formatting / notification / script-wiring.
 
-DDL lives in `schema.md`, never inline in `stories.md` — `stories.md` points to it ("use
-the exact schema from `schema.md`"). `schema.md` **must** also state the `DB_REGISTRY.md`
-row to add. `check_story_structure.py` warns (does not block) when a `stories.md` /
-`prompt.md` contains `CREATE TABLE` / `ALTER TABLE` and the folder has no `schema.md`.
+DDL lives in `schema.md`, never inline in `stories.md` — `stories.md` points to it ("use the exact schema from `schema.md`"). `schema.md` **must** also state the `DB_REGISTRY.md` row to add.
+`check_story_structure.py` warns (does not block) when a `stories.md` / `prompt.md` contains `CREATE TABLE` / `ALTER TABLE` and the folder has no `schema.md`.
 
 ### Extra files
 
-A story or epic folder may carry additional `.md` files beyond the sets above **only** when
-the file is shared reference material used by more than one task — a reusable prompt, a
-`plan.md`, a `spec.md`, a research note — **and** it contains no `- [ ]` / `- [x]` task
-checkboxes. Anything with tracked checkboxes is a task list and belongs in a story folder's
-`tasks.md`. OS / editor cruft (`.DS_Store`, `*.swp`) is removed — it is already
-`.gitignore`d. `check_story_structure.py` flags a tracked non-`.md` file in a plan folder,
-and an extra `.md` that contains checkbox lines.
+A story or epic folder may carry additional `.md` files beyond the sets above **only** when the file is shared reference material used by more than one task — a reusable prompt, a `plan.md`, a
+`spec.md`, a research note — **and** it contains no `- [ ]` / `- [x]` task checkboxes. Anything with tracked checkboxes is a task list and belongs in a story folder's `tasks.md`. OS / editor cruft
+(`.DS_Store`, `*.swp`) is removed — it is already `.gitignore`d. `check_story_structure.py` flags a tracked non-`.md` file in a plan folder, and an extra `.md` that contains checkbox lines.
 
 ### Task-line format
 
@@ -319,114 +224,72 @@ Every `tasks.md` line is a single `- [ ]` checkbox carrying five `|`-separated f
 - [ ] **<ID>** — <one-line description> | Owner: <Claude|Antigravity|Animesh> | Model: <model-id|n/a> | Review: <code-reviewer|greeks-analyst|roll-validator|none> | SHA: <—>
 ```
 
-`Owner`, `Model`, and `Review` are filled **when the story is authored** — they record the
-`CLAUDE.md` Step 3b routing decision and which AutoTrigger sub-agent gates that task's
-commit.
-`Model` is the implementing model id when `Owner=Claude` (e.g. `claude-sonnet-5`), `n/a`
-otherwise.
-`Review` is `none` for docs-only tasks.
-`SHA` is `—` until the task's commit lands; then set it to the real SHA and tick the box.
-When a phase ticks its own box in the same commit, `SHA: <pending>` is the sanctioned
-interim — the real SHA is backfilled in the next commit's docs touch, never in a dedicated
-swap-only commit (`commit` skill Step 1b; `check_checkbox_consistency.py` allows `<pending>`
-on a ticked line).
-One line per task — never mirror task state into `TODOS.md` or a `stories.md` DoD box.
+`Owner`, `Model`, and `Review` are filled **when the story is authored** — they record the `CLAUDE.md` Step 3b routing decision and which AutoTrigger sub-agent gates that task's commit. `Model` is the
+implementing model id when `Owner=Claude` (e.g. `claude-sonnet-5`), `n/a` otherwise. `Review` is `none` for docs-only tasks. `SHA` is `—` until the task's commit lands; then set it to the real SHA and
+tick the box. When a phase ticks its own box in the same commit, `SHA: <pending>` is the sanctioned interim — the real SHA is backfilled in the next commit's docs touch, never in a dedicated swap-only
+commit (`commit` skill Step 1b; `check_checkbox_consistency.py` allows `<pending>` on a ticked line). One line per task — never mirror task state into `TODOS.md` or a `stories.md` DoD box.
 
 ### Canonical state vs derived state
 
-`tasks.md` checkbox state is the single source of truth for task progress.
-Everything else is derived and must not be hand-edited to disagree with it:
+`tasks.md` checkbox state is the single source of truth for task progress. Everything else is derived and must not be hand-edited to disagree with it:
 
 - this file's per-story status / next marker — a summary of the story's `tasks.md`
 - a `stories.md` DoD checkbox — mirrors its `tasks.md` task
 
 ### Checkbox consistency (RDO-15)
 
-Every task id carries **exactly one** checkbox — the `- [ ]` / `- [x]` line in the working
-list.
-A trailing `## Epic done when` (epic) / `## Story done when` (single story) block is an
-**acceptance-criteria list in prose** — bold id, one-line criterion, **no `- [ ]`
-checkboxes** — verified at close, not tracked incrementally.
-An acceptance item with no matching task id (e.g. a whole-epic "loop-closure verified"
-check) is real work: give it a task id in the working list, don't leave it as a bare bullet
-here.
-Nothing mirrors task state, so nothing can drift.
-`scripts/dev/hooks/check_checkbox_consistency.py` sweeps every `docs/plan/**/tasks.md` (plus
-legacy `*_tasks.md`) and `docs/bugs/task.md` for: a checkbox inside a summary block
-(`## Epic done when` / `## Story done when` / `## Definition of done` / …), the same id with
-disagreeing state in one file, a README `next:` marker pointing at an already-done id, and —
-on any line carrying the canonical `| Owner: … | Model: … | Review: … | SHA: …` tail — a
-`Review` value that is not a known gate name (`code-reviewer` / `greeks-analyst` /
-`roll-validator` / `none`) or a `SHA` that disagrees with the checkbox state (`—` / `<—>`
-iff unchecked, a real 7–40 hex SHA — or the `<pending>` interim — iff ticked). Legacy tails
-(`| Owner | Model | SHA` with
-no `Review`, or a prose-laden `| Review:`) are grandfathered — skipped, not flagged.
-It runs in the `md-organize` skill's periodic audit — not pre-commit (task files churn far
-faster than the audit needs to).
+Every task id carries **exactly one** checkbox — the `- [ ]` / `- [x]` line in the working list. A trailing `## Epic done when` (epic) / `## Story done when` (single story) block is an
+**acceptance-criteria list in prose** — bold id, one-line criterion, **no `- [ ]` checkboxes** — verified at close, not tracked incrementally. An acceptance item with no matching task id (e.g. a
+whole-epic "loop-closure verified" check) is real work: give it a task id in the working list, don't leave it as a bare bullet here. Nothing mirrors task state, so nothing can drift.
+`scripts/dev/hooks/check_checkbox_consistency.py` sweeps every `docs/plan/**/tasks.md` (plus legacy `*_tasks.md`) and `docs/bugs/task.md` for: a checkbox inside a summary block (`## Epic done when` /
+`## Story done when` / `## Definition of done` / …), the same id with disagreeing state in one file, a README `next:` marker pointing at an already-done id, and — on any line carrying the canonical `|
+Owner: … | Model: … | Review: … | SHA: …` tail — a `Review` value that is not a known gate name (`code-reviewer` / `greeks-analyst` / `roll-validator` / `none`) or a `SHA` that disagrees with the
+checkbox state (`—` / `<—>` iff unchecked, a real 7–40 hex SHA — or the `<pending>` interim — iff ticked). Legacy tails (`| Owner | Model | SHA` with no `Review`, or a prose-laden `| Review:`) are
+grandfathered — skipped, not flagged. It runs in the `md-organize` skill's periodic audit — not pre-commit (task files churn far faster than the audit needs to).
 
 ### `TODOS.md` hygiene
 
-`TODOS.md` carries two separate pointer-only lists — `## Feature Backlog` (`docs/plan/`
-stories) and `## Open Bugs` (`docs/bugs/` defects). `/work` routes to one or the other.
-Each item is **pointer-only**: title, the `docs/plan/<slug>/` or `docs/bugs/` path, the next
-unchecked task id, and a one-line why.
-No inline multi-paragraph detail, no per-task progress — that lives only in the story's
-`tasks.md` / `docs/bugs/task.md`.
-Cross-references between items use folder names, never list positions.
-The `## Open Bugs` snapshot is not authoritative — `docs/bugs/bugs.md` is; never encode bug
-priority or status in `TODOS.md`.
-On completion, a line is removed, not just ticked — see *Completion → archive*.
+`TODOS.md` carries two separate pointer-only lists — `## Feature Backlog` (`docs/plan/` stories) and `## Open Bugs` (`docs/bugs/` defects). `/work` routes to one or the other. Each item is
+**pointer-only**: title, the `docs/plan/<slug>/` or `docs/bugs/` path, the next unchecked task id, and a one-line why. No inline multi-paragraph detail, no per-task progress — that lives only in the
+story's `tasks.md` / `docs/bugs/task.md`. Cross-references between items use folder names, never list positions. The `## Open Bugs` snapshot is not authoritative — `docs/bugs/bugs.md` is; never encode
+bug priority or status in `TODOS.md`. On completion, a line is removed, not just ticked — see *Completion → archive*.
 
 ### Completion → archive
 
-A story or bug is **done** when every `- [ ]` in its `tasks.md` / `docs/bugs/task.md` is
-ticked and its `## Epic done when` / `## Story done when` acceptance block (if present) is
-satisfied.
-As soon as that holds, do all of the following in the same commit — never leave a done
-story half-archived:
+A story or bug is **done** when every `- [ ]` in its `tasks.md` / `docs/bugs/task.md` is ticked and its `## Epic done when` / `## Story done when` acceptance block (if present) is satisfied. As soon
+as that holds, do all of the following in the same commit — never leave a done story half-archived:
 
-1. **Story:** `git mv docs/plan/<slug>/ docs/archive/plan/<slug>/`
-   (bug: `git mv docs/bugs/<slug>/ docs/archive/bugs/<slug>/`, or fold the `bugs.md` entry
-   into `docs/archive/bugs/bugs.md` and mark it `[MOVED]` at the original location).
-2. **`TODOS.md`:** delete the item's line from `## Feature Backlog` / `## Open Bugs` and
-   append it to `docs/archive/TODOS_ARCHIVE.md` under a dated heading.
-3. **This file:** collapse the story's entry under `## Active Epics` to a one-line
-   `✅ Archived → docs/archive/plan/<slug>/` pointer.
-4. **`bugs.md`:** flip the status cell to `✅ Fixed` with the closing SHA before the entry
-   moves.
+1. **Story:** `git mv docs/plan/<slug>/ docs/archive/plan/<slug>/` (bug: `git mv docs/bugs/<slug>/ docs/archive/bugs/<slug>/`, or fold the `bugs.md` entry into `docs/archive/bugs/bugs.md` and mark it
+   `[MOVED]` at the original location).
+2. **`TODOS.md`:** delete the item's line from `## Feature Backlog` / `## Open Bugs` and append it to `docs/archive/TODOS_ARCHIVE.md` under a dated heading.
+3. **This file:** collapse the story's entry under `## Active Epics` to a one-line `✅ Archived → docs/archive/plan/<slug>/` pointer.
+4. **`bugs.md`:** flip the status cell to `✅ Fixed` with the closing SHA before the entry moves.
 
-The `md-organize` skill's periodic audit and the `session-close` skill both check for done
-stories that were not archived; do not rely on that — archive at completion.
+The `md-organize` skill's periodic audit and the `session-close` skill both check for done stories that were not archived; do not rely on that — archive at completion.
 
 ### Markdown line style (RDO-5; fill-to-≤200 per RDO-17.7 §A, 2026-08-29)
 
-Prose fills each line to the last word boundary before 200 chars — do not break early at a sentence or clause end, and do not hand-wrap to a fixed narrow width. The earlier "semantic
-linefeeds" guidance (one sentence or clause per line) is **retired**: the mid-line wrap near ~110 chars it produced was harder to read in source, not easier, and it made diffs noisier.
-The hard **200-char ceiling** is the only gated rule. It applies to every line kind (prose, table rows, fenced code) and is enforced by the `md-line-length` pre-commit hook over root
-`.md` + `docs/plan/**` + `docs/bugs/**`; `<!-- lint-ignore-length -->` on the immediately-preceding line excuses one unbreakable token (a long URL, a base64 blob).
-`.py` stays at ruff's `line-length = 100` (ruff already excludes `docs/`).
-`scripts/dev/reflow_md.py` is the reusable engine that does the fill: `python -m scripts.dev.reflow_md <path>` rewrites in place, `--check` reports. It only re-wraps whitespace — a
-`git diff --word-diff` of a reflow shows zero word changes — and leaves fenced code, tables, headings and nested list/quote structure verbatim.
-The two RDO-17.5 / RDO-17.6 POC folders — `root-doc-organization/` and `telegram-markdown-migration/` — were swept to fill-to-≤200 in full at RDO-17.7 (2026-08-29) and are the reference
-exemplars. RDO-17.8 then decided the rule for every other legacy `docs/plan/` folder — batch-convert all of them, executed in the `doc-format-migration/` epic — so this is now migration in
-progress, not opportunistic-on-touch.
+Prose fills each line to the last word boundary before 200 chars — do not break early at a sentence or clause end, and do not hand-wrap to a fixed narrow width. The earlier "semantic linefeeds"
+guidance (one sentence or clause per line) is **retired**: the mid-line wrap near ~110 chars it produced was harder to read in source, not easier, and it made diffs noisier. Two pre-commit hooks
+enforce this. `md-line-length` blocks any line over 200 chars on root `.md` + `docs/plan/**` + `docs/bugs/**` (`<!-- lint-ignore-length -->` on the immediately-preceding line excuses one unbreakable
+token — a long URL, a base64 blob). `md-reflow` runs `reflow_md.py --check` on every changed `docs/plan/**` + `docs/bugs/**` `.md` (minus `_TEMPLATE/`) and blocks a commit whose markdown is not in
+fill-to-≤200 style — hand-wrapping at a narrow width now fails the commit, not just an audit. A legacy narrow-wrapped file you touch must be reflowed in the same commit: `python -m
+scripts.dev.reflow_md <path>`, then re-stage (this is the "converts on next substantive touch" rule, now gated). Root `.md` is not yet under `md-reflow` — that waits for
+`doc-format-migration/repo-wide-reflow/`. `.py` stays at ruff's `line-length = 100` (ruff already excludes `docs/`). `scripts/dev/reflow_md.py` is the reusable engine that does the fill: `python -m
+scripts.dev.reflow_md <path>` rewrites in place, `--check` reports. It only re-wraps whitespace — a `git diff --word-diff` of a reflow shows zero word changes — and leaves fenced code, tables,
+headings and nested list/quote structure verbatim. The two RDO-17.5 / RDO-17.6 POC folders — `root-doc-organization/` and `telegram-markdown-migration/` — were swept to fill-to-≤200 in full at
+RDO-17.7 (2026-08-29) and are the reference exemplars. RDO-17.8 then decided the rule for every other legacy `docs/plan/` folder — batch-convert all of them, executed in the `doc-format-migration/`
+epic — so this is now migration in progress, not opportunistic-on-touch.
 
 ### Structure audit
 
-`scripts/dev/hooks/check_story_structure.py` checks every non-archived `docs/plan/*/` folder:
-a flat story folder has `prompt.md` + `tasks.md` + `stories.md`; an epic root has
-`prompt.md` + `README.md` and at least one conforming sub-story.
-It also flags stray or empty folders, a missing `schema.md` against DDL in
-`stories.md` / `prompt.md` (warning), and disallowed extra files (see *Extra files*).
-It runs pre-commit on newly-added folders only — legacy shapes are grandfathered, so the
-repo-wide `--all` sweep warns but does not fail; the full sweep is part of the
-`md-organize` skill's periodic audit, since folders churn only ~monthly.
-`scripts/dev/hooks/check_checkbox_consistency.py` (see §"Checkbox consistency") is the companion
-sweep for task-state drift and task-line-tail shape; it runs alongside it in the same audit,
-also not pre-commit.
+`scripts/dev/hooks/check_story_structure.py` checks every non-archived `docs/plan/*/` folder: a flat story folder has `prompt.md` + `tasks.md` + `stories.md`; an epic root has `prompt.md` +
+`README.md` and at least one conforming sub-story. It also flags stray or empty folders, a missing `schema.md` against DDL in `stories.md` / `prompt.md` (warning), and disallowed extra files (see
+*Extra files*). It runs pre-commit on newly-added folders only — legacy shapes are grandfathered, so the repo-wide `--all` sweep warns but does not fail; the full sweep is part of the `md-organize`
+skill's periodic audit, since folders churn only ~monthly. `scripts/dev/hooks/check_checkbox_consistency.py` (see §"Checkbox consistency") is the companion sweep for task-state drift and
+task-line-tail shape; it runs alongside it in the same audit, also not pre-commit.
 
 ### Status transitions
 
-`⬜ Not started` → `🔄 In progress` → `✅ Done` → `✅ Archived`.
-A `✅ Done` story stays listed until archived; archival is not optional and not deferred —
-it happens in the completion commit per *Completion → archive* above.
+`⬜ Not started` → `🔄 In progress` → `✅ Done` → `✅ Archived`. A `✅ Done` story stays listed until archived; archival is not optional and not deferred — it happens in the completion commit per
+*Completion → archive* above.

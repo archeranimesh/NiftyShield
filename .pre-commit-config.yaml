@@ -38,6 +38,14 @@ repos:
         files: '^([^/]+\.md|docs/(plan|bugs)/.*\.md)$'
         pass_filenames: true
 
+      - id: md-reflow
+        name: "docs/plan + docs/bugs markdown must be in fill-to-<=200 style (reflow_md)"
+        language: system
+        entry: python scripts/dev/reflow_md.py --check
+        files: '^docs/(plan|bugs)/.*\.md$'
+        exclude: '/_TEMPLATE/'
+        pass_filenames: true
+
       - id: check-story-structure
         name: "newly added docs/plan story folders need prompt.md + tasks.md"
         language: system
