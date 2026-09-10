@@ -16,7 +16,7 @@
 
 ---
 
-## BUG-046 [MOVED] — see `docs/archive/bugs/bugs.md` (closed 2026-09-10, SHA `pending`)
+## BUG-046 [MOVED] — see `docs/archive/bugs/bugs.md` (closed 2026-09-10, SHA `35d464d`)
 
 ---
 

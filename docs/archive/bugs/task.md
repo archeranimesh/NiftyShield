@@ -788,8 +788,8 @@ P&L whenever an overlay role has two open positions
 ## BUG-046 — `test_escaping_guard.py` 3 failures: `scripts/morning_signal.py` `.send()` call site drifted from `_BASELINE_UNESCAPED`
 
 - [x] **B046.1** — Confirmed L282 (the sole `notifier.send()`) is safe: `msg` is built by `_format_signal_notification()`, which owns its MarkdownV2 boundary (`escape_markdown()` per value, literal
-  `*`); the guard just can't follow the call. L245 is stale — the send moved down via the 2026-09-10 premium/cost commits. | SHA `pending`
-- [x] **B046.2** — Repointed the one `_BASELINE_UNESCAPED` key `("scripts/morning_signal.py", 245)` → `282`; reason text unchanged. No production code change. | SHA `pending`
-- [x] **B046.3** — `pytest tests/unit/notifications/test_escaping_guard.py` 10/10 green; full unit suite green (3421 passed). | SHA `pending`
-- [x] **B046.4** — Committed; `bugs.md` BUG-046 flipped ✅ Fixed; both sections moved to `docs/archive/bugs/`; `TODOS.md` session-log line. | SHA `pending`
+  `*`); the guard just can't follow the call. L245 is stale — the send moved down via the 2026-09-10 premium/cost commits. | SHA `35d464d`
+- [x] **B046.2** — Repointed the one `_BASELINE_UNESCAPED` key `("scripts/morning_signal.py", 245)` → `282`; reason text unchanged. No production code change. | SHA `35d464d`
+- [x] **B046.3** — `pytest tests/unit/notifications/test_escaping_guard.py` 10/10 green; full unit suite green (3421 passed). | SHA `35d464d`
+- [x] **B046.4** — Committed; `bugs.md` BUG-046 flipped ✅ Fixed; both sections moved to `docs/archive/bugs/`; `TODOS.md` session-log line. | SHA `35d464d`
 

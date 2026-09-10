@@ -1929,7 +1929,7 @@ blew up in `date.fromisoformat` / `float()` / comparison), now with a clear mess
 | Field | Value |
 |---|---|
 | Severity | **Low** — unit suite not green on `main` (3 failures); the drifted call site is genuinely escape-safe, so no live 400 risk |
-| Status | ✅ Fixed — SHA `pending` |
+| Status | ✅ Fixed — SHA `35d464d` |
 | Discovered | 2026-09-10 (SPT-2 `@test-runner` run) |
 | Location | `tests/unit/notifications/test_escaping_guard.py` `_BASELINE_UNESCAPED` — stale key for `scripts/morning_signal.py:245` |
 
@@ -1944,7 +1944,7 @@ line 245 down to line 282. The `_BASELINE_UNESCAPED` key was not updated in thos
 dynamic value, literal `*` for bold, caller must not re-wrap. Same builder-owns-the-boundary shape as the existing `record_signal_outcome.py:229` / `signal_report.py:314` baseline entries; the guard's
 single-function heuristic just can't follow the call.
 
-**Fix (B046.1–B046.4, SHA `pending`):** repointed the one `_BASELINE_UNESCAPED` key `("scripts/morning_signal.py", 245)` → `282` in `tests/unit/notifications/test_escaping_guard.py`; reason text
+**Fix (B046.1–B046.4, SHA `35d464d`):** repointed the one `_BASELINE_UNESCAPED` key `("scripts/morning_signal.py", 245)` → `282` in `tests/unit/notifications/test_escaping_guard.py`; reason text
 unchanged. No production code touched. `test_escaping_guard.py` 10/10 green; full unit suite green (3421 passed). Both sections moved to `docs/archive/bugs/`.
 
 ---

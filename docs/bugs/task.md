@@ -17,7 +17,7 @@
 
 > BUG-045 closed 2026-09-10 (SHA `aa44820`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
-> BUG-046 closed 2026-09-10 (SHA `pending`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
+> BUG-046 closed 2026-09-10 (SHA `35d464d`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
 ## BUG-044 — standalone CC overlay vanishes from the S9 digest; its P&L is folded into Collar
 
