@@ -3,13 +3,12 @@
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
 spec; `schema.md` is the sole DDL source.
 
-**Open: SPT-2a.**
+**Open: SPT-3.**
 
 > SPT-1 (council checkpoint) is closed — ruled 2026-09-09, `docs/archive/council/strategy/2026-09-09_signals-paper-track-execution-layer.md`, absorbed into `DECISIONS.md` §"Signals Paper Track —
 > Execution Layer". SPT-2..SPT-8 below are the rewrite from that ruling — no longer provisional.
 
-> **Routing:** SPT-2a is `Owner: Antigravity` (bounded single-function change, airtight spec, TDD-shaped). Its `greeks-analyst` gate is a **real Claude subagent run**, not Antigravity's persona
-> approximation (CLAUDE.md §AutoTrigger — financial logic). Everything else is `Owner: Claude` — model / design calls or graph queries land mid-implementation.
+> **Routing:** SPT-2a closed 2026-09-10 as a no-op (see its task line). Everything else is `Owner: Claude` — model / design calls or graph queries land mid-implementation.
 
 - [x] **SPT-1** — Council checkpoint (no code): module boundary (A — `paper_signal_track_v1` on the shared `StrategyMonitor` / `PaperExecutor` / `PaperStore`); pure `src/strategy/signal_exit.py`;
   fixed SL −30 % / target +50 %; Phase 1 fixed-only, `TRAILING_STOP` reserved; 30 s cadence; mark-path telemetry from day one; two-tier recalibration; go-live gate G1–G9; auto-execute live pilot.
@@ -19,8 +18,9 @@ spec; `schema.md` is the sole DDL source.
   `get_entries` / `cumulative_pnl`). Position rides `paper_trades` as `paper_signal_track_v1`, `quantity` = `paper.constants.LOT_SIZE` (import, not the literal `65`); `STRATEGY_SIGNAL_TRACK` constant
   added. Tables `paper_signal_entries` / `paper_signal_marks` in `_SCHEMA` (non-STRICT, matching `schema.md` + sibling `paper_trades`). `close_signal_entry` runs the state-flip + exit-event insert in
   one transaction; `cumulative_pnl` pairs closed entries to SELL rows in order with a length-mismatch guard. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 58e0b08
-- [ ] **SPT-2a** — `<= 7-DTE` roll in `src/signals/option_resolver.py::resolve_monthly_option` (next-month contract in the current month's final week; `get_expiry_candidates` untouched).
-  | Owner: Antigravity | Model: n/a | Review: greeks-analyst | SHA: <—>
+- [x] **SPT-2a** — No-op: closed as satisfied-by-existing-behaviour. `get_expiry_candidates(preference=["monthly"])` already enforces a `dte >= 14` floor, so `resolve_monthly_option` never returns a
+  `<= 13-DTE` contract — the near-month is already rolled to next-month at 14 DTE. A `<= 7` hold would need to bypass that floor and realign `src/signals/snapshot.py`. Operator kept the 14-DTE roll
+  (DECISIONS.md §"Signals Paper Track — Execution Layer" 2026-09-10 follow-up). No code change. | Owner: Antigravity | Model: n/a | Review: none | SHA: `<docs-only>`
 - [ ] **SPT-3** — Entry executor: `src/strategy/signal_track_v1.py` `PaperStrategy` — `DailySignal` → `resolve_monthly_option` → `LegSpec` → `PaperExecutor` fill → frozen `SignalPaperEntry` → Telegram
   entry message. Also creates `src/strategy/signal_exit.py` as the SL/target constants home (`SL_PCT` / `TGT_PCT` / `RULESET_VERSION` / `derive_levels`), imports `paper.constants.LOT_SIZE`, and
   exposes the entry path as a plain `open_signal_paper_entry(signal, snapshot, broker, store)` callable (shared with SPT-6, no hardcoded level literals). Extract `_render_table` →
@@ -43,7 +43,7 @@ spec; `schema.md` is the sole DDL source.
 
 - **SPT-1** — the council has ruled; the ruling is in `DECISIONS.md`; `schema.md` exists; SPT-2..SPT-8 and `stories.md` are rewritten to match. ✅
 - **SPT-2** — `SignalPaperEntry` / `SignalMark` round-trip through the store; a second open is rejected; `cumulative_pnl()` aggregates correctly; happy-path + edge tests pass, no real DB.
-- **SPT-2a** — near-month at 8 DTE stays, at 7 DTE rolls to next month, no next-month contract returns `None`; `record_signal_outcome` regression green; `greeks-analyst` clean.
+- **SPT-2a** — closed as a no-op 2026-09-10: the `dte >= 14` floor in `get_expiry_candidates` already delivers the next-month roll; operator kept it. No code, no tests.
 - **SPT-3** — a firing `DailySignal` produces one resolved-option paper entry at a simulated fill, one `paper_trades` row + one frozen `SignalPaperEntry`, one Telegram entry message stating the fill
   price; NO_TRADE / already-open are logged no-ops; the EOD PT summary still renders after the `build_position_table` extraction.
 - **SPT-4** — `paper_signal_track_v1` is polled every 30 s while open, each tick writes a `paper_signal_marks` row, and each tick reaches `signal_exit` without duplicate firing.

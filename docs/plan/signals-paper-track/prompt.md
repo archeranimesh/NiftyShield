@@ -68,7 +68,7 @@ auto-execute 1-lot live pilot.
 
 - **SPT-1** — Council checkpoint. ✅ Done — `DECISIONS.md` entry + `schema.md` + the SPT-2..8 rewrite.
 - **SPT-2** — `SignalPaperEntry` / `SignalMark` models + store methods (incl. `cumulative_pnl`).
-- **SPT-2a** — `≤ 7-DTE` roll in `resolve_monthly_option` (`get_expiry_candidates` untouched). **Owner: Antigravity.**
+- **SPT-2a** — ✅ Closed 2026-09-10 as a no-op: the `dte >= 14` floor in `get_expiry_candidates` already rolls `resolve_monthly_option` to next-month; operator kept it (see `tasks.md` + DECISIONS.md).
 - **SPT-3** — Entry executor: `src/strategy/signal_track_v1.py` `PaperStrategy` + `build_position_table` extraction + Telegram entry message.
 - **SPT-4** — `StrategyMonitor` registration at 30 s + per-tick `paper_signal_marks` logging.
 - **SPT-5** — `src/strategy/signal_exit.py` pure evaluator + exit fill at the observed mark + Telegram exit message.

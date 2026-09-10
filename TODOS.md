@@ -27,8 +27,8 @@ rot them.
 6. **Options Income strategy** — `docs/plan/options_income/` — next **S0** (data audit).
 7. **Backtest Engine** — `docs/plan/backtest-engine/` (`phase1..4/`) — next **1.3a / 1.4** (parallel, `phase1/`). Four chained phases; each phase's GATE task blocks the next dir. Gated on
    `variance-gate`. `BACKTEST_PLAN_PHASE1.md` is the canonical spec; the phase dirs are thin status pointers.
-8. **signals-paper-track** — `docs/plan/signals-paper-track/` — SPT-1 done (council q17, 2026-09-09); next **SPT-2** (`SignalPaperEntry` / `SignalMark` models + store). Turns the
-    `signals/` consensus into a paper-traded strategy: auto-enter a long monthly option (≤ 7-DTE roll), fixed SL −30 % / target +50 %, exit or 15:00 square-off, full mark-path log,
+8. **signals-paper-track** — `docs/plan/signals-paper-track/` — SPT-1..2a done; next **SPT-3** (entry executor + `signal_track_v1` strategy). Turns the
+    `signals/` consensus into a paper-traded strategy: auto-enter a long monthly option (next-month roll at 14 DTE), fixed SL −30 % / target +50 %, exit or 15:00 square-off, full mark-path log,
     6-month G1–G9 go-live gate. Ruling: `paper_signal_track_v1` `PaperStrategy` on the shared engine + pure `src/strategy/signal_exit.py`; Phase 1 fixed-only. Supersedes `signals/` S5.5a.
 9. **backtest-eval-core** — `docs/plan/backtest-eval-core/` — next **B1.1**. Blocked until `backtest-engine` tasks 1.3 + 1.4 land.
 10. **signals-eval-core** — `docs/plan/signals-eval-core/` — next **SE1.1**.
@@ -153,7 +153,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
   `paper_trades` as `paper_signal_track_v1` (`STRATEGY_SIGNAL_TRACK` constant, `quantity = LOT_SIZE`). `close_signal_entry` does the state-flip + `paper_exit_events` insert in one transaction
   (code-review: no half-closed state); `cumulative_pnl` pairs closed entries to SELL rows in chronological order (safe under the one-position-at-a-time guard) with a length-mismatch raise.
   code-reviewer 3 CRITICAL + 3 ERROR → 5 fixed, STRICT-table finding rejected (`schema.md` is the DDL source and has none; siblings `paper_trades` / `paper_exit_events` are non-STRICT). 12 new tests.
-  Next: SPT-2a (`≤ 7-DTE` roll in `resolve_monthly_option`, Owner Antigravity).
+  Next: SPT-3 (SPT-2a was closed as a no-op on 2026-09-10 — see below).
 - [2026-09-10] Planning — signals-paper-track SPT-6/7 rewritten + follow-up story `signals-entrypoint-consolidation` created. A Plan-agent review of the entrypoint topology (asked by Animesh: too many
   overlapping signal crons, logic will diverge) concluded the paper track adds **zero** new crons — SPT-6 becomes a guarded paper-entry tail-call inside `morning_signal` (not a 09:35 cron),
   `signal_paper_entry.py` a manual backfill tool, SPT-7 a manual report. `src/strategy/signal_exit.py` becomes the single SL/target-constants + evaluator home (created in SPT-3, extended in SPT-5);
@@ -349,6 +349,10 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
   follow-ups: DEBT-8..DEBT-12.
 
 ### 2026-09-10
+- **SPT-2a closed as a no-op** (docs-only). Antigravity handoff surfaced that `get_expiry_candidates(preference=["monthly"])` already enforces a `dte >= 14` floor, so `resolve_monthly_option` never
+  returns a `≤ 13-DTE` contract — the next-month roll SPT-2a asked for already happens at 14 DTE, consistent with `snapshot.py` / overlays / IC. A `≤ 7` hold would need a floor bypass + a
+  `snapshot.py` realignment; operator (Animesh) kept the 14-DTE roll. WIP reverted, no code change. `DECISIONS.md` follow-up note added; `tasks.md` / `stories.md` / `prompt.md` / `README.md` updated.
+  Next: SPT-3.
 - **BUG-046 fixed** (SHA `35d464d`) — 3 `test_escaping_guard.py` failures on `main`: the 2026-09-10 `morning_signal` premium/cost commits (`dc4701b`/`402db00`/`1078397`) moved the script's sole
   `notifier.send()` from line 245 → 282 without updating `_BASELINE_UNESCAPED`. Confirmed the call site is escape-safe (`_format_signal_notification()` owns the MarkdownV2 boundary). Repointed the one
   baseline key 245 → 282; no production code change. `test_escaping_guard.py` 10/10 green, full suite 3421 passed. Both sections moved to `docs/archive/bugs/`.

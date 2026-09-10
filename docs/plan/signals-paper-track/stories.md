@@ -46,7 +46,11 @@ an empty table and a win/loss mix; `gap_event` / `stale` persist as written.
 
 ---
 
-## SPT-2a — `resolve_monthly_option` ≤ 7-DTE roll
+## SPT-2a — `resolve_monthly_option` ≤ 7-DTE roll — ✅ CLOSED 2026-09-10, no-op
+
+**Outcome:** not implemented. `get_expiry_candidates(preference=["monthly"])` already enforces a `dte >= 14` floor, so `resolve_monthly_option` never returns a `≤ 13-DTE` contract — the next-month
+roll the spec asked for already happens at 14 DTE, consistent with `src/signals/snapshot.py` and every overlay / IC caller. Holding the near-month to 7 DTE would need a floor bypass plus a
+`snapshot.py` realignment; operator kept the 14-DTE roll. See `DECISIONS.md` §"Signals Paper Track — Execution Layer" 2026-09-10 follow-up. Original spec below, retained for history.
 
 **Intent:** add the ≤ 7-DTE roll to `src/signals/option_resolver.py::resolve_monthly_option` so the paper track **and** `record_signal_outcome.py` both trade the next-month contract inside the current
 month's final week. `get_expiry_candidates` and its `dte >= 14` floor are **not** touched — shared by the finideas overlays / IC / chain pipelines.
