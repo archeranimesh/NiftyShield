@@ -12,7 +12,7 @@
 
 ---
 
-## BUG-045 [MOVED] — see `docs/archive/bugs/bugs.md` (closed 2026-09-10, SHA `pending`)
+## BUG-045 [MOVED] — see `docs/archive/bugs/bugs.md` (closed 2026-09-10, SHA `aa44820`)
 
 ---
 

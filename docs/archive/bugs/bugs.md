@@ -1392,7 +1392,7 @@ morning_signal_complete n_responses=1 consensus_direction=NEUTRAL trade_action=N
 | Field | Value |
 |---|---|
 | Severity | **Low / high-friction** — no known wrong output (callers pass resolved findings), but the mypy pre-commit hook failed for any commit staging a `src/paper/` / `src/client/` file |
-| Status | ✅ Fixed — SHA `pending` |
+| Status | ✅ Fixed — SHA `aa44820` |
 | Discovered | 2026-09-10 (SPT-2 commit; committed with `SKIP=mypy`) |
 | Location | `src/notifications/formatting.py` — `_resolved_label` and `build_position_health_message` (`sorted` key `f.days_overdue`) |
 
@@ -1402,6 +1402,6 @@ morning_signal_complete n_responses=1 consensus_direction=NEUTRAL trade_action=N
 
 **Fix:** narrowed at both call sites — an explicit `ValueError` guard at the top of `_resolved_label` (`expiry_str` / `underlying_symbol` / `instrument_type` non-`None`, REVIEW.md G6 — no bare `assert`), a second `ValueError` guard for `strike_price` on the non-`FUT` branch, and `key=lambda f: f.days_overdue or 0` for the `overdue` sort. Same crash paths as before (a `None` field previously blew up in `date.fromisoformat` / `float()` / comparison), now with a clear message; no live behaviour change on the resolved-finding happy path.
 
-**Implementation progress (2026-09-10, B045.1–B045.4, SHA `pending`):** B045.1 graph trace confirmed `_resolved_label` has exactly one call site and `run_position_checks` (`scripts/position_health_check.py`) is the sole producer, always populating the resolved fields for `roll_overdue` — no live wrong-output path. B045.2 landed the two guards + sort-key change in `src/notifications/formatting.py`. Tests: `test_position_health_roll_overdue_missing_resolved_fields_raises` + `test_position_health_roll_overdue_missing_strike_raises` in `tests/unit/notifications/test_position_health_format.py`. `pre-commit run mypy` green; unit suite green except the 3 pre-existing `test_escaping_guard` failures (BUG-046, untouched). `@code-reviewer`: 0 CRITICAL / 0 ERROR; 5 WARNINGs (4 line-length, 1 missing second-guard test) all resolved before commit.
+**Implementation progress (2026-09-10, B045.1–B045.4, SHA `aa44820`):** B045.1 graph trace confirmed `_resolved_label` has exactly one call site and `run_position_checks` (`scripts/position_health_check.py`) is the sole producer, always populating the resolved fields for `roll_overdue` — no live wrong-output path. B045.2 landed the two guards + sort-key change in `src/notifications/formatting.py`. Tests: `test_position_health_roll_overdue_missing_resolved_fields_raises` + `test_position_health_roll_overdue_missing_strike_raises` in `tests/unit/notifications/test_position_health_format.py`. `pre-commit run mypy` green; unit suite green except the 3 pre-existing `test_escaping_guard` failures (BUG-046, untouched). `@code-reviewer`: 0 CRITICAL / 0 ERROR; 5 WARNINGs (4 line-length, 1 missing second-guard test) all resolved before commit.
 
 ---

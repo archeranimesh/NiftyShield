@@ -349,7 +349,7 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
   follow-ups: DEBT-8..DEBT-12.
 
 ### 2026-09-10
-- **BUG-045 fixed** (SHA `pending`) — `src/notifications/formatting.py` position-health helpers passed `Optional` `PositionFinding` fields into non-`Optional` APIs, red-lining the mypy pre-commit hook
+- **BUG-045 fixed** (SHA `aa44820`) — `src/notifications/formatting.py` position-health helpers passed `Optional` `PositionFinding` fields into non-`Optional` APIs, red-lining the mypy pre-commit hook
   for every `src/paper` / `src/client` commit. Narrowed both call sites in `_resolved_label` with explicit `ValueError` guards (REVIEW.md G6) + `days_overdue or 0` for the `overdue` sort key; 2
   regression tests. B045.1 graph trace confirmed no live wrong-output path. `@code-reviewer` 0 CRITICAL/ERROR. mypy green; suite green bar the 3 pre-existing BUG-046 `test_escaping_guard` failures.
   Both sections moved to `docs/archive/bugs/`.

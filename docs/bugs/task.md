@@ -15,7 +15,7 @@
 
 > BUG-041 closed 2026-09-08 — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
-> BUG-045 closed 2026-09-10 (SHA `pending`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
+> BUG-045 closed 2026-09-10 (SHA `aa44820`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
 ## BUG-046 — `test_escaping_guard.py` 3 failures: `scripts/morning_signal.py` `.send()` call sites drifted from `_BASELINE_UNESCAPED`
 
