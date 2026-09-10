@@ -138,6 +138,11 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-10] Ops fix (`a8e74f3`) — 16:00 `record_signal_outcome --auto` cron crashed with `IndexError: No item with that key` on `row["cost_usd"]`: SCT-2 (`c7efe54`, deployed 13:34)
+  added the `signal_responses` cost columns via `init_db`'s idempotent ALTER loop, but `record_signal_outcome` / `signal_report` construct `SignalStore` and never call `init_db()`, so the
+  ALTERs never hit the live DB (yesterday's manual `ALTER` covered only `daily_signals.entry_premium`). Fixed live DB with the three `ALTER TABLE signal_responses` columns, backfilled today's
+  outcome + report (both green), and added `store.init_db()` after construction in both scripts (mirrors `morning_signal.py:205`). Today's 3 response rows keep NULL cost — this morning's run
+  predates the code; self-heals 2026-09-11.
 - [2026-09-10] signals-cost-tracking SCT-4 closed (`b70f8fa`) — docs: added a `signal_responses` row to `DB_REGISTRY.md` (it was never registered when `signals/` shipped — an add, not the spec's
   "edit"; the sibling `signal_inputs` / `daily_signals` / `signal_outcomes` tables are still unregistered), extended the `CONTEXT.md` `src/signals/` bullet with cost capture, added the
   2026-09-09 inline-`usage.include`-over-`/generation` decision to `DECISIONS.md`. Trustworthy-from date: 2026-09-11 (first 09:30 run after SCT-2 `c7efe54` deployed 2026-09-10 13:34 IST).
