@@ -124,3 +124,13 @@ Step 4b item 8) and record the outcome in `DECISIONS.md`.
   session-close reports over the 3 sessions after `2b85b84`; if the slug did not recur, tick the
   box. If it recurred, open a protocol/model discussion — likely folding `ruff format` into the
   standard pre-stage checklist. Standalone — no trigger wait.
+- **DEBT-16** — `rule0-read-over-graph-hook-ignored` (Count 5). Remediation: the Rule 0
+  `.claude/hooks/guard_src_reads.sh` PreToolUse hook, which fires on every `Read` of a `src/` or
+  `scripts/` path. It is warn-only by design ("It will not block — the decision is yours") and
+  has not stopped the pattern across five sessions: BUG-041, S5.5d, signals-cost-tracking
+  planning + SCT-1, and the read-path `init_db` cron fix (2026-09-10) each grepped a
+  `src/`/`scripts/` file then issued a full-file `Read` rather than pivoting to
+  `get_code_snippet` / a targeted `sed -n 'N,Mp'` or stating in one line why the graph was
+  insufficient. Decide whether the hook should block on a missing prior graph/snippet call (or
+  emit a harder-to-ignore reminder), implement, then verify over the next 3 logged sessions. If
+  it still recurs, escalate to a protocol/model discussion. Standalone — no trigger wait.
