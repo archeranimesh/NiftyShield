@@ -38,9 +38,10 @@ both have landed and archived.
   `src.paper.cycle_pnl` gives the CLI its unchanged output; tests green; `greeks-analyst`
   clean.
 - **UXM-2** — `format_exit_message` renders the Act/Instrument/Entry/Exit/P&L table + the
-  this-exit / cycle / inception footer; win-rate row appears only at `closed_count >= 5`;
-  this-exit and cycle rows collapse when equal; negative P&L renders `-₹` not `₹-`; tests
-  green.
+  this-exit / cycle / inception footer; the cycle line carries entry-credit → exit-cost →
+  decay% for a credit cycle and drops that segment for a net-debit one; win-rate row appears
+  only at `closed_count >= 5` and carries avg decay% when available; this-exit and cycle rows
+  collapse when equal; negative P&L renders `-₹` not `₹-`; tests green.
 - **UXM-3** — IC v1 and v2 closes emit `✅ *IC v1/v2 Closed*` with the 4-leg table and the
   footer; no hand-rolled close f-string remains in either module; notify failure non-fatal;
   tests green.

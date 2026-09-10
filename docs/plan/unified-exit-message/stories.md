@@ -27,7 +27,10 @@ ledger; exit reasons come from `paper_exit_events`, which already exists.
 **Before any code (graph queries):**
 - `get_code_snippet("Cycle")` + `get_code_snippet("reconstruct_cycles")` +
   `get_code_snippet("get_last_cycle_realized_pnl")` — the `Cycle` field list
-  (`realized_pnl`, `entry_date`, `exit_date`, `decay_pct`, `is_open`, `index`).
+  (`realized_pnl`, `entry_date`, `exit_date`, `days_in_trade`, `entry_credit_per_unit`,
+  `exit_cost_per_unit`, `decay_pct`, `is_open`, `index`). `entry_credit_per_unit` /
+  `exit_cost_per_unit` / `decay_pct` are already first-class fields — the exit footer reads
+  them off the just-closed `Cycle`, no new math.
 - `get_code_snippet("resolve_target")` + `search_code("_Group")` in
   `scripts/dev/cycle_pnl_report.py` — the full definition + every reference, so the move is
   complete.
@@ -99,8 +102,13 @@ ledger; exit reasons come from `paper_exit_events`, which already exists.
    - `legs: list[CloseLegRow]` — 1..N.
    - `this_exit_pnl: Decimal` — required. `per_lot: bool = False` — IC passes `True` to also
      show `(₹X/lot)`.
-   - `cycle_pnl: Decimal | None`, `cycle_index: int | None`, `cycle_decay_pct: float | None` —
-     the just-closed `Cycle`; `None` for a partial close where no cycle closed.
+   - `cycle_pnl: Decimal | None`, `cycle_index: int | None`, `cycle_decay_pct: Decimal | None`,
+     `cycle_entry_credit: Decimal | None`, `cycle_exit_cost: Decimal | None`,
+     `cycle_held_days: int | None` — read straight off the just-closed `Cycle`
+     (`realized_pnl` / `index` / `decay_pct` / `entry_credit_per_unit` / `exit_cost_per_unit`
+     / `days_in_trade`). All `None` for a partial close where no cycle closed. `decay_pct` /
+     the credit/cost pair are also `None` for a net-debit cycle (Collar, PP) — the cycle line
+     then shows only P&L + held days.
    - `inception_pnl: Decimal` — required (`get_strategy_realized_pnl`).
    - `stats: CycleStats | None` — win-rate row rendered only when
      `stats is not None and stats.closed_count >= 5`.
@@ -117,22 +125,35 @@ ledger; exit reasons come from `paper_exit_events`, which already exists.
    <blank>
    ━━━━━━━━━━━━━━━━━━━━━━━━
    💰 *This exit:* {+₹this}   [(₹x/lot) when per_lot]
-   🔁 *Cycle #{i}:* {+₹cycle}   (decay {d}%, held {h}d)      [omit line if cycle_pnl is None]
+   🔁 *Cycle #{i}:* {+₹cycle}  ·  ₹{credit} → ₹{cost}  ·  {d}% decay  ·  {h}d
    📈 *Inception:* {+₹inception}
-   🎯 *Win rate:* {r}%  ({W}W / {L}L)   avg {+₹aw} / {-₹al}   [only when stats.closed_count >= 5]
+   🎯 *Win rate:* {r}%  ({W}W / {L}L)   {D}% avg decay   avg {+₹aw} / {-₹al}
    📊 *Overlay P&L (total realized):* {₹overlay}              [only when overlay_total_pnl set]
    → *State:* {state_line}                                    [only when state_line set]
    ```
-   Collapse the `This exit` / `Cycle` rows into one when
-   `cycle_pnl is not None and abs(this_exit_pnl - cycle_pnl) < Decimal("1")` — render just
-   `🔁 *Cycle #{i}:* {+₹} (decay …, held …)`.
+   Cycle-line rules:
+   - Omit the whole `🔁` line when `cycle_pnl is None` (partial close).
+   - Drop the `₹{credit} → ₹{cost}  ·  {d}% decay` middle segment when `cycle_decay_pct is
+     None` (net-debit cycle) — the line becomes `🔁 *Cycle #{i}:* {+₹cycle}  ·  {h}d`.
+   - Collapse `This exit` + `Cycle` into one when `cycle_pnl is not None and
+     abs(this_exit_pnl - cycle_pnl) < Decimal("1")` — keep the `🔁` line, drop the `💰` one.
+   Win-rate line:
+   - Rendered only when `stats is not None and stats.closed_count >= 5`.
+   - The `{D}% avg decay` segment is shown only when `stats.avg_decay_pct is not None`
+     (some closed cycles were credit structures).
    Every interpolated value pre-escaped; the fenced table emitted literally.
 
 **Tests (no network, no real DB):**
 - `test_full_close_collapses_this_exit_and_cycle` — equal values → one combined row.
 - `test_partial_close_omits_cycle_row` — `cycle_pnl=None` → no `🔁` line, `💰 This exit` shown.
+- `test_cycle_line_shows_credit_cost_decay` — credit cycle → `₹142.50 → ₹42.00  ·  78% decay`
+  segment present on the `🔁` line.
+- `test_cycle_line_drops_decay_segment_for_debit_cycle` — `cycle_decay_pct=None` → `🔁` line
+  is just P&L + `{h}d`, no `→` / `decay`.
 - `test_win_rate_hidden_below_five_cycles` — `stats.closed_count == 4` → no `🎯` line.
 - `test_win_rate_shown_at_five` — `closed_count == 5` → `🎯 *Win rate:*` present, correct %.
+- `test_win_rate_line_omits_avg_decay_when_none` — `stats.avg_decay_pct=None` → no
+  `% avg decay` segment, win rate + avg win/loss still shown.
 - `test_net_loss_renders_minus_sign` — negative `inception_pnl` → `-₹` not `₹-`.
 - `test_overlay_total_line_only_when_set` — both branches.
 - `test_close_leg_table_badges` — a `[S]` and a `[B]` row render correctly, P&L signed.
@@ -164,8 +185,9 @@ ledger; exit reasons come from `paper_exit_events`, which already exists.
 
 1. Build `legs: list[CloseLegRow]` from `closed_trades` — `entry` from the opening fill
    (`t.entry` / the position `avg_*`), `exit` from the close fill, `pnl` per-leg realized.
-2. `this_exit_pnl` = sum of the per-leg P&L in this action; `cycle_pnl` /
-   `cycle_index` / `cycle_decay_pct` from the just-closed `Cycle`; `inception_pnl` from the
+2. `this_exit_pnl` = sum of the per-leg P&L in this action; the `cycle_*` fields
+   (`cycle_pnl` / `cycle_index` / `cycle_decay_pct` / `cycle_entry_credit` / `cycle_exit_cost`
+   / `cycle_held_days`) read straight off the just-closed `Cycle`; `inception_pnl` from the
    existing `get_strategy_realized_pnl`; `stats` from `cycle_stats`.
 3. `headline_label="IC v1"` / `"IC v2"`, `per_lot=True`, `kind` from `action_type`.
 4. Keep the non-fatal `try/except` + `ic_nifty_v*.send_notification*` log. Deferred import of
