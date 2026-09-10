@@ -35,7 +35,7 @@ No DB schema change — no `schema.md`.
    the escaping-boundary note (fenced block emitted literally, every interpolated value pre-escaped).
 2. `ICEntryMessage` → `EntryMessage`. Fields:
    - `headline_label: str` — **new**, replaces the `"v2" in strategy_name` derivation. Caller passes
-     `"IC v1"` / `"IC v2"` / `"CSP"`. `_headline` becomes `f"✅ *{escape_markdown(label)} Entry* — ..."`
+     `"IC v1"` / `"IC v2"` / `"CSP"` / `"CC"`. `_headline` becomes `f"✅ *{escape_markdown(label)} Entry* — ..."`
      with the trailing `— {expiry_type}` segment emitted only when `expiry_type is not None`.
    - `expiry: date`, `dte: int`, `spot: float`, `net_credit: Decimal` — stay **required**.
    - `ivr: float | None = None`, `mode: str | None = None`, `expiry_type: str | None = None` — optional.
@@ -58,7 +58,8 @@ No DB schema change — no `schema.md`.
   `test_headline_uses_headline_label` — assert `"IC v2"` label renders `✅ *IC v2 Entry* — monthly`.
 - `test_net_credit_line_uses_format_money_both_sides` — unchanged logic.
 - **New** `test_single_leg_no_ivr_omits_ivr_segment` — build an `EntryMessage` with one short-put
-  `LegRow`, `ivr=None`, `expiry_type=None`, `headline_label="CSP"`; assert the kv row has no `IVR:` and
+  `LegRow`, `ivr=None`, `expiry_type=None`, `headline_label="CSP"` (the CC card uses the same shape,
+  `headline_label="CC"` + a `"Short Call"` leg); assert the kv row has no `IVR:` and
   the headline has no `—` segment, and `build_leg_table` renders exactly one `[S]` row.
 - **New** `test_ivr_present_renders_ivr_segment` — same but `ivr=0.14`; assert `*IVR:* 0\.14` present.
 
@@ -66,12 +67,13 @@ No DB schema change — no `schema.md`.
 
 ---
 
-## UEM-2 — Lean CSP entry card from the shared recorder
+## UEM-2 — Lean CSP / CC entry card from the shared recorder
 
 **Files to change / create:**
 - `scripts/record/record_paper_trade.py` — add `--notify` flag; on a successful open, build an
-  `EntryMessage` and send it via `TelegramNotifier`.
-- `tests/unit/scripts/test_record_paper_trade.py` — new or extended; two cases below.
+  `EntryMessage` and send it via `TelegramNotifier`. One card path serves both CSP and CC — they share
+  the recorder; only `headline_label` and the leg `role` differ, and both are derived (not hand-passed).
+- `tests/unit/scripts/test_record_paper_trade.py` — new or extended; four cases below.
 
 **Before any code (graph queries):**
 - Read the whole `record_paper_trade.py` `main()` / arg-parse flow via `get_code_snippet` — find where a
@@ -81,7 +83,9 @@ No DB schema change — no `schema.md`.
 - `get_code_snippet("TelegramNotifier")` + `search_graph("NotifierProtocol")` — the `send_notification`
   signature and how existing callers construct it from `settings` (mirror `paper_ic_entry.py`'s
   `TelegramGateway` block, but use `TelegramNotifier` — no approval/callback needed for a plain card).
-- `search_graph("STRATEGY_CSP")` + `get_code_snippet` on the constant — confirm the default strategy id.
+- `search_graph("STRATEGY_CSP")` + `search_graph("STRATEGY_CC_OVERLAY")` + `get_code_snippet` on both
+  constants — confirm the CSP and CC-overlay strategy ids the recorder receives via `--strategy` (the CC
+  id is what `scripts/strategies/cc_calibration/paper_cc_entry.py` prints).
 - `search_code("format_expiry")` — reuse for the expiry the recorder already resolved.
 - `trace_path("record_trade")` in `scripts/record/record_paper_trade.py` — confirm nothing else imports
   its internals such that adding a flag / a helper breaks a caller.
@@ -92,9 +96,11 @@ No DB schema change — no `schema.md`.
    successful open (no-op on close / roll)".
 2. New module-level helper `_build_entry_card(...)` (10–20 lines): takes the resolved strike / opt-type /
    expiry date / dte / spot / credit / lot fill and returns `format_entry_message(EntryMessage(...))`
-   with `headline_label="CSP"`, `expiry_type=None`, `ivr=None`, `mode=None`, one `LegRow(role="Short
-   Put", instrument=f"{int(strike)} {opt_type}", delta=<delta if resolved else None>, ltp=<fill>,
-   entry=<fill>)`. `net_credit` = the per-unit sell price as `Decimal`.
+   with `expiry_type=None`, `ivr=None`, `mode=None`, one `LegRow(role=<"Short Put" for a PE, "Short Call"
+   for a CE>, instrument=f"{int(strike)} {opt_type}", delta=<delta if resolved else None>, ltp=<fill>,
+   entry=<fill>)`. `headline_label` is `"CSP"` when `--strategy` is the CSP id and `"CC"` when it is the
+   CC-overlay id — a small dict / `if`, never string-parsing the strategy name. `net_credit` = the
+   per-unit sell price as `Decimal`.
    - Instrument label per `src/notifications/CLAUDE.md` §"Instrument Label Formatting" — if a
      `format_option_label` / `format_strike` helper is the sanctioned form there, use it, don't hand-roll.
 3. At the confirmed-open point, `if args.notify and <this is an open, not a close>:` build the card, then
@@ -114,12 +120,14 @@ No DB schema change — no `schema.md`.
 - `test_notify_flag_sends_csp_entry_card_on_open` — patch `TelegramNotifier.send_notification` with a
   spy, run the open path with `--notify`, assert it was awaited once with a body containing
   `✅ *CSP Entry*` and one `[S]` leg row.
+- `test_notify_flag_sends_cc_entry_card_on_open` — same but `--strategy` = the CC-overlay id with a CE
+  strike; assert the body contains `✅ *CC Entry*` and one `[S]` `… CE` row.
 - `test_notify_send_failure_is_non_fatal` — spy raises `RuntimeError`; assert the recorder still exits 0
   and the trade write happened (store spy saw the insert).
 - `test_no_notify_flag_sends_nothing` — run the open path without `--notify`; assert the notifier was
   never constructed / never called.
 
-**Commit:** `feat(paper): CSP entry Telegram card from record_paper_trade --notify`
+**Commit:** `feat(paper): CSP / CC entry Telegram card from record_paper_trade --notify`
 
 ---
 
@@ -131,13 +139,14 @@ No DB schema change — no `schema.md`.
 **What to implement:**
 
 1. `CONTEXT.md` "What Exists" `src/notifications/` bullet — `ic_entry_message.py (IC entry ...)` →
-   `entry_message.py (shared lean entry-confirmation renderer — IC v1/v2 + CSP, UEM-1/2)`.
+   `entry_message.py (shared lean entry-confirmation renderer — IC v1/v2 + CSP + CC, UEM-1/2)`.
 2. `src/notifications/CLAUDE.md` — update any reference to `ic_entry_message` / `format_ic_entry_message`
    to the new names; add a one-line note that the renderer is strategy-agnostic (`headline_label`) and
    the kv row omits `IVR` when absent.
-3. `DECISIONS.md` §P&L & Reporting — one dated line: shared entry renderer + CSP entry card via
-   `record_paper_trade --notify`; `ivr` relaxed to optional vs ROLL-17 (CSP has no IVR at record time);
-   overlays / track-comparison deferred.
+3. `DECISIONS.md` §P&L & Reporting — one dated line: shared entry renderer + CSP / CC entry card via
+   `record_paper_trade --notify` (`headline_label` from `--strategy`); `ivr` relaxed to optional vs
+   ROLL-17 (CSP / CC have no IVR at record time); PP / collar / three-track bootstrap / track-comparison
+   deferred.
 4. `docs/plan/README.md` — move the `unified-entry-message/` row to ✅ Shipped/Archived with the three
    SHAs; `TODOS.md` Feature Backlog line deleted, Session Log line added.
 5. Archive: `git mv docs/plan/unified-entry-message docs/archive/plan/unified-entry-message`, per
