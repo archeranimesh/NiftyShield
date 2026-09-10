@@ -26,6 +26,18 @@
 
 > BUG-041 closed 2026-09-08 — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
+## BUG-043 — "Net P&L" in close notifications is inception-cumulative for IC v1/v2, cycle-only for collar, absent for CSP — no stable per-strategy contract
+
+- [ ] **B043.1** — Add `reconstruct_cycles()` + `get_last_cycle_realized_pnl()` to `src/paper/`
+  (all-legs-flat cycle boundaries from `paper_trades`); happy-path + open-trailing-cycle +
+  single-leg-overlay tests.
+- [ ] **B043.2** — Standardise the five close paths (`ic_nifty_v1`, `ic_nifty_v2`,
+  `collar_overlay_v1`, `auto_close.py`, `csp_nifty_v1`) to fixed labels `Cycle P&L` +
+  `Since inception`; add both to the CSP close message.
+- [ ] **B043.3** — Tests: one per close path asserting both figures render with the standard labels; no network.
+- [ ] **B043.4** — Suite green + real `@code-reviewer` clean (financial-logic notification path).
+- [ ] **B043.5** — Flip `bugs.md` BUG-043 status to ✅ Fixed + SHA; move both sections to `docs/archive/bugs/{bugs,task}.md`; `TODOS.md` session-log line.
+
 ## BUG-042 — `721daf9` MarkdownV2 switch broke every unmigrated `TelegramNotifier` cron caller — silent 400 since 2026-08-25
 
 - [ ] **B042.1** — Grep `logs/` + callers of `TelegramNotifier.send` to enumerate every entrypoint still emitting unescaped MarkdownV2; list them in `bugs.md`.

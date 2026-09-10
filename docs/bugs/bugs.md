@@ -27,6 +27,56 @@
 
 ---
 
+## BUG-043 — "Net P&L" in close notifications has no stable meaning: inception-cumulative for IC v1/v2, cycle-only for collar, absent for CSP
+
+| Field | Value |
+|---|---|
+| Severity | **Medium** — no wrong trade action, but the headline number on every IC close Telegram is the lifetime total, read at a glance as the just-closed cycle's result |
+| Status | 🔴 Open |
+| Discovered | 2026-09-10 |
+| Location | five close paths under `src/strategy/` — see list below |
+
+Close paths affected (all in `src/strategy/`):
+`ic_nifty_v1.py::_send_close_notification` (~L824) ·
+`ic_nifty_v2.py::_send_close_notification` (~L2224) ·
+`collar_overlay_v1.py` collar close (~L720) ·
+`auto_close.py` overlay close (~L308) ·
+`csp_nifty_v1.py::_reentry_notification` (~L635).
+
+**Severity detail:** Animesh read the line `Net P&L: ₹3,739.12` on a `paper_ic_nifty_v1_weekly`
+CLOSE_FULL message (2026-09-03 close) as that cycle's result. It is the cumulative realized
+P&L across all 8 closed cycles since inception; that cycle actually made +₹713.38. Trades and
+DB records are correct — only the notification label/semantics are wrong.
+
+**Discovered:** 2026-09-10, user asked for a per-cycle P&L breakdown of the weekly IC and
+noticed the close message's "Net P&L" matched the inception total, not the cycle.
+
+**Root cause:** no shared contract for what the close-notification P&L line reports. Current
+state per close path:
+
+| Close path | P&L line(s) shown | What "Net P&L" actually is |
+|---|---|---|
+| `ic_nifty_v1._send_close_notification` | `Net P&L:` | `get_strategy_realized_pnl()` — **inception cumulative** |
+| `ic_nifty_v2._send_close_notification` | `Net P&L:` | `get_strategy_realized_pnl()` — **inception cumulative** |
+| `auto_close.py` (CC / PP / Collar via `OverlayCloser`) | `Net P&L` **and** `Overlay P&L (total realized)` | per-leg entry−exit — **this cycle** (this path is the closest to correct) |
+| `collar_overlay_v1.py` collar close | `Net P&L:` | `call_pnl + put_pnl` — **this cycle only**, no inception figure |
+| `csp_nifty_v1._reentry_notification` | *(none)* | CSP close shows no P&L at all |
+
+There is no `get_last_cycle_realized_pnl` helper — cycle boundaries (all legs of the group
+back to net-zero) are reconstructable from `paper_trades` but nothing does it today.
+
+**Suggested fix:** add `reconstruct_cycles()` / `get_last_cycle_realized_pnl()` to
+`src/paper/` (shared with the `scripts/dev/` per-cycle report being built alongside this bug —
+same reconstruction logic). Then standardise every close notification to two lines with fixed
+labels, e.g. `Cycle P&L: <±figure>` and `Since inception: <±figure>`, and add them to the CSP
+close message. Keep `auto_close.py`'s existing dual line but rename to the standard labels.
+
+**Related:** the `scripts/dev/cycle_pnl_report.py` CLI (per-cycle P&L / exit reason / days in
+trade for IC-all / CC / PP / Collar) shares the cycle-reconstruction helper; build the helper
+under `src/paper/` first, then this bug's notification fix wires it into the five close paths.
+
+---
+
 ## BUG-042 — `721daf9` MarkdownV2 switch broke every unmigrated `TelegramNotifier` cron caller (CC/PP entry, paper snapshot, monitor daemon, pre-market brief) — silent 400 since 2026-08-25
 
 | Field | Value |
