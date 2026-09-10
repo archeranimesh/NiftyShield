@@ -143,6 +143,11 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-10] Loose-ends cleanup after SPT-2. Filed **BUG-045** (`6677f13`) — `src/notifications/formatting.py` position-health helpers pass `PositionFinding` `Optional` fields into
+  `date.fromisoformat` / `format_option_label` / a `sorted` key with no narrowing; latent since 2026-09-03, surfaced because the mypy pre-commit hook (`^src/(client|paper)/`) follows imports into
+  `formatting.py` and SPT-2 was the first `src/paper` commit since — blocks every `src/paper`/`src/client` commit's mypy gate (SPT-2 used `SKIP=mypy`). Filed **BUG-046** (`6677f13`) — 3
+  `test_escaping_guard.py` failures from `scripts/morning_signal.py` `.send()` drift (L282 new, L245 stale baseline) across the 2026-09-10 signal-cost commits. `chore` (`f8685f6`) gitignored
+  `docs/council/pending/` + dropped the stale SPT-1 prompt. `docs(technical-debt)` (`06f43a5`) committed the pre-existing uncommitted DEBT-16 + `suggestions.md` session-close maintenance.
 - [2026-09-10] signals-paper-track SPT-2 closed (`58e0b08`) — `SignalPaperEntry` / `SignalMark` frozen Pydantic models + `paper_signal_entries` / `paper_signal_marks` tables (non-STRICT, per
   `schema.md`) added to `PaperStore._SCHEMA`, plus `open_signal_entry` / `get_open_signal_entry` / `record_mark` / `get_marks` / `close_signal_entry` / `get_entries` / `cumulative_pnl`. Position
   rides `paper_trades` as `paper_signal_track_v1` (`STRATEGY_SIGNAL_TRACK` constant, `quantity = LOT_SIZE`). `close_signal_entry` does the state-flip + `paper_exit_events` insert in one
