@@ -226,6 +226,72 @@ def test_format_signal_notification_no_consensus_lists_every_vote() -> None:
     assert "➖ gemini: NEUTRAL" in msg
 
 
+def _consensus_signal() -> DailySignal:
+    return DailySignal(
+        trade_date=date(2026, 9, 8),
+        responses=[
+            _resp("grok", Direction.BULLISH, 4, low="50.00", high="66.00"),
+            _resp("gpt4o", Direction.BULLISH, 3, low="66.00", high="78.00"),
+        ],
+        consensus_direction=Direction.BULLISH,
+        consensus_confidence=Decimal("3.5"),
+        trade_action=TradeAction.BUY_CALL,
+        recommended_strike=24800,
+        agreeing_models=["grok", "gpt4o"],
+        dissenting_models=["gemini"],
+        entry_premium=Decimal("65.40"),
+    )
+
+
+def test_notification_consensus_shows_cost() -> None:
+    msg = morning_signal._format_signal_notification(_consensus_signal(), 3, Decimal("0.0042"), 2)
+    assert r"💵 LLM cost: $0\.0042 \(2 calls\)" in msg
+
+
+def test_notification_no_consensus_shows_cost() -> None:
+    signal = DailySignal(
+        trade_date=date(2026, 9, 8),
+        responses=[
+            _resp("grok", Direction.BULLISH),
+            _resp("gpt4o", Direction.BEARISH),
+        ],
+        consensus_direction=Direction.NEUTRAL,
+        consensus_confidence=Decimal("0"),
+        trade_action=TradeAction.NO_TRADE,
+        recommended_strike=None,
+        agreeing_models=[],
+        dissenting_models=["grok", "gpt4o"],
+    )
+    msg = morning_signal._format_signal_notification(signal, 3, Decimal("0.0030"), 2)
+    assert r"💵 LLM cost: $0\.0030 \(2 calls\)" in msg
+
+
+def test_notification_pipeline_failure_shows_zero_cost() -> None:
+    signal = DailySignal(
+        trade_date=date(2026, 9, 8),
+        responses=[],
+        consensus_direction=Direction.NEUTRAL,
+        consensus_confidence=Decimal("0"),
+        trade_action=TradeAction.NO_TRADE,
+        recommended_strike=None,
+        agreeing_models=[],
+        dissenting_models=[],
+    )
+    msg = morning_signal._format_signal_notification(signal, 2)
+    assert r"💵 LLM cost: $0\.0000 \(0 calls\)" in msg
+
+
+def test_notification_cost_line_escaped() -> None:
+    msg = morning_signal._format_signal_notification(_consensus_signal(), 3, Decimal("0.0042"), 2)
+    assert r"$0\.0042" in msg
+    assert "$0.0042" not in msg
+
+
+def test_notification_singular_call() -> None:
+    msg = morning_signal._format_signal_notification(_consensus_signal(), 3, Decimal("0.0011"), 1)
+    assert r"💵 LLM cost: $0\.0011 \(1 call\)" in msg
+
+
 def test_format_signal_notification_pipeline_failed_uses_provider_count() -> None:
     signal = DailySignal(
         trade_date=date(2026, 9, 8),

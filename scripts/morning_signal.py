@@ -80,7 +80,27 @@ def _consensus_entry_band(signal: DailySignal) -> tuple[Decimal, Decimal]:
     )
 
 
-def _format_signal_notification(signal: DailySignal, n_providers: int) -> str:
+def _format_usd(value: Decimal) -> str:
+    """Render a small USD amount as ``$X.XXXX`` (4dp, ``$`` prefix).
+
+    ``format_money`` is INR-only (``₹`` prefix, 2dp) and unfit for the sub-cent
+    LLM-call costs (~1e-3 USD) shown here, so this local helper is used instead.
+
+    Args:
+        value: USD amount. Quantized to 4dp for display.
+
+    Returns:
+        e.g. ``"$0.0042"``.
+    """
+    return f"${value.quantize(Decimal('0.0001')):.4f}"
+
+
+def _format_signal_notification(
+    signal: DailySignal,
+    n_providers: int,
+    day_cost: Decimal = Decimal("0"),
+    n_priced: int = 0,
+) -> str:
     """Render the consensus signal as MarkdownV2-ready Telegram message text.
 
     Vertical layout agreed with Animesh 2026-09-08 (reference renderer
@@ -92,12 +112,18 @@ def _format_signal_notification(signal: DailySignal, n_providers: int) -> str:
         signal: The aggregated ``DailySignal`` for the session.
         n_providers: Providers dispatched — the ``0 / N`` count in the
             pipeline-failure variant.
+        day_cost: Summed OpenRouter USD cost of today's priced responses.
+        n_priced: Count of today's responses that carried a usage/cost object.
 
     Returns:
         Fully-escaped message text. One of three variants: a directional
         consensus block, a no-consensus block (one line per model vote), or a
-        pipeline-failure alert when no provider responded.
+        pipeline-failure alert when no provider responded. Every variant ends
+        with a ``💵 LLM cost`` line.
     """
+    plural = "" if n_priced == 1 else "s"
+    cost_line = _E(f"💵 LLM cost: {_format_usd(day_cost)} ({n_priced} call{plural})")
+
     if signal.trade_action is TradeAction.NO_TRADE:
         if not signal.responses:
             return (
@@ -106,13 +132,14 @@ def _format_signal_notification(signal: DailySignal, n_providers: int) -> str:
                 f"{_E(f'❌ 0 / {n_providers} models responded')}\n"
                 f"{_E('⏸ No signal issued today')}\n"
                 f"\n"
-                f"{_E('👉 Check logs before the next run')}"
+                f"{_E('👉 Check logs before the next run')}\n"
+                f"{cost_line}"
             )
         votes = "\n".join(
             _E(f"{_DIRECTION_EMOJI[r.direction]} {r.provider}: {r.direction.value}")
             for r in signal.responses
         )
-        return f"*{_E('⏸ NO TRADE · NO CONSENSUS')}*\n\n{votes}"
+        return f"*{_E('⏸ NO TRADE · NO CONSENSUS')}*\n\n{votes}\n{cost_line}"
 
     emoji = _DIRECTION_EMOJI[signal.consensus_direction]
     if signal.entry_premium is not None:
@@ -132,7 +159,8 @@ def _format_signal_notification(signal: DailySignal, n_providers: int) -> str:
         f"\n"
         f"*{_E('Model Votes:')}*\n"
         f"{_E(f'👍 Agree: {agree}')}\n"
-        f"{_E(f'👎 Dissent: {dissent}')}"
+        f"{_E(f'👎 Dissent: {dissent}')}\n"
+        f"{cost_line}"
     )
 
 
@@ -216,6 +244,15 @@ async def run() -> None:
             errors=len(responses),
         )
 
+    day_cost = sum((r.usage.cost_usd for r in valid if r.usage is not None), Decimal("0"))
+    n_priced = sum(1 for r in valid if r.usage is not None)
+    logger.info(
+        "morning_signal.llm_cost",
+        day_cost_usd=str(day_cost),
+        n_priced=n_priced,
+        n_responses=len(valid),
+    )
+
     signal = build_aggregator().aggregate(snapshot, valid)
 
     if signal.trade_action is not TradeAction.NO_TRADE:
@@ -241,7 +278,7 @@ async def run() -> None:
 
     notifier = build_notifier()
     if notifier:
-        msg = _format_signal_notification(signal, len(providers))
+        msg = _format_signal_notification(signal, len(providers), day_cost, n_priced)
         await notifier.send(msg)
 
     logger.info(
