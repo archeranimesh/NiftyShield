@@ -81,24 +81,16 @@ rot them.
     audit / close, one chart per IC variation — no option model, ships now) → `chart-model-overlay/`
     (T+0 curve + ±1σ/±2σ bands + POP — blocked on `greeks-bs-fallback/` GF-2 + GF-3).
     Priority relative to items 13–21 is Animesh's call.
-23. **Unified entry message** — `docs/plan/unified-entry-message/` — next **UEM-1** (generalize
-    `ic_entry_message.py` → shared `entry_message.py` / `EntryMessage`). One lean entry-confirmation
-    renderer for all paper strategies; IC migrated onto it, CSP + CC given the entry Telegram card they
-    lack (via `record_paper_trade.py --notify`, headline from `--strategy`). IC + CSP + CC — overlay
-    automated re-entry + three-track bootstrap are the `overlay-entry-message` follow-up (#24),
-    track-comparison deferred. Requested by Animesh 2026-09-10.
-24. **Overlay entry message** — `docs/plan/overlay-entry-message/` — next **OEM-1** (sign-aware
-    `Net credit` / `Net debit` line in `entry_message.py`). Extends the shared renderer to the automated
-    overlay entries: Collar / CC / PP re-entry cards from the strategy classes + the three-track
-    `📥 Overlay Entry` bootstrap message. Depends on #23. Requested by Animesh 2026-09-10.
-25. **Unified exit message** — `docs/plan/unified-exit-message/` — next **UXM-1** (gross-short-premium
-    `short_decay_pct` on `Cycle` + `cycle_stats` + move `resolve_target` / `LegGroup` into
-    `src/paper/cycle_pnl.py`). One shared close-confirmation renderer for IC/CSP/CC/PP/Collar with a
-    this-exit / cycle / inception P&L footer + win-rate + avg-decay stats;
-    `src/notifications/exit_message.py` + `build_close_leg_table`; migrates both the strategy-class and
-    `auto_close.py` close paths + `record_paper_trade --close`; UXM-7 also redesigns
-    `pre_market_brief.py` (fenced house style, overlay broken into CC / Collar / PP). Depends on #23 +
-    #24. Requested by Animesh 2026-09-10.
+23. **Telegram message unification** — `docs/plan/telegram-message-unification/` — next **UEM-1**
+    (generalize `ic_entry_message.py` → shared `entry_message.py` / `EntryMessage`). Epic, three
+    sequenced sub-stories on a hard dependency chain: `unified-entry-message/` (UEM-1..3 — shared entry
+    renderer; IC migrated; CSP + CC entry card via `record_paper_trade.py --notify`) →
+    `overlay-entry-message/` (OEM-1..5 — sign-aware `Net credit` / `Net debit` line; Collar / CC / PP
+    re-entry cards; three-track `📥 Overlay Entry` bootstrap onto the renderer) → `unified-exit-message/`
+    (UXM-1..8 — shared `exit_message.py` close renderer replacing five hand-rolled shapes;
+    `short_decay_pct` + `cycle_stats` + `resolve_target` into `src/paper/cycle_pnl.py`; this-exit /
+    cycle / inception P&L footer + win-rate; `pre_market_brief.py` redesign). No DB schema change.
+    `/work` routes via the epic `prompt.md`. Requested by Animesh 2026-09-10.
 
 ## Open Bugs
 

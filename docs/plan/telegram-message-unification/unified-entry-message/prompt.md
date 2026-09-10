@@ -72,8 +72,9 @@ new opt-in Telegram message after UEM-2.
   `--notify`, on a successful open (SELL, not close / not roll), via `TelegramNotifier`, non-fatal on
   send failure. `headline_label` (`"CSP"` / `"CC"`) and leg `role` are derived from `--strategy` and the
   option type.
-- **UEM-3** — Docs close: `CONTEXT.md` "What Exists", `src/notifications/CLAUDE.md`, DECISIONS.md,
-  `docs/plan/README.md`, `TODOS.md`; archive the folder.
+- **UEM-3** — Sub-story docs close: `CONTEXT.md` "What Exists", `src/notifications/CLAUDE.md`,
+  DECISIONS.md, the epic `README.md` Stories table, `TODOS.md` Session Log. No folder archive — the
+  epic archives as a whole at UXM-8.
 
 ## Definition of done
 
@@ -83,7 +84,8 @@ call `format_entry_message`. `scripts/record/record_paper_trade.py --notify` sen
 `✅ *CC Entry*` card (chosen by `--strategy`) on a successful open and is silent (stdout only) without the
 flag. No reference to `ic_entry_message` /
 `format_ic_entry_message` / `ICEntryMessage` remains in `src/`, `scripts/`, or `tests/`. All unit tests
-green. Docs updated and the folder archived per §Conventions *Completion → archive*.
+green. Sub-story docs updated and its epic `README.md` Stories-table row flipped to ✅ (the epic
+folder is archived only after the last sub-story, UXM-8).
 
 ## Perspectives not covered
 

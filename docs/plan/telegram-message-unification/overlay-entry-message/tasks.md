@@ -4,8 +4,9 @@ Work top-down. Find the first unchecked `- [ ]` and do only that task.
 Each task = one commit unless noted. See `prompt.md` for why the story exists;
 see `stories.md` for the per-task implementation spec.
 
-Depends on `unified-entry-message/` (UEM-1..3) — `src/notifications/entry_message.py` must
-already exist. Do not start OEM-1 before UEM-3 has landed and archived.
+Sub-story 2 of the `telegram-message-unification/` epic. Depends on `unified-entry-message/`
+(UEM-1..3) — `src/notifications/entry_message.py` must already exist. Do not start OEM-1 before
+every UEM box is ticked (its epic `README.md` Stories-table row is ✅).
 
 **Open: OEM-1, OEM-2, OEM-3, OEM-4, OEM-5.**
 
@@ -23,8 +24,9 @@ already exist. Do not start OEM-1 before UEM-3 has landed and archived.
       `paper_3track_overlay_entry.py` to `format_entry_message`; the `⚠️ Gate Logged` line
       stays appended by the caller after the rendered card.
       | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
-- [ ] **OEM-5** — Docs close: `CONTEXT.md` / `src/notifications/CLAUDE.md` / `DECISIONS.md` /
-      `docs/plan/README.md` / `TODOS.md`; archive the folder.
+- [ ] **OEM-5** — Sub-story docs close: `CONTEXT.md` / `src/notifications/CLAUDE.md` / `DECISIONS.md` /
+      the epic `README.md` Stories table / `TODOS.md` Session Log. No folder archive — the epic
+      archives as a whole at UXM-8.
       | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: —
 
 ## Story done when
@@ -41,13 +43,13 @@ already exist. Do not start OEM-1 before UEM-3 has landed and archived.
 - **OEM-4** — the bootstrap message is `format_entry_message`'s output for cc / pp / collar,
   with the unchanged `⚠️ Gate Logged` line appended when a gate fired; no hand-rolled
   `📥 Overlay Entry` f-string remains; tests green.
-- **OEM-5** — all five docs reflect the shared overlay renderer and the sign-aware net line;
-  Feature Backlog line removed; folder archived to
-  `docs/archive/plan/overlay-entry-message/`.
+- **OEM-5** — `CONTEXT.md`, `src/notifications/CLAUDE.md`, `DECISIONS.md` reflect the shared overlay
+  renderer and the sign-aware net line; the epic `README.md` Stories-table row is ✅ with the closing
+  SHA; `TODOS.md` Session Log line added. The epic folder is **not** archived here.
 
 ## After each task
 
 Set `SHA:` to the real commit SHA on the task line and tick the box.
-Then update this story's status in `docs/plan/README.md` and add one line to `TODOS.md`
-Session Log. When the whole story is done, follow §Conventions *Completion → archive* — do
-not leave a done story half-archived.
+Then flip this sub-story's row in the epic `README.md` **Stories** table
+(`docs/plan/telegram-message-unification/README.md`) and add one line to `TODOS.md` Session Log.
+The epic folder is archived only when every sub-story is done — see the epic `prompt.md` Step 4.

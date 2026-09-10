@@ -2,10 +2,10 @@
 
 > One task per session. Find the first unchecked item in `tasks.md`. That is your only task.
 > Full implementation rules in `CLAUDE.md` and `REVIEW.md`.
-> After each task: set `SHA:` on the task line + tick the box, update the story status
-> summary, add one line to `TODOS.md`. See `docs/plan/README.md` §Conventions.
+> After each task: set `SHA:` on the task line + tick the box, flip this sub-story's row in the
+> epic `README.md` **Stories** table, add one line to `TODOS.md`. See `docs/plan/README.md` §Conventions.
 
-No DB schema change — no `schema.md`.
+Sub-story 1 of the `telegram-message-unification/` epic. No DB schema change — no `schema.md`.
 
 ---
 
@@ -133,8 +133,8 @@ No DB schema change — no `schema.md`.
 
 ## UEM-3 — Docs close
 
-**Files to change:** `CONTEXT.md`, `src/notifications/CLAUDE.md`, `DECISIONS.md`, `docs/plan/README.md`,
-`TODOS.md`. Targeted `Edit` only, never `Write`.
+**Files to change:** `CONTEXT.md`, `src/notifications/CLAUDE.md`, `DECISIONS.md`,
+`docs/plan/telegram-message-unification/README.md`, `TODOS.md`. Targeted `Edit` only, never `Write`.
 
 **What to implement:**
 
@@ -147,9 +147,8 @@ No DB schema change — no `schema.md`.
    `record_paper_trade --notify` (`headline_label` from `--strategy`); `ivr` relaxed to optional vs
    ROLL-17 (CSP / CC have no IVR at record time); PP / collar / three-track bootstrap / track-comparison
    deferred.
-4. `docs/plan/README.md` — move the `unified-entry-message/` row to ✅ Shipped/Archived with the three
-   SHAs; `TODOS.md` Feature Backlog line deleted, Session Log line added.
-5. Archive: `git mv docs/plan/unified-entry-message docs/archive/plan/unified-entry-message`, per
-   §Conventions *Completion → archive* — one commit.
+4. `docs/plan/telegram-message-unification/README.md` — flip the `unified-entry-message/` row in the
+   **Stories** table to ✅ with the closing SHA; add a Session Log line to `TODOS.md`. Do **not** touch
+   the `docs/plan/README.md` epic row or archive anything — the whole epic archives at UXM-8.
 
-**Commit:** `docs: close unified-entry-message (UEM-1..3)`
+**Commit:** `docs: close unified-entry-message sub-story (UEM-1..3)`

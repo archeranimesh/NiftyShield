@@ -87,7 +87,7 @@ broken into CC / Collar / PP.
 
 ## Session-start load hints
 
-- `unified-entry-message/` + `overlay-entry-message/` (archived) — the `EntryMessage` /
+- `unified-entry-message/` + `overlay-entry-message/` (sibling sub-stories in this epic) — the `EntryMessage` /
   `format_entry_message` design and the sign-aware net line (OEM-1) this mirrors.
 - `src/notifications/CLAUDE.md` — §"Instrument Label Formatting"; the escaping-boundary
   contract (fenced block emitted literally, every interpolated value pre-escaped).
@@ -119,8 +119,10 @@ broken into CC / Collar / PP.
 - **UXM-7** — Redesign `scripts/pre_market_brief.py`: drop the broken `<b>` HTML, MarkdownV2
   fenced table, `strategy_label()` names, `paper_nifty_overlay` broken into a parent row +
   CC / Collar / PP sub-rows (via UXM-1's `resolve_target`), a portfolio `Total` row.
-- **UXM-8** — Docs close: `CONTEXT.md`, `src/notifications/CLAUDE.md`, `DECISIONS.md`,
-  `docs/plan/README.md`, `TODOS.md`; archive.
+- **UXM-8** — Epic close: `CONTEXT.md`, `src/notifications/CLAUDE.md`, `DECISIONS.md`, the epic
+  `README.md` (last Stories row + **Epic done when**); `git mv` the whole
+  `telegram-message-unification/` folder to `docs/archive/plan/`; collapse the `docs/plan/README.md`
+  epic entry to a pointer; move the `TODOS.md` Feature Backlog line to `TODOS_ARCHIVE.md`.
 
 ## Definition of done
 
@@ -131,7 +133,7 @@ PP, Collar) and both paths (strategy-class + `auto_close.py`) emit it; `record_p
 `src/strategy/`. Win rate is shown only at `closed_count >= 5`. Send failure is logged and
 never crashes a tick or a recording. `pre_market_brief.py` sends a MarkdownV2 fenced table
 (no `<b>`) with the overlay split into CC / Collar / PP and a portfolio total. All unit tests
-green. Docs updated, folder archived.
+green. Docs updated; at UXM-8 the whole `telegram-message-unification/` epic folder is archived.
 
 ## Perspectives not covered
 

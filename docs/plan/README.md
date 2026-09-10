@@ -73,34 +73,13 @@ Cross-strategy paper-trade EOD digest to Telegram. PT-1 (spec `d1ae760`) + PT-2 
 + `scripts/eod_pt_summary.py` + `43 15` cron, `77dc160`) + PT-3 (docs close, `dac18ea`). Runs alongside
 `scripts/eod_summary.py`, not a replacement (DECISIONS.md §P&L & Reporting, 2026-09-07).
 
-**`unified-entry-message/`** · ⬜ Not started · next: **UEM-1** (generalize the IC entry renderer)
-One shared lean entry-confirmation renderer for all paper strategies. `src/notifications/ic_entry_message.py`
-→ `entry_message.py` / `EntryMessage` with a `headline_label` field and optional `ivr`/`mode`/`expiry_type`
-(UEM-1, IC output unchanged) → lean CSP / CC entry Telegram card from `scripts/record/record_paper_trade.py`
-behind `--notify` (headline from `--strategy`), on a successful open only (UEM-2) → docs close (UEM-3).
-IC + CSP + CC (all through the recorder). Overlay automated re-entry + the three-track bootstrap message
-are the `overlay-entry-message/` follow-up; `nifty_track_comparison_v1` stays deferred. No DB schema
-change. Requested by Animesh 2026-09-10.
-
-**`overlay-entry-message/`** · ⬜ Not started · next: **OEM-1** (sign-aware net credit/debit line)
-Extends the shared `entry_message.py` renderer to the automated overlay entries. OEM-1 makes the net line
-sign-aware (`Net debit` when negative — collar / PP; IC / CSP / CC byte-identical) → `✅ *Collar Entry*`
-card from `CollarOverlayV1._reenter_collar` (OEM-2) → `✅ *CC Entry*` / `✅ *PP Entry*` cards from the CC /
-PP re-entry paths (OEM-3) → migrate the `📥 Overlay Entry — {TYPE} Bootstrap` message in
-`paper_3track_overlay_entry.py` onto the renderer (OEM-4) → docs close (OEM-5). Depends on
-`unified-entry-message/`. No DB schema change. Requested by Animesh 2026-09-10.
-
-**`unified-exit-message/`** · ⬜ Not started · next: **UXM-1** (gross-short-premium decay + `cycle_stats` + LegGroup resolver)
-One shared close-confirmation renderer for IC v1/v2, CSP, CC, PP, Collar — replaces four divergent
-hand-rolled close f-strings. `short_decay_pct` (gross short premium basis) + `cycle_stats` + `resolve_target`
-move into `src/paper/cycle_pnl.py` (UXM-1) →
-`src/notifications/exit_message.py` / `ExitMessage` / `format_exit_message` + `build_close_leg_table`,
-with a this-exit / cycle / inception P&L footer + win-rate row gated at ≥ 5 closed cycles (UXM-2) →
-migrate IC (UXM-3), CSP + `record_paper_trade --close` (UXM-4), CC/PP/Collar strategy classes (UXM-5),
-`auto_close.py` daemon (UXM-6) → redesign `pre_market_brief.py` to the fenced house style with the
-`paper_nifty_overlay` umbrella broken into CC / Collar / PP sub-rows (UXM-7) → docs close (UXM-8).
-Depends on `unified-entry-message/` + `overlay-entry-message/`. No DB schema change. Requested by
-Animesh 2026-09-10.
+**`telegram-message-unification/`** · ⬜ Not started — start with `unified-entry-message/` **UEM-1**
+One shared renderer family for every paper-strategy Telegram entry and exit card. Three sequenced sub-stories, hard dependency chain: `unified-entry-message/` (UEM-1..3 — `ic_entry_message.py` →
+shared `entry_message.py` / `EntryMessage`; IC migrated; CSP + CC entry card via `record_paper_trade.py --notify`) → `overlay-entry-message/` (OEM-1..5 — sign-aware `Net credit` / `Net debit` line;
+Collar / CC / PP automated re-entry cards; three-track `📥 Overlay Entry` bootstrap migrated onto the renderer) → `unified-exit-message/` (UXM-1..8 — shared `exit_message.py` close renderer replacing
+five hand-rolled shapes; `short_decay_pct` gross-short-premium decay + `cycle_stats` + `resolve_target` into `src/paper/cycle_pnl.py`; this-exit / cycle / inception P&L footer + win-rate gated at ≥ 5
+closed cycles; `pre_market_brief.py` redesigned to a MarkdownV2 fenced table with the overlay broken into CC / Collar / PP). No DB schema change anywhere. Priority + dependencies + scope decisions in
+the epic's own `README.md`. Requested by Animesh 2026-09-10.
 
 **`risk-gamma-phase-a/`** · 🔄 In progress · next: **B2.2** (chain fetch + field computation)
 Risk delta gate (done) + Near-Expiry Gamma Buy `gamma_daily_watch.py`.

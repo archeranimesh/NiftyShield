@@ -2,10 +2,11 @@
 
 > One task per session. Find the first unchecked item in `tasks.md`. That is your only task.
 > Full implementation rules in `CLAUDE.md` and `REVIEW.md`.
-> After each task: set `SHA:` on the task line + tick the box, update the story status
-> summary in `docs/plan/README.md`, add one line to `TODOS.md` Session Log.
+> After each task: set `SHA:` on the task line + tick the box, flip this sub-story's row in the
+> epic `README.md` **Stories** table, add one line to `TODOS.md` Session Log.
 
-Depends on `unified-entry-message/` (UEM-1..3, shipped + archived) — this story assumes
+This is sub-story 2 of the `telegram-message-unification/` epic. Depends on `unified-entry-message/`
+(UEM-1..3, shipped — sub-stories are not individually archived; the epic archives as a whole) — this story assumes
 `src/notifications/entry_message.py` with `EntryMessage` / `format_entry_message`,
 `headline_label`, and optional `ivr`/`mode`/`expiry_type` already exists.
 
@@ -184,7 +185,7 @@ No DB schema change — no `schema.md`.
 ## OEM-5 — Docs close
 
 **Files to change:** `CONTEXT.md`, `src/notifications/CLAUDE.md`, `DECISIONS.md`,
-`docs/plan/README.md`, `TODOS.md`. Targeted `Edit` only, never `Write`.
+`docs/plan/telegram-message-unification/README.md`, `TODOS.md`. Targeted `Edit` only, never `Write`.
 
 **What to implement:**
 
@@ -197,9 +198,8 @@ No DB schema change — no `schema.md`.
    automated re-entry + three-track bootstrap) unified onto `format_entry_message`; net line
    sign-aware for debit structures; `nifty_track_comparison_v1` still deferred (not a credit
    structure).
-4. `docs/plan/README.md` — move the `overlay-entry-message/` row to ✅ Shipped/Archived with
-   the OEM SHAs; `TODOS.md` Feature Backlog line deleted, Session Log line added.
-5. Archive: `git mv docs/plan/overlay-entry-message docs/archive/plan/overlay-entry-message`,
-   per §Conventions *Completion → archive* — one commit.
+4. `docs/plan/telegram-message-unification/README.md` — flip the `overlay-entry-message/` row in the
+   **Stories** table to ✅ with the closing SHA; add a `TODOS.md` Session Log line. Do **not** touch
+   the `docs/plan/README.md` epic row or archive anything — the whole epic archives at UXM-8.
 
-**Commit:** `docs: close overlay-entry-message (OEM-1..5)`
+**Commit:** `docs: close overlay-entry-message sub-story (OEM-1..5)`

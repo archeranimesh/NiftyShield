@@ -60,7 +60,7 @@ shared renderer after OEM-4. IC / CSP / CC output is unchanged throughout.
 
 ## Session-start load hints
 
-- `unified-entry-message/` `stories.md` (archived after UEM-3) — the `EntryMessage` field
+- `unified-entry-message/stories.md` (sibling sub-story in this epic) — the `EntryMessage` field
   list + `_headline` / `_kv_row` / `_credit_line` design this builds on.
 - `src/notifications/CLAUDE.md` — auto-loads; §"Instrument Label Formatting" governs the leg
   label; §"kv row omits IVR when absent" note added by UEM-3.
@@ -85,8 +85,9 @@ shared renderer after OEM-4. IC / CSP / CC output is unchanged throughout.
   `paper_3track_overlay_entry.py` to `format_entry_message` for cc / pp / collar;
   `headline_label` from `overlay_type`. The `⚠️ Gate Logged` line stays appended by the
   caller *after* the rendered card — the renderer stays lean, no new field.
-- **OEM-5** — Docs close: `CONTEXT.md`, `src/notifications/CLAUDE.md`, `DECISIONS.md`,
-  `docs/plan/README.md`, `TODOS.md`; archive the folder.
+- **OEM-5** — Sub-story docs close: `CONTEXT.md`, `src/notifications/CLAUDE.md`, `DECISIONS.md`,
+  the epic `README.md` Stories table, `TODOS.md` Session Log. No folder archive — the epic archives
+  as a whole at UXM-8.
 
 ## Definition of done
 
@@ -95,8 +96,8 @@ byte-identical for a positive one. A successful automated Collar / CC / PP re-en
 matching `✅ *… Entry*` card; a send failure is logged and never crashes the tick. The
 three-track bootstrap message is the shared renderer's output (+ the unchanged gate line).
 No hand-rolled `✅ … Entry` / `📥 Overlay Entry` f-string remains in the overlay classes or
-the bootstrap script. All unit tests green. Docs updated and the folder archived per
-§Conventions *Completion → archive*.
+the bootstrap script. All unit tests green. Sub-story docs updated and its epic `README.md`
+Stories-table row flipped to ✅ (the epic folder is archived only after the last sub-story, UXM-8).
 
 ## Perspectives not covered
 
