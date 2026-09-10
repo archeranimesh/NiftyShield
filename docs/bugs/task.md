@@ -17,14 +17,7 @@
 
 > BUG-045 closed 2026-09-10 (SHA `aa44820`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
-## BUG-046 — `test_escaping_guard.py` 3 failures: `scripts/morning_signal.py` `.send()` call sites drifted from `_BASELINE_UNESCAPED`
-
-- [ ] **B046.1** — Read `scripts/morning_signal.py` around L245 and L282; determine whether the L282 dynamic value is actually escaped (enclosing function routes it through `escape_markdown()` /
-  `mdcode()`) or genuinely unescaped.
-- [ ] **B046.2** — Fix: if safe, add L282 to `_BASELINE_UNESCAPED` with a one-line documented reason per the test's maintenance contract; else wrap the value. Remove or repoint the stale L245 baseline
-  entry in the same change.
-- [ ] **B046.3** — Verify: `pytest tests/unit/notifications/test_escaping_guard.py` green; full unit suite green.
-- [ ] **B046.4** — Commit, flip `bugs.md` BUG-046 to ✅ Fixed + SHA, move both sections to `docs/archive/bugs/`, add a `TODOS.md` session-log line.
+> BUG-046 closed 2026-09-10 (SHA `pending`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
 ## BUG-044 — standalone CC overlay vanishes from the S9 digest; its P&L is folded into Collar
 

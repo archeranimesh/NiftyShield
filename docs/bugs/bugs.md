@@ -16,29 +16,7 @@
 
 ---
 
-## BUG-046 — `test_escaping_guard.py` 3 failures: `scripts/morning_signal.py` gained/moved `.send()` call sites without updating `_BASELINE_UNESCAPED`
-
-| Field | Value |
-|---|---|
-| Severity | **Low–Medium** — unit suite not green on `main` (3 failures); if L282's value is genuinely unescaped, a dynamic value in the 09:30 Telegram would silently 400 (non-fatal `send()`) |
-| Status | 🔴 Open |
-| Discovered | 2026-09-10 (SPT-2 `@test-runner` run) |
-| Location | `tests/unit/notifications/test_escaping_guard.py` vs `scripts/morning_signal.py` L282 (new dynamic `.send()`) + the stale `_BASELINE_UNESCAPED` entry for L245 |
-
-**Symptom:** `python -m pytest tests/unit/notifications/test_escaping_guard.py` — 3 failures:
-
-- `test_no_new_unescaped_send_call_sites` — `scripts/morning_signal.py:282` is a `.send()` with dynamic values whose enclosing function shows no `escape_markdown()` / `mdcode()` call and which is not
-  in `_BASELINE_UNESCAPED`.
-- `test_baseline_entries_are_still_unescaped` — the `_BASELINE_UNESCAPED` entry for `scripts/morning_signal.py:245` no longer reproduces (the line moved or was fixed).
-- `test_baseline_has_no_duplicate_or_unused_entries` — same stale line-245 entry, flagged as unused.
-
-**Root cause:** the 2026-09-10 `morning_signal` changes — `dc4701b` (fetch real entry premium), `402db00` (show real entry price), `1078397` (show daily LLM spend) — added and shifted `.send()` call
-sites in `run()` / `_format_signal_notification`. The test's own maintenance contract (docstring: *"remove a baseline entry in the same commit that lands its real escaping fix"*, and keep new call
-sites either escaped or explicitly whitelisted) was not followed in those commits.
-
-**Suggested fix:** read `scripts/morning_signal.py` around L245 and L282; if `_format_signal_notification` (or the sending function) already routes every dynamic value through `escape_markdown()` /
-`mdcode()`, the guard's single-function heuristic just needs the enclosing function to *contain* such a call — confirm and, if the value is safe, add L282 to `_BASELINE_UNESCAPED` with a one-line
-documented reason per the contract; otherwise wrap the value. Remove or repoint the stale L245 baseline entry in the same commit. Verify with `pytest tests/unit/notifications/test_escaping_guard.py`.
+## BUG-046 [MOVED] — see `docs/archive/bugs/bugs.md` (closed 2026-09-10, SHA `pending`)
 
 ---
 

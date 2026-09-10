@@ -349,6 +349,9 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
   follow-ups: DEBT-8..DEBT-12.
 
 ### 2026-09-10
+- **BUG-046 fixed** (SHA `pending`) — 3 `test_escaping_guard.py` failures on `main`: the 2026-09-10 `morning_signal` premium/cost commits (`dc4701b`/`402db00`/`1078397`) moved the script's sole
+  `notifier.send()` from line 245 → 282 without updating `_BASELINE_UNESCAPED`. Confirmed the call site is escape-safe (`_format_signal_notification()` owns the MarkdownV2 boundary). Repointed the one
+  baseline key 245 → 282; no production code change. `test_escaping_guard.py` 10/10 green, full suite 3421 passed. Both sections moved to `docs/archive/bugs/`.
 - **BUG-045 fixed** (SHA `aa44820`) — `src/notifications/formatting.py` position-health helpers passed `Optional` `PositionFinding` fields into non-`Optional` APIs, red-lining the mypy pre-commit hook
   for every `src/paper` / `src/client` commit. Narrowed both call sites in `_resolved_label` with explicit `ValueError` guards (REVIEW.md G6) + `days_overdue or 0` for the `overdue` sort key; 2
   regression tests. B045.1 graph trace confirmed no live wrong-output path. `@code-reviewer` 0 CRITICAL/ERROR. mypy green; suite green bar the 3 pre-existing BUG-046 `test_escaping_guard` failures.
