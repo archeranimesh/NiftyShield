@@ -67,19 +67,23 @@ Win rate / avg-win / avg-loss / best / worst / avg-hold / avg-decay are a pure h
 `scripts/dev/cycle_pnl_report.py` so `src/` can import it) · `src/strategy/ic_nifty_v1.py` ·
 `ic_nifty_v2.py` · `csp_nifty_v1.py` · `cc_overlay_v1.py` · `pp_overlay_v1.py` ·
 `collar_overlay_v1.py` · `src/strategy/auto_close.py` · `scripts/record/record_paper_trade.py`
-(extend UEM-2's `--notify` to also fire on `--close`) · `scripts/dev/cycle_pnl_report.py`
-(import path only) · matching `tests/unit/`.
+(extend UEM-2's `--notify` to also fire on `--close`) · `scripts/pre_market_brief.py` (UXM-7
+redesign) · `src/notifications/formatting.py` `STRATEGY_LABELS` (add any `paper_*` id the
+brief lists that is missing) · `scripts/dev/cycle_pnl_report.py` (import path only) ·
+matching `tests/unit/`.
 
 **Out of bounds:** `entry_message.py` / `build_leg_table` (unchanged) · the entry cards
 shipped by the two entry stories · roll *execution* logic (`csp_roll_executor`,
 `ic_close_executor`, `roll_utils`) — this is the *message* only · re-entry *failure*
 notifications (`_send_reentry_failure_notification`) · any DB schema (no `schema.md` —
 `paper_exit_events` + the `paper_trades` ledger already carry everything) · `PaperTracker`
-P&L math · `TelegramGateway` / `TelegramNotifier` internals.
+P&L math · `TelegramGateway` / `TelegramNotifier` internals · the brief's IVR / position-fetch
+logic (UXM-7 is the message only).
 
 Changes `src/` and `scripts/` behaviour: every close message switches to the shared card with
 the P&L footer; CSP gains prices + P&L it never had; `record_paper_trade.py --close --notify`
-sends an exit card.
+sends an exit card; the daily pre-market brief switches to a fenced table with the overlay
+broken into CC / Collar / PP.
 
 ## Session-start load hints
 
@@ -112,7 +116,10 @@ sends an exit card.
   `greeks-analyst` gate.
 - **UXM-6** — Migrate `auto_close.py` daemon paths (Collar / CC / PP), keeping the
   `Overlay P&L (total realized)` line as the footer's overlay-total row. `greeks-analyst` gate.
-- **UXM-7** — Docs close: `CONTEXT.md`, `src/notifications/CLAUDE.md`, `DECISIONS.md`,
+- **UXM-7** — Redesign `scripts/pre_market_brief.py`: drop the broken `<b>` HTML, MarkdownV2
+  fenced table, `strategy_label()` names, `paper_nifty_overlay` broken into a parent row +
+  CC / Collar / PP sub-rows (via UXM-1's `resolve_target`), a portfolio `Total` row.
+- **UXM-8** — Docs close: `CONTEXT.md`, `src/notifications/CLAUDE.md`, `DECISIONS.md`,
   `docs/plan/README.md`, `TODOS.md`; archive.
 
 ## Definition of done
@@ -122,7 +129,9 @@ the this-exit / cycle / inception / win-rate footer. All six strategies (IC v1/v
 PP, Collar) and both paths (strategy-class + `auto_close.py`) emit it; `record_paper_trade.py
 --close --notify` sends it. No hand-rolled `✅ … closed` / `📤 Closed:` f-string remains in
 `src/strategy/`. Win rate is shown only at `closed_count >= 5`. Send failure is logged and
-never crashes a tick or a recording. All unit tests green. Docs updated, folder archived.
+never crashes a tick or a recording. `pre_market_brief.py` sends a MarkdownV2 fenced table
+(no `<b>`) with the overlay split into CC / Collar / PP and a portfolio total. All unit tests
+green. Docs updated, folder archived.
 
 ## Perspectives not covered
 

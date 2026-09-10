@@ -331,15 +331,76 @@ STRATEGY_OVERLAY)`.
 
 ---
 
-## UXM-7 — Docs close
+## UXM-7 — Pre-market brief redesign
+
+The daily `scripts/pre_market_brief.py` message is the last unmigrated Telegram surface: it
+emits literal `<b>…</b>` HTML tags run through `escape_markdown()` then sent as MarkdownV2
+(so the tags render as literal `\<b\>` text), raw `paper_*` strategy ids, an inconsistent
+`₹+110.50` / `₹-888.88` sign convention, and no portfolio total. This task brings it to the
+fenced-table house style and breaks the `paper_nifty_overlay` umbrella into its CC / Collar /
+PP components. Depends on UXM-1's `resolve_target` / `LegGroup` in `src/paper/cycle_pnl.py`.
+
+**Files to change:**
+- `scripts/pre_market_brief.py` — the message builder (~140–195).
+- `src/notifications/formatting.py` — add any `paper_*` id the brief lists that is missing
+  from `STRATEGY_LABELS` (`strategy_label()` raises on an unmapped id). Likely
+  `paper_nifty_futures` / `paper_nifty_proxy` / `paper_nifty_spot` — confirm first.
+- `tests/unit/scripts/test_pre_market_brief.py` — new or extended.
+
+**Before any code (graph queries):**
+- Read the whole message-building block via `get_code_snippet` — the `<b>` wrapping, the
+  `escape_markdown` calls, the `float(unrealized):+,.2f` formatting, `send_plain_message`.
+- `get_code_snippet("strategy_label")` + `search_graph("STRATEGY_LABELS")` — the mapped ids,
+  and that it raises (not falls back) on an unmapped one.
+- `get_code_snippet("resolve_target")` (post-UXM-1, in `src.paper.cycle_pnl`) +
+  `search_code("_OVERLAY_GROUPS")` — the `cc` / `collar` / `pp` leg-role filters.
+- `search_code("build_leg_table")` / `search_graph("build_strategy_table")` — reuse an
+  existing fenced-table builder if one fits; only add a new one if none does.
+- `get_code_snippet("format_money")` — `signed=True` gives `+1,234.50` / `-1,234.50`,
+  Indian grouping, no `₹` glyph inside a column.
+
+**What to implement:**
+
+1. Drop all `<b>` HTML. Header:
+   `☀️ *NiftyShield Pre-Market Brief*` /
+   `*Date:* {format_expiry(date.today())}   *India VIX IVR:* {ivr}%` — both lines' dynamic
+   values pre-escaped, the fenced table emitted literally.
+2. One fenced table: `Strategy | Legs | Unrealized P&L`, one row per strategy via
+   `strategy_label(name)`, P&L via `format_money(v, signed=True)`.
+3. `paper_nifty_overlay` renders as a parent row (its aggregate) followed by indented
+   `├ CC` / `├ Collar` / `└ PP` sub-rows, each filtered by the `resolve_target` leg-role
+   group. A sub-group with zero open legs shows `—` for both Legs and P&L.
+4. A trailing `Total` row: portfolio-wide open-leg count + summed unrealized P&L
+   (the overlay counted once, via its parent aggregate — not double-counted with the
+   sub-rows).
+5. Keep the existing "no open positions" early-return path; just fix its `<b>` / parse mode
+   the same way. Keep `gateway.send_plain_message` and the non-fatal send handling.
+
+**Tests (no network, no real DB):**
+- `test_brief_is_markdownv2_no_html` — rendered body contains no `<b>` / `</b>`.
+- `test_overlay_breaks_into_cc_collar_pp` — a store with overlay legs across two of the three
+  → parent row + three sub-rows, the empty one showing `—`.
+- `test_total_row_sums_without_double_counting_overlay` — total P&L == sum of the
+  per-strategy aggregates (overlay parent once).
+- `test_unmapped_strategy_id` — decide + assert the behaviour (add the id to `STRATEGY_LABELS`
+  so this can't happen, and assert `strategy_label` covers every id `get_strategy_names`
+  can return).
+- `test_no_open_positions_path` — early return renders clean MarkdownV2, no `<b>`.
+
+**Commit:** `refactor(scripts): pre-market brief to fenced house style + overlay breakout`
+
+---
+
+## UXM-8 — Docs close
 
 **Files to change:** `CONTEXT.md`, `src/notifications/CLAUDE.md`, `DECISIONS.md`,
 `docs/plan/README.md`, `TODOS.md`. Targeted `Edit` only, never `Write`.
 
 1. `CONTEXT.md` "What Exists" `src/notifications/` bullet — add
    `exit_message.py (shared close-confirmation renderer — IC/CSP/CC/PP/Collar + this-exit /
-   cycle / inception P&L + win-rate, UXM-1..6)`; note `cycle_pnl.py` gained `short_decay_pct`
-   on `Cycle`, `cycle_stats`, and `LegGroup` / `resolve_target`.
+   cycle / inception P&L + win-rate, UXM-1..7)`; note `cycle_pnl.py` gained `short_decay_pct`
+   on `Cycle`, `cycle_stats`, and `LegGroup` / `resolve_target`; note `pre_market_brief.py`
+   is now MarkdownV2 + overlay breakout.
 2. `src/notifications/CLAUDE.md` — the close card is `format_exit_message`; the footer's
    inception number is `get_strategy_realized_pnl` (authoritative), cycle stats are the
    approximation; win rate gated at `closed_count >= 5`.
@@ -347,9 +408,10 @@ STRATEGY_OVERLAY)`.
    (this-exit / cycle / inception) with inception from the store not the cycle sum; win-rate
    + avg-decay stats from `cycle_stats`; decay on the **gross-short-premium** basis
    (`short_decay_pct`, `None` for pure-long PP) not the net `decay_pct`; `auto_close.py` +
-   strategy-class + recorder all on one renderer.
+   strategy-class + recorder all on one renderer; `pre_market_brief.py` migrated off HTML
+   with the overlay broken into CC / Collar / PP.
 4. `docs/plan/README.md` — `unified-exit-message/` row → ✅ Shipped/Archived with the SHAs;
    `TODOS.md` Feature Backlog line deleted, Session Log line added.
 5. `git mv docs/plan/unified-exit-message docs/archive/plan/unified-exit-message` — one commit.
 
-**Commit:** `docs: close unified-exit-message (UXM-1..7)`
+**Commit:** `docs: close unified-exit-message (UXM-1..8)`

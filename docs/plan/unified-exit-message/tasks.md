@@ -7,7 +7,7 @@ see `stories.md` for the per-task implementation spec.
 Depends on `unified-entry-message/` + `overlay-entry-message/` — do not start UXM-1 before
 both have landed and archived.
 
-**Open: UXM-1, UXM-2, UXM-3, UXM-4, UXM-5, UXM-6, UXM-7.**
+**Open: UXM-1, UXM-2, UXM-3, UXM-4, UXM-5, UXM-6, UXM-7, UXM-8.**
 
 - [ ] **UXM-1** — gross-short-premium `short_decay_pct` (+ `short_credit_per_unit` /
       `short_buyback_per_unit`) on `Cycle`; `cycle_stats(trades) -> CycleStats` (win_rate,
@@ -28,7 +28,11 @@ both have landed and archived.
 - [ ] **UXM-6** — Migrate `auto_close.py` daemon paths (Collar / CC / PP); keep the
       `Overlay P&L (total realized)` line as the footer's overlay-total row.
       | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer + greeks-analyst | SHA: —
-- [ ] **UXM-7** — Docs close: `CONTEXT.md` / `src/notifications/CLAUDE.md` / `DECISIONS.md` /
+- [ ] **UXM-7** — Redesign `scripts/pre_market_brief.py`: drop the broken `<b>` HTML, fenced
+      house-style table, `strategy_label()` names, `paper_nifty_overlay` broken into CC /
+      Collar / PP sub-rows (via UXM-1's `resolve_target`), portfolio total row.
+      | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
+- [ ] **UXM-8** — Docs close: `CONTEXT.md` / `src/notifications/CLAUDE.md` / `DECISIONS.md` /
       `docs/plan/README.md` / `TODOS.md`; archive the folder.
       | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: —
 
@@ -55,8 +59,13 @@ both have landed and archived.
 - **UXM-6** — the three `auto_close.py` daemon branches emit the shared card; the overlay
   total matches `get_strategy_realized_pnl(store, STRATEGY_OVERLAY)`; tests green;
   `greeks-analyst` clean.
-- **UXM-7** — all five docs reflect the shared exit renderer + `cycle_stats`; Feature Backlog
-  line removed; folder archived to `docs/archive/plan/unified-exit-message/`.
+- **UXM-7** — `pre_market_brief.py` sends a MarkdownV2 fenced table (no `<b>`), strategy
+  labels not raw ids, `paper_nifty_overlay` shown as a parent row + CC / Collar / PP sub-rows
+  (empty sub-group → `—`), and a portfolio `Total` row that counts the overlay once; tests
+  green.
+- **UXM-8** — all five docs reflect the shared exit renderer + `cycle_stats` + the brief
+  redesign; Feature Backlog line removed; folder archived to
+  `docs/archive/plan/unified-exit-message/`.
 
 ## After each task
 

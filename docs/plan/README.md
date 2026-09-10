@@ -97,8 +97,10 @@ move into `src/paper/cycle_pnl.py` (UXM-1) →
 `src/notifications/exit_message.py` / `ExitMessage` / `format_exit_message` + `build_close_leg_table`,
 with a this-exit / cycle / inception P&L footer + win-rate row gated at ≥ 5 closed cycles (UXM-2) →
 migrate IC (UXM-3), CSP + `record_paper_trade --close` (UXM-4), CC/PP/Collar strategy classes (UXM-5),
-`auto_close.py` daemon (UXM-6) → docs close (UXM-7). Depends on `unified-entry-message/` +
-`overlay-entry-message/`. No DB schema change. Requested by Animesh 2026-09-10.
+`auto_close.py` daemon (UXM-6) → redesign `pre_market_brief.py` to the fenced house style with the
+`paper_nifty_overlay` umbrella broken into CC / Collar / PP sub-rows (UXM-7) → docs close (UXM-8).
+Depends on `unified-entry-message/` + `overlay-entry-message/`. No DB schema change. Requested by
+Animesh 2026-09-10.
 
 **`risk-gamma-phase-a/`** · 🔄 In progress · next: **B2.2** (chain fetch + field computation)
 Risk delta gate (done) + Near-Expiry Gamma Buy `gamma_daily_watch.py`.

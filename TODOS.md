@@ -96,8 +96,9 @@ rot them.
     `src/paper/cycle_pnl.py`). One shared close-confirmation renderer for IC/CSP/CC/PP/Collar with a
     this-exit / cycle / inception P&L footer + win-rate + avg-decay stats;
     `src/notifications/exit_message.py` + `build_close_leg_table`; migrates both the strategy-class and
-    `auto_close.py` close paths + `record_paper_trade --close`. Depends on #23 + #24. Requested by
-    Animesh 2026-09-10.
+    `auto_close.py` close paths + `record_paper_trade --close`; UXM-7 also redesigns
+    `pre_market_brief.py` (fenced house style, overlay broken into CC / Collar / PP). Depends on #23 +
+    #24. Requested by Animesh 2026-09-10.
 
 ## Open Bugs
 
