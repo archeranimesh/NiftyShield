@@ -103,8 +103,8 @@ BUY−SELL and the Nuvama bond basis are full history). `Total` = their sums: `t
 total_realized_pnl_today`; `Realized total` = `total_realized_pnl_today + cumulative_realized_pnl`. Only the `Nuvama options` row up in `📊 Today` is the delta.
 
 Degraded states: a failed source renders `[fetch failed]` on its `📊 Today` and `📦 Holdings` lines, is excluded from `Net` and `Total`, and adds one `⚠ <source> excluded` line under `Total`. Nuvama
-options unavailable → omit the whole `📈 Nuvama options` section and the `Nuvama options` row in `📊 Today`. No prior-day data (`has_deltas` false) → omit the entire `📊 Today` block; lead with
-`📦 Holdings`. The header 🟢/🔴 follows the sign of `total_day_delta` (or `total_pnl` when there is no delta).
+options unavailable → omit the whole `📈 Nuvama options` section and the `Nuvama options` row in `📊 Today`. No prior-day data (`has_deltas` false) → omit the entire `📊 Today` block; lead with `📦
+Holdings`. The header 🟢/🔴 follows the sign of `total_day_delta` (or `total_pnl` when there is no delta).
 
 Not in this epic's scope but noted: the fenced block means `daily_snapshot.py` must stop wrapping the whole string in `escape_markdown()` and instead emit ```` ``` ```` fences with literal content
 (DHR-2 / DHR-3).

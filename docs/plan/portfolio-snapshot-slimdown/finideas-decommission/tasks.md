@@ -1,12 +1,10 @@
 # Finideas decommission — tasks
 
-Work top-down. Find the first unchecked `- [ ]` and do only that task.
-Each task = one commit unless noted. See `prompt.md` for why the story exists;
-see `stories.md` for the per-task implementation spec.
+Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
+spec.
 
-History decision: **option A — hard-delete every Finideas row** (Animesh, 2026-09-10). No
-`schema.md` (straight `DELETE`). FD-2..FD-4 are code; FD-5 is the DB CLI; FD-6 is example
-cleanup; FD-1 and FD-7 are non-code.
+History decision: **option A — hard-delete every Finideas row** (Animesh, 2026-09-10). No `schema.md` (straight `DELETE`). FD-2..FD-4 are code; FD-5 is the DB CLI; FD-6 is example cleanup; FD-1 and
+FD-7 are non-code.
 
 **Open: FD-1, FD-2, FD-3, FD-4, FD-5, FD-6, FD-7.**
 
@@ -42,34 +40,23 @@ cleanup; FD-1 and FD-7 are non-code.
 
 ## Story done when
 
-- **FD-1** — a session-log note (or a short `audit.md` in this sub-story folder) records:
-  zero open Finideas legs confirmed, the exact row ids/counts per table, and the pre-delete
-  all-time `Total P&L`.
-- **FD-2** — `src/portfolio/strategies/finideas/` is gone; `ALL_STRATEGIES` is `[]` (or the
-  constant is removed); no `HedgeStrategy` / `FINIDEAS_*` symbol is importable; unknown
-  strategy names construct a base `Strategy`; unit tests green.
-- **FD-3** — `PortfolioSummary` has no `options_pnl` / `options_day_delta` /
-  `finrakshak_day_delta`; `_build_portfolio_summary` computes `total_value` / `total_pnl` /
-  `total_day_delta` from MF + Dhan + Nuvama bonds + Nuvama options only; tests green.
-- **FD-4** — both formatter paths render with no `Finideas P&L`, no `Derivatives` options
-  line, no hedge block, no `Finideas ETF` line; a snapshot with only MF + bonds is
-  well-formed; golden/string tests updated; tests green.
-- **FD-5** — `decommission_finideas.py --dry-run` lists every Finideas row across the four
-  tables; `--apply` deletes them in one transaction and is idempotent on a second run;
-  `DB_REGISTRY.md` row counts updated; CLI has a happy-path + empty-DB test.
-- **FD-6** — no `finideas` / `finrakshak` / `ilts` string remains in the named seed /
-  example / lookup files except where it is explicit historical narration; the Nuvama /
-  Dhan dedup guards for `LIQUIDBEES` are removed or re-justified; tests green.
-- **FD-7** — `CONTEXT.md` / `REFERENCES.md` / `CONTEXT_TREE.md` / `DECISIONS.md` /
-  `src/portfolio/CLAUDE.md` / `src/portfolio/NOTES.md` reflect the removal; `REFERENCES.md`
-  Finideas sections deleted; a `DECISIONS.md` row records the decommission + option-A history
-  choice; the epic `README.md` Stories-table row is ✅ with the closing SHA; `TODOS.md`
-  Session Log line added. The epic folder is **not** archived here.
+- **FD-1** — a session-log note (or a short `audit.md` in this sub-story folder) records: zero open Finideas legs confirmed, the exact row ids/counts per table, and the pre-delete all-time `Total
+  P&L`.
+- **FD-2** — `src/portfolio/strategies/finideas/` is gone; `ALL_STRATEGIES` is `[]` (or the constant is removed); no `HedgeStrategy` / `FINIDEAS_*` symbol is importable; unknown strategy names
+  construct a base `Strategy`; unit tests green.
+- **FD-3** — `PortfolioSummary` has no `options_pnl` / `options_day_delta` / `finrakshak_day_delta`; `_build_portfolio_summary` computes `total_value` / `total_pnl` / `total_day_delta` from MF +
+  Dhan + Nuvama bonds + Nuvama options only; tests green.
+- **FD-4** — both formatter paths render with no `Finideas P&L`, no `Derivatives` options line, no hedge block, no `Finideas ETF` line; a snapshot with only MF + bonds is well-formed; golden/string
+  tests updated; tests green.
+- **FD-5** — `decommission_finideas.py --dry-run` lists every Finideas row across the four tables; `--apply` deletes them in one transaction and is idempotent on a second run; `DB_REGISTRY.md` row
+  counts updated; CLI has a happy-path + empty-DB test.
+- **FD-6** — no `finideas` / `finrakshak` / `ilts` string remains in the named seed / example / lookup files except where it is explicit historical narration; the Nuvama / Dhan dedup guards for
+  `LIQUIDBEES` are removed or re-justified; tests green.
+- **FD-7** — `CONTEXT.md` / `REFERENCES.md` / `CONTEXT_TREE.md` / `DECISIONS.md` / `src/portfolio/CLAUDE.md` / `src/portfolio/NOTES.md` reflect the removal; `REFERENCES.md` Finideas sections deleted;
+  a `DECISIONS.md` row records the decommission + option-A history choice; the epic `README.md` Stories-table row is ✅ with the closing SHA; `TODOS.md` Session Log line added. The epic folder is
+  **not** archived here.
 
 ## After each task
 
-Set `SHA:` to the real commit SHA on the task line and tick the box.
-Then flip this sub-story's row in the epic `README.md` **Stories** table
-(`docs/plan/portfolio-snapshot-slimdown/README.md`) and add one line to `TODOS.md` Session
-Log. The epic folder is archived only when every sub-story is done — see the epic `prompt.md`
-Step 4.
+Set `SHA:` to the real commit SHA on the task line and tick the box. Then flip this sub-story's row in the epic `README.md` **Stories** table (`docs/plan/portfolio-snapshot-slimdown/README.md`) and
+add one line to `TODOS.md` Session Log. The epic folder is archived only when every sub-story is done — see the epic `prompt.md` Step 4.

@@ -30,8 +30,8 @@ rot them.
 8. **signals-paper-track** — `docs/plan/signals-paper-track/` — SPT-1 done (council q17, 2026-09-09); next **SPT-2** (`SignalPaperEntry` / `SignalMark` models + store). Turns the
     `signals/` consensus into a paper-traded strategy: auto-enter a long monthly option (≤ 7-DTE roll), fixed SL −30 % / target +50 %, exit or 15:00 square-off, full mark-path log,
     6-month G1–G9 go-live gate. Ruling: `paper_signal_track_v1` `PaperStrategy` on the shared engine + pure `src/strategy/signal_exit.py`; Phase 1 fixed-only. Supersedes `signals/` S5.5a.
-9. **signals-cost-tracking** — `docs/plan/signals-cost-tracking/` — next **SCT-1** (usage model + provider capture). Capture OpenRouter per-call token usage + USD cost via inline
-   `usage.include` accounting, persist as 3 new `signal_responses` columns, show today's spend on the 09:30 message, add `get_signal_cost()` aggregate. SCT-1..4, carries `schema.md`.
+9. **signals-cost-tracking** — `docs/plan/signals-cost-tracking/` — next **SCT-1** (usage model + provider capture). Capture OpenRouter per-call token usage + USD cost via inline `usage.include`
+   accounting, persist as 3 new `signal_responses` columns, show today's spend on the 09:30 message, add `get_signal_cost()` aggregate. SCT-1..4, carries `schema.md`.
 10. **backtest-eval-core** — `docs/plan/backtest-eval-core/` — next **B1.1**. Blocked until `backtest-engine` tasks 1.3 + 1.4 land.
 11. **signals-eval-core** — `docs/plan/signals-eval-core/` — next **SE1.1**.
     Blocked until `backtest-eval-core` + `backtest-engine` 1.12.
@@ -140,211 +140,141 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
-- [2026-09-10] BUG-043 logged (`abc2d60`) — "Net P&L" in strategy close notifications has no
-  stable meaning (inception-cumulative for IC v1/v2, cycle-only for collar, absent for CSP).
-  B043.1 closed (`74bf1c4`): new `src/paper/cycle_pnl.py` (`reconstruct_cycles` /
-  `get_last_cycle_realized_pnl`) + `scripts/dev/cycle_pnl_report.py` (per-cycle P&L / exit
-  reason / days-in-trade for IC-all / cc / pp / collar). 10 tests. code-reviewer CRITICAL+ERROR
-  resolved, greeks-analyst clean. Next: B043.2 — standardise the five close paths to
-  `Cycle P&L` + `Since inception`.
-- [2026-09-10] cycle_pnl_report follow-up (`2d7412e`) — `Cycle` gains
-  `entry_credit_per_unit` / `exit_cost_per_unit` / `decay_pct`; report shows the three as
-  columns. code-reviewer clean, test-runner 3382 passed.
-- [2026-09-09] signals-paper-track SPT-1 closed (`636c190`) — council q17 ruled
-  (`docs/archive/council/strategy/2026-09-09_signals-paper-track-execution-layer.md`). Docs-only:
-  `DECISIONS.md` §"Signals Paper Track — Execution Layer" (module boundary A, pure
-  `src/strategy/signal_exit.py`, fixed SL −30 % / target +50 %, Phase 1 fixed-only +
-  `TRAILING_STOP` reserved, 30 s per-strategy cadence, two-tier recalibration, G1–G9 go-live
-  gate, auto-execute 1-lot pilot); new `docs/plan/signals-paper-track/schema.md`
-  (`paper_signal_entries` + `paper_signal_marks`, position stays on `paper_trades` as
-  `paper_signal_track_v1`); `stories.md` / `tasks.md` rewritten SPT-2..SPT-8 concrete + added
-  SPT-2a (`≤ 7-DTE` roll in `resolve_monthly_option`); `prompt.md` scope guard + task overview;
-  `council-question.md` marked closed; `docs/plan/README.md` row → in progress; `git mv` the
-  council file to `docs/archive/council/strategy/`. Deltas from our draft: cadence 30 s not
-  90 s, gate N≥50 not 40, live pilot auto-execute not manual. Next: SPT-2.
-- [2026-09-09] signals S6 (`566e1b0`) — story closed and archived. Docs-only: `CONTEXT.md` `src/signals/`
-  bullet rewritten to "shipped" + crons-live, signals crons removed from "What Does NOT Exist
-  Yet"; `DECISIONS.md` close bullet (story archived + `phase` column semantics);
-  `docs/plan/README.md` entry collapsed to a `✅ Archived` pointer; `git mv docs/plan/signals/
-  → docs/archive/plan/signals/`; backlog item deleted here, appended to `TODOS_ARCHIVE.md`.
-  The `signals/` story (S1.1–S6) is complete; next signals work is `signals-paper-track` SPT-1.
-  Also this session: fixed a S5.6 deploy gap — the `entry_premium` column was added to
-  `daily_signals` in code (`5bebf92`) but never `ALTER`-ed onto the live DB, so the 16:00
-  `record_signal_outcome` cron failed with `IndexError`; `ALTER TABLE daily_signals ADD COLUMN
-  entry_premium TEXT` run against `data/portfolio/portfolio.sqlite`, read + write paths verified.
-- [2026-09-09] signals S5.6 filed — the 09:15 "Entry band" is an LLM guess
-  (`_consensus_entry_band`), and `record_signal_outcome --auto` books P&L against it while
-  fetching the exit LTP on the *weekly* option though the strike was picked on the *monthly*
-  chain. S5.6 (before S6): fetch + persist the real option LTP at 09:15 as the entry premium,
-  use it for exit P&L, pin strike/entry/exit to one expiry (weekly vs monthly = a pre-code
-  decision). Spec in `signals_tasks.md` / `signals_stories.md`. Docs-only.
-- [2026-09-09] signals S5.5b — NSE-holiday early-exit guard added to `scripts/morning_signal.py`
-  (`run()`) and `scripts/signal_report.py` (`main()`): `if not is_trading_day(market_today()):
-  logger.info(...); return`, mirroring `scripts/pipeline/upstox_chain_snapshot.py`. No new
-  tests (matches existing cron pattern); `test_escaping_guard.py` baseline line numbers bumped
-  (morning_signal 215→218, signal_report 313→314) for the shifted `.send()` call sites. Full
-  suite 3354 green. code-reviewer: 0 CRITICAL/ERROR, 1 WARNING (double `market_today()` call —
-  fixed). — SHA `5466b9d`
-- [2026-09-09] signals S5.5d — `scripts/signal_report.py` now pushes the full 5-section
-  performance report to Telegram on every run (was `print()`-only). Local
-  `_format_report_message` wraps the body in a MarkdownV2 fenced block with fence-safe
-  escaping (backslash + backtick only — `escape_markdown` renders backslashes literally
-  inside a fence); non-fatal `_notify` mirrors `record_signal_outcome._notify`, sent after
-  `print()` and downstream of the empty-window early return. 4 tests + escaping-guard
-  baseline entry. code-reviewer: 0 CRITICAL/ERROR, 3 WARNING (1 fixed, 2 pre-existing/not
-  in scope). — SHA `51d3e59`
-- [2026-09-09] signals S5.5a — `record_signal_outcome.py` now posts the daily outcome to
-  Telegram on its 16:00 run (S5.5c vertical layout): executed / not-taken (would-be P&L
-  derived in the formatter, no `SignalOutcome` change) / NO_TRADE / close-only fallback.
-  Local `_format_outcome_notification` owns MarkdownV2 escaping; `_notify` send is non-fatal
-  (guards `build_notifier() is None` + swallows formatter/send errors post-write). 4 render
-  tests + escaping-guard baseline entry. code-reviewer: 0 CRITICAL/ERROR, 2 WARNING both
-  fixed. — SHA `ce59529`
-- [2026-09-09] signals S5.5c — reformatted `morning_signal.py` 09:15 Telegram message to the
-  agreed vertical layout (CONSENSUS / NO CONSENSUS / PIPELINE FAILED); `_format_signal_notification`
-  now owns its MarkdownV2 escaping (caller sends without re-wrapping), entry band = mean of
-  agreeing models' quoted bands. 3 formatter render tests + escaping-guard baseline entry.
-- [2026-09-09] signals — restructured `signals_tasks.md` into "Remaining work — in order"
-  (S5.5c → S5.5a → S5.5d → S5.5b → S6 + summary table) and "Completed". 4ec58c6.
-- [2026-09-09] signals S5.5a design — revived (was superseded → SPT-5) as the Phase-1 interim
-  16:00 outcome message; `record_signal_outcome.py` currently sends nothing. Restyled messages
-  6–8 in `scratch/2026-09-08_signal_telegram_messages.py` to the S5.5c vertical layout
-  (executed / not-taken with would-be P&L / NO_TRADE); would-be P&L derived in the formatter,
-  no `SignalOutcome` change. Docs: signals_tasks.md, signals_stories.md §S5.5a,
-  signals-paper-track/stories.md SPT-5/SPT-8, DECISIONS.md, TODOS.md. Implementation pending.
-- [2026-09-09] signals S5.5 — rollout state recorded (discussion, no code): all 3 crons already
-  live on the Mac host, so the cron-enablement runbook was dropped; rollout phase = Phase 1
-  `openrouter_only`. Telegram scope settled — 09:15 message → S5.5c, `signal_report` 16:35
-  digest (full report, every weekday, MarkdownV2 fenced block) → new box S5.5d. Touched
-  signals_tasks.md, signals_stories.md, DECISIONS.md, TODOS.md. No SHA.
-- [2026-09-08] BUG-041 B041.5/B041.6 — closed. No new code: slug/env-override and error-body
-  capture tests landed across B041.1–B041.3. Verified at close: `pytest tests/unit/signals/`
-  green (115), live `morning_signal` 16:37 run 3/3 providers respond, zero `provider_error`.
-  `bugs.md` + `task.md` sections moved to `docs/archive/bugs/`. — SHA `4b5aed2`
-- [2026-09-08] BUG-041 B041.1/B041.2 — OpenRouter model slugs made env-configurable
-  (`SIGNAL_MODEL_{GROK,GPT4O,GEMINI}`) threaded through `factory._construct`; `model` param on
-  grok/gemini providers. Confirmed grok-3/gemini-2.0-flash retired on OpenRouter; gemini 400 is
-  the slug not `response_format`. `.env.example` gitignored — doc edit on disk only. Suite green
-  (3331), code-reviewer clean (1 deferred WARNING). B041.3–B041.6 remain. — SHA `f1fad55`
-- [2026-09-08] BUG-041 B041.2b — provider payloads: `max_tokens` 512→2048, default `timeout`
-  30→60s so the reasoning models `~x-ai/grok-latest` / `~openai/gpt-latest` don't time out or
-  return null content. Probe: `scratch/2026-09-08_signal_model_probe.py`. Live `morning_signal`
-  now gets 3/3 responses. Suite green (3334), code-reviewer 0 ERROR/CRITICAL. — SHA `9a2e9d3`
-- [2026-09-08] signals S5.4 — `scripts/signal_report.py` on-demand performance report: aggregates
-  `get_all_outcomes` over a `--from`/`--to`/`--phase` window into OVERALL (win rate, realised EV,
-  deterministic md5 coin-flip baseline), per-model direction accuracy (09:10 snapshot spot as open
-  proxy), confidence calibration, NO_TRADE move check, phase breakdown. No unit tests (per S5.4 spec).
+- [2026-09-10] BUG-043 logged (`abc2d60`) — "Net P&L" in strategy close notifications has no stable meaning (inception-cumulative for IC v1/v2, cycle-only for collar, absent for CSP). B043.1 closed
+  (`74bf1c4`): new `src/paper/cycle_pnl.py` (`reconstruct_cycles` / `get_last_cycle_realized_pnl`) + `scripts/dev/cycle_pnl_report.py` (per-cycle P&L / exit reason / days-in-trade for IC-all / cc / pp
+  / collar). 10 tests. code-reviewer CRITICAL+ERROR resolved, greeks-analyst clean. Next: B043.2 — standardise the five close paths to `Cycle P&L` + `Since inception`.
+- [2026-09-10] cycle_pnl_report follow-up (`2d7412e`) — `Cycle` gains `entry_credit_per_unit` / `exit_cost_per_unit` / `decay_pct`; report shows the three as columns. code-reviewer clean, test-runner
+  3382 passed.
+- [2026-09-09] signals-paper-track SPT-1 closed (`636c190`) — council q17 ruled (`docs/archive/council/strategy/2026-09-09_signals-paper-track-execution-layer.md`). Docs-only: `DECISIONS.md` §"Signals
+  Paper Track — Execution Layer" (module boundary A, pure `src/strategy/signal_exit.py`, fixed SL −30 % / target +50 %, Phase 1 fixed-only + `TRAILING_STOP` reserved, 30 s per-strategy cadence,
+  two-tier recalibration, G1–G9 go-live gate, auto-execute 1-lot pilot); new `docs/plan/signals-paper-track/schema.md` (`paper_signal_entries` + `paper_signal_marks`, position stays on `paper_trades`
+  as `paper_signal_track_v1`); `stories.md` / `tasks.md` rewritten SPT-2..SPT-8 concrete + added SPT-2a (`≤ 7-DTE` roll in `resolve_monthly_option`); `prompt.md` scope guard + task overview;
+  `council-question.md` marked closed; `docs/plan/README.md` row → in progress; `git mv` the council file to `docs/archive/council/strategy/`. Deltas from our draft: cadence 30 s not 90 s, gate N≥50
+  not 40, live pilot auto-execute not manual. Next: SPT-2.
+- [2026-09-09] signals S6 (`566e1b0`) — story closed and archived. Docs-only: `CONTEXT.md` `src/signals/` bullet rewritten to "shipped" + crons-live, signals crons removed from "What Does NOT Exist
+  Yet"; `DECISIONS.md` close bullet (story archived + `phase` column semantics); `docs/plan/README.md` entry collapsed to a `✅ Archived` pointer; `git mv docs/plan/signals/ →
+  docs/archive/plan/signals/`; backlog item deleted here, appended to `TODOS_ARCHIVE.md`. The `signals/` story (S1.1–S6) is complete; next signals work is `signals-paper-track` SPT-1. Also this
+  session: fixed a S5.6 deploy gap — the `entry_premium` column was added to `daily_signals` in code (`5bebf92`) but never `ALTER`-ed onto the live DB, so the 16:00 `record_signal_outcome` cron failed
+  with `IndexError`; `ALTER TABLE daily_signals ADD COLUMN entry_premium TEXT` run against `data/portfolio/portfolio.sqlite`, read + write paths verified.
+- [2026-09-09] signals S5.6 filed — the 09:15 "Entry band" is an LLM guess (`_consensus_entry_band`), and `record_signal_outcome --auto` books P&L against it while fetching the exit LTP on the
+  *weekly* option though the strike was picked on the *monthly* chain. S5.6 (before S6): fetch + persist the real option LTP at 09:15 as the entry premium, use it for exit P&L, pin strike/entry/exit
+  to one expiry (weekly vs monthly = a pre-code decision). Spec in `signals_tasks.md` / `signals_stories.md`. Docs-only.
+- [2026-09-09] signals S5.5b — NSE-holiday early-exit guard added to `scripts/morning_signal.py` (`run()`) and `scripts/signal_report.py` (`main()`): `if not is_trading_day(market_today()):
+  logger.info(...); return`, mirroring `scripts/pipeline/upstox_chain_snapshot.py`. No new tests (matches existing cron pattern); `test_escaping_guard.py` baseline line numbers bumped (morning_signal
+  215→218, signal_report 313→314) for the shifted `.send()` call sites. Full suite 3354 green. code-reviewer: 0 CRITICAL/ERROR, 1 WARNING (double `market_today()` call — fixed). — SHA `5466b9d`
+- [2026-09-09] signals S5.5d — `scripts/signal_report.py` now pushes the full 5-section performance report to Telegram on every run (was `print()`-only). Local `_format_report_message` wraps the body
+  in a MarkdownV2 fenced block with fence-safe escaping (backslash + backtick only — `escape_markdown` renders backslashes literally inside a fence); non-fatal `_notify` mirrors
+  `record_signal_outcome._notify`, sent after `print()` and downstream of the empty-window early return. 4 tests + escaping-guard baseline entry. code-reviewer: 0 CRITICAL/ERROR, 3 WARNING (1 fixed, 2
+  pre-existing/not in scope). — SHA `51d3e59`
+- [2026-09-09] signals S5.5a — `record_signal_outcome.py` now posts the daily outcome to Telegram on its 16:00 run (S5.5c vertical layout): executed / not-taken (would-be P&L derived in the formatter,
+  no `SignalOutcome` change) / NO_TRADE / close-only fallback. Local `_format_outcome_notification` owns MarkdownV2 escaping; `_notify` send is non-fatal (guards `build_notifier() is None` + swallows
+  formatter/send errors post-write). 4 render tests + escaping-guard baseline entry. code-reviewer: 0 CRITICAL/ERROR, 2 WARNING both fixed. — SHA `ce59529`
+- [2026-09-09] signals S5.5c — reformatted `morning_signal.py` 09:15 Telegram message to the agreed vertical layout (CONSENSUS / NO CONSENSUS / PIPELINE FAILED); `_format_signal_notification` now owns
+  its MarkdownV2 escaping (caller sends without re-wrapping), entry band = mean of agreeing models' quoted bands. 3 formatter render tests + escaping-guard baseline entry.
+- [2026-09-09] signals — restructured `signals_tasks.md` into "Remaining work — in order" (S5.5c → S5.5a → S5.5d → S5.5b → S6 + summary table) and "Completed". 4ec58c6.
+- [2026-09-09] signals S5.5a design — revived (was superseded → SPT-5) as the Phase-1 interim 16:00 outcome message; `record_signal_outcome.py` currently sends nothing. Restyled messages 6–8 in
+  `scratch/2026-09-08_signal_telegram_messages.py` to the S5.5c vertical layout (executed / not-taken with would-be P&L / NO_TRADE); would-be P&L derived in the formatter, no `SignalOutcome` change.
+  Docs: signals_tasks.md, signals_stories.md §S5.5a, signals-paper-track/stories.md SPT-5/SPT-8, DECISIONS.md, TODOS.md. Implementation pending.
+- [2026-09-09] signals S5.5 — rollout state recorded (discussion, no code): all 3 crons already live on the Mac host, so the cron-enablement runbook was dropped; rollout phase = Phase 1
+  `openrouter_only`. Telegram scope settled — 09:15 message → S5.5c, `signal_report` 16:35 digest (full report, every weekday, MarkdownV2 fenced block) → new box S5.5d. Touched signals_tasks.md,
+  signals_stories.md, DECISIONS.md, TODOS.md. No SHA.
+- [2026-09-08] BUG-041 B041.5/B041.6 — closed. No new code: slug/env-override and error-body capture tests landed across B041.1–B041.3. Verified at close: `pytest tests/unit/signals/` green (115),
+  live `morning_signal` 16:37 run 3/3 providers respond, zero `provider_error`. `bugs.md` + `task.md` sections moved to `docs/archive/bugs/`. — SHA `4b5aed2`
+- [2026-09-08] BUG-041 B041.1/B041.2 — OpenRouter model slugs made env-configurable (`SIGNAL_MODEL_{GROK,GPT4O,GEMINI}`) threaded through `factory._construct`; `model` param on grok/gemini providers.
+  Confirmed grok-3/gemini-2.0-flash retired on OpenRouter; gemini 400 is the slug not `response_format`. `.env.example` gitignored — doc edit on disk only. Suite green (3331), code-reviewer clean (1
+  deferred WARNING). B041.3–B041.6 remain. — SHA `f1fad55`
+- [2026-09-08] BUG-041 B041.2b — provider payloads: `max_tokens` 512→2048, default `timeout` 30→60s so the reasoning models `~x-ai/grok-latest` / `~openai/gpt-latest` don't time out or return null
+  content. Probe: `scratch/2026-09-08_signal_model_probe.py`. Live `morning_signal` now gets 3/3 responses. Suite green (3334), code-reviewer 0 ERROR/CRITICAL. — SHA `9a2e9d3`
+- [2026-09-08] signals S5.4 — `scripts/signal_report.py` on-demand performance report: aggregates `get_all_outcomes` over a `--from`/`--to`/`--phase` window into OVERALL (win rate, realised EV,
+  deterministic md5 coin-flip baseline), per-model direction accuracy (09:10 snapshot spot as open proxy), confidence calibration, NO_TRADE move check, phase breakdown. No unit tests (per S5.4 spec).
   — SHA: <pending>
-- [2026-09-08] signals S5.3 — `scripts/record_signal_outcome.py` 03:00 PM outcome recorder: reads the
-  day's `DailySignal`, captures entry/exit premium (manual flags or `--auto` weekly-expiry BOD lookup +
-  live LTP), writes one `SignalOutcome` row; NO_TRADE / non-executed signals still logged for direction
-  accuracy. `phase` from `SIGNAL_PHASE` env / key-set. No unit tests (per S5.3 spec). — a387349
-- [2026-09-08] signals S5.2 — `scripts/morning_signal.py` 09:15 AM cron: pure wiring over
-  `assemble_market_snapshot` → `build_providers` → `asyncio.gather` fan-out (return_exceptions) →
-  `SignalAggregator.aggregate` → `SignalStore` writes (init_db/record_snapshot/response/signal via
-  to_thread) → guarded `build_notifier` send + end-of-run structured JSON log. No unit tests
+- [2026-09-08] signals S5.3 — `scripts/record_signal_outcome.py` 03:00 PM outcome recorder: reads the day's `DailySignal`, captures entry/exit premium (manual flags or `--auto` weekly-expiry BOD
+  lookup + live LTP), writes one `SignalOutcome` row; NO_TRADE / non-executed signals still logged for direction accuracy. `phase` from `SIGNAL_PHASE` env / key-set. No unit tests (per S5.3 spec). —
+  a387349
+- [2026-09-08] signals S5.2 — `scripts/morning_signal.py` 09:15 AM cron: pure wiring over `assemble_market_snapshot` → `build_providers` → `asyncio.gather` fan-out (return_exceptions) →
+  `SignalAggregator.aggregate` → `SignalStore` writes (init_db/record_snapshot/response/signal via to_thread) → guarded `build_notifier` send + end-of-run structured JSON log. No unit tests
   (integration-only). SHA: e299a6b
-- [2026-09-08] signals S5.2c — `src/signals/snapshot.py` `assemble_market_snapshot`: the 7 non-S5.2a
-  MarketSnapshot fields (nifty_spot/india_vix via get_ltp, prev close/high/low via get_ohlc "1d",
-  monthly_expiry via InstrumentLookup, option_chain→OptionChainSummary derivation, vix_5d_trend over
-  get_recent_snapshots) + gift/usd_inr/fii delegated to market_inputs via asyncio.gather; no neutral
+- [2026-09-08] signals S5.2c — `src/signals/snapshot.py` `assemble_market_snapshot`: the 7 non-S5.2a MarketSnapshot fields (nifty_spot/india_vix via get_ltp, prev close/high/low via get_ohlc "1d",
+  monthly_expiry via InstrumentLookup, option_chain→OptionChainSummary derivation, vix_5d_trend over get_recent_snapshots) + gift/usd_inr/fii delegated to market_inputs via asyncio.gather; no neutral
   fallbacks (DataFetchError). 4 offline tests. SHA: b33a43d
 - [2026-09-08] signals S5.2b — added `BrokerClient.get_ohlc(instruments, interval="1d")` to the protocol
-  + all impls (upstox_market async wrapper over get_ohlc_sync, upstox_live delegate, mock_client canned
-  dict via set_ohlc) and `SignalStore.get_recent_snapshots(n)` (newest-first, n<=0 guard) + 6 tests.
-  Prereqs for the S5.2c snapshot assembler. SKIP=mypy (7 pre-existing upstox_live.py errors). SHA: e1b5a0a
-- [2026-09-08] signals S5.2b split (docs-only) — the old combined S5.2b (get_ohlc/get_recent_snapshots
-  prereqs + snapshot.py assembler) split into S5.2b (client `get_ohlc` across protocol + all 3 impls +
-  `SignalStore.get_recent_snapshots` + tests) and S5.2c (`snapshot.py` assemble_market_snapshot), one
-  commit each per Animesh. Touched signals_tasks.md, signals_stories.md, docs/plan/README.md. No SHA.
-- [2026-09-08] signals S5.2a — built src/signals/market_inputs.py: fetch_gift_nifty (GLOBAL_INDEX|SGX NIFTY
-  LTP), fetch_usd_inr (nearest-monthly NCD_FO USDINR future via InstrumentLookup), fetch_fii_data (NSE
-  fiidiiTradeReact cash-market net → FIIData); each raises DataFetchError on failure, no fallbacks + 9 offline tests. SHA: <pending>
-- [2026-09-07] signals/ S5.2 split (docs-only) — S5.2 needs gift_nifty / fii / usd_inr and the repo has no
-  fetcher; Animesh's call: probe Upstox/Dhan/Nuvama APIs rather than scrape NSE or hard-code defaults. Added
-  S5.2a (persistent source-discovery spike `scratch/2026-09-07_signal_input_sources.py` + `src/signals/market_inputs.py`
-  + offline tests) and S5.2b (`src/signals/snapshot.py` assemble_market_snapshot); S5.2 rewritten as wiring-only.
-  Touched signals_tasks.md, signals_stories.md, docs/plan/README.md. No SHA (uncommitted at log time).
-- [2026-09-07] signals/ S5.1 — added config/signals.toml (thresholds + grok/gpt4o/gemini provider sub-tables)
-  and extended .env.example with signals pipeline block (OPENROUTER/XAI/GOOGLE_AI keys, SIGNAL_PROVIDERS,
-  SIGNAL_MIN_CONFIDENCE + Phase 1/2 token checklist; .env.example local-only). SHA: 80edf53
-- [2026-09-07] signals/ S4.1 — added build_providers factory: canonical-order (grok,gpt4o,gemini) env-driven
-  selection, UPSTOX_ENV=test + empty-result fallback to MockSignalProvider, missing key → WARN+skip + 7 tests. SHA: 417cb5f
-- [2026-09-07] signals/ S3.4 — added GeminiSignalProvider: Phase 1 OpenRouter google/gemini-2.0-flash HTTP shim,
-  Phase 2 guarded google-generativeai SDK via asyncio.to_thread + wait_for timeout; failures → DataFetchError + 9 tests. SHA: 41254dc
+  + all impls (upstox_market async wrapper over get_ohlc_sync, upstox_live delegate, mock_client canned dict via set_ohlc) and `SignalStore.get_recent_snapshots(n)` (newest-first, n<=0 guard) + 6
+    tests. Prereqs for the S5.2c snapshot assembler. SKIP=mypy (7 pre-existing upstox_live.py errors). SHA: e1b5a0a
+- [2026-09-08] signals S5.2b split (docs-only) — the old combined S5.2b (get_ohlc/get_recent_snapshots prereqs + snapshot.py assembler) split into S5.2b (client `get_ohlc` across protocol + all 3
+  impls + `SignalStore.get_recent_snapshots` + tests) and S5.2c (`snapshot.py` assemble_market_snapshot), one commit each per Animesh. Touched signals_tasks.md, signals_stories.md,
+  docs/plan/README.md. No SHA.
+- [2026-09-08] signals S5.2a — built src/signals/market_inputs.py: fetch_gift_nifty (GLOBAL_INDEX|SGX NIFTY LTP), fetch_usd_inr (nearest-monthly NCD_FO USDINR future via InstrumentLookup),
+  fetch_fii_data (NSE fiidiiTradeReact cash-market net → FIIData); each raises DataFetchError on failure, no fallbacks + 9 offline tests. SHA: <pending>
+- [2026-09-07] signals/ S5.2 split (docs-only) — S5.2 needs gift_nifty / fii / usd_inr and the repo has no fetcher; Animesh's call: probe Upstox/Dhan/Nuvama APIs rather than scrape NSE or hard-code
+  defaults. Added S5.2a (persistent source-discovery spike `scratch/2026-09-07_signal_input_sources.py` + `src/signals/market_inputs.py`
+  + offline tests) and S5.2b (`src/signals/snapshot.py` assemble_market_snapshot); S5.2 rewritten as wiring-only. Touched signals_tasks.md, signals_stories.md, docs/plan/README.md. No SHA (uncommitted
+    at log time).
+- [2026-09-07] signals/ S5.1 — added config/signals.toml (thresholds + grok/gpt4o/gemini provider sub-tables) and extended .env.example with signals pipeline block (OPENROUTER/XAI/GOOGLE_AI keys,
+  SIGNAL_PROVIDERS, SIGNAL_MIN_CONFIDENCE + Phase 1/2 token checklist; .env.example local-only). SHA: 80edf53
+- [2026-09-07] signals/ S4.1 — added build_providers factory: canonical-order (grok,gpt4o,gemini) env-driven selection, UPSTOX_ENV=test + empty-result fallback to MockSignalProvider, missing key →
+  WARN+skip + 7 tests. SHA: 417cb5f
+- [2026-09-07] signals/ S3.4 — added GeminiSignalProvider: Phase 1 OpenRouter google/gemini-2.0-flash HTTP shim, Phase 2 guarded google-generativeai SDK via asyncio.to_thread + wait_for timeout;
+  failures → DataFetchError + 9 tests. SHA: 41254dc
 - [2026-09-07] signals/ S3.3 — added GrokSignalProvider: use_openrouter flag picks OpenRouter x-ai/grok-3 (P1) vs xAI direct grok-3 +search (P2); reuses gpt4o POST+parse + 8 tests. SHA: 2b04546
 - [2026-09-07] signals/ S3.2 — added GPT4oSignalProvider: aiohttp POST to OpenRouter chat completions, parse JSON → SignalResponse, HTTP/timeout/parse failures → DataFetchError + 7 tests. SHA: 12ba97a
 - [2026-09-07] signals/ S3.1 — added MockSignalProvider: deterministic Protocol-compliant provider (fixed direction/confidence/strike_offset), never raises + 5 tests. SHA: 1d5fbbd
-- [2026-09-07] signals/ S2.2 — added SignalStore read methods: get_snapshot (model_validate_json), get_responses, get_signal
-  (rebuilds responses from signal_responses), get_outcome, get_all_outcomes (optional from_date/to_date/phase via parameterised WHERE) + 8 tests. SHA: fc4a8d4
-- [2026-09-07] signals/ S2.1 — added SignalStore: init_db (4 tables + 2 indexes, idempotent) + write methods
-  record_snapshot/response/signal/outcome with model→schema column mapping, Decimal→TEXT, INSERT OR IGNORE for responses + 9 tests. SHA: 2aa5979
+- [2026-09-07] signals/ S2.2 — added SignalStore read methods: get_snapshot (model_validate_json), get_responses, get_signal (rebuilds responses from signal_responses), get_outcome, get_all_outcomes
+  (optional from_date/to_date/phase via parameterised WHERE) + 8 tests. SHA: fc4a8d4
+- [2026-09-07] signals/ S2.1 — added SignalStore: init_db (4 tables + 2 indexes, idempotent) + write methods record_snapshot/response/signal/outcome with model→schema column mapping, Decimal→TEXT,
+  INSERT OR IGNORE for responses + 9 tests. SHA: 2aa5979
 - [2026-09-07] signals/ S1.3 — added SignalAggregator: strike/confidence validation, direction voting, Decimal confidence gate, modal strike with ATM tie-break + 10 tests. SHA: 4c5e7e6
 - [2026-09-07] signals/ S1.2 — added SignalProvider protocol and build_prompt pure function with gpt4o, grok, and gemini suffixes + tests. SHA: 6ea9028
 - [2026-09-07] signals/ S1.1 — added signals data models, Direction, MarketSnapshot, SignalResponse, DailySignal, SignalOutcome. SHA: 8d295c6
-- [2026-09-07] `signals/` unblocked — moved out of `docs/plan/README.md` "Blocked / Later Stories" to an active parallel track (Feature Backlog #8, was
-  #10). Verified zero `src/backtest/` dependency: self-contained `src/signals/` package, own SQLite tables, S5.4 baseline is a coin flip not shared stats.
-  Runs alongside `backtest-engine`. `OPENROUTER_API_KEY` gates only the live S5.2 cron. `signals-eval-core/` stays blocked (it's mechanical-strategy
-  backtest validation, not LLM-signal work). DECISIONS.md entry added under §Strategy & Research Decisions. Next: S1.1.
-- [2026-09-07] `ic-yearly-expiry-fix/` WG-1 shipped — `IronCondorV1.check_signals` now emits `ic_nifty_v1.leg_greeks` (INFO) per short leg with tick-time
-  delta/abs_delta/gamma/theta/vega/iv/ltp + warn/stop thresholds, so the Greeks behind a DELTA_WARN/DELTA_STOP decision are recoverable from `logs/` (the
-  2026-07-08 0.25→0.09 discrepancy had no such record). Weekly Parquet bucket — WG-1's primary fix — already landed in `a38e53f`. Story folder complete;
-  removed from Feature Backlog. 2 tests.
+- [2026-09-07] `signals/` unblocked — moved out of `docs/plan/README.md` "Blocked / Later Stories" to an active parallel track (Feature Backlog #8, was #10). Verified zero `src/backtest/` dependency:
+  self-contained `src/signals/` package, own SQLite tables, S5.4 baseline is a coin flip not shared stats. Runs alongside `backtest-engine`. `OPENROUTER_API_KEY` gates only the live S5.2 cron.
+  `signals-eval-core/` stays blocked (it's mechanical-strategy backtest validation, not LLM-signal work). DECISIONS.md entry added under §Strategy & Research Decisions. Next: S1.1.
+- [2026-09-07] `ic-yearly-expiry-fix/` WG-1 shipped — `IronCondorV1.check_signals` now emits `ic_nifty_v1.leg_greeks` (INFO) per short leg with tick-time delta/abs_delta/gamma/theta/vega/iv/ltp +
+  warn/stop thresholds, so the Greeks behind a DELTA_WARN/DELTA_STOP decision are recoverable from `logs/` (the 2026-07-08 0.25→0.09 discrepancy had no such record). Weekly Parquet bucket — WG-1's
+  primary fix — already landed in `a38e53f`. Story folder complete; removed from Feature Backlog. 2 tests.
 - [2026-09-07] `eod-pt-summary/` PT-3 — docs close. CONTEXT.md (`792fa79`) / DECISIONS.md §P&L & Reporting / TODOS.md log lines already landed piecemeal with PT-1/PT-2; this pass filled the PT-2
-  closing SHA (`77dc160`) into `tasks.md` + the PT-2 log line, refreshed the `docs/plan/README.md` Active-Stories row to ✅ Shipped, and marked `scratch/2026-08-13_eod_pt_summary.py` SUPERSEDED.
-  Epic `eod-pt-summary/` complete (PT-1..PT-3); folder archived to `docs/archive/plan/eod-pt-summary/`. Docs-only. SHA: dac18ea
+  closing SHA (`77dc160`) into `tasks.md` + the PT-2 log line, refreshed the `docs/plan/README.md` Active-Stories row to ✅ Shipped, and marked `scratch/2026-08-13_eod_pt_summary.py` SUPERSEDED. Epic
+  `eod-pt-summary/` complete (PT-1..PT-3); folder archived to `docs/archive/plan/eod-pt-summary/`. Docs-only. SHA: dac18ea
 - [2026-09-07] `eod-pt-summary/` PT-2 — promoted `scratch/2026-08-13_eod_pt_summary.py` to `src/reporting/eod_pt_summary.py` (new package) + thin cron `scripts/eod_pt_summary.py`, 17 tests in
-  `tests/unit/reporting/test_eod_pt_summary.py`. Function boundaries unchanged from the validated prototype; `escape_markdown` swapped to `src/notifications/markdown.py`, local `LtpProvider`
-  Protocol for the broker surface, no-`LOT_SIZE` P&L regression-tested. Coordination question resolved with Animesh: runs **alongside** `scripts/eod_summary.py`, not a replacement (DECISIONS.md
-  §P&L & Reporting). `code-reviewer`: 1 ERROR + 5 WARNING all fixed. Next: PT-3 (docs close). SHA: 77dc160
-- [2026-09-06] `eod-pt-summary/` PT-1 — captured the confirmed 3-message Telegram-split spec (open positions / Closed Today / Strategy P&L·Ann.% on Margin) in `stories.md` as the reference for
-  PT-2: full column/format derivation, CE/PE-last instrument label, the 3-Track + `STRATEGY_OVERLAY` strategy_name traps, no-`LOT_SIZE` P&L formula, MarkdownV2 fence + `_PART_EMOJI` map, non-fatal
-  send contract, CLI surface. Fixed a drift in the draft spec (message 3 is open-positions-only, not "open and/or closed"). Docs-only. SHA: d1ae760
+  `tests/unit/reporting/test_eod_pt_summary.py`. Function boundaries unchanged from the validated prototype; `escape_markdown` swapped to `src/notifications/markdown.py`, local `LtpProvider` Protocol
+  for the broker surface, no-`LOT_SIZE` P&L regression-tested. Coordination question resolved with Animesh: runs **alongside** `scripts/eod_summary.py`, not a replacement (DECISIONS.md §P&L &
+  Reporting). `code-reviewer`: 1 ERROR + 5 WARNING all fixed. Next: PT-3 (docs close). SHA: 77dc160
+- [2026-09-06] `eod-pt-summary/` PT-1 — captured the confirmed 3-message Telegram-split spec (open positions / Closed Today / Strategy P&L·Ann.% on Margin) in `stories.md` as the reference for PT-2:
+  full column/format derivation, CE/PE-last instrument label, the 3-Track + `STRATEGY_OVERLAY` strategy_name traps, no-`LOT_SIZE` P&L formula, MarkdownV2 fence + `_PART_EMOJI` map, non-fatal send
+  contract, CLI surface. Fixed a drift in the draft spec (message 3 is open-positions-only, not "open and/or closed"). Docs-only. SHA: d1ae760
 - [2026-09-06] `telegram-ic-comparison-formatting/` — archived as superseded → `docs/archive/plan/telegram-ic-comparison-formatting/`. TGFMT-1 stays shipped history (`a69d817`); TGFMT-2..9 fully
   absorbed by the now-archived `telegram-markdown-migration/` (Legs row + Bkd/Flt split landed as ROLL-2c `a2fbe31`). `docs/plan/README.md` row → pointer; detail in `TODOS_ARCHIVE.md`. Docs-only.
-- [2026-09-06] ROLL-5 — docs close: `telegram-markdown-migration/` epic complete and archived → `docs/archive/plan/telegram-markdown-migration/`. All three sub-stories done: `backbone/`
-  (`57c1c3c`), `formatting-rules/` (`75cc123`), `strategy-rollout/` (ROLL-0..17). CONTEXT.md / DECISIONS.md / `docs/plan/README.md` updated; Feature Backlog item removed. Docs-only. SHA: b55773d
-- [2026-09-06] ROLL-17 — unify IC entry v1/v2 onto `src/notifications/ic_entry_message.py` fenced-table renderer; v2's bare `{strike}PE` label violation fixed; `ivr`/`dte`/`spot`/`net_credit`
-  made required per `@code-reviewer` — 26527c2
+- [2026-09-06] ROLL-5 — docs close: `telegram-markdown-migration/` epic complete and archived → `docs/archive/plan/telegram-markdown-migration/`. All three sub-stories done: `backbone/` (`57c1c3c`),
+  `formatting-rules/` (`75cc123`), `strategy-rollout/` (ROLL-0..17). CONTEXT.md / DECISIONS.md / `docs/plan/README.md` updated; Feature Backlog item removed. Docs-only. SHA: b55773d
+- [2026-09-06] ROLL-17 — unify IC entry v1/v2 onto `src/notifications/ic_entry_message.py` fenced-table renderer; v2's bare `{strike}PE` label violation fixed; `ivr`/`dte`/`spot`/`net_credit` made
+  required per `@code-reviewer` — 26527c2
 - [2026-09-06] ROLL-17 workshop — closed all design decisions for the IC entry v1/v2 unification: fenced `build_leg_table()` renderer, `[S]`/`[B]` badge, strike+PE/CE identity, entry price on all
-  legs, `IVR DTE Nifty Exp` kv row, `Net credit: X/lot x65 = Y`, `IC v1/v2 Entry` headline. Spec in `strategy-rollout/stories.md`; ref
-  `scratch/2026-09-06_ic_entry_confirmation_format.py`. Docs + scratch only — implementation is a follow-on session.
+  legs, `IVR DTE Nifty Exp` kv row, `Net credit: X/lot x65 = Y`, `IC v1/v2 Entry` headline. Spec in `strategy-rollout/stories.md`; ref `scratch/2026-09-06_ic_entry_confirmation_format.py`. Docs +
+  scratch only — implementation is a follow-on session.
 - [2026-09-06] ROLL-16 — migrate production proxy delta CRITICAL alert to MarkdownV2 (shared `build_proxy_critical_alert`); guard-integrity follow-up — e5efb8f, 35c17e5
 - [2026-09-06] audit finding ROLL-15 — split base-expiry Telegram alert into summary + logged commands — 3855f8f
-- [2026-09-08] BUG-040 B040.2–B040.5 — signals prev-session OHLC now sourced from the Upstox v2 historical-candle
-  day endpoint (`get_historical_candles_sync` in `upstox_market.py`, delegated from `upstox_live.py`);
-  `_fetch_prev_ohlc` rewritten with a strict-before-`trade_date` guard. Antigravity handoff `50a5ce4` landed
-  red (mangled signature, bypassed review); Claude fixup corrected it + cleared 2 `@code-reviewer` ERRORs.
-  3322 tests green. B040.6 manual `morning_signal` run blocked on live host. SHA: `680778b`
-- [2026-09-08] BUG-040 follow-up — `scripts/morning_signal.py` now logs one structured line per LLM
-  response (`morning_signal.provider_response`), a `providers_dispatched` count, and a
-  `no_valid_responses` warning; new `tests/unit/scripts/test_morning_signal.py` (first tests for that
-  script). Live `morning_signal` run on 2026-09-08 verified the BUG-040 fix end-to-end (gpt4o
+- [2026-09-08] BUG-040 B040.2–B040.5 — signals prev-session OHLC now sourced from the Upstox v2 historical-candle day endpoint (`get_historical_candles_sync` in `upstox_market.py`, delegated from
+  `upstox_live.py`); `_fetch_prev_ohlc` rewritten with a strict-before-`trade_date` guard. Antigravity handoff `50a5ce4` landed red (mangled signature, bypassed review); Claude fixup corrected it +
+  cleared 2 `@code-reviewer` ERRORs. 3322 tests green. B040.6 manual `morning_signal` run blocked on live host. SHA: `680778b`
+- [2026-09-08] BUG-040 follow-up — `scripts/morning_signal.py` now logs one structured line per LLM response (`morning_signal.provider_response`), a `providers_dispatched` count, and a
+  `no_valid_responses` warning; new `tests/unit/scripts/test_morning_signal.py` (first tests for that script). Live `morning_signal` run on 2026-09-08 verified the BUG-040 fix end-to-end (gpt4o
   responded NEUTRAL/conf 3 → NO_TRADE; prev-OHLC sourced correctly from historical-candle). SHA: `8459604`
 
-- [2026-09-08] BUG-041 B041.3 — all three OpenRouter signal providers now read the response body
-  before the status check and put its text (≤500 chars) into the `DataFetchError`, so
-  `morning_signal.provider_error` names the real OpenRouter reason instead of a bare `HTTP 404`/`400`;
-  non-JSON envelope and `UnicodeDecodeError` also surface as `DataFetchError`. Per-provider tests for
-  error-body capture + non-JSON envelope; `@code-reviewer` 0 CRITICAL/ERROR, WARNINGs resolved. 3340
-  tests green. SHA: `5bdd18c`
+- [2026-09-08] BUG-041 B041.3 — all three OpenRouter signal providers now read the response body before the status check and put its text (≤500 chars) into the `DataFetchError`, so
+  `morning_signal.provider_error` names the real OpenRouter reason instead of a bare `HTTP 404`/`400`; non-JSON envelope and `UnicodeDecodeError` also surface as `DataFetchError`. Per-provider tests
+  for error-body capture + non-JSON envelope; `@code-reviewer` 0 CRITICAL/ERROR, WARNINGs resolved. 3340 tests green. SHA: `5bdd18c`
 
-- [2026-09-08] BUG-041 B041.4 — `SIGNAL_MIN_CONFIDENCE` / `SIGNAL_CONSENSUS_REQUIRED` now wired
-  through new `src/signals/factory.build_aggregator(env)` (shared `_int_env` helper, blank/invalid
-  → default + warning) into `SignalAggregator`; `scripts/morning_signal.py` calls it instead of a
-  bare `SignalAggregator()`. 3 factory tests + mock-target rename. 3343 tests green; `@code-reviewer`
-  0 CRITICAL/ERROR. SHA: `1e36c32`
+- [2026-09-08] BUG-041 B041.4 — `SIGNAL_MIN_CONFIDENCE` / `SIGNAL_CONSENSUS_REQUIRED` now wired through new `src/signals/factory.build_aggregator(env)` (shared `_int_env` helper, blank/invalid →
+  default + warning) into `SignalAggregator`; `scripts/morning_signal.py` calls it instead of a bare `SignalAggregator()`. 3 factory tests + mock-target rename. 3343 tests green; `@code-reviewer` 0
+  CRITICAL/ERROR. SHA: `1e36c32`
 
 Full forensic log (SHAs, bug numbers, root-cause detail) moved to [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md) — most recently during the 2026-08-26 reorg (everything from 2026-08-01
 through 2026-08-26, plus item 29's inline design history above). Add new entries there going forward, or start a fresh dated section here if this file's Session Log grows large again.
 
-- **2026-09-07** — `docs/plan/signals/` S1.1a shipped: `FIIData` redefined from index-F&O
-  positioning (`net_futures_cr`/`net_options_cr` — unreachable per S5.2a spike) to cash-market
-  net flows (`fii_cash_net_cr`/`dii_cash_net_cr`, NSE `fiidiiTradeReact`). `src/signals/models.py`
-  + `prompt.py` + 8 signals test files. Split out of S5.2a per Animesh. 77 signals tests green.
-  SHA: `<pending>`. Next: S5.2b (`snapshot.py`).
-- **2026-09-06** — `docs/plan/telegram-markdown-migration/strategy-rollout/` ROLL-14 shipped: 3-track overlay entry
-  bootstrap notification migrated to MarkdownV2 kv format. SHA: `129d54e`. Next: ROLL-15.
+- **2026-09-07** — `docs/plan/signals/` S1.1a shipped: `FIIData` redefined from index-F&O positioning (`net_futures_cr`/`net_options_cr` — unreachable per S5.2a spike) to cash-market net flows
+  (`fii_cash_net_cr`/`dii_cash_net_cr`, NSE `fiidiiTradeReact`). `src/signals/models.py`
+  + `prompt.py` + 8 signals test files. Split out of S5.2a per Animesh. 77 signals tests green. SHA: `<pending>`. Next: S5.2b (`snapshot.py`).
+- **2026-09-06** — `docs/plan/telegram-markdown-migration/strategy-rollout/` ROLL-14 shipped: 3-track overlay entry bootstrap notification migrated to MarkdownV2 kv format. SHA: `129d54e`. Next:
+  ROLL-15.
 - **2026-09-06** — `docs/plan/telegram-markdown-migration/strategy-rollout/` ROLL-13 shipped: 3-track base entry notification migrated to MarkdownV2 kv format. SHA: `7adf484`. Next: ROLL-14.
 - **2026-09-02** — `docs/plan/token-efficiency/fixed-overhead/` FIX-3: `session-close` now runs as a fresh `general-purpose` subagent reading the transcript by path, never a `fork` clone. Measured
   ~55% drop (116,375 → 52,523 tokens) on a matched session; fork's median cost across 9 sessions was ~254K. SHA: `03d991f`.
@@ -381,9 +311,9 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
 ### 2026-09-09
 - **S5.6 completed.** Real entry premium fetch implemented and plugged into the 09:15 signal formatter and outcome P&L calculator; strike selection pinned to monthly option. (SHA `402db00`).
 
-- **Logged BUG-042** — `721daf9`'s unconditional MarkdownV2 switch broke every unmigrated `TelegramNotifier` cron caller (CC/PP entry, paper snapshot, monitor daemon, pre-market brief);
-  silent `400 Bad Request` on every send since 2026-08-25. Same root cause as BUG-039 (which fixed `daily_snapshot.py` only). Full entry + fix options in `docs/bugs/bugs.md`, checklist B042.1–B042.7
-  in `docs/bugs/task.md`. Diagnostic only — CC positions still record to DB, only notifications lost. Docs-only.
+- **Logged BUG-042** — `721daf9`'s unconditional MarkdownV2 switch broke every unmigrated `TelegramNotifier` cron caller (CC/PP entry, paper snapshot, monitor daemon, pre-market brief); silent `400
+  Bad Request` on every send since 2026-08-25. Same root cause as BUG-039 (which fixed `daily_snapshot.py` only). Full entry + fix options in `docs/bugs/bugs.md`, checklist B042.1–B042.7 in
+  `docs/bugs/task.md`. Diagnostic only — CC positions still record to DB, only notifications lost. Docs-only.
 
 ### 2026-09-02
 
@@ -699,6 +629,6 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
   `build_healthcheck_alert()` colocated in `healthcheck.py`. 8 new tests, 6 updated. `strategy-rollout/` next: ROLL-12.
 - [2026-09-03] ROLL-12 shipped (`b3bf77a`, `a083fba`, `ecb7d0b`) — position health check alert (`position_health_check.py`) → MarkdownV2 grouped-by-finding-type format; refactored
   `run_position_checks()` → `list[PositionFinding]` (frozen dataclass); colocated `build_position_health_message()` in `src/notifications/formatting.py`. `strategy-rollout/` next: ROLL-13.
-- [2026-09-09] MVP story — reframed from price-vs-target watch to capital-deployment sim (`eaa05de`, docs only). Locked: fixed 6% tranche ladder (25% each at 0/−6/−12/−18%),
-  tipster SL ignored, −30%-on-deployed-capital hard stop. Open questions (whole-share rounding, cost bps, NIFTY benchmark alpha, time stop, portfolio mode, M-A lump-sum phasing,
-  schema council) recorded at top of `docs/plan/mvp/mvp_tasks.md`; M1/M2/M4 need rewrite before implementation. Not started.
+- [2026-09-09] MVP story — reframed from price-vs-target watch to capital-deployment sim (`eaa05de`, docs only). Locked: fixed 6% tranche ladder (25% each at 0/−6/−12/−18%), tipster SL ignored,
+  −30%-on-deployed-capital hard stop. Open questions (whole-share rounding, cost bps, NIFTY benchmark alpha, time stop, portfolio mode, M-A lump-sum phasing, schema council) recorded at top of
+  `docs/plan/mvp/mvp_tasks.md`; M1/M2/M4 need rewrite before implementation. Not started.
