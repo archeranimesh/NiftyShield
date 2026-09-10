@@ -690,3 +690,71 @@ def build_position_health_message(findings: list[PositionFinding]) -> str:
         lines.pop()
 
     return "\n".join(lines)
+
+
+# --- SPT-3: shared flat position table (promotion of eod_pt_summary._render_table) ---
+# One builder for the EOD PT summary (open + closed-today tables) and the
+# signals-paper-track entry / exit messages. Money cells are 2dp, no ₹ — the
+# EOD PT override registered in FORMATTING.md §5. Callers pre-format every data
+# cell; this builder only formats the TOTAL row's P&L. Does not add its own
+# fence (same convention as build_leg_table).
+
+
+def build_position_table(
+    rows: list[tuple[str, ...]],
+    total_pnl: Decimal | None,
+    any_pnl_missing: bool,
+    title: str | None,
+    empty_message: str,
+    value_header: str = "LTP",
+) -> str:
+    """Render a flat 7-column table (Strategy/Instrument/Qty/Avg/<value>/P&L/Chg).
+
+    Strategy/Instrument are left-justified; the numeric columns right-justified.
+    Each row is a tuple whose first 7 elements are the formatted cell strings
+    (extra trailing elements — e.g. a raw ``Decimal`` P&L — are ignored). The
+    ``TOTAL`` row carries the summed P&L in the P&L column; pass
+    ``total_pnl=None`` to leave that cell blank (the entry message, where no
+    position has closed yet).
+
+    Args:
+        rows: Pre-formatted table rows; ``row[:7]`` are the cells.
+        total_pnl: Summed realised P&L for the TOTAL row, or ``None`` to blank it.
+        any_pnl_missing: Append a "(partial — some legs missing LTP)" note.
+        title: Heading line above the table (with a blank line after it), or
+            ``None`` to omit both — for embedding directly under a message's own
+            bold header inside a fence.
+        empty_message: When ``rows`` is empty, returns ``"<title> — <empty_message>"``
+            (or just ``empty_message`` when ``title`` is ``None``).
+        value_header: Header for the 5th column (``"LTP"`` / ``"Exit"``).
+
+    Returns:
+        The rendered table as a plain string (no fence).
+    """
+    if not rows:
+        return f"{title} — {empty_message}" if title is not None else empty_message
+
+    headers = ("Strategy", "Instrument", "Qty", "Avg", value_header, "P&L", "Chg")
+    right_align = (False, False, True, True, True, True, True)
+    total_pnl_cell = f"{total_pnl:,.2f}" if total_pnl is not None else ""
+    total_row = ("", "TOTAL", "", "", "", total_pnl_cell, "")
+
+    display_rows = [row[:7] for row in rows] + [total_row]
+    widths = [max(len(headers[i]), *(len(r[i]) for r in display_rows)) for i in range(len(headers))]
+
+    def _line(cells: tuple[str, ...]) -> str:
+        return "  ".join(
+            cells[i].rjust(widths[i]) if right_align[i] else cells[i].ljust(widths[i])
+            for i in range(len(cells))
+        )
+
+    sep = _line(tuple("-" * w for w in widths))
+    lines = [title, "", _line(headers), sep] if title is not None else [_line(headers), sep]
+    lines.extend(_line(row[:7]) for row in rows)
+    lines.append(sep)
+    lines.append(_line(total_row))
+    if any_pnl_missing:
+        lines.append("")
+        lines.append("(partial — some legs missing LTP)")
+
+    return "\n".join(lines)

@@ -27,7 +27,7 @@ rot them.
 6. **Options Income strategy** — `docs/plan/options_income/` — next **S0** (data audit).
 7. **Backtest Engine** — `docs/plan/backtest-engine/` (`phase1..4/`) — next **1.3a / 1.4** (parallel, `phase1/`). Four chained phases; each phase's GATE task blocks the next dir. Gated on
    `variance-gate`. `BACKTEST_PLAN_PHASE1.md` is the canonical spec; the phase dirs are thin status pointers.
-8. **signals-paper-track** — `docs/plan/signals-paper-track/` — SPT-1..2a done; next **SPT-3** (entry executor + `signal_track_v1` strategy). Turns the
+8. **signals-paper-track** — `docs/plan/signals-paper-track/` — SPT-1..3 done; next **SPT-4** (30 s monitor registration + per-tick `paper_signal_marks`). Turns the
     `signals/` consensus into a paper-traded strategy: auto-enter a long monthly option (next-month roll at 14 DTE), fixed SL −30 % / target +50 %, exit or 15:00 square-off, full mark-path log,
     6-month G1–G9 go-live gate. Ruling: `paper_signal_track_v1` `PaperStrategy` on the shared engine + pure `src/strategy/signal_exit.py`; Phase 1 fixed-only. Supersedes `signals/` S5.5a.
 9. **backtest-eval-core** — `docs/plan/backtest-eval-core/` — next **B1.1**. Blocked until `backtest-engine` tasks 1.3 + 1.4 land.
@@ -143,6 +143,13 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-10] signals-paper-track **SPT-3** — entry executor. New `src/strategy/signal_exit.py` (`SL_PCT` / `TGT_PCT` / `RULESET_VERSION` / `derive_levels` — the constants half; SPT-5 adds
+  `evaluate`) and `src/strategy/signal_track_v1.py` (`open_signal_paper_entry` async hook: `DailySignal` → `resolve_monthly_option` → own option-chain bid/ask fetch → `PaperFillSimulator` BUY fill →
+  frozen `SignalPaperEntry` → Telegram entry message; `SignalTrackV1` `PaperStrategy` shell, tick left as a no-op for SPT-4). `PaperStore.record_signal_open_leg` added (returns the opening BUY
+  `paper_trades.id`, which no existing store method exposed). `eod_pt_summary._render_table` promoted to `src/notifications/formatting.py::build_position_table` (public, `title=None` for the
+  fence-embedded case) — `eod_pt_summary` repointed, behaviour-preserving. Tests: `test_signal_exit.py`, `test_signal_track_v1.py` (new); additions to `test_signal_store.py`, `test_formatting.py`,
+  `test_escaping_guard.py` (L295 baseline — builder owns escaping, same shape as `morning_signal` L282). `code-reviewer`: 0 CRITICAL / 2 ERROR (both missing type hints — fixed) / 3 WARNING (deferred).
+  Commit `<pending>`. Next: SPT-4.
 - [2026-09-10] Loose-ends cleanup after SPT-2. Filed **BUG-045** (`6677f13`) — `src/notifications/formatting.py` position-health helpers pass `PositionFinding` `Optional` fields into
   `date.fromisoformat` / `format_option_label` / a `sorted` key with no narrowing; latent since 2026-09-03, surfaced because the mypy pre-commit hook (`^src/(client|paper)/`) follows imports into
   `formatting.py` and SPT-2 was the first `src/paper` commit since — blocks every `src/paper`/`src/client` commit's mypy gate (SPT-2 used `SKIP=mypy`). Filed **BUG-046** (`6677f13`) — 3

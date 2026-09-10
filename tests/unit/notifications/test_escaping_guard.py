@@ -263,6 +263,13 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "value, literal * for bold), but this guard only inspects the immediate enclosing "
         "function (run), not the builder it calls — same shape as the scripts/eod_summary.py:200 entry"
     ),
+    ("src/strategy/signal_track_v1.py", 295): (
+        "SPT-3 — value is fully escaped inside the callee build_signal_entry_message() "
+        "(the message-builder owns the MarkdownV2 boundary: escape_markdown() per dynamic "
+        "value + literal * for bold, fenced table content passed through verbatim), but "
+        "this guard only inspects the immediate enclosing function (open_signal_paper_entry), "
+        "not the builder it calls — same shape as the scripts/morning_signal.py:282 entry"
+    ),
     ("scripts/strategies/three_track/paper_3track_snapshot.py", 2064): (
         "heuristic limitation, not a real gap - value is escaped inside the callee "
         "_build_recovery_digest() (MD-4.2 scope) but this guard only inspects the "

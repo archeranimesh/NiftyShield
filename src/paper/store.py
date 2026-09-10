@@ -2097,6 +2097,65 @@ class PaperStore:
     # Signals paper track (paper_signal_track_v1) — SPT-2
     # ------------------------------------------------------------------
 
+    def record_signal_open_leg(self, trade: PaperTrade) -> int:
+        """Record the opening BUY leg of a signals-paper-track position; return its id.
+
+        ``record_trade`` is idempotent but returns only a bool — the SPT-3 entry
+        executor needs the ``paper_trades.id`` to freeze the matching
+        ``paper_signal_entries`` row via :meth:`open_signal_entry`. On an
+        exact-duplicate re-run (same strategy/leg/instrument/date/action) the
+        existing row's id is returned instead of a new insert.
+
+        Args:
+            trade: The opening BUY paper trade. ``strategy_name`` must carry the
+                ``paper_`` prefix (enforced by ``PaperTrade``); the caller is
+                responsible for it being the signals-track name.
+
+        Returns:
+            The ``paper_trades.id`` of the opening BUY leg.
+
+        Raises:
+            ValueError: If the row can neither be inserted nor found afterwards.
+        """
+        with _connect(self.db_path) as conn:
+            cur = conn.execute(
+                """INSERT INTO paper_trades
+                   (strategy_name, leg_role, instrument_key, trade_date,
+                    action, quantity, price, notes, ivr_at_entry, state)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(strategy_name, leg_role, instrument_key, trade_date, action)
+                   DO NOTHING""",
+                (
+                    trade.strategy_name,
+                    trade.leg_role,
+                    trade.instrument_key,
+                    trade.trade_date.isoformat(),
+                    trade.action.value,
+                    trade.quantity,
+                    str(trade.price),
+                    trade.notes,
+                    trade.ivr_at_entry,
+                    trade.state.value,
+                ),
+            )
+            if cur.rowcount == 1 and cur.lastrowid is not None:
+                return cur.lastrowid
+            row = conn.execute(
+                """SELECT id FROM paper_trades
+                   WHERE strategy_name = ? AND leg_role = ? AND instrument_key = ?
+                     AND trade_date = ? AND action = ?""",
+                (
+                    trade.strategy_name,
+                    trade.leg_role,
+                    trade.instrument_key,
+                    trade.trade_date.isoformat(),
+                    trade.action.value,
+                ),
+            ).fetchone()
+        if row is None:
+            raise ValueError("record_signal_open_leg: row neither inserted nor found")
+        return int(row["id"])
+
     def open_signal_entry(self, entry: SignalPaperEntry) -> None:
         """Freeze the entry metadata for one signals-paper-track position.
 

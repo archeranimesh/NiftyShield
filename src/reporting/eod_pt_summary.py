@@ -36,6 +36,7 @@ import structlog
 
 from src.instruments.lookup import InstrumentLookup, parse_expiry
 from src.models.portfolio import TradeAction
+from src.notifications.formatting import build_position_table
 from src.notifications.markdown import escape_markdown
 from src.paper.constants import STRATEGY_OVERLAY
 from src.paper.models import PaperPosition
@@ -442,50 +443,6 @@ def _collect_closed_rows(
     return rows, total_pnl
 
 
-def _render_table(
-    rows: list[_Row],
-    total_pnl: Decimal,
-    any_pnl_missing: bool,
-    title: str,
-    empty_message: str,
-    value_header: str = "LTP",
-) -> str:
-    """Render a flat 7-column table (Strategy/Instrument/Qty/Avg/<value>/P&L/Chg).
-
-    Shared by the open-positions table (``value_header="LTP"``) and the
-    closed-today table (``value_header="Exit"``). Strategy/Instrument are
-    left-justified; the numeric columns right-justified. A ``TOTAL`` row carries
-    the summed P&L in the P&L column only. When ``rows`` is empty, returns
-    ``"<title> — <empty_message>"``.
-    """
-    if not rows:
-        return f"{title} — {empty_message}"
-
-    headers = ("Strategy", "Instrument", "Qty", "Avg", value_header, "P&L", "Chg")
-    right_align = (False, False, True, True, True, True, True)
-    total_row = ("", "TOTAL", "", "", "", _fmt_money(total_pnl), "")
-
-    display_rows = [row[:7] for row in rows] + [total_row]
-    widths = [max(len(headers[i]), *(len(r[i]) for r in display_rows)) for i in range(len(headers))]
-
-    def _line(cells: tuple[str, ...]) -> str:
-        return "  ".join(
-            cells[i].rjust(widths[i]) if right_align[i] else cells[i].ljust(widths[i])
-            for i in range(len(cells))
-        )
-
-    sep = _line(tuple("-" * w for w in widths))
-    lines = [title, "", _line(headers), sep]
-    lines.extend(_line(row[:7]) for row in rows)
-    lines.append(sep)
-    lines.append(_line(total_row))
-    if any_pnl_missing:
-        lines.append("")
-        lines.append("(partial — some legs missing LTP)")
-
-    return "\n".join(lines)
-
-
 def _render_summary(
     store: PaperStore,
     strategy_meta: dict[str, _StrategyMeta],
@@ -577,7 +534,7 @@ async def build_summary_parts(
     """
     rows, total_pnl, any_pnl_missing, strategy_meta = await _collect_rows(store, broker, lookup)
     parts = [
-        _render_table(
+        build_position_table(
             rows,
             total_pnl,
             any_pnl_missing,
@@ -589,7 +546,7 @@ async def build_summary_parts(
     closed_rows, closed_total_pnl = _collect_closed_rows(store, lookup, snap_date)
     if closed_rows:
         parts.append(
-            _render_table(
+            build_position_table(
                 closed_rows,
                 closed_total_pnl,
                 any_pnl_missing=False,

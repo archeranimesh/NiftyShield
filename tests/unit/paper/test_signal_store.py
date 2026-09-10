@@ -250,6 +250,47 @@ def test_get_entries_filters_by_signal_date(store: PaperStore) -> None:
     assert [e.signal_date for e in got] == [date(2026, 9, 10)]
 
 
+# ── record_signal_open_leg (SPT-3) ────────────────────────────────────────────
+
+
+def _open_leg_trade(day: date, key: str = _KEY) -> PaperTrade:
+    return PaperTrade(
+        strategy_name=STRATEGY_SIGNAL_TRACK,
+        leg_role=_LEG,
+        instrument_key=key,
+        trade_date=day,
+        action=TradeAction.BUY,
+        quantity=LOT_SIZE,
+        price=Decimal("40.25"),
+    )
+
+
+def test_record_signal_open_leg_returns_new_id(store: PaperStore) -> None:
+    trade = _open_leg_trade(date(2026, 9, 10))
+    tid = store.record_signal_open_leg(trade)
+    assert isinstance(tid, int)
+    with sqlite3.connect(store.db_path) as conn:
+        (n_rows,) = conn.execute("SELECT COUNT(*) FROM paper_trades").fetchone()
+        (stored_id,) = conn.execute(
+            "SELECT id FROM paper_trades WHERE instrument_key = ?", (_KEY,)
+        ).fetchone()
+    assert n_rows == 1
+    assert stored_id == tid
+    # the id round-trips into an entry row
+    store.open_signal_entry(_entry(tid))
+    assert store.get_open_signal_entry().trade_id == tid
+
+
+def test_record_signal_open_leg_idempotent_returns_same_id(store: PaperStore) -> None:
+    trade = _open_leg_trade(date(2026, 9, 10))
+    first = store.record_signal_open_leg(trade)
+    second = store.record_signal_open_leg(trade)
+    assert first == second
+    with sqlite3.connect(store.db_path) as conn:
+        (n_rows,) = conn.execute("SELECT COUNT(*) FROM paper_trades").fetchone()
+    assert n_rows == 1
+
+
 def test_close_sets_trade_state_closed(store: PaperStore) -> None:
     tid = _open_buy_row(store, day=date(2026, 9, 10), price="40.25")
     store.open_signal_entry(_entry(tid))

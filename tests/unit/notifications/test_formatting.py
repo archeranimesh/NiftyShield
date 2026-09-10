@@ -9,6 +9,7 @@ from src.notifications.formatting import (
     build_compare_table,
     build_kv_table,
     build_leg_table,
+    build_position_table,
     build_side_by_side_kv_table,
     format_expiry,
     format_greek,
@@ -318,3 +319,47 @@ def test_strategy_short_label_happy_path():
 def test_strategy_short_label_unmapped_raises():
     with pytest.raises(ValueError, match="paper_made_up"):
         strategy_short_label("paper_made_up")
+
+
+# ── build_position_table (SPT-3 promotion of eod_pt_summary._render_table) ─────
+
+_PT_ROW = ("Signal", "NIFTY 23000 29 SEP 26 PE", "65", "39.52", "—", "—", "—")
+
+
+def test_build_position_table_with_title_and_total():
+    out = build_position_table(
+        [("CSP", "NIFTY 22000 PE", "65", "10.00", "8.00", "130.00", "+20.00%", Decimal("130"))],
+        total_pnl=Decimal("130"),
+        any_pnl_missing=False,
+        title="EOD PT Summary — 2026-09-10",
+        empty_message="no open positions.",
+    )
+    lines = out.splitlines()
+    assert lines[0] == "EOD PT Summary — 2026-09-10"
+    assert lines[1] == ""
+    assert lines[2].split() == ["Strategy", "Instrument", "Qty", "Avg", "LTP", "P&L", "Chg"]
+    assert lines[-1].split()[0] == "TOTAL"
+    assert "130.00" in lines[-1]
+
+
+def test_build_position_table_empty_with_title():
+    assert (
+        build_position_table([], Decimal("0"), False, "Closed Today", "nothing closed.")
+        == "Closed Today — nothing closed."
+    )
+
+
+def test_build_position_table_titleless_blank_total_for_entry_message():
+    out = build_position_table(
+        [_PT_ROW],
+        total_pnl=None,
+        any_pnl_missing=False,
+        title=None,
+        empty_message="",
+        value_header="Exit",
+    )
+    lines = out.splitlines()
+    # no title / blank line — starts straight at the header row
+    assert lines[0].split() == ["Strategy", "Instrument", "Qty", "Avg", "Exit", "P&L", "Chg"]
+    assert lines[-1].strip() == "TOTAL"  # P&L cell blank when total_pnl is None
+    assert "NIFTY 23000 29 SEP 26 PE" in out
