@@ -120,7 +120,7 @@ persistent residual — and which moneyness bands decay faster than theta alone 
 as three nullable columns on `signal_responses`, aggregated by `SignalStore.get_signal_cost()`, and shown as today's spend on the 09:30 message. Cost trustworthy from 2026-09-11.
 
 **`signals-paper-track/`** · 🔨 In progress · SPT-1..3 done (SPT-2 `58e0b08`; SPT-2a closed 2026-09-10 as a no-op — the `dte >= 14` floor in `get_expiry_candidates` already rolls to next-month,
-operator kept it; SPT-3 `<pending>` — `src/strategy/signal_track_v1.py` + `signal_exit.py` constants, `open_signal_paper_entry` async hook, `PaperStore.record_signal_open_leg`, shared
+operator kept it; SPT-3 `6b0dada` — `src/strategy/signal_track_v1.py` + `signal_exit.py` constants, `open_signal_paper_entry` async hook, `PaperStore.record_signal_open_leg`, shared
 `formatting.build_position_table`) · next: **SPT-4** (30 s monitor registration + per-tick `paper_signal_marks`). Turns the `signals/` consensus into a live paper-traded strategy: auto-enter the daily
 `DailySignal` as a long monthly option (near-month, rolled to next-month at 14 DTE), manage it intraday against a fixed SL −30 % / target +50 %, exit on a hit or square off by 15:00, log the full mark
 path, and record every entry + exit for a 6-month evaluation window that gates go-live. SPT-1 ruled 2026-09-09 (council q17,

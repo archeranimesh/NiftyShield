@@ -26,7 +26,7 @@ spec; `schema.md` is the sole DDL source.
   exposes the entry path as a plain `open_signal_paper_entry(signal, snapshot, broker, store)` callable (shared with SPT-6, no hardcoded level literals). Extract `_render_table` →
   `src/notifications/formatting.py::build_position_table`. As-built: `open_signal_paper_entry` is `async` (both callers already run in an event loop); the entry hook fetches its own option chain
   (`broker.get_option_chain` + `parse_upstox_option_chain`) for bid/ask rather than `find_option_leg`; `PaperStore.record_signal_open_leg` added to return the opening BUY `paper_trades.id`; the fenced
-  position table is `build_position_table(..., title=None)`. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: <pending>
+  position table is `build_position_table(..., title=None)`. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 6b0dada
 - [ ] **SPT-4** — Register `paper_signal_track_v1` with `StrategyMonitor` at 30 s per-strategy cadence; per-tick `paper_signal_marks` row (mark / MFE / MAE / stale / gap_event); hand tick to
   `signal_exit`. 90 s fallback + cadence-review trigger. | Owner: Claude | Model: claude-sonnet-5 | Review: greeks-analyst | SHA: <—>
 - [ ] **SPT-5** — Extend `src/strategy/signal_exit.py` (created in SPT-3 as the constants module) with the pure `evaluate(entry, mark, now) → TARGET | STOP_LOSS | TIME_EXIT | HOLD`

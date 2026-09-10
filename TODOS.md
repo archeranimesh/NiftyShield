@@ -149,7 +149,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
   `paper_trades.id`, which no existing store method exposed). `eod_pt_summary._render_table` promoted to `src/notifications/formatting.py::build_position_table` (public, `title=None` for the
   fence-embedded case) — `eod_pt_summary` repointed, behaviour-preserving. Tests: `test_signal_exit.py`, `test_signal_track_v1.py` (new); additions to `test_signal_store.py`, `test_formatting.py`,
   `test_escaping_guard.py` (L295 baseline — builder owns escaping, same shape as `morning_signal` L282). `code-reviewer`: 0 CRITICAL / 2 ERROR (both missing type hints — fixed) / 3 WARNING (deferred).
-  Commit `<pending>`. Next: SPT-4.
+  Commit `6b0dada`. Next: SPT-4.
 - [2026-09-10] Loose-ends cleanup after SPT-2. Filed **BUG-045** (`6677f13`) — `src/notifications/formatting.py` position-health helpers pass `PositionFinding` `Optional` fields into
   `date.fromisoformat` / `format_option_label` / a `sorted` key with no narrowing; latent since 2026-09-03, surfaced because the mypy pre-commit hook (`^src/(client|paper)/`) follows imports into
   `formatting.py` and SPT-2 was the first `src/paper` commit since — blocks every `src/paper`/`src/client` commit's mypy gate (SPT-2 used `SKIP=mypy`). Filed **BUG-046** (`6677f13`) — 3
