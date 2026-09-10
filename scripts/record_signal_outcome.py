@@ -244,6 +244,7 @@ def main() -> None:
         sys.exit(1)
 
     store = SignalStore(settings.db_path)
+    store.init_db()  # idempotent — applies any pending schema ALTERs to the live DB
     signal = store.get_signal(trade_date)
     if signal is None:
         print(f"ERROR: no signal recorded for {trade_date}.", file=sys.stderr)

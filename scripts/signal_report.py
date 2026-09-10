@@ -328,6 +328,7 @@ def main() -> None:
     to_date = _parse_date(args.to_date, "to")
 
     store = SignalStore(settings.db_path)
+    store.init_db()  # idempotent — applies any pending schema ALTERs to the live DB
     outcomes = store.get_all_outcomes(from_date=from_date, to_date=to_date, phase=args.phase)
     if not outcomes:
         print("No signal outcomes recorded for the requested window.")
