@@ -5,6 +5,9 @@
 > Finideas row in `portfolio.sqlite` — after Animesh decided (2026-09-10) the Finideas
 > product is not worth running.
 
+Sub-story 1 of the `portfolio-snapshot-slimdown/` epic. `/work` routes here via the epic
+`prompt.md`.
+
 Read `CONTEXT.md` and state `CONTEXT.md ✓` before anything else.
 Then read `tasks.md`, find the first unchecked `- [ ]`, and do **only** that task.
 Read that task's full spec in `stories.md` (same task id) before writing any code.
@@ -92,9 +95,10 @@ all-time `Total P&L` is recomputed without Finideas.
 - **FD-6** — Seed / example cleanup: `seed_trades.py`, `seed_mf_holdings.py`,
   `record_trade.py`, `roll_leg.py`, `instrument_lookup.py`, and the `LIQUIDBEES` /
   `finideas_ilts` dedup comments in `src/dhan/reader.py` + `src/nuvama/reader.py`.
-- **FD-7** — Docs close: `CONTEXT.md`, `REFERENCES.md`, `CONTEXT_TREE.md`, `DECISIONS.md`,
-  `src/portfolio/CLAUDE.md`, `src/portfolio/NOTES.md`, `docs/plan/README.md`, `TODOS.md`;
-  archive the folder.
+- **FD-7** — Sub-story docs close: `CONTEXT.md`, `REFERENCES.md`, `CONTEXT_TREE.md`,
+  `DECISIONS.md`, `src/portfolio/CLAUDE.md`, `src/portfolio/NOTES.md`, the epic `README.md`
+  Stories table, `TODOS.md` Session Log. No folder archive — the epic archives as a whole at
+  `dhan-holdings-removal/` DHR-4.
 
 ## Definition of done
 
@@ -104,8 +108,8 @@ paths) renders with no `Finideas P&L`, no `Derivatives` options line, no `🛡 H
 `finideas` / `finrakshak` / `ilts` / `HedgeStrategy` reference remains in `src/` or
 `scripts/` outside a historical-note context. `scripts/dev/decommission_finideas.py --apply`
 has removed every Finideas row from the four tables and `DB_REGISTRY.md` reflects the new
-counts. All unit tests green. Docs updated and the folder archived per §Conventions
-*Completion → archive*.
+counts. All unit tests green. Sub-story docs updated and its epic `README.md` Stories-table
+row flipped to ✅ (the epic folder is archived only after the last sub-story, DHR-4).
 
 ## Perspectives not covered
 

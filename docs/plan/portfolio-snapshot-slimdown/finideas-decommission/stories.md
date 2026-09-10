@@ -2,8 +2,11 @@
 
 > One task per session. Find the first unchecked item in `tasks.md`. That is your only task.
 > Full implementation rules in `CLAUDE.md` and `REVIEW.md`.
-> After each task: set `SHA:` on the task line + tick the box, update this story's status in
-> `docs/plan/README.md`, add one line to `TODOS.md`. See `docs/plan/README.md` §Conventions.
+> After each task: set `SHA:` on the task line + tick the box, flip this sub-story's row in
+> the epic `README.md` **Stories** table, add one line to `TODOS.md`. See
+> `docs/plan/README.md` §Conventions.
+
+Sub-story 1 of the `portfolio-snapshot-slimdown/` epic.
 
 History decision: **option A — hard-delete every Finideas row** (Animesh, 2026-09-10). No
 `schema.md`: FD-5 is a straight `DELETE` across existing tables, no new table.
@@ -239,11 +242,12 @@ behaviour.
 
 ---
 
-## FD-7 — Docs close
+## FD-7 — Sub-story docs close
 
 **Files to change:** `CONTEXT.md`, `REFERENCES.md`, `CONTEXT_TREE.md`, `DECISIONS.md`,
-`src/portfolio/CLAUDE.md`, `src/portfolio/NOTES.md`, `docs/plan/README.md`, `TODOS.md`.
-Targeted `Edit` only, never `Write`.
+`src/portfolio/CLAUDE.md`, `src/portfolio/NOTES.md`,
+`docs/plan/portfolio-snapshot-slimdown/README.md`, `TODOS.md`. Targeted `Edit` only, never
+`Write`. **No folder archive** — the whole epic archives at `dhan-holdings-removal/` DHR-4.
 
 **What to implement:**
 
@@ -260,13 +264,13 @@ Targeted `Edit` only, never `Write`.
 4. `DECISIONS.md` §"P&L & Reporting" (and a cross-ref line in §"daily_snapshot.py Design") —
    one dated row: Finideas product wound down; strategy-provider layer, options/hedge/ETF
    snapshot reporting, and all Finideas DB rows removed; history option A (hard delete)
-   chosen over export/archive; portfolio now MF + Nuvama bonds + Nuvama options + Dhan.
+   chosen over export/archive; portfolio snapshot now MF + Dhan + Nuvama bonds + Nuvama
+   options (Dhan is removed next by `dhan-holdings-removal/`).
 5. `src/portfolio/CLAUDE.md` + `NOTES.md` — remove Finideas/hedge invariants; note the
    strategy registry is now empty but the extension point (`register_strategy_type`) remains.
-6. `docs/plan/README.md` — collapse this story's `## Active Epics` entry to
-   `✅ Archived → docs/archive/plan/finideas-decommission/`.
-7. `TODOS.md` — delete the Feature Backlog line, append it to
-   `docs/archive/TODOS_ARCHIVE.md` under a dated heading; add a Session Log line.
-8. `git mv docs/plan/finideas-decommission docs/archive/plan/finideas-decommission`.
+6. `docs/plan/portfolio-snapshot-slimdown/README.md` — flip the `finideas-decommission/` row
+   in the **Stories** table to ✅ with the closing SHA.
+7. `TODOS.md` — add a Session Log line (the Feature Backlog line is the epic's, not this
+   sub-story's — it stays until DHR-4).
 
-One commit. **Commit:** `docs: close finideas-decommission (FD-1..7)`
+One commit. **Commit:** `docs: close finideas-decommission sub-story (FD-1..7)`

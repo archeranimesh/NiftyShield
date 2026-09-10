@@ -34,16 +34,17 @@ cleanup; FD-1 and FD-7 are non-code.
       `record_trade.py`, `roll_leg.py`, `instrument_lookup.py`, and the `LIQUIDBEES` /
       `finideas_ilts` dedup comments in `src/dhan/reader.py` + `src/nuvama/reader.py`.
       | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
-- [ ] **FD-7** — Docs close: `CONTEXT.md` / `REFERENCES.md` / `CONTEXT_TREE.md` /
-      `DECISIONS.md` / `src/portfolio/CLAUDE.md` / `src/portfolio/NOTES.md` /
-      `docs/plan/README.md` / `TODOS.md`; archive the folder.
+- [ ] **FD-7** — Sub-story docs close: `CONTEXT.md` / `REFERENCES.md` / `CONTEXT_TREE.md` /
+      `DECISIONS.md` / `src/portfolio/CLAUDE.md` / `src/portfolio/NOTES.md` / the epic
+      `README.md` Stories table / `TODOS.md` Session Log. No folder archive — the epic
+      archives as a whole at `dhan-holdings-removal/` DHR-4.
       | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: —
 
 ## Story done when
 
-- **FD-1** — a session-log note (or a short `docs/plan/finideas-decommission/audit.md`)
-  records: zero open Finideas legs confirmed, the exact row ids/counts per table, and the
-  pre-delete all-time `Total P&L`.
+- **FD-1** — a session-log note (or a short `audit.md` in this sub-story folder) records:
+  zero open Finideas legs confirmed, the exact row ids/counts per table, and the pre-delete
+  all-time `Total P&L`.
 - **FD-2** — `src/portfolio/strategies/finideas/` is gone; `ALL_STRATEGIES` is `[]` (or the
   constant is removed); no `HedgeStrategy` / `FINIDEAS_*` symbol is importable; unknown
   strategy names construct a base `Strategy`; unit tests green.
@@ -59,13 +60,16 @@ cleanup; FD-1 and FD-7 are non-code.
 - **FD-6** — no `finideas` / `finrakshak` / `ilts` string remains in the named seed /
   example / lookup files except where it is explicit historical narration; the Nuvama /
   Dhan dedup guards for `LIQUIDBEES` are removed or re-justified; tests green.
-- **FD-7** — all eight docs reflect the removal; `REFERENCES.md` Finideas sections deleted;
-  a `DECISIONS.md` row records the decommission + option-A history choice; Feature Backlog
-  line removed; folder archived to `docs/archive/plan/finideas-decommission/`.
+- **FD-7** — `CONTEXT.md` / `REFERENCES.md` / `CONTEXT_TREE.md` / `DECISIONS.md` /
+  `src/portfolio/CLAUDE.md` / `src/portfolio/NOTES.md` reflect the removal; `REFERENCES.md`
+  Finideas sections deleted; a `DECISIONS.md` row records the decommission + option-A history
+  choice; the epic `README.md` Stories-table row is ✅ with the closing SHA; `TODOS.md`
+  Session Log line added. The epic folder is **not** archived here.
 
 ## After each task
 
 Set `SHA:` to the real commit SHA on the task line and tick the box.
-Then update this story's status in `docs/plan/README.md` and add one line to `TODOS.md`
-Session Log. When the whole story is done, follow §Conventions *Completion → archive* — do
-not leave a done story half-archived.
+Then flip this sub-story's row in the epic `README.md` **Stories** table
+(`docs/plan/portfolio-snapshot-slimdown/README.md`) and add one line to `TODOS.md` Session
+Log. The epic folder is archived only when every sub-story is done — see the epic `prompt.md`
+Step 4.
