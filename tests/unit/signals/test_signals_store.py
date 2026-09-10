@@ -15,6 +15,7 @@ from src.signals.models import (
     OptionChainSummary,
     SignalOutcome,
     SignalResponse,
+    SignalUsage,
     TradeAction,
 )
 from src.signals.store import SignalStore
@@ -71,6 +72,10 @@ def _response(provider: str = "grok") -> SignalResponse:
         key_risk="risk",
         raw_response="{}",
     )
+
+
+def _usage(cost: str = "0.0031") -> SignalUsage:
+    return SignalUsage(prompt_tokens=1200, completion_tokens=40, cost_usd=Decimal(cost))
 
 
 def _signal(
@@ -321,3 +326,58 @@ def test_get_all_outcomes_date_range_excludes_out_of_range(store: SignalStore) -
         store.record_outcome(_outcome().model_copy(update={"trade_date": d}))
     got = store.get_all_outcomes(from_date=date(2026, 9, 6), to_date=date(2026, 9, 8))
     assert [o.trade_date for o in got] == [date(2026, 9, 7)]
+
+
+def test_record_response_persists_usage(store: SignalStore) -> None:
+    store.record_response(_response("grok").model_copy(update={"usage": _usage()}))
+    got = store.get_responses(TRADE_DATE)[0]
+    assert got.usage is not None
+    assert got.usage.cost_usd == Decimal("0.0031")
+    assert got.usage.prompt_tokens == 1200
+    assert got.usage.completion_tokens == 40
+
+
+def test_record_response_null_usage(store: SignalStore) -> None:
+    store.record_response(_response("grok"))
+    assert store.get_responses(TRADE_DATE)[0].usage is None
+
+
+def test_get_signal_cost_aggregates(store: SignalStore) -> None:
+    store.record_response(_response("grok").model_copy(update={"usage": _usage("0.0010")}))
+    store.record_response(_response("gpt4o").model_copy(update={"usage": _usage("0.0020")}))
+    store.record_response(
+        _response("gemini").model_copy(
+            update={"trade_date": date(2026, 9, 8), "usage": _usage("0.0030")}
+        )
+    )
+    cost = store.get_signal_cost()
+    assert cost["total_usd"] == Decimal("0.0060")
+    assert cost["call_count"] == 3
+    assert set(cost["by_provider"]) == {"grok", "gpt4o", "gemini"}
+
+
+def test_get_signal_cost_date_filter(store: SignalStore) -> None:
+    store.record_response(_response("grok").model_copy(update={"usage": _usage("0.0010")}))
+    store.record_response(
+        _response("gpt4o").model_copy(
+            update={"trade_date": date(2026, 9, 1), "usage": _usage("0.0020")}
+        )
+    )
+    cost = store.get_signal_cost(from_date=TRADE_DATE)
+    assert cost["call_count"] == 1
+    assert cost["total_usd"] == Decimal("0.0010")
+
+
+def test_get_signal_cost_empty(store: SignalStore) -> None:
+    assert store.get_signal_cost() == {
+        "total_usd": Decimal("0"),
+        "call_count": 0,
+        "by_provider": {},
+    }
+
+
+def test_init_db_idempotent_with_cost_columns(store: SignalStore) -> None:
+    store.init_db()
+    store.init_db()
+    store.record_response(_response("grok").model_copy(update={"usage": _usage()}))
+    assert store.get_responses(TRADE_DATE)[0].usage is not None

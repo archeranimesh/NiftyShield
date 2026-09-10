@@ -19,6 +19,7 @@ from src.signals.models import (
     MarketSnapshot,
     SignalOutcome,
     SignalResponse,
+    SignalUsage,
 )
 
 _SCHEMA = """
@@ -40,6 +41,9 @@ CREATE TABLE IF NOT EXISTS signal_responses (
     key_risk     TEXT    NOT NULL,
     raw_response TEXT    NOT NULL,
     created_at   TEXT    NOT NULL,
+    prompt_tokens     INTEGER,
+    completion_tokens INTEGER,
+    cost_usd          TEXT,
     UNIQUE (trade_date, provider)
 );
 
@@ -105,6 +109,15 @@ def _response_from_row(row: sqlite3.Row) -> SignalResponse:
         key_reason=row["key_reason"],
         key_risk=row["key_risk"],
         raw_response=row["raw_response"],
+        usage=(
+            None
+            if row["cost_usd"] is None
+            else SignalUsage(
+                prompt_tokens=row["prompt_tokens"],
+                completion_tokens=row["completion_tokens"],
+                cost_usd=Decimal(row["cost_usd"]),
+            )
+        ),
     )
 
 
@@ -140,11 +153,17 @@ class SignalStore:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         with connect(self.db_path) as conn:
             conn.executescript(_SCHEMA)
-            try:
-                conn.execute("ALTER TABLE daily_signals ADD COLUMN entry_premium TEXT")
-            except sqlite3.OperationalError as exc:
-                if "duplicate column name" not in str(exc).lower():
-                    raise
+            for ddl in (
+                "ALTER TABLE daily_signals ADD COLUMN entry_premium TEXT",
+                "ALTER TABLE signal_responses ADD COLUMN prompt_tokens INTEGER",
+                "ALTER TABLE signal_responses ADD COLUMN completion_tokens INTEGER",
+                "ALTER TABLE signal_responses ADD COLUMN cost_usd TEXT",
+            ):
+                try:
+                    conn.execute(ddl)
+                except sqlite3.OperationalError as exc:
+                    if "duplicate column name" not in str(exc).lower():
+                        raise
 
     def record_snapshot(self, snapshot: MarketSnapshot) -> None:
         """Upsert the assembled market context for one trading day.
@@ -169,8 +188,9 @@ class SignalStore:
                 "INSERT OR IGNORE INTO signal_responses ("
                 " trade_date, provider, direction, confidence, strike,"
                 " premium_low, premium_high, key_reason, key_risk,"
-                " raw_response, created_at"
-                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " raw_response, created_at,"
+                " prompt_tokens, completion_tokens, cost_usd"
+                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     response.trade_date.isoformat(),
                     response.provider,
@@ -183,6 +203,9 @@ class SignalStore:
                     response.key_risk,
                     response.raw_response,
                     _utc_now_iso(),
+                    None if response.usage is None else response.usage.prompt_tokens,
+                    None if response.usage is None else response.usage.completion_tokens,
+                    None if response.usage is None else str(response.usage.cost_usd),
                 ),
             )
 
@@ -285,6 +308,47 @@ class SignalStore:
                 (trade_date.isoformat(),),
             ).fetchall()
         return [_response_from_row(row) for row in rows]
+
+    def get_signal_cost(
+        self, from_date: date | None = None, to_date: date | None = None
+    ) -> dict[str, object]:
+        """Aggregate per-call LLM cost over a trade-date range.
+
+        Only rows with a non-``NULL`` ``cost_usd`` count. The ``SUM`` runs on
+        ``CAST(cost_usd AS REAL)`` — a deliberate precision compromise: costs are
+        ~1e-3 USD reported to four decimal places, so float error (~1e-15) is far
+        below the output grain. The per-row ``TEXT`` values stay exact.
+
+        Args:
+            from_date: Inclusive lower bound on ``trade_date``; unbounded if ``None``.
+            to_date: Inclusive upper bound on ``trade_date``; unbounded if ``None``.
+
+        Returns:
+            ``{"total_usd": Decimal, "call_count": int, "by_provider": dict[str, Decimal]}``.
+        """
+        sql = (
+            "SELECT provider, COUNT(*) AS n,"
+            " COALESCE(SUM(CAST(cost_usd AS REAL)), 0) AS c"
+            " FROM signal_responses WHERE cost_usd IS NOT NULL"
+        )
+        params: list[str] = []
+        if from_date is not None:
+            sql += " AND trade_date >= ?"
+            params.append(from_date.isoformat())
+        if to_date is not None:
+            sql += " AND trade_date <= ?"
+            params.append(to_date.isoformat())
+        sql += " GROUP BY provider"
+        with connect(self.db_path) as conn:
+            rows = conn.execute(sql, tuple(params)).fetchall()
+        by_provider = {
+            row["provider"]: Decimal(str(row["c"])).quantize(Decimal("0.0001")) for row in rows
+        }
+        return {
+            "total_usd": sum(by_provider.values(), Decimal("0")),
+            "call_count": sum(row["n"] for row in rows),
+            "by_provider": by_provider,
+        }
 
     def get_signal(self, trade_date: date) -> DailySignal | None:
         """Return the aggregated ``DailySignal`` for a day, or ``None``.
