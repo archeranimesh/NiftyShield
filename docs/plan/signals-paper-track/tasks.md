@@ -14,7 +14,7 @@ spec; `schema.md` is the sole DDL source.
 - [x] **SPT-1** — Council checkpoint (no code): module boundary (A — `paper_signal_track_v1` on the shared `StrategyMonitor` / `PaperExecutor` / `PaperStore`); pure `src/strategy/signal_exit.py`;
   fixed SL −30 % / target +50 %; Phase 1 fixed-only, `TRAILING_STOP` reserved; 30 s cadence; mark-path telemetry from day one; two-tier recalibration; go-live gate G1–G9; auto-execute live pilot.
   Output: `DECISIONS.md` entry + `schema.md` + this rewrite.
-  | Owner: Animesh | Model: n/a | Review: none | SHA: <—>
+  | Owner: Animesh | Model: n/a | Review: none | SHA: 636c190
 - [ ] **SPT-2** — Signal paper models (`SignalPaperEntry`, `SignalMark`) + store methods (`open_signal_entry` / `get_open_signal_entry` / `record_mark` / `get_marks` / `close_signal_entry` /
   `get_entries` / `cumulative_pnl`). Position rides `paper_trades` as `paper_signal_track_v1`, `quantity` = `paper.constants.LOT_SIZE` (import, not the literal `65`). | Owner: Claude | Model:
   claude-sonnet-5 | Review: code-reviewer | SHA: <—>
