@@ -9,8 +9,9 @@ import aiohttp
 
 from src.client.exceptions import DataFetchError
 
-from ..models import Direction, MarketSnapshot, SignalResponse
+from ..models import Direction, MarketSnapshot, SignalResponse, SignalUsage
 from ..prompt import build_prompt
+from . import _usage_from_envelope
 
 try:  # Phase 2 dependency — optional until a Google AI key is acquired.
     import google.generativeai as genai
@@ -99,6 +100,7 @@ class GeminiSignalProvider:
             "temperature": 0,
             "response_format": {"type": "json_object"},
         }
+        payload["usage"] = {"include": True}
         headers = {"Authorization": f"Bearer {self._api_key}"}
         url = f"{self._base_url}/chat/completions"
 
@@ -127,7 +129,7 @@ class GeminiSignalProvider:
             content = envelope["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as e:
             raise DataFetchError(f"{_PROVIDER}: unexpected response envelope: {e}") from e
-        return _build_signal(snapshot, content)
+        return _build_signal(snapshot, content, usage=_usage_from_envelope(envelope))
 
     async def _call_google_sdk(self, messages: list[dict[str, str]]) -> str:
         """Run the Google AI SDK call (with search grounding) off the event loop."""
@@ -146,7 +148,9 @@ class GeminiSignalProvider:
             raise DataFetchError(f"{_PROVIDER}: Google AI SDK call failed: {e}") from e
 
 
-def _build_signal(snapshot: MarketSnapshot, content: Any) -> SignalResponse:
+def _build_signal(
+    snapshot: MarketSnapshot, content: Any, usage: SignalUsage | None = None
+) -> SignalResponse:
     """Parse an LLM ``message.content`` body into a :class:`SignalResponse`."""
     try:
         parsed = json.loads(content)
@@ -161,6 +165,7 @@ def _build_signal(snapshot: MarketSnapshot, content: Any) -> SignalResponse:
             key_reason=str(parsed["key_reason"]),
             key_risk=str(parsed["key_risk"]),
             raw_response=content if isinstance(content, str) else json.dumps(content),
+            usage=usage,
         )
     except (json.JSONDecodeError, KeyError, ValueError, TypeError, InvalidOperation) as e:
         raise DataFetchError(f"{_PROVIDER}: could not parse signal JSON: {e}") from e

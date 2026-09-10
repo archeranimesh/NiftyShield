@@ -74,3 +74,8 @@ async def test_bearish_direction(snapshot: MarketSnapshot) -> None:
     provider = MockSignalProvider(direction=Direction.BEARISH)
     resp = await provider.get_signal(snapshot)
     assert resp.direction is Direction.BEARISH
+
+
+async def test_mock_provider_usage_none(snapshot: MarketSnapshot) -> None:
+    resp = await MockSignalProvider().get_signal(snapshot)
+    assert resp.usage is None

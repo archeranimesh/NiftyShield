@@ -11,6 +11,7 @@ from src.client.exceptions import DataFetchError
 
 from ..models import Direction, MarketSnapshot, SignalResponse
 from ..prompt import build_prompt
+from . import _usage_from_envelope
 
 _PROVIDER = "grok"
 
@@ -74,7 +75,9 @@ class GrokSignalProvider:
             "temperature": 0,
             "response_format": {"type": "json_object"},
         }
-        if not self._use_openrouter:
+        if self._use_openrouter:
+            payload["usage"] = {"include": True}
+        else:
             payload["search"] = True
         headers = {"Authorization": f"Bearer {self._api_key}"}
         url = f"{self._base_url}/chat/completions"
@@ -110,6 +113,8 @@ def _parse_response(snapshot: MarketSnapshot, envelope: dict[str, Any]) -> Signa
     except (KeyError, IndexError, TypeError) as e:
         raise DataFetchError(f"{_PROVIDER}: unexpected response envelope: {e}") from e
 
+    usage = _usage_from_envelope(envelope)
+
     try:
         parsed = json.loads(content)
         return SignalResponse(
@@ -123,6 +128,7 @@ def _parse_response(snapshot: MarketSnapshot, envelope: dict[str, Any]) -> Signa
             key_reason=str(parsed["key_reason"]),
             key_risk=str(parsed["key_risk"]),
             raw_response=content if isinstance(content, str) else json.dumps(content),
+            usage=usage,
         )
     except (json.JSONDecodeError, KeyError, ValueError, TypeError, InvalidOperation) as e:
         raise DataFetchError(f"{_PROVIDER}: could not parse signal JSON: {e}") from e

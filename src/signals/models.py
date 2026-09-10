@@ -81,6 +81,20 @@ class MarketSnapshot(BaseModel, frozen=True):
 # ── Output ───────────────────────────────────────────────────────────────────
 
 
+class SignalUsage(BaseModel, frozen=True):
+    """OpenRouter token usage and USD cost for one model call.
+
+    Fields map to the OpenRouter response ``usage`` block: ``prompt_tokens``,
+    ``completion_tokens``, and ``cost`` (billed USD credits). ``None`` on the
+    ``mock`` provider and Gemini's Google-SDK path — neither returns a usage
+    object.
+    """
+
+    prompt_tokens: int
+    completion_tokens: int
+    cost_usd: Decimal
+
+
 class SignalResponse(BaseModel, frozen=True):
     """
     Raw structured output from one model call.
@@ -101,6 +115,7 @@ class SignalResponse(BaseModel, frozen=True):
     key_reason: str  # ≤ 1 sentence
     key_risk: str  # ≤ 1 sentence
     raw_response: str  # full JSON string returned by model
+    usage: SignalUsage | None = None
 
 
 class DailySignal(BaseModel, frozen=True):

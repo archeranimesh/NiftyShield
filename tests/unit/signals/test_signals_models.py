@@ -10,6 +10,7 @@ from src.signals.models import (
     OptionChainSummary,
     SignalOutcome,
     SignalResponse,
+    SignalUsage,
     TradeAction,
 )
 
@@ -133,3 +134,13 @@ def test_signal_outcome_skipped():
 def test_oi_level_negative_change():
     level = OILevel(strike=22500, oi=1500000, oi_change=-350000)
     assert level.oi_change == -350000
+
+
+def test_signal_usage_model_types() -> None:
+    usage = SignalUsage(prompt_tokens=100, completion_tokens=50, cost_usd=Decimal("0.0015"))
+    assert usage.prompt_tokens == 100
+    assert usage.completion_tokens == 50
+    assert usage.cost_usd == Decimal("0.0015")
+
+    loaded = SignalUsage.model_validate(usage.model_dump(mode="json"))
+    assert loaded == usage

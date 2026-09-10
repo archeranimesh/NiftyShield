@@ -192,3 +192,44 @@ async def test_payload_has_headroom_for_reasoning_models(snapshot: MarketSnapsho
 
 def test_is_runtime_signal_provider() -> None:
     assert isinstance(GrokSignalProvider(api_key="k"), SignalProvider)
+
+
+def _body_with_usage(usage: object) -> str:
+    envelope = json.loads(_valid_body())
+    envelope["usage"] = usage
+    return json.dumps(envelope)
+
+
+async def test_get_signal_parses_usage(snapshot: MarketSnapshot) -> None:
+    body = _body_with_usage({"prompt_tokens": 1200, "completion_tokens": 40, "cost": 0.0031})
+    session = _FakeSession(_FakeResponse(body=body))
+    with _patch_session(session):
+        resp = await GrokSignalProvider(api_key="k").get_signal(snapshot)
+    assert resp.usage is not None
+    assert resp.usage.prompt_tokens == 1200
+    assert resp.usage.completion_tokens == 40
+    assert resp.usage.cost_usd == Decimal("0.0031")
+    assert session.calls[0][1]["json"]["usage"] == {"include": True}
+
+
+async def test_get_signal_usage_absent_is_none(snapshot: MarketSnapshot) -> None:
+    session = _FakeSession(_FakeResponse(body=_valid_body()))
+    with _patch_session(session):
+        resp = await GrokSignalProvider(api_key="k").get_signal(snapshot)
+    assert resp.usage is None
+
+
+async def test_get_signal_usage_malformed_is_none(snapshot: MarketSnapshot) -> None:
+    session = _FakeSession(_FakeResponse(body=_body_with_usage({"cost": "not-a-number"})))
+    with _patch_session(session):
+        resp = await GrokSignalProvider(api_key="k").get_signal(snapshot)
+    assert resp.usage is None
+    assert resp.direction is Direction.BULLISH
+
+
+async def test_xai_direct_path_omits_usage_flag(snapshot: MarketSnapshot) -> None:
+    session = _FakeSession(_FakeResponse(body=_valid_body()))
+    with _patch_session(session):
+        resp = await GrokSignalProvider(api_key="k", use_openrouter=False).get_signal(snapshot)
+    assert "usage" not in session.calls[0][1]["json"]
+    assert resp.usage is None
