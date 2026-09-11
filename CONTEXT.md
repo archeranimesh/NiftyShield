@@ -40,9 +40,11 @@ Top-level `src/` packages, one line each (detail → `CONTEXT_TREE.md`):
   `paper_trades` ledger; shared with `scripts/dev/cycle_pnl_report.py` and BUG-043).
 - `src/strategy/` — paper-backbone strategy layer. `PaperStrategy` protocol,
   `SignalEvent`/`ApprovedAction`/`LegSpec`/`LegClose`, `StrategyMonitor` daemon (tick loop, WARN
-  dedup, auto-execute dispatch), `PaperExecutor`, `ReEntryMixin`. 7 strategies: `CSPNiftyV1`,
+  dedup, auto-execute dispatch), `PaperExecutor`, `ReEntryMixin`. 8 strategies: `CSPNiftyV1`,
   `CCOverlayV1`, `PPOverlayV1`, `CollarOverlayV1`, `IronCondorV1`, `IronCondorV2`,
-  `NiftyTrackComparisonV1`. Engines: `ExitSignalEngine`, `ProfitLockEngine`, `OverlayCloser`,
+  `NiftyTrackComparisonV1`, `SignalTrackV1` (`paper_signal_track_v1` — the `signals-paper-track/`
+  execution layer, 30 s cadence, entry/exit via `open_signal_paper_entry` +
+  `signal_exit.evaluate`). Engines: `ExitSignalEngine`, `ProfitLockEngine`, `OverlayCloser`,
   `ic_close_executor`, `roll_utils`.
 - `src/signals/` — multi-LLM daily directional signal pipeline (shipped 2026-09-09; `docs/archive/plan/signals/`). Frozen Pydantic models
   (`MarketSnapshot`/`SignalResponse`/`DailySignal`/`SignalOutcome`, `Direction`/`TradeAction`), `SignalProvider` protocol, pure `build_prompt`, pure

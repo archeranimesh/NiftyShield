@@ -968,6 +968,16 @@ near-month is already rolled to next-month at 14 DTE. Extending the hold to 7 DT
 (which feeds the LLM the 14-floor monthly chain) to keep the analysed and traded expiries consistent. Operator decision (Animesh): keep the 14-DTE roll as is — it is shared, consistent across
 `snapshot.py` / overlays / IC, and adequate. The parenthetical "incl. the `<= 7`-DTE roll" above is superseded; `resolve_monthly_option` is unchanged, SPT-2a closes as satisfied-by-existing-behaviour.
 
+**SPT-8 as-built note (2026-09-11, docs close).** The execution layer shipped SPT-2..SPT-7 as ruled, with four seam decisions worth recording since they are not visible from the ruling text alone.
+`src/signals/` stays untouched except one guarded tail-call: `scripts/morning_signal.py` calls `await open_signal_paper_entry(signal, snapshot, broker, paper_store)` in a `try/except Exception`
+isolation block right after `store.record_signal(signal)` — the signal pipeline's own persistence and Telegram advisory message are unaffected if the paper-entry path throws.
+`src/strategy/signal_exit.py` is both the SL/target constants home (`SL_PCT`, `TGT_PCT`, `RULESET_VERSION`, `derive_levels`, added SPT-3) and the pure evaluator (`evaluate()`, `SignalExitReason`,
+added SPT-3b) — one module, two halves added across two tasks because SPT-4 needed the evaluator to exist before it could wire the monitor tick. `scripts/signal_paper_entry.py` is a manual `--date`
+backfill/re-entry tool, not a cron — it exists so a missed or failed morning entry can be replayed idempotently (no-ops on `NO_TRADE` / already-open / holiday) without waiting for the next trading
+day. Monitor cadence shipped at the ruled **30 s** for `paper_signal_track_v1` (`due_interval_s=30` as a `SignalTrackV1` class attribute, not a registration-time param); the **90 s fallback** was
+never triggered — 30 s proved practical on chain-fetch latency, so it remains undeployed, documented-only insurance per the ruling, not a shipped code path. Go-live gate (SPT-7) and the go-live pilot
+remain unexercised — the 6-month evaluation window has not yet elapsed.
+
 ---
 
 ## B002.3 — `PaperPosition.option_type` resolution strategy (2026-07-02)
@@ -1015,11 +1025,11 @@ paragraph describing `inline_full_suite.sh` said "(warn-only)" — now "(blockin
 
 ## DEBT-12 — `commit_preflight.py` md-line-length check verified effective (2026-09-11)
 
-Verification (per `docs/plan/technical-debt/stories.md` DEBT-8/-9/-10/-12 common procedure): `authored-md-prose-over-200-cap` recurred 4x in `suggestions.md` after the SWEEP-4 remediation
-(`2b85b84`, 2026-09-03) — SPT-2 (2026-09-07), S2.1 (`5aa9ce6`), S3.3, SCT-4 (`b70f8fa`, through 2026-09-10) — past the 3-session check window, so the slug already self-escalated to
-`Escalated: DEBT-12` in `suggestions.md`. Unlike `DEBT-8`/`DEBT-9` (warn-only hooks that never blocked anything), this remediation is a staged pre-commit blocker: every cited recurrence shows the
-check firing and the commit actually aborting (`5aa9ce6`, `b70f8fa` both cite "aborted by `md-line-length`"), forcing a chase-down/re-edit/re-stage cycle before the commit landed. The check is doing
-its job — no line over 200 chars has reached a commit since `2b85b84`. What recurs is authoring-time cost (writing the overflow in the first place), not a hook failure.
+Verification (per `docs/plan/technical-debt/stories.md` DEBT-8/-9/-10/-12 common procedure): `authored-md-prose-over-200-cap` recurred 4x in `suggestions.md` after the SWEEP-4 remediation (`2b85b84`,
+2026-09-03) — SPT-2 (2026-09-07), S2.1 (`5aa9ce6`), S3.3, SCT-4 (`b70f8fa`, through 2026-09-10) — past the 3-session check window, so the slug already self-escalated to `Escalated: DEBT-12` in
+`suggestions.md`. Unlike `DEBT-8`/`DEBT-9` (warn-only hooks that never blocked anything), this remediation is a staged pre-commit blocker: every cited recurrence shows the check firing and the commit
+actually aborting (`5aa9ce6`, `b70f8fa` both cite "aborted by `md-line-length`"), forcing a chase-down/re-edit/re-stage cycle before the commit landed. The check is doing its job — no line over 200
+chars has reached a commit since `2b85b84`. What recurs is authoring-time cost (writing the overflow in the first place), not a hook failure.
 
 **Decision (Animesh):** no further hook change. The `doc-format-migration` epic (RDO-17.x/DFM series, closed prior to this session) already built `scripts/dev/reflow_md.py` and widened
 `md-line-length` repo-wide as the standard fill-to-≤200 remediation path — that is the correct answer to the authoring-time gap, not a second commit-time mechanism. Per `stories.md`'s own note,
@@ -1029,39 +1039,30 @@ un-reflowable long `tasks.md` lines remain an accepted residual. DEBT-12 closes 
 
 ## DEBT-15 — `commit_preflight.py` staged `ruff format --check` blocker verified effective (2026-09-11)
 
-Verification (per `docs/plan/technical-debt/stories.md` DEBT-8/-9/-10/-12 common procedure): `ruff-format-check-skipped-precommit-abort` recurred once after the SWEEP-4 remediation
-(`2b85b84`, 2026-09-03) — S5.2c (`b33a43d`, 2026-09-08), where `snapshot.py` was reformatted and the first `git commit` aborted because only `ruff check` (not `ruff format --check`) had been run
-pre-stage. That single post-remediation hit closed out the slug's Count-5 escalation and it was drained from `suggestions.md` (`ef8f555`) into this DEBT-15 line — it has not recurred in any of the
-dozens of sessions since (S5.3 through S5.6, S6, SCT-1..4, SPT-1..6, ROLL-5..17, BUG-040..046, DEBT-8/-9/-10/-11/-12/-13/-14), well past the 3-session check window `tasks.md` sets. Like DEBT-12
-(and unlike DEBT-8/DEBT-9's warn-only hooks), this remediation is a staged pre-commit blocker: the one cited recurrence shows the check firing and the commit actually aborting before landing —
-`tasks.md`'s own note that it "caught the S5.3 case (`✗ ruff-format` on `record_signal_outcome.py`) before the commit" confirms the same behavior on the very next session. The check is doing its
-job — no unformatted `.py` has reached a commit since `2b85b84`. What recurs (once) is a pre-stage checklist gap (`ruff check` run without `ruff format --check`), not a hook failure.
+Verification (per `docs/plan/technical-debt/stories.md` DEBT-8/-9/-10/-12 common procedure): `ruff-format-check-skipped-precommit-abort` recurred once after the SWEEP-4 remediation (`2b85b84`,
+2026-09-03) — S5.2c (`b33a43d`, 2026-09-08), where `snapshot.py` was reformatted and the first `git commit` aborted because only `ruff check` (not `ruff format --check`) had been run pre-stage. That
+single post-remediation hit closed out the slug's Count-5 escalation and it was drained from `suggestions.md` (`ef8f555`) into this DEBT-15 line — it has not recurred in any of the dozens of sessions
+since (S5.3 through S5.6, S6, SCT-1..4, SPT-1..6, ROLL-5..17, BUG-040..046, DEBT-8/-9/-10/-11/-12/-13/-14), well past the 3-session check window `tasks.md` sets. Like DEBT-12 (and unlike
+DEBT-8/DEBT-9's warn-only hooks), this remediation is a staged pre-commit blocker: the one cited recurrence shows the check firing and the commit actually aborting before landing — `tasks.md`'s own
+note that it "caught the S5.3 case (`✗ ruff-format` on `record_signal_outcome.py`) before the commit" confirms the same behavior on the very next session. The check is doing its job — no unformatted
+`.py` has reached a commit since `2b85b84`. What recurs (once) is a pre-stage checklist gap (`ruff check` run without `ruff format --check`), not a hook failure.
 
-**Decision (Animesh):** no further hook change. The blocker is a real, firing, effective backstop — the residual cost is a re-stage cycle when pre-stage discipline skips `ruff format --check`,
-which is authoring-time cost, not hook failure, matching the DEBT-12 verdict exactly. DEBT-15 closes as **verified effective**, no protocol/model discussion opened.
+**Decision (Animesh):** no further hook change. The blocker is a real, firing, effective backstop — the residual cost is a re-stage cycle when pre-stage discipline skips `ruff format --check`, which
+is authoring-time cost, not hook failure, matching the DEBT-12 verdict exactly. DEBT-15 closes as **verified effective**, no protocol/model discussion opened.
 
 ---
 
 ## DEBT-13 — `check_checkbox_consistency.py` follows epic sub-story README pointers (2026-09-11)
 
-Fix (per `docs/plan/technical-debt/stories.md` DEBT-13): `check_readme_pointers()` resolved a
-`docs/plan/README.md` `next: **ID**` row only against a flat `PLAN_DIR/<slug>/tasks.md`, and
-silently skipped any epic row whose slug folder has no root `tasks.md` — only nested
-sub-story folders (e.g. a `<epic>/<sub-story>/tasks.md` shape). Added
-`_resolve_pointer_task_file(slug, task_id)`: try the flat file first, and if absent, glob
-`<epic>/**/tasks.md` (sorted for determinism) for the nested file whose text contains
-`**<task_id>**`. `check_readme_pointers()` now calls this helper and reports the actual
-resolved path in its finding message instead of assuming the flat one.
+Fix (per `docs/plan/technical-debt/stories.md` DEBT-13): `check_readme_pointers()` resolved a `docs/plan/README.md` `next: **ID**` row only against a flat `PLAN_DIR/<slug>/tasks.md`, and silently
+skipped any epic row whose slug folder has no root `tasks.md` — only nested sub-story folders (e.g. a `<epic>/<sub-story>/tasks.md` shape). Added `_resolve_pointer_task_file(slug, task_id)`: try the
+flat file first, and if absent, glob `<epic>/**/tasks.md` (sorted for determinism) for the nested file whose text contains `**<task_id>**`. `check_readme_pointers()` now calls this helper and reports
+the actual resolved path in its finding message instead of assuming the flat one.
 
-Verification: the cited repro (`strategy-rollout/` epic, ROLL-14, `eb782d0`) is no longer live
-— the `telegram-markdown-migration` epic that owned it was archived to
-`docs/archive/plan/telegram-markdown-migration/` on 2026-09-06, and the current
-`docs/plan/README.md` row for it reads `✅ Shipped/Archived`, carrying no `next:` marker. No
-README correction was needed. Added two unit tests
-(`tests/unit/scripts/dev/hooks/test_check_checkbox_consistency.py`) reconstructing the epic
-shape directly: a nested `<epic>/<sub-story>/tasks.md` with the pointed-at id ticked (flags)
-and one with it open (clean). Full `tests/unit/` suite green (3022 passed). `@code-reviewer`
-run against the diff: 0 CRITICAL/ERROR/WARNING.
+Verification: the cited repro (`strategy-rollout/` epic, ROLL-14, `eb782d0`) is no longer live — the `telegram-markdown-migration` epic that owned it was archived to
+`docs/archive/plan/telegram-markdown-migration/` on 2026-09-06, and the current `docs/plan/README.md` row for it reads `✅ Shipped/Archived`, carrying no `next:` marker. No README correction was
+needed. Added two unit tests (`tests/unit/scripts/dev/hooks/test_check_checkbox_consistency.py`) reconstructing the epic shape directly: a nested `<epic>/<sub-story>/tasks.md` with the pointed-at id
+ticked (flags) and one with it open (clean). Full `tests/unit/` suite green (3022 passed). `@code-reviewer` run against the diff: 0 CRITICAL/ERROR/WARNING.
 
 ---
 

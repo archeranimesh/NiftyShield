@@ -379,5 +379,5 @@ referenced, before acting on any of its content. §2–§5 are lookups: read onl
 ## Module CLAUDE.md files
 
 Working inside `src/<module>/` auto-loads that module's `CLAUDE.md` — you never need to read
-one manually. Eight modules carry one: `portfolio`, `mf`, `client`, `notifications`, `dhan`,
-`paper`, `nuvama`, `gamma`. Index of what each covers: `protocol-reference` §5.
+one manually. Nine modules carry one: `portfolio`, `mf`, `client`, `notifications`, `dhan`,
+`paper`, `nuvama`, `gamma`, `strategy`. Index of what each covers: `protocol-reference` §5.

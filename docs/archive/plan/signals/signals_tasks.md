@@ -104,6 +104,14 @@ eventually supersedes S5.5a.
   supersedes this** when the paper track goes live (real exit replaces the would-be row).
   | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: ce59529
 
+**Status: won't-do (2026-09-11, `signals-paper-track/` SPT-8).** `SignalTrackV1`'s exit
+Telegram message (SPT-5, `06df9d8`) is live — it reports the real exit reason and realised P&L
+for the actual paper position, superseding this interim would-be-P&L message. The 16:00
+`record_signal_outcome.py --auto` cron keeps running for `SignalOutcome` scoring (the
+coin-flip-baseline forward comparison), but its Telegram send is no longer the paper track's
+outcome message. No code removal — the send path stays as a harmless duplicate; removing it is
+a separate cleanup, not scoped here.
+
 ---
 
 ### 3 · S5.5d — `signal_report.py` 16:35 digest to Telegram

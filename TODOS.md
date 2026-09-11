@@ -27,9 +27,6 @@ rot them.
 6. **Options Income strategy** — `docs/plan/options_income/` — next **S0** (data audit).
 7. **Backtest Engine** — `docs/plan/backtest-engine/` (`phase1..4/`) — next **1.3a / 1.4** (parallel, `phase1/`). Four chained phases; each phase's GATE task blocks the next dir. Gated on
    `variance-gate`. `BACKTEST_PLAN_PHASE1.md` is the canonical spec; the phase dirs are thin status pointers.
-8. **signals-paper-track** — `docs/plan/signals-paper-track/` — SPT-1..3 done; next **SPT-4** (30 s monitor registration + per-tick `paper_signal_marks`). Turns the
-    `signals/` consensus into a paper-traded strategy: auto-enter a long monthly option (next-month roll at 14 DTE), fixed SL −30 % / target +50 %, exit or 15:00 square-off, full mark-path log,
-    6-month G1–G9 go-live gate. Ruling: `paper_signal_track_v1` `PaperStrategy` on the shared engine + pure `src/strategy/signal_exit.py`; Phase 1 fixed-only. Supersedes `signals/` S5.5a.
 9. **backtest-eval-core** — `docs/plan/backtest-eval-core/` — next **B1.1**. Blocked until `backtest-engine` tasks 1.3 + 1.4 land.
 10. **signals-eval-core** — `docs/plan/signals-eval-core/` — next **SE1.1**.
     Blocked until `backtest-eval-core` + `backtest-engine` 1.12.
@@ -100,7 +97,7 @@ rot them.
     login flow + client + tables wired). No `schema.md`. `/work` routes via the epic `prompt.md`.
     Requested by Animesh 2026-09-10.
 25. **signals-entrypoint-consolidation** — `docs/plan/signals-entrypoint-consolidation/` — next **SEC-1**.
-    **Blocked until `signals-paper-track/` is archived.** One trading-day guard + one `DailySignal.is_actionable`
+    Unblocked 2026-09-11 (`signals-paper-track/` archived). One trading-day guard + one `DailySignal.is_actionable`
     predicate across the four signal entrypoints, merge `record_signal_outcome` + `signal_report` → one 16:00
     `signal_eod` (2 crons → 1), no pipeline / execution-layer behaviour change. From the 2026-09-10 SPT-plan review.
     No `schema.md`. Requested by Animesh 2026-09-10.
@@ -143,6 +140,15 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-11] `docs/plan/signals-paper-track` **SPT-8** closed (docs-only) — story done, archived
+  to `docs/archive/plan/signals-paper-track/`. Updated `CONTEXT.md` (`src/strategy/` bullet +
+  `SignalTrackV1`), `DECISIONS.md` (as-built follow-up note on the SPT ruling entry),
+  `DB_REGISTRY.md` (`paper_signal_entries` / `paper_signal_marks` rows + note), `TODOS.md`
+  (Feature Backlog item removed → `TODOS_ARCHIVE.md`), `docs/plan/README.md` (collapsed to the
+  archived pointer; `signals-entrypoint-consolidation/` unblocked), and created
+  `src/strategy/CLAUDE.md` (did not previously exist — also added `strategy` to root `CLAUDE.md`'s
+  9-module index and `protocol-reference` §5). `signals/` S5.5a marked `won't-do` in the archived
+  `signals_tasks.md`. No code change.
 - [2026-09-11] `docs/plan/signals-paper-track` **SPT-6** closed (`1f52880`) — entrypoint wiring,
   no new cron: `scripts/morning_signal.py` opens the paper entry via a guarded tail-call
   (`await open_signal_paper_entry(signal, snapshot, broker, paper_store)`, isolated in a

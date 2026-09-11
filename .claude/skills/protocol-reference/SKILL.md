@@ -194,3 +194,4 @@ manually. This index says what each covers, so you can tell whether a task will 
 | `src/paper/` | Paper-trading engine — `PaperStore` tables, `PaperTracker` P&L, fill simulator, `TradeState` enum |
 | `src/nuvama/` | Bonds + options readers (pure parse + aggregate), `NuvamaStore` SQL-layer aggregation |
 | `src/gamma/` | Near-Expiry Gamma Buy scaffolding — frozen models + `GammaStore` |
+| `src/strategy/` | `PaperStrategy` protocol, `StrategyMonitor` daemon, `SignalTrackV1` signals paper-track execution layer, `signal_exit.py` pure evaluator |
