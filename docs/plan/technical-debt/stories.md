@@ -56,7 +56,8 @@ slug. If it did **not** recur in 3+ such sessions, tick the box — the hook wor
   prior-read gate still forces a `Read` of a resident file — a harness constraint the hook cannot close; note it in the verification, don't count it against the hook.
 - **DEBT-9** — `pytest-inlined-not-test-runner` (Count 9). Remediation: SWEEP-3 `check_inline_full_suite.py` (`e325e86`) + the `test-runner` AutoTrigger cadence amended to "once per task before
   `code-reviewer` / the commit".
-- **DEBT-10** — `wide-grep-dump-then-page` (Count 7). Remediation: SWEEP-2 `check_wide_grep.py` (`68683cb`).
+- **DEBT-10** — `wide-grep-dump-then-page` (Count 7). Remediation: SWEEP-2 `check_wide_grep.py` (`68683cb`). **Verified (2026-09-11):** the slug has zero recurrence entries in `suggestions.md`'s
+  active table across every session since `68683cb` (~8 days, ~250 commits) — far past the 3-session check window. Hook confirmed effective; no protocol discussion needed.
 - **DEBT-11** — `sha-recorded-via-second-commit` (Count 6). **Not a hook-effectiveness check — a protocol reconciliation.** The SWEEP-4 `commit` skill Step 1b policy ("land with `SHA: <pending>`,
   backfill as the first edit of the next doc-touch, no swap-only commit") contradicts the "one commit plus a follow-up" convention stated in some `tasks.md` folders (flagged in the `suggestions.md`
   example for MEAS-2). Pick one policy, make it repo-wide (update `docs/plan/README.md` §Conventions and any folder `tasks.md` that says otherwise), record the decision in `DECISIONS.md`, then confirm
