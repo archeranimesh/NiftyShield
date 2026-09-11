@@ -3,7 +3,7 @@
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
 spec; `schema.md` is the sole DDL source.
 
-**Open: SPT-4.**
+**Open: SPT-3b.**
 
 > SPT-1 (council checkpoint) is closed — ruled 2026-09-09, `docs/archive/council/strategy/2026-09-09_signals-paper-track-execution-layer.md`, absorbed into `DECISIONS.md` §"Signals Paper Track —
 > Execution Layer". SPT-2..SPT-8 below are the rewrite from that ruling — no longer provisional.
@@ -27,11 +27,13 @@ spec; `schema.md` is the sole DDL source.
   `src/notifications/formatting.py::build_position_table`. As-built: `open_signal_paper_entry` is `async` (both callers already run in an event loop); the entry hook fetches its own option chain
   (`broker.get_option_chain` + `parse_upstox_option_chain`) for bid/ask rather than `find_option_leg`; `PaperStore.record_signal_open_leg` added to return the opening BUY `paper_trades.id`; the fenced
   position table is `build_position_table(..., title=None)`. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 6b0dada
-- [ ] **SPT-4** — Register `paper_signal_track_v1` with `StrategyMonitor` at 30 s per-strategy cadence; per-tick `paper_signal_marks` row (mark / MFE / MAE / stale / gap_event); hand tick to
-  `signal_exit`. 90 s fallback + cadence-review trigger. | Owner: Claude | Model: claude-sonnet-5 | Review: greeks-analyst | SHA: <—>
-- [ ] **SPT-5** — Extend `src/strategy/signal_exit.py` (created in SPT-3 as the constants module) with the pure `evaluate(entry, mark, now) → TARGET | STOP_LOSS | TIME_EXIT | HOLD`
-  + `SignalExitReason` (`TRAILING_STOP` reserved, unused); caller takes the exit fill at the observed mark, closes the row + `paper_exit_events`, sends the Telegram exit message.
-  | Owner: Claude | Model: claude-sonnet-5 | Review: greeks-analyst | SHA: <—>
+- [ ] **SPT-3b** — Split from SPT-5 (2026-09-11, dependency ordering): extend `src/strategy/signal_exit.py` (created in SPT-3 as the constants module) with the pure `evaluate(entry, mark, now) →
+  TARGET | STOP_LOSS | TIME_EXIT | HOLD` + `SignalExitReason` (`TRAILING_STOP` reserved, unused). No I/O, no fill, no persistence — SPT-4 needs this to exist before it can wire the monitor tick. |
+  Owner: Claude | Model: claude-sonnet-5 | Review: greeks-analyst | SHA: <—>
+- [ ] **SPT-4** — Register `paper_signal_track_v1` with `StrategyMonitor` via a new per-strategy `due_interval_s` (30 s; credit spreads stay 90 s); per-tick `paper_signal_marks` row (mark / MFE / MAE
+  / stale / gap_event); hand tick to `signal_exit.evaluate` (SPT-3b). 90 s fallback + cadence-review trigger. | Owner: Claude | Model: claude-sonnet-5 | Review: greeks-analyst | SHA: <—>
+- [ ] **SPT-5** — Caller-side wiring only (evaluator moved to SPT-3b): on a non-HOLD decision from SPT-4's tick, take the exit fill at the observed mark via `PaperFillSimulator`, close the row +
+  `paper_exit_events`, send the Telegram exit message. | Owner: Claude | Model: claude-sonnet-5 | Review: greeks-analyst | SHA: <—>
 - [ ] **SPT-6** — Entrypoint wiring, **no new cron**: a guarded paper-entry tail-call in `scripts/morning_signal.py` right after `store.record_signal(signal)`; a `paper_signal_track_v1` registration
   with `due_interval_s=30` inside `scripts/monitor_daemon.py`; `scripts/signal_paper_entry.py` as a manual `--date` backfill / re-entry tool (idempotent, **not** a scheduled cron). No unit tests.
   Deliver the updated runbook crontab comment block plus log paths. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: <—>
@@ -48,9 +50,11 @@ spec; `schema.md` is the sole DDL source.
 - **SPT-2a** — closed as a no-op 2026-09-10: the `dte >= 14` floor in `get_expiry_candidates` already delivers the next-month roll; operator kept it. No code, no tests.
 - **SPT-3** — a firing `DailySignal` produces one resolved-option paper entry at a simulated fill, one `paper_trades` row + one frozen `SignalPaperEntry`, one Telegram entry message stating the fill
   price; NO_TRADE / already-open are logged no-ops; the EOD PT summary still renders after the `build_position_table` extraction.
-- **SPT-4** — `paper_signal_track_v1` is polled every 30 s while open, each tick writes a `paper_signal_marks` row, and each tick reaches `signal_exit` without duplicate firing.
+- **SPT-3b** — `evaluate()` returns `TARGET` / `STOP_LOSS` / `TIME_EXIT` / `HOLD` per the priority rule; `SignalExitReason.TRAILING_STOP` is defined but never returned; happy-path + edge tests pass,
+  no I/O.
+- **SPT-4** — `paper_signal_track_v1` is polled every 30 s while open, each tick writes a `paper_signal_marks` row, and each tick reaches `signal_exit.evaluate` without duplicate firing.
 - **SPT-5** — an open position exits on the first of `TARGET` / `STOP_LOSS` / the 15:00 square-off; the fill is taken at the observed mark; the row + `paper_exit_events` record the reason and realised
-  P&L; a Telegram exit message goes out; `TRAILING_STOP` is defined but never returned.
+  P&L; a Telegram exit message goes out.
 - **SPT-6** — no crontab line is added; `morning_signal` opens the paper entry via a guarded tail-call, the monitor picks up `paper_signal_track_v1` at 30 s, and `signal_paper_entry.py` is a manual
   idempotent backfill tool that no-ops on NO_TRADE / already-open / holiday.
 - **SPT-7** — the report aggregates the paper track over a window, grouped by ruleset version, and returns an explicit all-pass / fail against G1–G9; it is a manual invocation, not a cron.

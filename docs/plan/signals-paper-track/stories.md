@@ -113,6 +113,32 @@ message renders (no network) for both directions; footer at zero prior trades an
 
 ---
 
+## SPT-3b — `signal_exit.evaluate()` pure function (dependency split from SPT-5)
+
+**Intent:** SPT-4 hands `(entry, mark, now)` to `signal_exit.evaluate` per its own spec below, but that function does not exist yet — it was originally scoped to SPT-5 alongside the exit-fill / close
+/ Telegram caller-side wiring. Split out early so SPT-4 has something real to call. Extend **`src/strategy/signal_exit.py`** (SPT-3 created it as the SL/target constants module — `SL_PCT` / `TGT_PCT`
+/ `RULESET_VERSION` / `derive_levels`; add the evaluator to that same file, do not create a second module) with a pure function `evaluate(entry: SignalPaperEntry, mark: Decimal, now: datetime) ->
+SignalExitDecision`. Priority, no state machine:
+
+```
+1. mark >= entry.tgt_price          -> TARGET
+2. mark <= entry.sl_price           -> STOP_LOSS
+3. now  >= 15:00 IST                -> TIME_EXIT
+4. otherwise                        -> HOLD
+```
+
+`SignalExitReason` enum: `TARGET`, `STOP_LOSS`, `TIME_EXIT` — **plus a reserved `TRAILING_STOP`** member (unused in Phase 1, present so the Phase 2 dynamic exit needs no migration). The function stays
+pure — no I/O, no fill, no persistence. `SignalExitDecision` is the return shape (reason + whatever `evaluate`'s caller needs — decide the minimal frozen shape here; SPT-5 consumes it unchanged).
+
+**Before any code:** `get_code_snippet("SignalPaperEntry")`, the SPT-2 models (already read for SPT-4's own pre-step — do not re-fetch if this session did SPT-4's pre-read first).
+
+**Tests:** `TARGET` fires at `mark == tgt_price` and above; `STOP_LOSS` at `mark == sl_price` and below; `TIME_EXIT` at exactly 15:00:00 IST and after; `HOLD` in the dead band and at 14:59; `TARGET`
+wins when a tick satisfies target and time together; `SignalExitReason.TRAILING_STOP` exists but `evaluate` never returns it.
+
+**Commit:** `feat(signals-paper-track): SPT-3b signal_exit.evaluate() pure evaluator`
+
+---
+
 ## SPT-4 — Monitor registration (30 s) + mark-path logging
 
 **Intent:** register `paper_signal_track_v1` with the shared `StrategyMonitor` at a **30 s** per-strategy cadence (credit spreads stay 90 s — no second daemon). Per due tick, while a position is open:
@@ -134,20 +160,10 @@ timestamp; `gap_event` set on a > 20 % inter-tick jump; `mfe_pct` / `mae_pct` mo
 
 ---
 
-## SPT-5 — Exit engine `signal_exit.py`
+## SPT-5 — Exit engine `signal_exit.py` caller-side wiring
 
-**Intent:** extend **`src/strategy/signal_exit.py`** (SPT-3 created it as the SL/target constants module — `SL_PCT` / `TGT_PCT` / `RULESET_VERSION` / `derive_levels`; add the evaluator to that same
-file, do not create a second module) with a pure function `evaluate(entry: SignalPaperEntry, mark: Decimal, now: datetime) -> SignalExitDecision`. Priority, no state machine:
-
-```
-1. mark >= entry.tgt_price          -> TARGET
-2. mark <= entry.sl_price           -> STOP_LOSS
-3. now  >= 15:00 IST                -> TIME_EXIT
-4. otherwise                        -> HOLD
-```
-
-`SignalExitReason` enum: `TARGET`, `STOP_LOSS`, `TIME_EXIT` — **plus a reserved `TRAILING_STOP`** member (unused in Phase 1, present so the Phase 2 dynamic exit needs no migration). The function stays
-pure — no I/O, no fill, no persistence.
+**Intent:** `signal_exit.evaluate()` + `SignalExitReason` already exist (SPT-3b). This task is the caller-side wiring only: on a non-HOLD decision from SPT-4's tick, take the exit fill, close the row,
+and send the Telegram exit message.
 
 On a non-HOLD the SPT-4 caller: takes the exit fill via `PaperFillSimulator` SELL at `mid − s` **on the observed tick's mark, not the threshold price** (gap-through is booked — a `0.60·E` mark against
 a `0.70·E` SL realises −40 %), closes the `paper_trades` row + writes `paper_exit_events` with the reason, computes realised P&L `= (X − E) × LOT_SIZE` (`Decimal` throughout), sends the Telegram exit
@@ -172,9 +188,8 @@ Signal    NIFTY 23000 29 SEP 26 PE   65   39.52   55.25  1,022.12  +39.78%
 **Before any code:** `get_code_snippet("PaperFillSimulator")`, `get_code_snippet("FillResult")`, `get_code_snippet("PaperExitEvent")`, `get_code_snippet("pnl_emoji")` / `format_money`; the SPT-2
 models + `cumulative_pnl`.
 
-**Tests:** `TARGET` fires at `mark == tgt_price` and above; `STOP_LOSS` at `mark == sl_price` and below; `TIME_EXIT` at exactly 15:00:00 IST and after; `HOLD` in the dead band and at 14:59; `TARGET`
-wins when a tick satisfies target and time together; P&L math for a win (`X > E`), a loss (`X < E`), and the gap-through case; message renders for a win and a loss; `SignalExitReason.TRAILING_STOP`
-exists but `evaluate` never returns it. `greeks-analyst` review (theta / gamma near the roll).
+**Tests:** P&L math for a win (`X > E`), a loss (`X < E`), and the gap-through case; `close_signal_entry` fires exactly once per exit (no double-close on a stray re-tick); message renders for a win
+and a loss. `greeks-analyst` review (theta / gamma near the roll).
 
 **Commit:** `feat(signals-paper-track): SPT-5 signal_exit evaluator + exit message`
 
