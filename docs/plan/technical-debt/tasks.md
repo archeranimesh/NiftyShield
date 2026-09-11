@@ -22,7 +22,7 @@ commit — they are proactive verification/reconciliation work, not opportunisti
 - [x] **DEBT-9** — `standalone-actionable`. Verify the SWEEP-3 `check_inline_full_suite.py` hook + the "once before commit" AutoTrigger cadence are effective against `pytest-inlined-not-test-runner`
   (Count 9 at escalation, 2026-09-03). Trigger: standalone once 3 sessions are logged after `e325e86`; escalate if still recurring. Verified NOT effective — slug recurred to Count 17 through
   2026-09-11, warn-only never stopped it; escalated to a protocol/model discussion (see `DECISIONS.md`), resolved by making the hook blocking (exit 2), mirroring DEBT-8. | Owner: Claude | Model:
-  claude-sonnet-5 | Review: none | SHA: <pending>
+  claude-sonnet-5 | Review: none | SHA: 300f5b8
 - [ ] **DEBT-10** — `standalone-actionable`. Verify the SWEEP-2 `check_wide_grep.py` hook is effective against `wide-grep-dump-then-page` (Count 7 at escalation, 2026-09-03). Trigger: standalone once
   3 sessions are logged after `68683cb`; escalate if still recurring. | Owner: Claude | Model: claude-sonnet-5 | Review: none
 - [ ] **DEBT-11** — `standalone-actionable`. `sha-recorded-via-second-commit` (Count 6 at escalation, 2026-09-03) is a protocol conflict, not a per-session lapse: the SWEEP-4 `commit` skill Step 1b
