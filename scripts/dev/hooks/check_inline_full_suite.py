@@ -1,7 +1,10 @@
-"""PreToolUse warn — a bare full-suite ``pytest`` run from the main session.
+"""PreToolUse block — a bare full-suite ``pytest`` run from the main session.
 
-Registered via ``.claude/hooks/inline_full_suite.sh`` on ``Bash``. Warn-only:
-prints guidance to stdout and always exits 0.
+Registered via ``.claude/hooks/inline_full_suite.sh`` on ``Bash``. Blocking:
+prints guidance to stderr and exits 2 on a bare full-suite run (exit 0
+otherwise) — DEBT-9 escalated this from warn-only after the
+``pytest-inlined-not-test-runner`` slug recurred 17x post-remediation with no
+change in behavior.
 
 Fires when the command invokes ``pytest`` (directly, or via ``python -m pytest``)
 against the whole unit tree — ``tests/unit`` / ``tests/`` / no path at all — with
@@ -81,15 +84,18 @@ def evaluate(command: str) -> str | None:
 
 
 def main(stdin_text: str) -> int:
-    """Parse the PreToolUse payload on stdin; print a warning if warranted."""
+    """Parse the PreToolUse payload on stdin; block (exit 2) on a bare full-suite run."""
     try:
         data = json.loads(stdin_text)
     except (ValueError, TypeError):
         return 0
-    command = data.get("tool_input", {}).get("command", "") or ""
+    if not isinstance(data, dict):
+        return 0
+    command = (data.get("tool_input") or {}).get("command", "") or ""
     warning = evaluate(command)
     if warning:
-        print(warning)
+        print(warning, file=sys.stderr)
+        return 2
     return 0
 
 

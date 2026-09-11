@@ -274,7 +274,7 @@ deferred with a documented reason in the commit message.
 
 `test-runner` runs **once** — one authoritative green run per task, spawned when the edits are
 done, not after each intermediate edit. Running `pytest tests/unit/` inline in the main
-session instead of spawning the agent is flagged by `inline_full_suite.sh` (warn-only). For a
+session instead of spawning the agent is flagged by `inline_full_suite.sh` (blocking). For a
 docs/tooling-only change, gate on the targeted test dir rather than the full suite.
 
 **Financial logic commits** (Greeks, P&L, Decimal paths, BrokerClient boundaries): the real

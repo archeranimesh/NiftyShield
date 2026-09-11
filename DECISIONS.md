@@ -1000,6 +1000,32 @@ separate graph-before-read hook (`guard_src_reads.sh`, tracked separately under 
 
 ---
 
+## DEBT-9 — `check_inline_full_suite.py` escalated from warn-only to blocking (2026-09-11)
+
+Verification (per `docs/plan/technical-debt/stories.md` DEBT-8/-9/-10/-12 common procedure):
+`pytest-inlined-not-test-runner` recurred to Count 17 in `suggestions.md`, with dated examples
+running through 2026-09-11 — well past the SWEEP-3 remediation (`e325e86`, 2026-09-03) and far
+beyond the 3-session check window. The hook fired correctly every time (`_is_narrowed()` traced
+against the actual recurring command shape, `python -m pytest tests/unit/ --tb=no -q`, confirms it
+is not narrowed and the warning does fire), but only printed to stdout and always exited 0, so the
+warning had no effect — sessions spawned `@test-runner` once as required, then ran the full suite
+inline anyway as a redundant "pre-commit green check." Per the procedure, this recurrence does not
+get a fresh `DEBT-*` line — it is a protocol/model discussion. Same call as `DEBT-8`: escalate to
+blocking rather than accept it as pure model discipline, since the hook's own warning text already
+names the correct alternative (spawn `@test-runner`) and a redundant inline run after that warning
+is not a judgment call the model should be free to override.
+
+**Change:** `check_inline_full_suite.py` now prints to stderr and returns exit 2 on a bare
+full-suite run (was: stdout + exit 0 always); added the same `isinstance`/null-safety guard on the
+PreToolUse payload as `DEBT-8`. `.claude/hooks/inline_full_suite.sh` propagates that exit code
+instead of forcing `exit 0` and drops the redundant `cat |` piping. This also blocks a recursive
+`@test-runner` subagent run if it is not itself narrowed — intentional, since a narrowed run is the
+whole point of the subagent's job. `CLAUDE.md`/`AGENTS.md` each needed one word corrected: the
+AutoTrigger Rules paragraph describing `inline_full_suite.sh` said "(warn-only)" — now
+"(blocking)" — since it no longer merely flags the pattern.
+
+---
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/` (except 0.6c), `src/streaming/` — all empty

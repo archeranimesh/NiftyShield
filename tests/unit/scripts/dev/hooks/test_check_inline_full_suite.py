@@ -58,8 +58,21 @@ def test_warns_when_piped_to_tail():
     assert evaluate("python -m pytest tests/unit/ --tb=no -q | tail -1") is not None
 
 
-def test_exits_zero():
+def test_blocks_on_bare_full_suite():
     payload = json.dumps({"tool_input": {"command": "pytest tests/unit/ -q"}})
-    assert main(payload) == 0
+    assert main(payload) == 2
     assert main("not json") == 0
     assert main(json.dumps({"tool_input": {"command": "ls -la"}})) == 0
+    assert (
+        main(json.dumps({"tool_input": {"command": "pytest tests/unit/scripts/dev/hooks/"}})) == 0
+    )
+
+
+def test_main_exits_zero_on_null_tool_input():
+    """A payload with tool_input: null must not crash the hook."""
+    assert main(json.dumps({"tool_input": None})) == 0
+
+
+def test_main_exits_zero_on_non_dict_payload():
+    """A well-formed but non-dict JSON payload must not crash the hook."""
+    assert main(json.dumps(["not", "a", "dict"])) == 0

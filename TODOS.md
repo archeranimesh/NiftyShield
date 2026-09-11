@@ -143,6 +143,11 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-11] `docs/plan/technical-debt` **DEBT-9** closed — verified `check_inline_full_suite.py`
+  (warn-only since SWEEP-3, `e325e86`) did not stop `pytest-inlined-not-test-runner` (Count 17
+  recurrences through 2026-09-11). Escalated to a protocol/model discussion per the DEBT-8/-9/
+  -10/-12 procedure; made the hook blocking (exit 2 + stderr), mirroring the DEBT-8 fix.
+  Decision + rationale: `DECISIONS.md`.
 - [2026-09-11] `docs/plan/technical-debt` **DEBT-8** closed — verified `check_repeat_read.py`
   (warn-only since SWEEP-2, `68683cb`) did not stop `reread-file-already-in-context` (34
   recurrences through 2026-09-11). Escalated to a protocol/model discussion per the DEBT-8/-9/

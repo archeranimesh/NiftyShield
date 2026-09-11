@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# PreToolUse(Bash) hook — warns on a bare full-suite `pytest tests/unit/` run
+# PreToolUse(Bash) hook — blocks a bare full-suite `pytest tests/unit/` run
 # from the main session (spawn @test-runner instead). Recursive test-runner
-# subagent runs will also see the line; it is warn-only noise there.
+# subagent runs will also see this — it blocks there too, so a narrowed run
+# is required even inside the subagent.
 #
-# Exit 0 always — warn only, never block. Logic + tests:
-#   scripts/dev/hooks/check_inline_full_suite.py
+# Exit 2 blocks the tool call (bare full-suite run); exit 0 otherwise. Logic +
+# tests: scripts/dev/hooks/check_inline_full_suite.py
 
 set -uo pipefail
 
-cat | python3 scripts/dev/hooks/check_inline_full_suite.py 2>/dev/null || true
-
-exit 0
+python3 scripts/dev/hooks/check_inline_full_suite.py
+exit $?
