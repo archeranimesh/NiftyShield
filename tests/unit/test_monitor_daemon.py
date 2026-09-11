@@ -162,12 +162,14 @@ async def test_four_ic_strategies_registered() -> None:
         assert "paper_ic_nifty_v1_leaps" in registered_names
         assert "paper_ic_nifty_v1_yearly" in registered_names
 
-        # Assert daemon's strategies_ref has all 4 strategy names
-        assert len(daemon.strategies_ref) == 4
+        # Assert daemon's strategies_ref has all 4 IC strategy names, plus
+        # paper_signal_track_v1 (SPT-6, always registered in this test env)
+        assert len(daemon.strategies_ref) == 5
         assert "paper_ic_nifty_v1_weekly" in daemon.strategies_ref
         assert "paper_ic_nifty_v1_monthly" in daemon.strategies_ref
         assert "paper_ic_nifty_v1_leaps" in daemon.strategies_ref
         assert "paper_ic_nifty_v1_yearly" in daemon.strategies_ref
+        assert "paper_signal_track_v1" in daemon.strategies_ref
 
 
 @pytest.mark.asyncio
@@ -312,12 +314,14 @@ async def test_one_ic_failure_does_not_block_others() -> None:
         assert "paper_ic_nifty_v1_leaps" in registered_names
         assert "paper_ic_nifty_v1_yearly" in registered_names
 
-        # Assert daemon's strategies_ref has 3 strategy names
-        assert len(daemon.strategies_ref) == 3
+        # Assert daemon's strategies_ref has the 3 surviving IC strategy names,
+        # plus paper_signal_track_v1 (SPT-6, always registered in this test env)
+        assert len(daemon.strategies_ref) == 4
         assert "paper_ic_nifty_v1_weekly" not in daemon.strategies_ref
         assert "paper_ic_nifty_v1_monthly" in daemon.strategies_ref
         assert "paper_ic_nifty_v1_leaps" in daemon.strategies_ref
         assert "paper_ic_nifty_v1_yearly" in daemon.strategies_ref
+        assert "paper_signal_track_v1" in daemon.strategies_ref
 
         # Assert logger.error was called with weekly initialization failure details
         mock_log_error.assert_called_with(

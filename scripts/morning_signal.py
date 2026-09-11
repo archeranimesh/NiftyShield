@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """Morning signal-pipeline cron script.
 
-Cron: 15 9 * * 1-5
+Cron: 15 9 * * 1-5  (also opens the paper_signal_track_v1 entry — no separate cron)
 
 Pure orchestration: assemble the market snapshot, fan out to every configured
 signal provider, aggregate their responses into one consensus DailySignal,
 persist every stage, and send a one-line Telegram notification. All
 data-source logic lives in ``assemble_market_snapshot`` — this script contains
-none.
+none. After the DailySignal is persisted, a guarded tail-call opens the
+signals-paper-track entry (SPT-6) — a failure there is logged and isolated,
+never crashing the advisory pipeline.
 """
 
 from __future__ import annotations
@@ -34,6 +36,7 @@ from src.notifications.formatting import format_money, format_strike  # noqa: E4
 from src.notifications.markdown import escape_markdown  # noqa: E402
 from src.notifications.telegram import build_notifier  # noqa: E402
 from src.paper.constants import DEFAULT_BOD_PATH  # noqa: E402
+from src.paper.store import PaperStore  # noqa: E402
 from src.signals.factory import build_aggregator, build_providers  # noqa: E402
 from src.signals.models import (  # noqa: E402
     DailySignal,
@@ -44,6 +47,7 @@ from src.signals.models import (  # noqa: E402
 from src.signals.option_resolver import resolve_monthly_option  # noqa: E402
 from src.signals.snapshot import assemble_market_snapshot  # noqa: E402
 from src.signals.store import SignalStore  # noqa: E402
+from src.strategy.signal_track_v1 import open_signal_paper_entry  # noqa: E402
 from src.utils.logging import setup_logging  # noqa: E402
 
 logger = structlog.get_logger("scripts.morning_signal")
@@ -275,6 +279,16 @@ async def run() -> None:
             )
 
     await asyncio.to_thread(store.record_signal, signal)
+
+    try:
+        paper_store = PaperStore(settings.db_path)
+        await asyncio.to_thread(paper_store.init_db)
+        await open_signal_paper_entry(signal, snapshot, broker, paper_store)
+    except Exception as exc:  # noqa: BLE001 -- Intentional: isolate paper entry at cron boundary; the advisory pipeline must still complete
+        logger.warning(
+            "morning_signal.paper_entry_failed",
+            error=str(exc),
+        )
 
     notifier = build_notifier()
     if notifier:

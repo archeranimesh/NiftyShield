@@ -10,6 +10,9 @@ Cron requirements:
 15 09 * * 1-5  python -m scripts.start_monitor
 30 15 * * 1-5  python -m scripts.stop_monitor
 35 15 * * 1-5  python -m scripts.eod_summary
+
+Also registers paper_signal_track_v1 (SPT-6) — its 30 s cadence runs off
+SignalTrackV1.due_interval_s inside the existing tick loop; no new cron.
 """
 
 from __future__ import annotations
@@ -96,6 +99,12 @@ try:
 except ImportError:
     # Intentional: Ignore import errors for unimplemented strategies
     OverlayCloser = None
+
+try:
+    from src.strategy.signal_track_v1 import SignalTrackV1  # noqa: E402
+except ImportError:
+    # Intentional: Ignore import errors for unimplemented strategies
+    SignalTrackV1 = None
 
 logger = structlog.get_logger("scripts.monitor_daemon")
 
@@ -332,6 +341,23 @@ async def main() -> int:
             )
     else:
         logger.warning("NiftyTrackComparisonV1 module not found; " + "skipping registration")
+
+    if SignalTrackV1 is not None:
+        try:
+            strategies.append(
+                SignalTrackV1(
+                    broker=broker,
+                    store=store,
+                    notifier=gateway,
+                    lookup=lookup,
+                )
+            )
+            logger.info("Registered SignalTrackV1 strategy (30s cadence)")
+        except Exception as e:
+            # Intentional: Safe strategy init guard
+            logger.error("Failed to initialize SignalTrackV1", error=str(e))
+    else:
+        logger.warning("SignalTrackV1 module not found; skipping registration")
 
     if MONITOR_OVERLAYS:
         logger.info("MONITOR_OVERLAYS=1 — registering overlay strategies")

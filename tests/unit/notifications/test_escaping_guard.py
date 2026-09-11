@@ -257,11 +257,12 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "be used on it), but this guard only inspects the immediate enclosing function "
         "(_notify), not the builder it calls — same shape as the morning_signal.py:218 entry"
     ),
-    ("scripts/morning_signal.py", 282): (
+    ("scripts/morning_signal.py", 296): (
         "S5.5c — value is fully escaped inside the callee _format_signal_notification() "
         "(the message-builder owns the MarkdownV2 boundary: escape_markdown() per dynamic "
         "value, literal * for bold), but this guard only inspects the immediate enclosing "
-        "function (run), not the builder it calls — same shape as the scripts/eod_summary.py:200 entry"
+        "function (run), not the builder it calls — same shape as the scripts/eod_summary.py:200 entry. "
+        "Line moved from 282 -> 296 by SPT-6's paper-entry tail-call above it."
     ),
     ("src/strategy/signal_track_v1.py", 379): (
         "SPT-3 — value is fully escaped inside the callee build_signal_entry_message() "
