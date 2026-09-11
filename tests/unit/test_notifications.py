@@ -22,18 +22,9 @@ _ENTITY_PARSE_ERROR_DESCRIPTION = (
     "Bad Request: can't parse entities: Can't find end of the entity starting at byte offset 455"
 )
 
-# Env vars that can leak across tests if dotenv loads into os.environ — several
-# scripts/ modules (e.g. paper_3track_roll.py) call load_dotenv() unconditionally
-# at import time, which is never undone by monkeypatch since monkeypatch only
-# reverts changes it made itself. Same pattern as tests/unit/auth/test_dhan_verify.py.
-_TELEGRAM_ENV_VARS = ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TELEGRAM_MESSAGE_BUDGET"]
-
-
-@pytest.fixture(autouse=True)
-def clean_telegram_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Prevent env var leakage between tests — dotenv writes to os.environ globally."""
-    for var in _TELEGRAM_ENV_VARS:
-        monkeypatch.delenv(var, raising=False)
+# Telegram env var leakage guard moved to tests/unit/conftest.py's
+# session-autouse clean_telegram_env fixture — every test needs this, not
+# just this file's.
 
 
 # ── _html_escape ──────────────────────────────────────────────────
