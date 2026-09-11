@@ -78,7 +78,9 @@ slug. If it did **not** recur in 3+ such sessions, tick the box — the hook wor
 - **DEBT-15** — `ruff-format-check-skipped-precommit-abort` (Count 5). Remediation: SWEEP-4 `commit_preflight.py` staged `ruff format --check` blocker (`2b85b84`). It fires before the commit rather
   than letting the pre-commit hook abort it, but a `ruff format` + re-stage cycle still costs a round trip when only `ruff check` + an `awk` length sweep were run pre-stage (S5.3: `✗ ruff-format` on
   `record_signal_outcome.py`). Run `token_audit.py` / grep session-close reports over the 3 sessions after `2b85b84`; if the slug did not recur, tick the box. If it recurred, open a protocol/model
-  discussion — likely folding `ruff format` into the standard pre-stage checklist. Standalone — no trigger wait.
+  discussion — likely folding `ruff format` into the standard pre-stage checklist. Standalone — no trigger wait. **Verified (2026-09-11):** one post-`2b85b84` recurrence (S5.2c, `b33a43d`), then none
+  across the dozens of sessions since — the check fired and the commit aborted correctly both times cited (S5.2c, S5.3); the blocker works, the residual is a pre-stage-checklist cost, not hook
+  failure. See `DECISIONS.md` DEBT-15.
 - **DEBT-16** — `rule0-read-over-graph-hook-ignored` (Count 5). Remediation: the Rule 0 `.claude/hooks/guard_src_reads.sh` PreToolUse hook, which fires on every `Read` of a `src/` or `scripts/` path.
   It is warn-only by design ("It will not block — the decision is yours") and has not stopped the pattern across five sessions: BUG-041, S5.5d, signals-cost-tracking planning + SCT-1, and the
   read-path `init_db` cron fix (2026-09-10) each grepped a `src/`/`scripts/` file then issued a full-file `Read` rather than pivoting to `get_code_snippet` / a targeted `sed -n 'N,Mp'` or stating in

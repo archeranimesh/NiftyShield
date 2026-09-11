@@ -37,9 +37,10 @@ commit — they are proactive verification/reconciliation work, not opportunisti
   a new file in an under-documented module) and closes without adding the `CONTEXT_TREE.md` row / `CONTEXT.md` "What Exists" line. `src/signals/` has had this gap open since S1.1 across four stories.
   Add a pre-commit / preflight audit that diffs `src/*/` and `scripts/*/` dirs against the anchors present in `CONTEXT_TREE.md`, then verify against the `src/signals/` backfill. Trigger: standalone. |
   Owner: Claude | Model: claude-sonnet-5 | Review: none
-- [ ] **DEBT-15** — `standalone-actionable`. Verify the SWEEP-4 `commit_preflight.py` staged `ruff format --check` blocker is effective against `ruff-format-check-skipped-precommit-abort` (Count 5 at
+- [x] **DEBT-15** — `standalone-actionable`. Verify the SWEEP-4 `commit_preflight.py` staged `ruff format --check` blocker is effective against `ruff-format-check-skipped-precommit-abort` (Count 5 at
   escalation, 2026-09-08). It caught the S5.3 case (`✗ ruff-format` on `record_signal_outcome.py` before the commit) but still cost a `ruff format` + re-stage cycle because only `ruff check` + an
-  `awk` length sweep were run pre-stage. Trigger: standalone once 3 sessions are logged after `2b85b84`; escalate if still recurring. | Owner: Claude | Model: claude-sonnet-5 | Review: none
+  `awk` length sweep were run pre-stage. Trigger: standalone once 3 sessions are logged after `2b85b84`; escalate if still recurring.
+  | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <pending>
 - [ ] **DEBT-16** — `standalone-actionable`. Verify the Rule 0 `.claude/hooks/guard_src_reads.sh` PreToolUse hook is effective against `rule0-read-over-graph-hook-ignored` (Count 5 at escalation,
   2026-09-10). The hook is warn-only by design and has not stopped the pattern: a session greps a `src/`/`scripts/` file then issues a full-file `Read` instead of pivoting to `get_code_snippet` / a
   targeted `sed -n` or stating why the graph is insufficient. Decide whether the hook should block (or emit a stronger reminder), then verify. Trigger: standalone once 3 sessions are logged after this

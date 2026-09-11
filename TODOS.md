@@ -143,6 +143,12 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-11] `docs/plan/technical-debt` **DEBT-15** closed — verified `commit_preflight.py`'s
+  staged `ruff format --check` blocker (SWEEP-4, `2b85b84`) against `ruff-format-check-skipped-
+  precommit-abort`: one post-remediation recurrence (S5.2c, `b33a43d`), none since across the
+  dozens of sessions that followed. Like DEBT-12, the check is a real blocker and fired
+  correctly each time cited (S5.2c, S5.3) — recurrence is a pre-stage-checklist cost, not hook
+  failure. No protocol/model discussion opened. Decision + rationale: `DECISIONS.md`.
 - [2026-09-11] `docs/plan/technical-debt` **DEBT-12** closed — verified `commit_preflight.py`'s
   staged md-line-length check (SWEEP-4, `2b85b84`) against `authored-md-prose-over-200-cap` (4
   post-remediation recurrences through 2026-09-10). Unlike DEBT-8/-9, the check is a real
