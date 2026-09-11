@@ -3,7 +3,7 @@
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
 spec; `schema.md` is the sole DDL source.
 
-**Open: SPT-4.**
+**Open: SPT-5.**
 
 > SPT-1 (council checkpoint) is closed — ruled 2026-09-09, `docs/archive/council/strategy/2026-09-09_signals-paper-track-execution-layer.md`, absorbed into `DECISIONS.md` §"Signals Paper Track —
 > Execution Layer". SPT-2..SPT-8 below are the rewrite from that ruling — no longer provisional.
@@ -30,8 +30,11 @@ spec; `schema.md` is the sole DDL source.
 - [x] **SPT-3b** — Split from SPT-5 (2026-09-11, dependency ordering): extend `src/strategy/signal_exit.py` (created in SPT-3 as the constants module) with the pure `evaluate(entry, mark, now) →
   TARGET | STOP_LOSS | TIME_EXIT | HOLD` + `SignalExitReason` (`TRAILING_STOP` reserved, unused). No I/O, no fill, no persistence — SPT-4 needs this to exist before it can wire the monitor tick. |
   Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: c050de0
-- [ ] **SPT-4** — Register `paper_signal_track_v1` with `StrategyMonitor` via a new per-strategy `due_interval_s` (30 s; credit spreads stay 90 s); per-tick `paper_signal_marks` row (mark / MFE / MAE
-  / stale / gap_event); hand tick to `signal_exit.evaluate` (SPT-3b). 90 s fallback + cadence-review trigger. | Owner: Claude | Model: claude-sonnet-5 | Review: greeks-analyst | SHA: <—>
+- [x] **SPT-4** — Register `paper_signal_track_v1` with `StrategyMonitor` via a new per-strategy `due_interval_s` (30 s; credit spreads stay 90 s); per-tick `paper_signal_marks` row (mark / MFE / MAE
+  / stale / gap_event); hand tick to `signal_exit.evaluate` (SPT-3b). As-built: cadence is a tick-count/ratio scheme (not wall-clock elapsed time) so repeated `_tick()` calls in tests stay
+  deterministic; `quote_ts` is always `None` for now (the chain parser doesn't expose one yet, so `stale` is currently dead in production, logic unit-tested directly); a non-HOLD decision from
+  `signal_exit.evaluate` is only logged + deduped in-memory (`_exit_fired_trade_ids`) — no fill/close, that's SPT-5. | Owner: Claude | Model: claude-sonnet-5 | Review: greeks-analyst + code-reviewer |
+  SHA: 7b11e83
 - [ ] **SPT-5** — Caller-side wiring only (evaluator moved to SPT-3b): on a non-HOLD decision from SPT-4's tick, take the exit fill at the observed mark via `PaperFillSimulator`, close the row +
   `paper_exit_events`, send the Telegram exit message. | Owner: Claude | Model: claude-sonnet-5 | Review: greeks-analyst | SHA: <—>
 - [ ] **SPT-6** — Entrypoint wiring, **no new cron**: a guarded paper-entry tail-call in `scripts/morning_signal.py` right after `store.record_signal(signal)`; a `paper_signal_track_v1` registration
