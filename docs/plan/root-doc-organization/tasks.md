@@ -2,7 +2,8 @@
 
 Token-efficiency cleanup of the ~22 root `.md` files, doc-maintenance automation, and the `docs/plan/` story-format standardization (RDO-17). Docs + tooling only — no `src/` behaviour change.
 `prompt.md` says why the story exists; `stories.md` carries the per-task spec — a full forward spec for the open tasks and a short as-built digest for each shipped one; `plan.md` keeps the original
-file-by-file root inventory (D6 extra file). Work top-down: the first unchecked `- [ ]` line is the task. Each task is one commit plus a follow-up that records its SHA and ticks the box.
+file-by-file root inventory (D6 extra file). Work top-down: the first unchecked `- [ ]` line is the task. When a phase ticks its own box in the same commit, `SHA: <pending>` is the sanctioned interim
+— the real SHA is backfilled in the next commit's docs touch, never in a dedicated swap-only commit (`docs/plan/README.md` §Conventions).
 
 **Open: RDO-16 (next, after RDO-6 — shipped), RDO-11 (date-gated ≥ 2026-09-03).** RDO-17.5 (`5508e41`) + RDO-17.6 (`cf46ff4`) shipped the two POC full conversions; RDO-17.7 §A shipped the fill-to-≤200
 *guidance* inside RDO-17.5 (`7d28d16`), then RDO-17.7 swept both POC folders to that style in full; RDO-17.8 (`0be92a1`) recorded the legacy-folder decision — batch-convert everything — now the

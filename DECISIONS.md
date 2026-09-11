@@ -8,6 +8,12 @@
 
 ## Developer Tooling
 
+**Closing-commit SHA-backfill policy, repo-wide (2026-09-11, DEBT-11):** when a commit ticks a `tasks.md` box in the same commit that does the work, set `SHA: <pending>` on that line and backfill the
+real SHA as the first edit of the **next** commit that touches that folder's docs — never a dedicated swap-only commit just to record one SHA. This is the sole policy;
+`docs/plan/root-doc-organization/tasks.md`'s prior "one commit plus a follow-up" line contradicted it and has been corrected to match. `commit_preflight.py`'s SHA-placeholder warning already enforces
+this shape (`scripts/dev/commit_preflight.py`, SHA-placeholder check). Rationale: a dedicated swap-only commit for a single SHA line was the recurring `sha-recorded-via-second-commit` pattern
+(`suggestions.md`, Count 6) — folding the backfill into the next real doc-touch removes the extra commit without losing the SHA record.
+
 **pydantic-settings singleton for all env vars (2026-05-30, CH-7a):** `Settings(BaseSettings)` in `src/config.py` is the sole place where environment variables are read. Import the `settings`
 singleton everywhere else — never call `os.getenv()` directly. Rationale: single validation point at startup catches missing credentials immediately rather than failing silently mid-run;
 pydantic-settings handles `.env` loading, type coercion, and pattern validation in one place. All fields are optional (None by default) so the codebase starts in test mode without credentials; callers
@@ -902,8 +908,7 @@ the operator and not reopened.
 **Module boundary — A.** The track is a `PaperStrategy` named `paper_signal_track_v1` on the shared `StrategyMonitor` + `PaperExecutor` / `PaperFillSimulator` + `PaperStore`. B (a self-contained
 `src/signals/` loop) is rejected: the 2026-09-07 independence ruling was `src/backtest/`-scoped, the PT-S2 roadmap slot always pointed here, and a second daemon is not justified by the one real cost
 of A (exit-vocabulary mismatch), which is paid either way. An adapter converts an actionable `DailySignal` -> `SignalEvent` / `ApprovedAction` / one `LegSpec` (BUY, 1 lot, key from
-`resolve_monthly_option` — rolls to next-month at 14 DTE via `get_expiry_candidates`'s floor;
-the SPT-2a `<= 7`-DTE roll was dropped, see the 2026-09-10 follow-up below).
+`resolve_monthly_option` — rolls to next-month at 14 DTE via `get_expiry_candidates`'s floor; the SPT-2a `<= 7`-DTE roll was dropped, see the 2026-09-10 follow-up below).
 
 **Exit evaluator — new pure module `src/strategy/signal_exit.py`.** `evaluate(entry, mark, now) -> TARGET | STOP_LOSS | TIME_EXIT | HOLD`, no I/O, no state machine. NOT a branch in `ExitSignalEngine`
 (its short-premium / delta / IVR vocabulary does not fit a naked long); NOT in `src/signals/` (that stays the advisory pipeline). Phase-1 priority: `TARGET` (mark >= tgt) -> `STOP_LOSS` (mark <= sl)
@@ -979,50 +984,32 @@ point for callers like `monitor.py`/`executor.py`/snapshot scripts). Full ration
 
 ## DEBT-8 — `check_repeat_read.py` escalated from warn-only to blocking (2026-09-11)
 
-Verification (per `docs/plan/technical-debt/stories.md` DEBT-8/-9/-10/-12 common procedure):
-`reread-file-already-in-context` recurred 34x in `suggestions.md`, with dated examples running
-through 2026-09-11 — well past the SWEEP-2 remediation (`68683cb`, 2026-09-03) and far beyond the
-3-session check window. The hook fired every time (it was never silent) but only printed to stdout
-and always exited 0, so the warning had no effect on whether the agent proceeded. Per the procedure,
-this recurrence does not get a fresh `DEBT-*` line — it is a protocol/model discussion. Operator
-decision (Animesh): make the hook blocking rather than accept it as pure model discipline, since the
-hook's own warning text already names the correct alternative (edit the copy in context, or
-`get_code_snippet`/`sed -n`) and a second `Read` after that warning is not a judgment call the model
-should be free to override.
+Verification (per `docs/plan/technical-debt/stories.md` DEBT-8/-9/-10/-12 common procedure): `reread-file-already-in-context` recurred 34x in `suggestions.md`, with dated examples running through
+2026-09-11 — well past the SWEEP-2 remediation (`68683cb`, 2026-09-03) and far beyond the 3-session check window. The hook fired every time (it was never silent) but only printed to stdout and always
+exited 0, so the warning had no effect on whether the agent proceeded. Per the procedure, this recurrence does not get a fresh `DEBT-*` line — it is a protocol/model discussion. Operator decision
+(Animesh): make the hook blocking rather than accept it as pure model discipline, since the hook's own warning text already names the correct alternative (edit the copy in context, or
+`get_code_snippet`/`sed -n`) and a second `Read` after that warning is not a judgment call the model should be free to override.
 
-**Change:** `check_repeat_read.py` now prints to stderr and returns exit 2 on a repeat read (was:
-stdout + exit 0 always); `.claude/hooks/repeat_read.sh` propagates that exit code instead of forcing
-`exit 0` and no longer discards stderr. The Edit/Write-precondition re-Read (a harness constraint,
-not a model choice) remains unflagged — `evaluate()` clears the seen-set on `Edit`/`Write`, unchanged.
-No `CLAUDE.md`/`AGENTS.md` doc line needed correction: the "flagged by `repeat_read.sh`" phrasing
-already held under either enforcement mode, and the Rule 0 "will not block" line refers to the
-separate graph-before-read hook (`guard_src_reads.sh`, tracked separately under DEBT-16).
+**Change:** `check_repeat_read.py` now prints to stderr and returns exit 2 on a repeat read (was: stdout + exit 0 always); `.claude/hooks/repeat_read.sh` propagates that exit code instead of forcing
+`exit 0` and no longer discards stderr. The Edit/Write-precondition re-Read (a harness constraint, not a model choice) remains unflagged — `evaluate()` clears the seen-set on `Edit`/`Write`,
+unchanged. No `CLAUDE.md`/`AGENTS.md` doc line needed correction: the "flagged by `repeat_read.sh`" phrasing already held under either enforcement mode, and the Rule 0 "will not block" line refers to
+the separate graph-before-read hook (`guard_src_reads.sh`, tracked separately under DEBT-16).
 
 ---
 
 ## DEBT-9 — `check_inline_full_suite.py` escalated from warn-only to blocking (2026-09-11)
 
-Verification (per `docs/plan/technical-debt/stories.md` DEBT-8/-9/-10/-12 common procedure):
-`pytest-inlined-not-test-runner` recurred to Count 17 in `suggestions.md`, with dated examples
-running through 2026-09-11 — well past the SWEEP-3 remediation (`e325e86`, 2026-09-03) and far
-beyond the 3-session check window. The hook fired correctly every time (`_is_narrowed()` traced
-against the actual recurring command shape, `python -m pytest tests/unit/ --tb=no -q`, confirms it
-is not narrowed and the warning does fire), but only printed to stdout and always exited 0, so the
-warning had no effect — sessions spawned `@test-runner` once as required, then ran the full suite
-inline anyway as a redundant "pre-commit green check." Per the procedure, this recurrence does not
-get a fresh `DEBT-*` line — it is a protocol/model discussion. Same call as `DEBT-8`: escalate to
-blocking rather than accept it as pure model discipline, since the hook's own warning text already
-names the correct alternative (spawn `@test-runner`) and a redundant inline run after that warning
-is not a judgment call the model should be free to override.
+Verification (per `docs/plan/technical-debt/stories.md` DEBT-8/-9/-10/-12 common procedure): `pytest-inlined-not-test-runner` recurred to Count 17 in `suggestions.md`, with dated examples running
+through 2026-09-11 — well past the SWEEP-3 remediation (`e325e86`, 2026-09-03) and far beyond the 3-session check window. The hook fired correctly every time (`_is_narrowed()` traced against the
+actual recurring command shape, `python -m pytest tests/unit/ --tb=no -q`, confirms it is not narrowed and the warning does fire), but only printed to stdout and always exited 0, so the warning had no
+effect — sessions spawned `@test-runner` once as required, then ran the full suite inline anyway as a redundant "pre-commit green check." Per the procedure, this recurrence does not get a fresh
+`DEBT-*` line — it is a protocol/model discussion. Same call as `DEBT-8`: escalate to blocking rather than accept it as pure model discipline, since the hook's own warning text already names the
+correct alternative (spawn `@test-runner`) and a redundant inline run after that warning is not a judgment call the model should be free to override.
 
-**Change:** `check_inline_full_suite.py` now prints to stderr and returns exit 2 on a bare
-full-suite run (was: stdout + exit 0 always); added the same `isinstance`/null-safety guard on the
-PreToolUse payload as `DEBT-8`. `.claude/hooks/inline_full_suite.sh` propagates that exit code
-instead of forcing `exit 0` and drops the redundant `cat |` piping. This also blocks a recursive
-`@test-runner` subagent run if it is not itself narrowed — intentional, since a narrowed run is the
-whole point of the subagent's job. `CLAUDE.md`/`AGENTS.md` each needed one word corrected: the
-AutoTrigger Rules paragraph describing `inline_full_suite.sh` said "(warn-only)" — now
-"(blocking)" — since it no longer merely flags the pattern.
+**Change:** `check_inline_full_suite.py` now prints to stderr and returns exit 2 on a bare full-suite run (was: stdout + exit 0 always); added the same `isinstance`/null-safety guard on the PreToolUse
+payload as `DEBT-8`. `.claude/hooks/inline_full_suite.sh` propagates that exit code instead of forcing `exit 0` and drops the redundant `cat |` piping. This also blocks a recursive `@test-runner`
+subagent run if it is not itself narrowed — intentional, since a narrowed run is the whole point of the subagent's job. `CLAUDE.md`/`AGENTS.md` each needed one word corrected: the AutoTrigger Rules
+paragraph describing `inline_full_suite.sh` said "(warn-only)" — now "(blocking)" — since it no longer merely flags the pattern.
 
 ---
 
