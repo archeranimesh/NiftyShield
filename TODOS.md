@@ -143,6 +143,14 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-11] `docs/plan/signals-paper-track` **SPT-5** closed (`06df9d8`) — caller-side exit
+  wiring: on a non-HOLD `signal_exit.evaluate()` decision, `SignalTrackV1._close_position` takes
+  the SELL fill at the observed mark via `PaperFillSimulator` (gap-through booked as-is, not
+  clamped to the SL/target threshold), closes the row + writes `paper_exit_events`, and sends
+  the new `build_signal_exit_message` Telegram exit message. `code-reviewer` and
+  `greeks-analyst` independently flagged the same issue — the closing SELL leg must go through
+  `PaperStore.record_trade`, not `record_signal_open_leg` (opening-leg-only, misleadingly
+  generic) — fixed before commit. Next: SPT-6.
 - [2026-09-11] `docs/plan/technical-debt` **DEBT-13** closed — `check_checkbox_consistency.py`'s
   `check_readme_pointers()` was blind to an epic row (`<epic>/` with `next: **ID**` pointing at
   a nested `<sub-story>/tasks.md`, no flat root `tasks.md`). Added
