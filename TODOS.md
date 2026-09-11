@@ -143,6 +143,20 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-11] `docs/plan/signals-paper-track` **SPT-6** closed (`1f52880`) — entrypoint wiring,
+  no new cron: `scripts/morning_signal.py` opens the paper entry via a guarded tail-call
+  (`await open_signal_paper_entry(signal, snapshot, broker, paper_store)`, isolated in a
+  `try/except` matching the existing entry-premium-capture pattern) right after
+  `store.record_signal`; `scripts/monitor_daemon.py` registers `SignalTrackV1` structurally
+  identically to the sibling strategies (its `due_interval_s=30` class attribute, set in SPT-4,
+  drives the 30 s cadence — no registration-time param needed); new
+  `scripts/signal_paper_entry.py` is a manual `--date` backfill/re-entry CLI for the rare
+  failed-tail-call case, calling the identical `open_signal_paper_entry` hook. No unit tests
+  (integration-only, matching `morning_signal.py`'s own precedent). Two `test_monitor_daemon.py`
+  strategy-count assertions bumped +1 for the now-always-registered `SignalTrackV1`; one
+  `test_escaping_guard.py` baseline line moved 282→296 (the tail-call shifted the already-safe
+  `notifier.send(msg)` call site, not a new escaping gap). `code-reviewer`: 0
+  CRITICAL/ERROR/WARNING. Next: SPT-8 (docs close).
 - [2026-09-11] `docs/plan/signals-paper-track` **SPT-5** closed (`06df9d8`) — caller-side exit
   wiring: on a non-HOLD `signal_exit.evaluate()` decision, `SignalTrackV1._close_position` takes
   the SELL fill at the observed mark via `PaperFillSimulator` (gap-through booked as-is, not

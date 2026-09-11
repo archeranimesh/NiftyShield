@@ -3,7 +3,7 @@
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
 spec; `schema.md` is the sole DDL source.
 
-**Open: SPT-6.**
+**Open: SPT-8.**
 
 > SPT-1 (council checkpoint) is closed — ruled 2026-09-09, `docs/archive/council/strategy/2026-09-09_signals-paper-track-execution-layer.md`, absorbed into `DECISIONS.md` §"Signals Paper Track —
 > Execution Layer". SPT-2..SPT-8 below are the rewrite from that ruling — no longer provisional.
@@ -38,9 +38,13 @@ spec; `schema.md` is the sole DDL source.
 - [x] **SPT-5** — Caller-side wiring only (evaluator moved to SPT-3b): on a non-HOLD decision from SPT-4's tick, take the exit fill at the observed mark via `PaperFillSimulator`, close the row +
   `paper_exit_events`, send the Telegram exit message. As-built: the closing SELL leg is recorded via `PaperStore.record_trade` (not `record_signal_open_leg`, which is opening-leg-only) — flagged
   independently by both `code-reviewer` and `greeks-analyst` in review. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer + greeks-analyst | SHA: 06df9d8
-- [ ] **SPT-6** — Entrypoint wiring, **no new cron**: a guarded paper-entry tail-call in `scripts/morning_signal.py` right after `store.record_signal(signal)`; a `paper_signal_track_v1` registration
+- [x] **SPT-6** — Entrypoint wiring, **no new cron**: a guarded paper-entry tail-call in `scripts/morning_signal.py` right after `store.record_signal(signal)`; a `paper_signal_track_v1` registration
   with `due_interval_s=30` inside `scripts/monitor_daemon.py`; `scripts/signal_paper_entry.py` as a manual `--date` backfill / re-entry tool (idempotent, **not** a scheduled cron). No unit tests.
-  Deliver the updated runbook crontab comment block plus log paths. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: <—>
+  Deliver the updated runbook crontab comment block plus log paths. As-built: `morning_signal.py` instantiates its own `PaperStore(settings.db_path)` (same file as `SignalStore`, the codebase's
+  established multi-store pattern) and `await open_signal_paper_entry(signal, snapshot, broker, paper_store)` inside a `try/except Exception` isolation block, same shape as the entry-premium-capture
+  try/except just above it; `monitor_daemon.py` registers `SignalTrackV1` structurally identically to the sibling strategy blocks — `due_interval_s=30` is a class attribute on `SignalTrackV1` (set in
+  SPT-4), not a registration-time param. `test_monitor_daemon.py`'s two strategy-count assertions bumped +1 for the always-registered `SignalTrackV1`. | Owner: Claude | Model: claude-sonnet-5 |
+  Review: code-reviewer | SHA: 1f52880
 - [x] **SPT-7** — PAPER TRACK evaluation report over `--from` / `--to` (default: first paper entry → +6 calendar months), grouped by `ruleset_version`: the metric set + the all-pass G1–G9 go-live
   gate. Manual / periodic report — invoked like `signal_report` today, not a scheduled entrypoint. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 71da2d5
 - [ ] **SPT-8** — Docs close: `CONTEXT.md`, `DECISIONS.md` as-built note (the `morning_signal` tail-call seam, `signal_exit.py` as constants + evaluator home, `signal_paper_entry.py` = manual tool, 30
