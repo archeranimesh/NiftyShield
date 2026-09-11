@@ -143,6 +143,12 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-11] signals-paper-track **SPT-3b** — new task split from SPT-5 (dependency ordering): SPT-4's spec hands `(entry, mark, now)` to `signal_exit.evaluate`, but that function was scoped to
+  SPT-5 alongside the caller-side fill/close/Telegram wiring — a hard forward dependency SPT-4 couldn't satisfy standalone. Split confirmed with the operator before touching `tasks.md`/`stories.md`.
+  `src/strategy/signal_exit.py` gains `SignalExitReason` (`TARGET`/`STOP_LOSS`/`TIME_EXIT`/reserved `TRAILING_STOP`), frozen `SignalExitDecision`, and pure `evaluate(entry, mark, now)` (priority:
+  target > stop-loss > 15:00 IST square-off > hold; naive datetimes treated as IST, aware ones converted). SPT-5 trimmed to caller-side wiring only. Tests: `test_signal_exit.py` — 8 new cases incl.
+  aware-datetime IST conversion. `code-reviewer`: 0 CRITICAL / 0 ERROR / 7 WARNING (6 line-length, 1 test-coverage gap — all fixed before commit). Full suite green (3447 passed, 2 skipped). Commit
+  `c050de0`. Next: SPT-4.
 - [2026-09-10] signals-paper-track **SPT-3** — entry executor. New `src/strategy/signal_exit.py` (`SL_PCT` / `TGT_PCT` / `RULESET_VERSION` / `derive_levels` — the constants half; SPT-5 adds
   `evaluate`) and `src/strategy/signal_track_v1.py` (`open_signal_paper_entry` async hook: `DailySignal` → `resolve_monthly_option` → own option-chain bid/ask fetch → `PaperFillSimulator` BUY fill →
   frozen `SignalPaperEntry` → Telegram entry message; `SignalTrackV1` `PaperStrategy` shell, tick left as a no-op for SPT-4). `PaperStore.record_signal_open_leg` added (returns the opening BUY
@@ -362,17 +368,13 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
   Next: SPT-3.
 
 ### 2026-09-11
-- **Escaping-guard baseline drift fixed** (`5465c4e`). SPT-3 (`6b0dada`) added the `_BASELINE_UNESCAPED` entry for
-  `src/strategy/signal_track_v1.py` at line 295, but the `notifier.send()` call is at 286 — the full-suite escaping
-  guard wasn't run before SPT-3 closed, so 3 `test_escaping_guard.py` tests failed on the next `make test`. One-line
-  repoint 295->286; same fix class as BUG-046. Recurring hole: this guard only runs on the full suite, not the
-  targeted dirs per-task sessions gate on.
-- **Telegram test env-leak fixed** (`048d647`). Root cause of real Telegram messages landing during `pytest`: ~30 `scripts/*.py`
-  modules call `load_dotenv()` unconditionally at import time, writing the real `.env` `TELEGRAM_BOT_TOKEN`/`CHAT_ID` into
-  `os.environ`; `monkeypatch` can't undo that later, so once one test's import triggered it, `build_notifier()` could go live
-  for whichever test ran next in the same `pytest-xdist` worker. The `clean_telegram_env` guard fixture only covered
-  `tests/unit/test_notifications.py`; promoted to a suite-wide autouse fixture in `tests/unit/conftest.py`. 3440 passed, 2
-  skipped.
+- **Escaping-guard baseline drift fixed** (`5465c4e`). SPT-3 (`6b0dada`) added the `_BASELINE_UNESCAPED` entry for `src/strategy/signal_track_v1.py` at line 295, but the `notifier.send()` call is at
+  286 — the full-suite escaping guard wasn't run before SPT-3 closed, so 3 `test_escaping_guard.py` tests failed on the next `make test`. One-line repoint 295->286; same fix class as BUG-046.
+  Recurring hole: this guard only runs on the full suite, not the targeted dirs per-task sessions gate on.
+- **Telegram test env-leak fixed** (`048d647`). Root cause of real Telegram messages landing during `pytest`: ~30 `scripts/*.py` modules call `load_dotenv()` unconditionally at import time, writing
+  the real `.env` `TELEGRAM_BOT_TOKEN`/`CHAT_ID` into `os.environ`; `monkeypatch` can't undo that later, so once one test's import triggered it, `build_notifier()` could go live for whichever test ran
+  next in the same `pytest-xdist` worker. The `clean_telegram_env` guard fixture only covered `tests/unit/test_notifications.py`; promoted to a suite-wide autouse fixture in `tests/unit/conftest.py`.
+  3440 passed, 2 skipped.
 - **BUG-046 fixed** (SHA `35d464d`) — 3 `test_escaping_guard.py` failures on `main`: the 2026-09-10 `morning_signal` premium/cost commits (`dc4701b`/`402db00`/`1078397`) moved the script's sole
   `notifier.send()` from line 245 → 282 without updating `_BASELINE_UNESCAPED`. Confirmed the call site is escape-safe (`_format_signal_notification()` owns the MarkdownV2 boundary). Repointed the one
   baseline key 245 → 282; no production code change. `test_escaping_guard.py` 10/10 green, full suite 3421 passed. Both sections moved to `docs/archive/bugs/`.

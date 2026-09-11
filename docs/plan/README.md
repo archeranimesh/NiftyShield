@@ -114,20 +114,21 @@ persistent residual — and which moneyness bands decay faster than theta alone 
 **`signals/`** · ✅ Shipped/Archived 2026-09-09 (S1.1–S6) → `docs/archive/plan/signals/` Multi-LLM daily directional signal pipeline: market snapshot → GPT-4o / Grok / Gemini (via OpenRouter) →
 `SignalAggregator` consensus → one `DailySignal` per day, scored forward-only against a `hash(trade_date) % 2` coin-flip baseline. Self-contained `src/signals/` package with its own SQLite tables — no
 `backtest-engine` / `backtest-eval-core` dependency. All three crons live on the Mac host (Phase 1 `openrouter_only`): `morning_signal` 09:30, `record_signal_outcome --auto` 16:00, `signal_report`
-16:35 (Mon–Fri). Next signals work → `signals-paper-track/` SPT-4.
+16:35 (Mon–Fri). Next signals work → `signals-paper-track/` SPT-4 (SPT-3b unblocked it).
 
 **`signals-cost-tracking/`** · ✅ Archived → `docs/archive/plan/signals-cost-tracking/` (SCT-1..4, 2026-09-10) OpenRouter per-call token usage + USD cost captured via inline `usage.include`, persisted
 as three nullable columns on `signal_responses`, aggregated by `SignalStore.get_signal_cost()`, and shown as today's spend on the 09:30 message. Cost trustworthy from 2026-09-11.
 
-**`signals-paper-track/`** · 🔨 In progress · SPT-1..3 done (SPT-2 `58e0b08`; SPT-2a closed 2026-09-10 as a no-op — the `dte >= 14` floor in `get_expiry_candidates` already rolls to next-month,
+**`signals-paper-track/`** · 🔨 In progress · SPT-1..3b done (SPT-2 `58e0b08`; SPT-2a closed 2026-09-10 as a no-op — the `dte >= 14` floor in `get_expiry_candidates` already rolls to next-month,
 operator kept it; SPT-3 `6b0dada` — `src/strategy/signal_track_v1.py` + `signal_exit.py` constants, `open_signal_paper_entry` async hook, `PaperStore.record_signal_open_leg`, shared
-`formatting.build_position_table`) · next: **SPT-4** (30 s monitor registration + per-tick `paper_signal_marks`). Turns the `signals/` consensus into a live paper-traded strategy: auto-enter the daily
-`DailySignal` as a long monthly option (near-month, rolled to next-month at 14 DTE), manage it intraday against a fixed SL −30 % / target +50 %, exit on a hit or square off by 15:00, log the full mark
-path, and record every entry + exit for a 6-month evaluation window that gates go-live. SPT-1 ruled 2026-09-09 (council q17,
-`docs/archive/council/strategy/2026-09-09_signals-paper-track-execution-layer.md`): module boundary **A** — `paper_signal_track_v1` `PaperStrategy` on the shared `StrategyMonitor` / `PaperExecutor` /
-`PaperStore`; pure `src/strategy/signal_exit.py`; Phase 1 fixed-only (`TRAILING_STOP` reserved); 30 s cadence; two-tier recalibration; go-live gate G1–G9 all-pass. SPT-5's exit message replaces
-`signals/` S5.5a's Phase-1 interim outcome message. SPT-6 adds **no new cron** — the paper entry is a guarded tail-call inside the 09:30 `morning_signal` run, `scripts/signal_paper_entry.py` is a
-manual backfill tool, SPT-7 a manual report (2026-09-10 Plan-agent topology review). Entrypoint-dedup cleanup deferred to `signals-entrypoint-consolidation/`.
+`formatting.build_position_table`; SPT-3b `c050de0` — split from SPT-5, 2026-09-11 dependency ordering: `signal_exit.evaluate()` + `SignalExitReason`, pure TARGET/STOP_LOSS/TIME_EXIT/HOLD decision) ·
+next: **SPT-4** (30 s monitor registration + per-tick `paper_signal_marks`). Turns the `signals/` consensus into a live paper-traded strategy: auto-enter the daily `DailySignal` as a long monthly
+option (near-month, rolled to next-month at 14 DTE), manage it intraday against a fixed SL −30 % / target +50 %, exit on a hit or square off by 15:00, log the full mark path, and record every entry +
+exit for a 6-month evaluation window that gates go-live. SPT-1 ruled 2026-09-09 (council q17, `docs/archive/council/strategy/2026-09-09_signals-paper-track-execution-layer.md`): module boundary **A**
+— `paper_signal_track_v1` `PaperStrategy` on the shared `StrategyMonitor` / `PaperExecutor` / `PaperStore`; pure `src/strategy/signal_exit.py`; Phase 1 fixed-only (`TRAILING_STOP` reserved); 30 s
+cadence; two-tier recalibration; go-live gate G1–G9 all-pass. SPT-5's exit message replaces `signals/` S5.5a's Phase-1 interim outcome message. SPT-6 adds **no new cron** — the paper entry is a
+guarded tail-call inside the 09:30 `morning_signal` run, `scripts/signal_paper_entry.py` is a manual backfill tool, SPT-7 a manual report (2026-09-10 Plan-agent topology review). Entrypoint-dedup
+cleanup deferred to `signals-entrypoint-consolidation/`.
 
 **`signals-entrypoint-consolidation/`** · ⬜ Not started · **blocked until `signals-paper-track/` archived** · next: **SEC-1** One trading-day guard (`market_calendar.guard_trading_day`) + one
 `DailySignal.is_actionable` predicate across the four signal entrypoints, and merge `record_signal_outcome.py` + `signal_report.py` into one 16:00 `scripts/signal_eod.py` (2 crons → 1). No
