@@ -33,8 +33,8 @@ spec; `schema.md` is the sole DDL source.
 - [ ] **SPT-6** — Entrypoint wiring, **no new cron**: a guarded paper-entry tail-call in `scripts/morning_signal.py` right after `store.record_signal(signal)`; a `paper_signal_track_v1` registration
   with `due_interval_s=30` inside `scripts/monitor_daemon.py`; `scripts/signal_paper_entry.py` as a manual `--date` backfill / re-entry tool (idempotent, **not** a scheduled cron). No unit tests.
   Deliver the updated runbook crontab comment block plus log paths. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: <—>
-- [ ] **SPT-7** — PAPER TRACK evaluation report over `--from` / `--to` (default: first paper entry → +6 calendar months), grouped by `ruleset_version`: the metric set + the all-pass G1–G9 go-live
-  gate. Manual / periodic report — invoked like `signal_report` today, not a scheduled entrypoint. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: <—>
+- [x] **SPT-7** — PAPER TRACK evaluation report over `--from` / `--to` (default: first paper entry → +6 calendar months), grouped by `ruleset_version`: the metric set + the all-pass G1–G9 go-live
+  gate. Manual / periodic report — invoked like `signal_report` today, not a scheduled entrypoint. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 71da2d5
 - [ ] **SPT-8** — Docs close: `CONTEXT.md`, `DECISIONS.md` as-built note (the `morning_signal` tail-call seam, `signal_exit.py` as constants + evaluator home, `signal_paper_entry.py` = manual tool, 30
   s vs 90 s-fallback as shipped), `DB_REGISTRY.md`, `TODOS.md`, `docs/plan/README.md`, `src/strategy/CLAUDE.md`; mark `signals/` S5.5a `won't-do`; archive per §Conventions. | Owner: Claude | Model:
   claude-sonnet-5 | Review: none | SHA: <—>
