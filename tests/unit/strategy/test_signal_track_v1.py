@@ -219,3 +219,178 @@ def test_entry_message_footer_at_n_prior_trades() -> None:
     assert "\\+12,480\\.50" in msg and "37 trades" in msg and "24W / 13L" in msg
     # SL / target rendered 2dp, no rupee sign
     assert "SL 27\\.66" in msg and "Target 59\\.28" in msg
+
+
+# ---------------------------------------------------------------------------
+# SPT-4 — monitor registration (30s) + mark-path logging
+# ---------------------------------------------------------------------------
+
+from datetime import datetime as _dt  # noqa: E402
+from datetime import timedelta as _timedelta  # noqa: E402
+from zoneinfo import ZoneInfo as _ZoneInfo  # noqa: E402
+
+from src.client.upstox_market import parse_upstox_option_chain  # noqa: E402
+from src.models.options import OptionChain as _OptionChain  # noqa: E402
+from src.models.portfolio import TradeAction as _TradeAction  # noqa: E402
+from src.paper.models import PaperTrade as _PaperTrade  # noqa: E402
+from src.strategy.signal_track_v1 import SignalTrackV1, _compute_mark  # noqa: E402
+
+_IST = _ZoneInfo("Asia/Kolkata")
+_SYM_KEY = "NSE_FO|NIFTY23000PE"
+
+
+def _chain(bid: str, ask: str, ltp: str) -> _OptionChain:
+    raw = [
+        {
+            "strike_price": _STRIKE,
+            "expiry": _EXPIRY.isoformat(),
+            "underlying_spot_price": 23041.0,
+            "call_options": _leg_dict(ltp, bid, ask),
+            "put_options": _leg_dict(ltp, bid, ask),
+        }
+    ]
+    return parse_upstox_option_chain(raw)
+
+
+def _open_entry(store: PaperStore, *, sl_price: str, tgt_price: str, premium: str = "40") -> int:
+    """Persist a real open paper_trades row + SignalPaperEntry, return trade_id."""
+    trade = _PaperTrade(
+        strategy_name=STRATEGY_SIGNAL_TRACK,
+        leg_role="signal_long",
+        instrument_key=_SYM_KEY,
+        trade_date=_SIGNAL_DATE,
+        action=_TradeAction.BUY,
+        quantity=LOT_SIZE,
+        price=Decimal(premium),
+        notes="test entry",
+        is_paper=True,
+    )
+    trade_id = store.record_signal_open_leg(trade)
+    entry = _make_entry(
+        trade_id=trade_id,
+        entry_premium=Decimal(premium),
+        sl_price=Decimal(sl_price),
+        tgt_price=Decimal(tgt_price),
+        instrument_key=_SYM_KEY,
+    )
+    store.open_signal_entry(entry)
+    return trade_id
+
+
+async def test_due_tick_stop_loss_routes(store: PaperStore) -> None:
+    _open_entry(store, sl_price="35", tgt_price="60")
+    strategy = SignalTrackV1(store=store, clock=lambda: _dt(2026, 9, 10, 10, 0, tzinfo=_IST))
+    chain = _chain(bid="30.00", ask="30.00", ltp="30.00")  # mark=30 <= sl_price=35
+
+    events = await strategy.check_signals(chain, [])
+
+    assert events == []
+    assert strategy._exit_fired_trade_ids  # a decision fired
+    marks = store.get_marks(next(iter(strategy._exit_fired_trade_ids)))
+    assert len(marks) == 1
+    assert marks[0].mark == Decimal("30.00")
+
+
+async def test_dead_band_tick_is_hold_and_writes_mark(store: PaperStore) -> None:
+    trade_id = _open_entry(store, sl_price="28", tgt_price="60")
+    strategy = SignalTrackV1(store=store, clock=lambda: _dt(2026, 9, 10, 10, 0, tzinfo=_IST))
+    chain = _chain(bid="40.00", ask="40.00", ltp="40.00")  # dead band
+
+    events = await strategy.check_signals(chain, [])
+
+    assert events == []
+    assert trade_id not in strategy._exit_fired_trade_ids
+    marks = store.get_marks(trade_id)
+    assert len(marks) == 1
+    assert marks[0].gap_event is False
+
+
+async def test_second_tick_after_exit_does_not_refire(store: PaperStore) -> None:
+    trade_id = _open_entry(store, sl_price="35", tgt_price="60")
+    strategy = SignalTrackV1(store=store, clock=lambda: _dt(2026, 9, 10, 10, 0, tzinfo=_IST))
+    chain = _chain(bid="30.00", ask="30.00", ltp="30.00")
+
+    await strategy.check_signals(chain, [])
+    assert len(store.get_marks(trade_id)) == 1
+
+    await strategy.check_signals(chain, [])  # second tick, same open entry
+    assert len(store.get_marks(trade_id)) == 1  # no new mark row — dedup short-circuits
+
+
+def test_stale_set_on_old_quote_timestamp() -> None:
+    entry = _make_entry(entry_premium=Decimal("40"))
+    leg = SimpleNamespace(ltp=Decimal("40"), bid=Decimal("39"), ask=Decimal("41"))
+    now = _dt(2026, 9, 10, 10, 0, tzinfo=_IST)
+    old_quote_ts = now - _timedelta(seconds=45)
+
+    mark = _compute_mark(
+        entry,
+        leg,
+        now=now,
+        quote_ts=old_quote_ts,
+        prev_mark=None,
+        prev_mfe_pct=Decimal("0"),
+        prev_mae_pct=Decimal("0"),
+    )
+
+    assert mark.stale is True
+
+
+def test_gap_event_on_large_inter_tick_jump() -> None:
+    entry = _make_entry(entry_premium=Decimal("40"))
+    leg = SimpleNamespace(ltp=Decimal("60"), bid=Decimal("59"), ask=Decimal("61"))
+    now = _dt(2026, 9, 10, 10, 0, tzinfo=_IST)
+
+    # prev_mark=40 -> new mark=60: |60-40|/40 = 0.50 > 0.20
+    mark = _compute_mark(
+        entry,
+        leg,
+        now=now,
+        quote_ts=None,
+        prev_mark=Decimal("40"),
+        prev_mfe_pct=Decimal("0"),
+        prev_mae_pct=Decimal("0"),
+    )
+
+    assert mark.gap_event is True
+
+
+def test_mfe_mae_monotonic_across_ticks() -> None:
+    entry = _make_entry(entry_premium=Decimal("40"))
+    now = _dt(2026, 9, 10, 10, 0, tzinfo=_IST)
+
+    m1 = _compute_mark(
+        entry,
+        SimpleNamespace(ltp=Decimal("44"), bid=Decimal("43"), ask=Decimal("45")),
+        now=now,
+        quote_ts=None,
+        prev_mark=None,
+        prev_mfe_pct=Decimal("0"),
+        prev_mae_pct=Decimal("0"),
+    )
+    assert m1.mfe_pct == Decimal("0.1")  # (44/40)-1
+    assert m1.mae_pct == Decimal("0")
+
+    m2 = _compute_mark(
+        entry,
+        SimpleNamespace(ltp=Decimal("36"), bid=Decimal("35"), ask=Decimal("37")),
+        now=now,
+        quote_ts=None,
+        prev_mark=m1.mark,
+        prev_mfe_pct=m1.mfe_pct,
+        prev_mae_pct=m1.mae_pct,
+    )
+    assert m2.mfe_pct == Decimal("0.1")  # unchanged — never regresses
+    assert m2.mae_pct == Decimal("-0.1")  # (36/40)-1
+
+    m3 = _compute_mark(
+        entry,
+        SimpleNamespace(ltp=Decimal("42"), bid=Decimal("41"), ask=Decimal("43")),
+        now=now,
+        quote_ts=None,
+        prev_mark=m2.mark,
+        prev_mfe_pct=m2.mfe_pct,
+        prev_mae_pct=m2.mae_pct,
+    )
+    assert m3.mfe_pct == Decimal("0.1")  # still the m1 high-water mark
+    assert m3.mae_pct == Decimal("-0.1")  # still the m2 low-water mark

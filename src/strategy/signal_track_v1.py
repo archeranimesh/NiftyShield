@@ -23,7 +23,8 @@ Exit-policy numbers (SL −30 % / target +50 %) live in
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime
+from collections.abc import Callable
+from datetime import datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
@@ -39,15 +40,21 @@ from src.paper.constants import (
     LOT_SIZE,
     STRATEGY_SIGNAL_TRACK,
 )
-from src.paper.models import PaperTrade, SignalPaperEntry
+from src.paper.models import PaperTrade, SignalMark, SignalPaperEntry
 from src.paper.store import PaperStore
-from src.strategy._price_utils import resolve_price
-from src.strategy.signal_exit import RULESET_VERSION, SL_PCT, TGT_PCT, derive_levels
+from src.strategy._price_utils import find_option_leg, resolve_price
+from src.strategy.signal_exit import RULESET_VERSION, SL_PCT, TGT_PCT, derive_levels, evaluate
 
 if TYPE_CHECKING:
     from src.client.protocol import BrokerClient
+    from src.instruments.lookup import InstrumentLookup
+    from src.models.options import OptionChain, OptionLeg
     from src.notifications.telegram import TelegramNotifier
+    from src.paper.models import PaperPosition
     from src.signals.models import DailySignal, MarketSnapshot
+
+_STALE_AFTER = 30  # seconds — quote_ts older than this behind `now` marks stale=1.
+_GAP_PCT = Decimal("0.20")  # |mark - prev_mark| / E threshold for gap_event.
 
 logger = structlog.get_logger(__name__)
 
@@ -288,32 +295,176 @@ async def open_signal_paper_entry(
     return entry
 
 
+def _compute_mark(
+    entry: SignalPaperEntry,
+    leg: OptionLeg,
+    now: datetime,
+    quote_ts: datetime | None,
+    prev_mark: Decimal | None,
+    prev_mfe_pct: Decimal,
+    prev_mae_pct: Decimal,
+) -> SignalMark:
+    """Build one ``SignalMark`` telemetry row from the current leg quote.
+
+    Pure — no I/O. ``mark`` is ``(bid + ask) / 2`` (falls back to ``ltp`` via
+    :func:`resolve_price` when bid/ask are unusable). ``mfe_pct`` / ``mae_pct``
+    are the running best/worst ``unrealised_pct`` seen so far, seeded at 0 on
+    the first tick so they never cross the entry line before an excursion
+    actually happens.
+
+    Args:
+        entry: The frozen entry (carries ``entry_premium`` == ``E``).
+        leg: ``OptionLeg`` with the current ``bid``/``ask``/``ltp``.
+        now: Tick evaluation time (IST).
+        quote_ts: Broker quote timestamp, or ``None`` if not supplied.
+        prev_mark: The previous tick's mark, or ``None`` on the first tick.
+        prev_mfe_pct: Running max favourable excursion so far.
+        prev_mae_pct: Running max adverse excursion so far.
+
+    Returns:
+        The new ``SignalMark`` (not yet persisted).
+    """
+    mark = resolve_price(leg)
+    unrealised_pct = (mark / entry.entry_premium) - 1
+    mfe_pct = max(prev_mfe_pct, unrealised_pct)
+    mae_pct = min(prev_mae_pct, unrealised_pct)
+    stale = quote_ts is not None and (now - quote_ts) > timedelta(seconds=_STALE_AFTER)
+    gap_event = prev_mark is not None and abs(mark - prev_mark) / entry.entry_premium > _GAP_PCT
+    return SignalMark(
+        trade_id=entry.trade_id,
+        ts=now,
+        quote_ts=quote_ts,
+        stale=stale,
+        ltp=leg.ltp,
+        bid=leg.bid,
+        ask=leg.ask,
+        mark=mark,
+        unrealised_pct=unrealised_pct,
+        mfe_pct=mfe_pct,
+        mae_pct=mae_pct,
+        gap_event=gap_event,
+    )
+
+
 class SignalTrackV1:
-    """``PaperStrategy`` shell for ``paper_signal_track_v1`` (SPT-3).
+    """``PaperStrategy`` shell for ``paper_signal_track_v1`` (SPT-3/SPT-4).
 
     Entry is driven by :func:`open_signal_paper_entry` off the morning signal,
-    not by a monitor tick. SPT-4 implements ``check_signals`` (per-tick
-    ``paper_signal_marks`` + `signal_exit` routing); SPT-5 the exit fill. Until
-    then the tick is a no-op so registration is safe.
+    not by a monitor tick. ``check_signals`` (SPT-4) writes the per-tick
+    ``paper_signal_marks`` row and hands ``(entry, mark, now)`` to
+    ``signal_exit.evaluate`` — a non-HOLD decision is logged only (no fill /
+    close / Telegram; that is SPT-5's caller-side wiring). Runs at a 30 s
+    cadence via ``due_interval_s`` on the shared ``StrategyMonitor`` while
+    credit-spread strategies stay at the monitor's default 90 s.
     """
 
     strategy_name: str = STRATEGY_SIGNAL_TRACK
     auto_execute: bool = True
+    due_interval_s: int = 30
 
     def __init__(
         self,
         store: PaperStore | None = None,
         broker: BrokerClient | None = None,
         notifier: TelegramNotifier | None = None,
+        lookup: InstrumentLookup | None = None,
+        clock: Callable[[], datetime] | None = None,
         **kwargs: Any,
     ) -> None:
-        """Store the collaborators; all optional to match the sibling strategies."""
+        """Store the collaborators; all optional to match the sibling strategies.
+
+        Args:
+            clock: Zero-arg callable returning the current IST time; defaults
+                to ``datetime.now(tz=_IST)``. Injectable so tests can pin the
+                tick evaluation time without depending on wall-clock time
+                (e.g. for the 15:00 IST square-off check in ``signal_exit``).
+        """
         self._store = store
         self._broker = broker
         self._notifier = notifier
+        self._lookup = lookup
+        self._clock = clock or (lambda: datetime.now(tz=_IST))
+        # SPT-4 dedup: trade_ids for which a non-HOLD decision has already been
+        # logged this process lifetime, so a stray re-tick before SPT-5 wires
+        # the actual close never re-fires the same exit decision.
+        self._exit_fired_trade_ids: set[int] = set()
 
-    async def check_signals(self, market: Any, positions: Any) -> list[Any]:
-        """No-op until SPT-4 wires the 30 s mark-path + exit routing."""
+    async def check_signals(self, market: OptionChain, positions: list[PaperPosition]) -> list[Any]:
+        """Per-tick mark-path telemetry + exit-decision routing (SPT-4).
+
+        Holiday / outside-market-hours are already gated by
+        ``StrategyMonitor._tick`` before this is ever called. No-open-position
+        and an unresolvable leg are logged no-ops. Emits no ``SignalEvent``s —
+        exit dispatch is SPT-5's caller-side wiring; this only logs the
+        decision and records the dedup key.
+
+        Args:
+            market: Current NIFTY option chain for this position's expiry.
+            positions: This strategy's open positions (unused directly — the
+                open entry is the source of truth via ``get_open_signal_entry``).
+
+        Returns:
+            Always ``[]`` — SPT-4 does not emit ``SignalEvent``s.
+        """
+        if self._store is None:
+            return []
+
+        entry = await asyncio.to_thread(self._store.get_open_signal_entry)
+        if entry is None:
+            return []
+        if entry.trade_id in self._exit_fired_trade_ids:
+            return []
+
+        leg = find_option_leg(entry.instrument_key, market, self._lookup)
+        if leg is None:
+            logger.warning(
+                "signal_track.mark_leg_absent",
+                trade_id=entry.trade_id,
+                instrument_key=entry.instrument_key,
+            )
+            return []
+
+        prior_marks = await asyncio.to_thread(self._store.get_marks, entry.trade_id)
+        prev = prior_marks[-1] if prior_marks else None
+        prev_mark = prev.mark if prev is not None else None
+        prev_mfe_pct = prev.mfe_pct if prev is not None else Decimal("0")
+        prev_mae_pct = prev.mae_pct if prev is not None else Decimal("0")
+
+        now = self._clock()
+        try:
+            mark_row = _compute_mark(
+                entry,
+                leg,
+                now=now,
+                # TODO(SPT-?): set from the broker's quote timestamp once
+                # parse_upstox_option_chain exposes one on OptionLeg; until
+                # then `stale` is always False in production (the logic is
+                # unit-tested directly against a supplied quote_ts).
+                quote_ts=None,
+                prev_mark=prev_mark,
+                prev_mfe_pct=prev_mfe_pct,
+                prev_mae_pct=prev_mae_pct,
+            )
+        except ValueError:
+            logger.warning(
+                "signal_track.mark_no_valid_price",
+                trade_id=entry.trade_id,
+                instrument_key=entry.instrument_key,
+            )
+            return []
+
+        await asyncio.to_thread(self._store.record_mark, mark_row)
+
+        decision = evaluate(entry, mark_row.mark, now)
+        if decision.reason is not None:
+            self._exit_fired_trade_ids.add(entry.trade_id)
+            logger.info(
+                "signal_track.exit_decision",
+                trade_id=entry.trade_id,
+                reason=decision.reason.value,
+                mark=str(mark_row.mark),
+            )
+
         return []
 
     def describe_context(self, event: Any, market: Any, positions: Any) -> str:

@@ -1538,3 +1538,125 @@ def _fake_ist_time(hour: int, minute: int) -> MagicMock:
     dt.minute = minute
     dt.date.return_value = date(2026, 6, 2)  # a Monday
     return dt
+
+
+# ---------------------------------------------------------------------------
+# SPT-4 — per-strategy due_interval_s cadence
+# ---------------------------------------------------------------------------
+
+
+class _DueStrategy(MockStrategy):
+    """MockStrategy with a settable due_interval_s and a call-counting mock."""
+
+    def __init__(self, name: str, due_interval_s: int | None = None) -> None:
+        self.strategy_name = name
+        self.auto_execute = False
+        self.due_interval_s = due_interval_s
+        self.calls = 0
+
+    async def check_signals(self, market, positions):  # noqa: ANN001
+        self.calls += 1
+        return []
+
+
+def test_loop_interval_uses_fastest_due_interval() -> None:
+    fast = _DueStrategy("paper_fast", due_interval_s=30)
+    slow = _DueStrategy("paper_slow")  # no due_interval_s -> defaults to poll_interval_s
+    monitor = _make_monitor(strategies=[fast, slow])
+    monitor._poll_interval_s = 90
+
+    assert monitor._loop_interval_s() == 30
+
+
+def test_loop_interval_defaults_to_poll_interval_when_no_strategy_sets_it() -> None:
+    plain = _DueStrategy("paper_plain")
+    monitor = _make_monitor(strategies=[plain])
+    monitor._poll_interval_s = 90
+
+    assert monitor._loop_interval_s() == 90
+
+
+async def test_slow_strategy_skipped_on_ticks_it_is_not_due() -> None:
+    """90s strategy alongside a 30s one: only evaluated on every 3rd tick."""
+    fast = _DueStrategy("paper_fast", due_interval_s=30)
+    slow = _DueStrategy("paper_slow", due_interval_s=90)
+    store = _make_store()
+    monitor = StrategyMonitor(
+        broker=_make_broker(),
+        store=store,
+        notifier=_make_notifier(),
+        strategies=[fast, slow],
+        poll_interval_s=90,
+        expiry_fn=lambda: "2026-06-26",
+    )
+
+    with (
+        patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch(
+            "src.strategy.monitor.datetime",
+            **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
+        ),
+    ):
+        for _ in range(3):
+            await monitor._tick()
+
+    # loop_interval_s == 30 (fast's due_interval_s); ratio(slow) = 90/30 = 3.
+    # Due on tick 0 only across 3 ticks (0, 1, 2) -> slow called once, fast every tick.
+    assert fast.calls == 3
+    assert slow.calls == 1
+
+
+async def test_fast_strategy_alongside_strategy_with_no_due_interval() -> None:
+    """A strategy with no due_interval_s defaults to poll_interval_s (90s)
+    even when a sibling's due_interval_s (30s) sets the loop's cadence."""
+    fast = _DueStrategy("paper_fast", due_interval_s=30)
+    plain = _DueStrategy("paper_plain")  # no due_interval_s -> defaults to poll_interval_s=90
+    monitor = StrategyMonitor(
+        broker=_make_broker(),
+        store=_make_store(),
+        notifier=_make_notifier(),
+        strategies=[fast, plain],
+        poll_interval_s=90,
+        expiry_fn=lambda: "2026-06-26",
+    )
+
+    with (
+        patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch(
+            "src.strategy.monitor.datetime",
+            **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
+        ),
+    ):
+        for _ in range(3):
+            await monitor._tick()
+
+    # loop_interval_s == 30 (fast's due_interval_s); ratio(plain) = 90/30 = 3.
+    assert fast.calls == 3
+    assert plain.calls == 1
+
+
+async def test_strategy_without_due_interval_runs_every_tick_backward_compat() -> None:
+    """No strategy sets due_interval_s -> every tick processes every strategy (pre-SPT-4)."""
+    a = _DueStrategy("paper_a")
+    b = _DueStrategy("paper_b")
+    monitor = StrategyMonitor(
+        broker=_make_broker(),
+        store=_make_store(),
+        notifier=_make_notifier(),
+        strategies=[a, b],
+        poll_interval_s=90,
+        expiry_fn=lambda: "2026-06-26",
+    )
+
+    with (
+        patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch(
+            "src.strategy.monitor.datetime",
+            **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
+        ),
+    ):
+        for _ in range(3):
+            await monitor._tick()
+
+    assert a.calls == 3
+    assert b.calls == 3

@@ -108,6 +108,16 @@ class StrategyMonitor:
         # _tick(); keyed by instrument_key since expiry resolution depends
         # only on that field, not on strategy_name/leg_role.
         self._expiry_cache: dict[str, date | None] = {}
+        # SPT-4: per-strategy cadence without a second daemon. A strategy may
+        # set a `due_interval_s` class/instance attribute shorter than
+        # `poll_interval_s` (e.g. paper_signal_track_v1 at 30s while credit
+        # spreads stay at the 90s default); the loop then ticks at the
+        # fastest requested interval and each strategy is only *processed*
+        # on the ticks where it is due. `_tick_count` — not wall-clock time —
+        # drives the due check so repeated `_tick()` calls in tests (no real
+        # time elapsed) stay deterministic; a strategy with no due_interval_s
+        # (ratio 1) is due on every tick, unchanged from pre-SPT-4 behavior.
+        self._tick_count: int = 0
 
     def register(self, strategy: PaperStrategy) -> None:
         """Add a strategy to the registry after construction.
@@ -117,6 +127,47 @@ class StrategyMonitor:
         """
         self._strategies.append(strategy)
 
+    def _loop_interval_s(self) -> int:
+        """Fastest cadence any registered strategy needs (seconds).
+
+        `poll_interval_s` unless a registered strategy's `due_interval_s` is
+        smaller — in which case the loop ticks that often and slower
+        strategies are simply skipped on the ticks where they are not due
+        (see `_due_strategies`).
+        """
+        intervals = [self._poll_interval_s]
+        intervals.extend(
+            interval
+            for s in self._strategies
+            if isinstance((interval := getattr(s, "due_interval_s", None)), int)
+        )
+        return min(intervals)
+
+    def _due_strategies(self, tick: int) -> list[PaperStrategy]:
+        """Strategies due for processing on tick number `tick`.
+
+        Ratio = strategy's own interval (its `due_interval_s`, else
+        `poll_interval_s`) divided by the loop's actual cadence, rounded to
+        the nearest whole tick. Due when `tick % ratio == 0` — always true on
+        tick 0 (first tick) and, when every strategy shares the same interval
+        (the common pre-SPT-4 case), true on every tick.
+
+        Intervals that are not an exact multiple of the loop's cadence are
+        deliberately rounded to the nearest tick ratio (e.g. a hypothetical
+        40s interval against a 30s loop rounds to ratio 1, i.e. every tick,
+        not every 40s) — today's registered intervals (30s / 90s) are exact
+        multiples, so this only matters for a future non-multiple interval.
+        """
+        loop_interval = self._loop_interval_s()
+        due = []
+        for strategy in self._strategies:
+            raw_interval = getattr(strategy, "due_interval_s", None)
+            interval = raw_interval if isinstance(raw_interval, int) else self._poll_interval_s
+            ratio = max(1, round(interval / loop_interval))
+            if tick % ratio == 0:
+                due.append(strategy)
+        return due
+
     async def run(self) -> None:
         """Main daemon loop. Runs until cancelled via asyncio.CancelledError."""
         while True:
@@ -124,7 +175,7 @@ class StrategyMonitor:
                 await self._tick()
             except Exception:
                 log.exception("strategy_monitor.tick_unhandled_error")
-            await asyncio.sleep(self._poll_interval_s)
+            await asyncio.sleep(self._loop_interval_s())
 
     async def _tick(self) -> None:
         """Single tick — extracted for testability.
@@ -141,6 +192,10 @@ class StrategyMonitor:
         tick_start = time.monotonic()
         trace_id = generate_trace_id()
         bind_trace_id(trace_id)
+        # Capture-then-advance so every _tick() call (including early-return
+        # guard branches below) advances the cadence counter exactly once.
+        current_tick = self._tick_count
+        self._tick_count += 1
         self._expiry_cache.clear()
         log.info("tick.start", trace_id=trace_id)
         now_ist = datetime.now(tz=_IST)
@@ -161,10 +216,16 @@ class StrategyMonitor:
             self._write_heartbeat(os.getpid())
             return
 
-        # Collect positions for all strategies up-front so we can derive expiries.
+        # SPT-4: only strategies due this tick are evaluated below — a slower
+        # (e.g. 90s) strategy is simply skipped on the faster ticks a quicker
+        # (e.g. 30s) sibling requires. Every strategy is due when none of
+        # them set a `due_interval_s` (pre-SPT-4 behavior, unchanged).
+        due_strategies = self._due_strategies(current_tick)
+
+        # Collect positions for due strategies up-front so we can derive expiries.
         per_strategy_positions: dict[str, list[PaperPosition]] = {}
         all_positions: list[PaperPosition] = []
-        for strategy in self._strategies:
+        for strategy in due_strategies:
             positions = self._store.get_positions(strategy.strategy_name)
             per_strategy_positions[strategy.strategy_name] = positions
             all_positions.extend(positions)
@@ -176,7 +237,7 @@ class StrategyMonitor:
             return
 
         signals_emitted = 0
-        for strategy in self._strategies:
+        for strategy in due_strategies:
             positions = per_strategy_positions[strategy.strategy_name]
             # (event_type, leg_role, expiry) triples that fire as WARN this
             # tick, across all of this strategy's expiry groups — reconciled
