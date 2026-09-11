@@ -749,3 +749,5 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
 - [2026-09-09] MVP story — reframed from price-vs-target watch to capital-deployment sim (`eaa05de`, docs only). Locked: fixed 6% tranche ladder (25% each at 0/−6/−12/−18%), tipster SL ignored,
   −30%-on-deployed-capital hard stop. Open questions (whole-share rounding, cost bps, NIFTY benchmark alpha, time stop, portfolio mode, M-A lump-sum phasing, schema council) recorded at top of
   `docs/plan/mvp/mvp_tasks.md`; M1/M2/M4 need rewrite before implementation. Not started.
+- [2026-09-11] SPT-4 (`7b11e83` + `edbc135`) and SPT-7 (`71da2d5` + `bbcf596`) shipped in parallel via two isolated subagents — SPT-7 has no code dependency on SPT-4/5/6 (only SPT-2's store
+  methods), so it ran concurrently with SPT-4 instead of waiting behind SPT-5/6 in task order. `signals-paper-track/` next: **SPT-5**.
