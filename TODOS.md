@@ -360,6 +360,13 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
   returns a `≤ 13-DTE` contract — the next-month roll SPT-2a asked for already happens at 14 DTE, consistent with `snapshot.py` / overlays / IC. A `≤ 7` hold would need a floor bypass + a
   `snapshot.py` realignment; operator (Animesh) kept the 14-DTE roll. WIP reverted, no code change. `DECISIONS.md` follow-up note added; `tasks.md` / `stories.md` / `prompt.md` / `README.md` updated.
   Next: SPT-3.
+
+### 2026-09-11
+- **Escaping-guard baseline drift fixed** (`5465c4e`). SPT-3 (`6b0dada`) added the `_BASELINE_UNESCAPED` entry for
+  `src/strategy/signal_track_v1.py` at line 295, but the `notifier.send()` call is at 286 — the full-suite escaping
+  guard wasn't run before SPT-3 closed, so 3 `test_escaping_guard.py` tests failed on the next `make test`. One-line
+  repoint 295->286; same fix class as BUG-046. Recurring hole: this guard only runs on the full suite, not the
+  targeted dirs per-task sessions gate on.
 - **BUG-046 fixed** (SHA `35d464d`) — 3 `test_escaping_guard.py` failures on `main`: the 2026-09-10 `morning_signal` premium/cost commits (`dc4701b`/`402db00`/`1078397`) moved the script's sole
   `notifier.send()` from line 245 → 282 without updating `_BASELINE_UNESCAPED`. Confirmed the call site is escape-safe (`_format_signal_notification()` owns the MarkdownV2 boundary). Repointed the one
   baseline key 245 → 282; no production code change. `test_escaping_guard.py` 10/10 green, full suite 3421 passed. Both sections moved to `docs/archive/bugs/`.
