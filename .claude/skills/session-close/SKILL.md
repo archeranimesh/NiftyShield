@@ -264,6 +264,7 @@ If Step 4 produced no suggestions (clean session), do not touch `suggestions.md`
 
 ### Escalation — draining a `Count >= 5` slug
 
+
 **Threshold: 5.** A slug that has recurred across five sessions, each time logged and each
 time re-sorted to the top, has demonstrated the log alone will not fix it. Step 4b item 7
 retires it from the active table into one of two exits:
@@ -282,6 +283,32 @@ retires it from the active table into one of two exits:
 
 Either way the row is deleted from the active count-sorted table (Step 4b item 7). Record
 every escalation in the Step 5 report's SUGGESTIONS block.
+
+---
+
+## Step 4c — Append a row to `session_audit.jsonl` (repo root)
+
+Unlike `suggestions.md` (Step 4b), this row is written for **every** session-close run,
+including a clean one with zero Step 4 suggestions — it's a raw per-session audit trail, not
+a dedup table, and the on-demand `weekly-audit` skill needs a complete series to aggregate
+against.
+
+Using the counts already computed in Steps 2–4 (no new analysis — this is a write, not a
+recheck), append one row:
+
+```bash
+python -m scripts.dev.session_audit_log append \
+  --session-id "$SESSION_ID" --date "$(date +%F)" --project NiftyShield \
+  --graph-calls N --raw-read-violations N --bash-output-violations N \
+  --subagent-spawns N --skills-invoked '["commit","work"]' \
+  --autotrigger-fires '{"test-runner": true, "code-reviewer": true}' \
+  --suggestions-count N
+```
+
+Field mapping: `graph-calls` and `raw-read-violations` come from 3a; `bash-output-violations`
+from 3b; `subagent-spawns` and `autotrigger-fires` from 3c / the Step 1 tool-call list;
+`skills-invoked` from the Step 1 tool-call list's `skill` entries; `suggestions-count` from
+Step 4's output count.
 
 ---
 

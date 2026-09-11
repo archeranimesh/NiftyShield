@@ -143,6 +143,17 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-11] Tooling: on-demand weekly feature-usage audit. `session-close` gains Step 4c —
+  appends one JSON row per session to `session_audit.jsonl` (repo root, committed) via new
+  `scripts/dev/session_audit_log.py` (`append_row`/`read_range`, frozen `SessionAuditRow`
+  dataclass). New on-demand skill `.claude/skills/weekly-audit/SKILL.md` reads that log
+  (never raw transcripts) to check for missed Claude Code features across recent sessions,
+  drilling into a flagged session's transcript only when the aggregate is ambiguous.
+  Deliberately on-demand, not cron/`/loop` — value unproven, cheapest version first. Tests:
+  `test_session_audit_log.py` (3 cases). `code-reviewer`: 0 CRITICAL / 0 ERROR / 4 WARNING
+  (missing JSON-parse error handling in `read_range`/CLI, no `main()` entry-point test, no
+  blank-line edge-case test — deferred, all robustness/coverage gaps on a non-financial
+  tooling path, no correctness impact on the happy path).
 - [2026-09-11] signals-paper-track **SPT-3b** — new task split from SPT-5 (dependency ordering): SPT-4's spec hands `(entry, mark, now)` to `signal_exit.evaluate`, but that function was scoped to
   SPT-5 alongside the caller-side fill/close/Telegram wiring — a hard forward dependency SPT-4 couldn't satisfy standalone. Split confirmed with the operator before touching `tasks.md`/`stories.md`.
   `src/strategy/signal_exit.py` gains `SignalExitReason` (`TARGET`/`STOP_LOSS`/`TIME_EXIT`/reserved `TRAILING_STOP`), frozen `SignalExitDecision`, and pure `evaluate(entry, mark, now)` (priority:
