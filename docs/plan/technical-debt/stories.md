@@ -70,7 +70,9 @@ slug. If it did **not** recur in 3+ such sessions, tick the box — the hook wor
 - **DEBT-13** — `next-marker-points-at-just-closed-task` (Count 5). Remediation exists but is ineffective for one shape: `check_checkbox_consistency.py`'s `README_ENTRY_RE` matches a flat `<folder>/ …
   next: **ID**` row and flags a pointer at a done id, but an epic row in `docs/plan/README.md` that carries a nested sub-story pointer (`strategy-rollout/ next: **ROLL-14**` while
   `strategy-rollout/tasks.md` has ROLL-14 checked) passes `--all` clean. Extend the guard to resolve the sub-story `tasks.md` for epic rows, then verify against the ROLL-14 close (`eb782d0`, README:43
-  left at `next: **ROLL-14**`). Standalone — no trigger wait.
+  left at `next: **ROLL-14**`). Standalone — no trigger wait. **Fixed (2026-09-11):** added `_resolve_pointer_task_file()` — flat `<slug>/tasks.md` first, falling back to a sorted glob of
+  `<slug>/**/tasks.md` for the nested file containing `**<id>**`. The cited README repro was already stale (the `telegram-markdown-migration` epic archived 2026-09-06; the current row reads `✅
+  Shipped/Archived` with no `next:` marker), so no README correction was needed — verified via two new unit tests reconstructing the epic/nested-sub-story shape directly. See `DECISIONS.md`.
 - **DEBT-14** — `context-tree-row-missing-for-new-module` (Count 5). No remediation exists. Every doc-freshness hook proxies "docs behind code" by a src-commit count and never checks whether a
   `src/<module>/` dir has a matching `CONTEXT_TREE.md` row or `CONTEXT.md` "What Exists" line. `src/signals/` was created by an Antigravity handoff at S1.1 (`8d295c6`) and S1.2/S1.3/S2.1 each added
   code (`store.py` at S2.1, `2aa5979`) without ever backfilling the row. Build a `check_context_tree_coverage.py` preflight that lists `src/*/` + `scripts/*/` dirs absent from `CONTEXT_TREE.md`, wire

@@ -143,6 +143,14 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-11] `docs/plan/technical-debt` **DEBT-13** closed — `check_checkbox_consistency.py`'s
+  `check_readme_pointers()` was blind to an epic row (`<epic>/` with `next: **ID**` pointing at
+  a nested `<sub-story>/tasks.md`, no flat root `tasks.md`). Added
+  `_resolve_pointer_task_file()`: flat file first, then a sorted glob fallback over
+  `<epic>/**/tasks.md`. Cited ROLL-14/`strategy-rollout` repro was already stale (epic archived
+  2026-09-06) so no README correction was needed; verified via two new unit tests
+  reconstructing the epic shape. Full `tests/unit/` green (3022 passed); `@code-reviewer`
+  clean. Decision + rationale: `DECISIONS.md`.
 - [2026-09-11] `docs/plan/technical-debt` **DEBT-15** closed — verified `commit_preflight.py`'s
   staged `ruff format --check` blocker (SWEEP-4, `2b85b84`) against `ruff-format-check-skipped-
   precommit-abort`: one post-remediation recurrence (S5.2c, `b33a43d`), none since across the

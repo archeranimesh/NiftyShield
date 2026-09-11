@@ -1042,6 +1042,29 @@ which is authoring-time cost, not hook failure, matching the DEBT-12 verdict exa
 
 ---
 
+## DEBT-13 — `check_checkbox_consistency.py` follows epic sub-story README pointers (2026-09-11)
+
+Fix (per `docs/plan/technical-debt/stories.md` DEBT-13): `check_readme_pointers()` resolved a
+`docs/plan/README.md` `next: **ID**` row only against a flat `PLAN_DIR/<slug>/tasks.md`, and
+silently skipped any epic row whose slug folder has no root `tasks.md` — only nested
+sub-story folders (e.g. a `<epic>/<sub-story>/tasks.md` shape). Added
+`_resolve_pointer_task_file(slug, task_id)`: try the flat file first, and if absent, glob
+`<epic>/**/tasks.md` (sorted for determinism) for the nested file whose text contains
+`**<task_id>**`. `check_readme_pointers()` now calls this helper and reports the actual
+resolved path in its finding message instead of assuming the flat one.
+
+Verification: the cited repro (`strategy-rollout/` epic, ROLL-14, `eb782d0`) is no longer live
+— the `telegram-markdown-migration` epic that owned it was archived to
+`docs/archive/plan/telegram-markdown-migration/` on 2026-09-06, and the current
+`docs/plan/README.md` row for it reads `✅ Shipped/Archived`, carrying no `next:` marker. No
+README correction was needed. Added two unit tests
+(`tests/unit/scripts/dev/hooks/test_check_checkbox_consistency.py`) reconstructing the epic
+shape directly: a nested `<epic>/<sub-story>/tasks.md` with the pointed-at id ticked (flags)
+and one with it open (clean). Full `tests/unit/` suite green (3022 passed). `@code-reviewer`
+run against the diff: 0 CRITICAL/ERROR/WARNING.
+
+---
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/` (except 0.6c), `src/streaming/` — all empty
