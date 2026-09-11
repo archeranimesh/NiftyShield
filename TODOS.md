@@ -367,6 +367,12 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
   guard wasn't run before SPT-3 closed, so 3 `test_escaping_guard.py` tests failed on the next `make test`. One-line
   repoint 295->286; same fix class as BUG-046. Recurring hole: this guard only runs on the full suite, not the
   targeted dirs per-task sessions gate on.
+- **Telegram test env-leak fixed** (`048d647`). Root cause of real Telegram messages landing during `pytest`: ~30 `scripts/*.py`
+  modules call `load_dotenv()` unconditionally at import time, writing the real `.env` `TELEGRAM_BOT_TOKEN`/`CHAT_ID` into
+  `os.environ`; `monkeypatch` can't undo that later, so once one test's import triggered it, `build_notifier()` could go live
+  for whichever test ran next in the same `pytest-xdist` worker. The `clean_telegram_env` guard fixture only covered
+  `tests/unit/test_notifications.py`; promoted to a suite-wide autouse fixture in `tests/unit/conftest.py`. 3440 passed, 2
+  skipped.
 - **BUG-046 fixed** (SHA `35d464d`) — 3 `test_escaping_guard.py` failures on `main`: the 2026-09-10 `morning_signal` premium/cost commits (`dc4701b`/`402db00`/`1078397`) moved the script's sole
   `notifier.send()` from line 245 → 282 without updating `_BASELINE_UNESCAPED`. Confirmed the call site is escape-safe (`_format_signal_notification()` owns the MarkdownV2 boundary). Repointed the one
   baseline key 245 → 282; no production code change. `test_escaping_guard.py` 10/10 green, full suite 3421 passed. Both sections moved to `docs/archive/bugs/`.
