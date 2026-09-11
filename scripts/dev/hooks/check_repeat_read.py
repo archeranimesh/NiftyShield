@@ -1,7 +1,10 @@
-"""PreToolUse warn — a second ``Read`` of a path already read this session.
+"""PreToolUse block — a second ``Read`` of a path already read this session.
 
 Registered via ``.claude/hooks/repeat_read.sh`` on ``Read`` / ``Edit`` /
-``Write``. Warn-only: prints guidance to stdout and always exits 0.
+``Write``. Blocking: prints guidance to stderr and exits 2 on a repeat read
+(exit 0 otherwise) — DEBT-8 escalated this from warn-only after the
+``reread-file-already-in-context`` slug recurred 34x post-remediation with no
+change in behavior.
 
 Seen paths are tracked in a session-scoped file passed as ``argv[0]`` (the shim
 derives it from the Claude Code PID). An ``Edit`` or ``Write`` to a path clears
@@ -73,20 +76,23 @@ def evaluate(tool_name: str, file_path: str, seen_path: str) -> str | None:
 
 
 def main(argv: list[str], stdin_text: str) -> int:
-    """Parse the PreToolUse payload on stdin; print a warning if warranted."""
+    """Parse the PreToolUse payload on stdin; block (exit 2) on a repeat read."""
     seen_path = argv[0] if argv else "/tmp/niftyshield-seen-reads"
     try:
         data = json.loads(stdin_text)
     except (ValueError, TypeError):
         return 0
+    if not isinstance(data, dict):
+        return 0
     tool_name = data.get("tool_name", "")
-    file_path = data.get("tool_input", {}).get("file_path", "") or ""
+    file_path = (data.get("tool_input") or {}).get("file_path", "") or ""
     try:
         warning = evaluate(tool_name, file_path, seen_path)
     except OSError:
         return 0
     if warning:
-        print(warning)
+        print(warning, file=sys.stderr)
+        return 2
     return 0
 
 

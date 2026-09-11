@@ -52,11 +52,24 @@ def test_repeat_read_distinct_paths_independent(tmp_path):
     assert evaluate("Read", "/repo/b.py", seen) is None
 
 
-def test_hook_always_exits_zero(tmp_path, capsys):
-    """main() returns 0 on a re-read, a first read, and malformed input."""
+def test_hook_blocks_on_repeat_read(tmp_path, capsys):
+    """main() returns 0 on a first read and malformed input, 2 on a re-read."""
     seen = _seen(tmp_path)
     payload = json.dumps({"tool_name": "Read", "tool_input": {"file_path": "/repo/a.py"}})
     assert main([seen], payload) == 0
-    assert main([seen], payload) == 0  # second read — warns but still 0
-    assert "already Read" in capsys.readouterr().out
+    assert main([seen], payload) == 2  # second read — blocks
+    assert "already Read" in capsys.readouterr().err
     assert main([seen], "not json") == 0
+
+
+def test_main_exits_zero_on_null_tool_input(tmp_path):
+    """A payload with tool_input: null must not crash the hook."""
+    seen = _seen(tmp_path)
+    payload = json.dumps({"tool_name": "Read", "tool_input": None})
+    assert main([seen], payload) == 0
+
+
+def test_main_exits_zero_on_non_dict_payload(tmp_path):
+    """A well-formed but non-dict JSON payload must not crash the hook."""
+    seen = _seen(tmp_path)
+    assert main([seen], json.dumps(["not", "a", "dict"])) == 0

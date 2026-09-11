@@ -143,6 +143,11 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-11] `docs/plan/technical-debt` **DEBT-8** closed — verified `check_repeat_read.py`
+  (warn-only since SWEEP-2, `68683cb`) did not stop `reread-file-already-in-context` (34
+  recurrences through 2026-09-11). Escalated to a protocol/model discussion per the DEBT-8/-9/
+  -10/-12 procedure; operator chose to make the hook blocking (exit 2 + stderr) over accepting
+  it as model discipline. Decision + rationale: `DECISIONS.md`.
 - [2026-09-11] Tooling: on-demand weekly feature-usage audit. `session-close` gains Step 4c —
   appends one JSON row per session to `session_audit.jsonl` (repo root, committed) via new
   `scripts/dev/session_audit_log.py` (`append_row`/`read_range`, frozen `SessionAuditRow`

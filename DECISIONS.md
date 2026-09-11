@@ -977,6 +977,29 @@ point for callers like `monitor.py`/`executor.py`/snapshot scripts). Full ration
 
 ---
 
+## DEBT-8 — `check_repeat_read.py` escalated from warn-only to blocking (2026-09-11)
+
+Verification (per `docs/plan/technical-debt/stories.md` DEBT-8/-9/-10/-12 common procedure):
+`reread-file-already-in-context` recurred 34x in `suggestions.md`, with dated examples running
+through 2026-09-11 — well past the SWEEP-2 remediation (`68683cb`, 2026-09-03) and far beyond the
+3-session check window. The hook fired every time (it was never silent) but only printed to stdout
+and always exited 0, so the warning had no effect on whether the agent proceeded. Per the procedure,
+this recurrence does not get a fresh `DEBT-*` line — it is a protocol/model discussion. Operator
+decision (Animesh): make the hook blocking rather than accept it as pure model discipline, since the
+hook's own warning text already names the correct alternative (edit the copy in context, or
+`get_code_snippet`/`sed -n`) and a second `Read` after that warning is not a judgment call the model
+should be free to override.
+
+**Change:** `check_repeat_read.py` now prints to stderr and returns exit 2 on a repeat read (was:
+stdout + exit 0 always); `.claude/hooks/repeat_read.sh` propagates that exit code instead of forcing
+`exit 0` and no longer discards stderr. The Edit/Write-precondition re-Read (a harness constraint,
+not a model choice) remains unflagged — `evaluate()` clears the seen-set on `Edit`/`Write`, unchanged.
+No `CLAUDE.md`/`AGENTS.md` doc line needed correction: the "flagged by `repeat_read.sh`" phrasing
+already held under either enforcement mode, and the Rule 0 "will not block" line refers to the
+separate graph-before-read hook (`guard_src_reads.sh`, tracked separately under DEBT-16).
+
+---
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/` (except 0.6c), `src/streaming/` — all empty
