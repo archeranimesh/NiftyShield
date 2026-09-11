@@ -298,3 +298,35 @@ def test_legacy_tails_are_grandfathered(tmp_path):
     task_file = _write(tmp_path, "legacy-tails", LEGACY_TAILS_SKIPPED)
 
     assert ccc.check_file(task_file) == []
+
+
+def test_readme_epic_pointer_follows_nested_substory_tasks_md(plan_tree):
+    """An epic row with no root tasks.md resolves via its nested sub-story tasks.md (DEBT-13)."""
+    epic_root = plan_tree.parent.parent
+    substory_dir = epic_root / "docs" / "plan" / "strategy-rollout" / "strategy-rollout"
+    substory_dir.mkdir(parents=True)
+    (substory_dir / "tasks.md").write_text(
+        "# strategy-rollout — tasks\n\n- [x] **ROLL-14** — done.\n", encoding="utf-8"
+    )
+    (plan_tree / "README.md").write_text(
+        "**`strategy-rollout/`** · \U0001f504 In progress · next: **ROLL-14**\n",
+        encoding="utf-8",
+    )
+
+    findings = ccc.check_readme_pointers()
+    assert len(findings) == 1
+    assert "already [x]" in findings[0]
+    assert "strategy-rollout" in findings[0]
+
+
+def test_readme_epic_pointer_nested_substory_open_id_is_clean(plan_tree):
+    """The nested-sub-story resolution stays clean when the id is still open."""
+    epic_root = plan_tree.parent.parent
+    substory_dir = epic_root / "docs" / "plan" / "epic-c" / "sub-c"
+    substory_dir.mkdir(parents=True)
+    (substory_dir / "tasks.md").write_text(
+        "# sub-c — tasks\n\n- [ ] **EC-1** — open.\n", encoding="utf-8"
+    )
+    (plan_tree / "README.md").write_text("**`epic-c/`** · next: **EC-1**\n", encoding="utf-8")
+
+    assert ccc.check_readme_pointers() == []

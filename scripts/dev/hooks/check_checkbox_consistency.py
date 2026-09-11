@@ -186,6 +186,27 @@ def check_file(path: Path) -> list[str]:
     return findings
 
 
+def _resolve_pointer_task_file(slug: str, task_id: str) -> Path | None:
+    """Find the ``tasks.md`` that owns ``task_id`` for an epic/story ``slug`` row.
+
+    A flat story's own ``<slug>/tasks.md`` is tried first. When that file is absent
+    (an epic row with no root ``tasks.md``, only nested sub-story folders — e.g.
+    ``strategy-rollout/tasks.md`` under a migration epic), fall back to searching
+    every ``<slug>/**/tasks.md`` for the one that actually contains ``**<task_id>**``.
+    """
+    flat = PLAN_DIR / slug / "tasks.md"
+    if flat.is_file():
+        return flat
+    epic_dir = PLAN_DIR / slug
+    if not epic_dir.is_dir():
+        return None
+    needle = f"**{task_id}**"
+    for nested in sorted(epic_dir.glob("**/tasks.md")):
+        if needle in nested.read_text(encoding="utf-8"):
+            return nested
+    return None
+
+
 def check_readme_pointers() -> list[str]:
     """Warn when ``docs/plan/README.md`` points a story's ``next:`` marker at a done id."""
     if not PLAN_README.is_file():
@@ -196,15 +217,15 @@ def check_readme_pointers() -> list[str]:
         if not match:
             continue
         slug, task_id = match.group(1), match.group(2)
-        task_file = PLAN_DIR / slug / "tasks.md"
-        if not task_file.is_file():
+        task_file = _resolve_pointer_task_file(slug, task_id)
+        if task_file is None:
             continue
         for raw in task_file.read_text(encoding="utf-8").splitlines():
             box = CHECKBOX_RE.match(raw)
             if box and box.group(2).strip() == task_id and _norm_state(box.group(1)) == "x":
                 findings.append(
                     f"docs/plan/README.md:{idx}: '{slug}/' next-marker points at '{task_id}' "
-                    f"which is already [x] in {slug}/tasks.md"
+                    f"which is already [x] in {_rel(task_file)}"
                 )
                 break
     return findings
