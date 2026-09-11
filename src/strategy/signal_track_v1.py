@@ -40,10 +40,17 @@ from src.paper.constants import (
     LOT_SIZE,
     STRATEGY_SIGNAL_TRACK,
 )
-from src.paper.models import PaperTrade, SignalMark, SignalPaperEntry
+from src.paper.models import ExitSignal, PaperExitEvent, PaperTrade, SignalMark, SignalPaperEntry
 from src.paper.store import PaperStore
 from src.strategy._price_utils import find_option_leg, resolve_price
-from src.strategy.signal_exit import RULESET_VERSION, SL_PCT, TGT_PCT, derive_levels, evaluate
+from src.strategy.signal_exit import (
+    RULESET_VERSION,
+    SL_PCT,
+    TGT_PCT,
+    SignalExitReason,
+    derive_levels,
+    evaluate,
+)
 
 if TYPE_CHECKING:
     from src.client.protocol import BrokerClient
@@ -63,6 +70,17 @@ _UNDERLYING = "NIFTY"
 _LEG_ROLE = "signal_long"
 _NIFTY_KEY = "NSE_INDEX|Nifty 50"
 _ACTION_TO_OPT_TYPE = {"BUY_CALL": "CE", "BUY_PUT": "PE"}
+
+# SPT-5: signal_exit's reason vocabulary maps onto the shared PaperExitEvent
+# ExitSignal enum (which predates this strategy and has its own names).
+# Exhaustive for every reason evaluate() can return in v1 — TRAILING_STOP is
+# reserved for Phase 2 and evaluate() never returns it; add it here first if
+# that changes.
+_EXIT_REASON_TO_SIGNAL = {
+    SignalExitReason.TARGET: ExitSignal.PROFIT_TARGET,
+    SignalExitReason.STOP_LOSS: ExitSignal.LOSS_STOP,
+    SignalExitReason.TIME_EXIT: ExitSignal.TIME_STOP,
+}
 
 _E = escape_markdown
 
@@ -142,6 +160,74 @@ def build_signal_entry_message(
             "",
             _E(f"🛑 SL {_money(entry.sl_price)}   🎯 Target {_money(entry.tgt_price)}"),
             _E(f"🕘 {time_str}  ·  Nifty {_spot(entry.entry_underlying)}"),
+            _E(footer),
+        ]
+    )
+
+
+def build_signal_exit_message(
+    entry: SignalPaperEntry,
+    instrument_label: str,
+    reason: SignalExitReason,
+    exit_price: Decimal,
+    pnl: Decimal,
+    now: datetime,
+    underlying: Decimal,
+    cumulative: tuple[Decimal, int, int, int],
+) -> str:
+    """Render the Telegram exit confirmation (MarkdownV2, self-escaping).
+
+    Same shared position table as the entry message, now with ``Exit`` / ``P&L``
+    / ``Chg`` filled in; bold header carries the exit reason; footer from
+    ``cumulative_pnl()`` already updated with this trade.
+
+    Args:
+        entry: The frozen entry being closed.
+        instrument_label: Human option label for the Instrument column.
+        reason: Why the position exited.
+        exit_price: The simulated SELL fill price.
+        pnl: Realised P&L for this trade, ``(exit_price - entry_premium) * LOT_SIZE``.
+        now: Exit evaluation time (IST).
+        underlying: Nifty spot at exit.
+        cumulative: ``PaperStore.cumulative_pnl()`` including this trade.
+
+    Returns:
+        Fully-escaped message text.
+    """
+    total, n_trades, wins, losses = cumulative
+    date_str = entry.entry_ts.strftime("%d %b").lstrip("0")
+    time_str = now.strftime("%H:%M")
+    chg_pct = (exit_price / entry.entry_premium) - 1
+
+    table = build_position_table(
+        rows=[
+            (
+                "Signal",
+                instrument_label,
+                str(LOT_SIZE),
+                _money(entry.entry_premium),
+                _money(exit_price),
+                _money_signed(pnl),
+                f"{chg_pct:+.2%}",
+            )
+        ],
+        total_pnl=pnl,
+        any_pnl_missing=False,
+        title=None,
+        empty_message="",
+        value_header="Exit",
+    )
+
+    footer = f"Σ Inception  {_money_signed(total)}  ·  {n_trades} trades  ·  {wins}W / {losses}L"
+    return "\n".join(
+        [
+            f"*{_E(f'🎯 SIGNAL EXIT · {date_str}')}*  ·  {_E(reason.value)}",
+            "",
+            "```",
+            table,
+            "```",
+            "",
+            _E(f"🕒 {time_str}  ·  Nifty close {_spot(underlying)}"),
             _E(footer),
         ]
     )
@@ -390,13 +476,15 @@ class SignalTrackV1:
         self._exit_fired_trade_ids: set[int] = set()
 
     async def check_signals(self, market: OptionChain, positions: list[PaperPosition]) -> list[Any]:
-        """Per-tick mark-path telemetry + exit-decision routing (SPT-4).
+        """Per-tick mark-path telemetry + exit-decision routing (SPT-4/SPT-5).
 
         Holiday / outside-market-hours are already gated by
         ``StrategyMonitor._tick`` before this is ever called. No-open-position
         and an unresolvable leg are logged no-ops. Emits no ``SignalEvent``s —
-        exit dispatch is SPT-5's caller-side wiring; this only logs the
-        decision and records the dedup key.
+        a non-HOLD decision is closed out directly (SPT-5): the exit fill is
+        taken on this tick's observed ``mark`` (gap-through is booked as-is,
+        not clamped to the threshold), the position is closed, and the
+        Telegram exit message is sent inline.
 
         Args:
             market: Current NIFTY option chain for this position's expiry.
@@ -464,8 +552,98 @@ class SignalTrackV1:
                 reason=decision.reason.value,
                 mark=str(mark_row.mark),
             )
+            await self._close_position(
+                entry, leg, market.underlying_spot, decision.reason, mark_row.mark, now
+            )
 
         return []
+
+    async def _close_position(
+        self,
+        entry: SignalPaperEntry,
+        leg: OptionLeg,
+        underlying_spot: Decimal,
+        reason: SignalExitReason,
+        mark: Decimal,
+        now: datetime,
+    ) -> None:
+        """Take the exit fill, close the row, and send the Telegram exit message (SPT-5).
+
+        The fill is taken at ``mark`` — the observed tick's price, not the
+        breached threshold — so a gap-through is booked as it actually would
+        have been (e.g. a ``0.60·E`` mark against a ``0.70·E`` SL realises the
+        full ``-40%``, not ``-30%``).
+        """
+        if self._store is None:
+            return
+
+        from src.strategy.executor import PaperFillSimulator
+
+        fill = PaperFillSimulator().simulate_fill(
+            instrument_key=entry.instrument_key,
+            action="SELL",
+            quantity=LOT_SIZE,
+            mid_price=mark,
+            vix=float(entry.entry_vix) if entry.entry_vix is not None else None,
+        )
+        exit_price = fill.fill_price
+        pnl = (exit_price - entry.entry_premium) * LOT_SIZE
+
+        sell_trade = PaperTrade(
+            strategy_name=STRATEGY_SIGNAL_TRACK,
+            leg_role=_LEG_ROLE,
+            instrument_key=entry.instrument_key,
+            trade_date=now.date(),
+            action=PaperTradeAction.SELL,
+            quantity=LOT_SIZE,
+            price=exit_price,
+            notes=f"signal_track_v1 exit ({reason.value})",
+            is_paper=True,
+        )
+        # If close_signal_entry below raises after this insert, the SELL leg is
+        # orphaned but the entry stays OPEN — get_open_signal_entry still finds
+        # it, so the next tick's evaluate() fires again and record_trade's
+        # ON CONFLICT DO NOTHING makes the retry a no-op. Recoverable by design.
+        await asyncio.to_thread(self._store.record_trade, sell_trade)
+
+        exit_event = PaperExitEvent(
+            strategy_name=STRATEGY_SIGNAL_TRACK,
+            leg_name=_LEG_ROLE,
+            trade_id=str(entry.trade_id),
+            event_time=now,
+            detected_by="INTRADAY",
+            exit_signal=_EXIT_REASON_TO_SIGNAL[reason],
+            severity="ACTION",
+            ltp=leg.ltp,
+            mid=mark,
+            bid=leg.bid,
+            ask=leg.ask,
+            entry_price=entry.entry_premium,
+            threshold_value=entry.tgt_price
+            if reason == SignalExitReason.TARGET
+            else entry.sl_price,
+            notes=f"exit fill {exit_price}",
+        )
+        await asyncio.to_thread(self._store.close_signal_entry, entry.trade_id, exit_event)
+
+        logger.info(
+            "signal_track.exit_closed",
+            trade_id=entry.trade_id,
+            reason=reason.value,
+            exit_price=str(exit_price),
+            pnl=str(pnl),
+        )
+
+        notifier = self._notifier or build_notifier()
+        if notifier:
+            cumulative = await asyncio.to_thread(self._store.cumulative_pnl)
+            opt_type = _ACTION_TO_OPT_TYPE[entry.trade_action]
+            expiry_label = entry.expiry.strftime("%d %b %y").upper()
+            label = _instrument_label(int(leg.strike), expiry_label, opt_type)
+            message = build_signal_exit_message(
+                entry, label, reason, exit_price, pnl, now, underlying_spot, cumulative
+            )
+            await notifier.send(message)
 
     def describe_context(self, event: Any, market: Any, positions: Any) -> str:
         """No council context — this strategy never routes through approval."""

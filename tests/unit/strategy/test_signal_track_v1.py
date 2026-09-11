@@ -355,6 +355,121 @@ def test_gap_event_on_large_inter_tick_jump() -> None:
     assert mark.gap_event is True
 
 
+# ---------------------------------------------------------------------------
+# SPT-5 — exit engine caller-side wiring
+# ---------------------------------------------------------------------------
+
+
+async def test_stop_loss_tick_closes_and_records_pnl(store: PaperStore) -> None:
+    trade_id = _open_entry(store, sl_price="35", tgt_price="60", premium="40")
+    notifier = _FakeNotifier()
+    strategy = SignalTrackV1(
+        store=store, notifier=notifier, clock=lambda: _dt(2026, 9, 10, 10, 0, tzinfo=_IST)
+    )
+    chain = _chain(bid="30.00", ask="30.00", ltp="30.00")  # mark=30 <= sl_price=35
+
+    await strategy.check_signals(chain, [])
+
+    open_entry = store.get_open_signal_entry()
+    assert open_entry is None  # position closed
+
+    trades = store.get_trades(STRATEGY_SIGNAL_TRACK)
+    sell_trades = [t for t in trades if t.action.value == "SELL"]
+    assert len(sell_trades) == 1
+    # SELL fill = mid(30) - slippage(1.0, VIX<=20 band) = 29.0
+    assert sell_trades[0].price == Decimal("29.0")
+
+    total, n_closed, wins, losses = store.cumulative_pnl()
+    assert n_closed == 1
+    assert losses == 1 and wins == 0
+    # pnl = (29.0 - 40) * LOT_SIZE
+    assert total == (Decimal("29.0") - Decimal("40")) * LOT_SIZE
+
+    assert len(notifier.messages) == 1
+    msg = notifier.messages[0]
+    assert "SIGNAL EXIT" in msg and "STOP" in msg and "LOSS" in msg
+    _ = trade_id
+
+
+async def test_target_tick_closes_as_win(store: PaperStore) -> None:
+    _open_entry(store, sl_price="20", tgt_price="55", premium="40")
+    strategy = SignalTrackV1(store=store, clock=lambda: _dt(2026, 9, 10, 10, 0, tzinfo=_IST))
+    chain = _chain(bid="60.00", ask="60.00", ltp="60.00")  # mark=60 >= tgt_price=55
+
+    await strategy.check_signals(chain, [])
+
+    total, n_closed, wins, losses = store.cumulative_pnl()
+    assert n_closed == 1
+    assert wins == 1 and losses == 0
+    # SELL fill = mid(60) - slippage(1.0) = 59.0 > entry(40) -> win
+    assert total == (Decimal("59.0") - Decimal("40")) * LOT_SIZE
+
+
+async def test_gap_through_books_actual_mark_not_threshold(store: PaperStore) -> None:
+    """A tick that jumps straight past the SL realises the gapped price, not the SL level."""
+    _open_entry(store, sl_price="28", tgt_price="60", premium="40")
+    strategy = SignalTrackV1(store=store, clock=lambda: _dt(2026, 9, 10, 10, 0, tzinfo=_IST))
+    chain = _chain(bid="24.00", ask="24.00", ltp="24.00")  # mark=24, well past sl_price=28
+
+    await strategy.check_signals(chain, [])
+
+    total, n_closed, _, _ = store.cumulative_pnl()
+    assert n_closed == 1
+    # fill = mid(24) - slippage(1.0) = 23.0, booked as-is (not clamped to sl_price=28)
+    assert total == (Decimal("23.0") - Decimal("40")) * LOT_SIZE
+
+
+async def test_exit_fires_exactly_once_on_repeat_ticks(store: PaperStore) -> None:
+    trade_id = _open_entry(store, sl_price="35", tgt_price="60", premium="40")
+    strategy = SignalTrackV1(store=store, clock=lambda: _dt(2026, 9, 10, 10, 0, tzinfo=_IST))
+    chain = _chain(bid="30.00", ask="30.00", ltp="30.00")
+
+    await strategy.check_signals(chain, [])
+    await strategy.check_signals(chain, [])  # stray re-tick after close
+
+    trades = store.get_trades(STRATEGY_SIGNAL_TRACK)
+    sell_trades = [t for t in trades if t.action.value == "SELL"]
+    assert len(sell_trades) == 1  # no double-close
+    _, n_closed, _, _ = store.cumulative_pnl()
+    assert n_closed == 1
+    _ = trade_id
+
+
+def test_exit_message_renders_for_win_and_loss() -> None:
+    entry = _make_entry(
+        entry_premium=Decimal("40"), sl_price=Decimal("28"), tgt_price=Decimal("60")
+    )
+    now = _dt(2026, 9, 10, 13, 42, tzinfo=_IST)
+
+    from src.strategy.signal_exit import SignalExitReason
+    from src.strategy.signal_track_v1 import build_signal_exit_message
+
+    win_msg = build_signal_exit_message(
+        entry,
+        "NIFTY 23000 29 SEP 26 PE",
+        SignalExitReason.TARGET,
+        Decimal("59.0"),
+        Decimal("1235.00"),
+        now,
+        Decimal("23088"),
+        (Decimal("1235.00"), 1, 1, 0),
+    )
+    assert "SIGNAL EXIT" in win_msg and "TARGET" in win_msg
+    assert "1,235\\.00" in win_msg or "1,235.00" in win_msg
+
+    loss_msg = build_signal_exit_message(
+        entry,
+        "NIFTY 23000 29 SEP 26 PE",
+        SignalExitReason.STOP_LOSS,
+        Decimal("29.0"),
+        Decimal("-715.00"),
+        now,
+        Decimal("22950"),
+        (Decimal("-715.00"), 1, 0, 1),
+    )
+    assert "SIGNAL EXIT" in loss_msg and "STOP" in loss_msg and "LOSS" in loss_msg
+
+
 def test_mfe_mae_monotonic_across_ticks() -> None:
     entry = _make_entry(entry_premium=Decimal("40"))
     now = _dt(2026, 9, 10, 10, 0, tzinfo=_IST)
