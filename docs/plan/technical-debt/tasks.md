@@ -28,8 +28,8 @@ commit — they are proactive verification/reconciliation work, not opportunisti
 - [x] **DEBT-11** — `standalone-actionable`. `sha-recorded-via-second-commit` (Count 6 at escalation, 2026-09-03) is a protocol conflict, not a per-session lapse: the SWEEP-4 `commit` skill Step 1b
   `<pending>`-then-backfill policy contradicts some `tasks.md` folders' "one commit plus a follow-up" convention. Reconcile the two into one repo-wide policy, then verify `commit_preflight.py`'s
   SHA-placeholder warning is heeded. Trigger: standalone. | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <pending>
-- [ ] **DEBT-12** — `standalone-actionable`. Verify the SWEEP-4 `commit_preflight.py` staged md-line-length check is effective against `authored-md-prose-over-200-cap` (Count 5 at escalation,
-  2026-09-03). Trigger: standalone once 3 sessions are logged after `2b85b84`; escalate if still recurring. | Owner: Claude | Model: claude-sonnet-5 | Review: none
+- [x] **DEBT-12** — `standalone-actionable`. Verify the SWEEP-4 `commit_preflight.py` staged md-line-length check is effective against `authored-md-prose-over-200-cap` (Count 5 at escalation,
+  2026-09-03). Trigger: standalone once 3 sessions are logged after `2b85b84`; escalate if still recurring. | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <pending>
 - [ ] **DEBT-13** — `standalone-actionable`. `next-marker-points-at-just-closed-task` (Count 5 at escalation, 2026-09-06). `check_checkbox_consistency.py` exists but is blind to the epic-row shape in
   `docs/plan/README.md` (a `<epic>/` line carrying `<sub-story>/ next: **ID**` for a nested `strategy-rollout/tasks.md`) — `--all` exits 0 with ROLL-14 checked and the README row still reading `next:
   **ROLL-14**`. Extend the guard's `README_ENTRY_RE` / resolution to follow the sub-story pointer, then verify. Trigger: standalone. | Owner: Claude | Model: claude-sonnet-5 | Review: none

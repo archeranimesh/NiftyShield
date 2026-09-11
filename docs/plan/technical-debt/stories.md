@@ -65,7 +65,8 @@ slug. If it did **not** recur in 3+ such sessions, tick the box — the hook wor
   policy is the sole repo-wide policy — it was already `README.md` §Conventions and what `commit_preflight.py` enforces. The contradicting line in `root-doc-organization/tasks.md` was corrected to
   match; decision recorded in `DECISIONS.md` (Developer Tooling).
 - **DEBT-12** — `authored-md-prose-over-200-cap` (Count 5). Remediation: SWEEP-4 `commit_preflight.py` staged md-line-length check reusing `check_md_line_length.check_file` (`2b85b84`). Un-reflowable
-  long `tasks.md` lines remain an accepted residual.
+  long `tasks.md` lines remain an accepted residual. **Verified (2026-09-11):** 4 post-`2b85b84` recurrences all show the check firing and the commit aborting before landing (`5aa9ce6`, `b70f8fa`) —
+  the blocker works; recurrence is authoring-time cost, not hook failure. `reflow_md.py` (doc-format-migration epic) is the standing remediation for that gap. See `DECISIONS.md` DEBT-12.
 - **DEBT-13** — `next-marker-points-at-just-closed-task` (Count 5). Remediation exists but is ineffective for one shape: `check_checkbox_consistency.py`'s `README_ENTRY_RE` matches a flat `<folder>/ …
   next: **ID**` row and flags a pointer at a done id, but an epic row in `docs/plan/README.md` that carries a nested sub-story pointer (`strategy-rollout/ next: **ROLL-14**` while
   `strategy-rollout/tasks.md` has ROLL-14 checked) passes `--all` clean. Extend the guard to resolve the sub-story `tasks.md` for epic rows, then verify against the ROLL-14 close (`eb782d0`, README:43

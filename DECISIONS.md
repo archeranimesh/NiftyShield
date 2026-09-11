@@ -1013,6 +1013,20 @@ paragraph describing `inline_full_suite.sh` said "(warn-only)" — now "(blockin
 
 ---
 
+## DEBT-12 — `commit_preflight.py` md-line-length check verified effective (2026-09-11)
+
+Verification (per `docs/plan/technical-debt/stories.md` DEBT-8/-9/-10/-12 common procedure): `authored-md-prose-over-200-cap` recurred 4x in `suggestions.md` after the SWEEP-4 remediation
+(`2b85b84`, 2026-09-03) — SPT-2 (2026-09-07), S2.1 (`5aa9ce6`), S3.3, SCT-4 (`b70f8fa`, through 2026-09-10) — past the 3-session check window, so the slug already self-escalated to
+`Escalated: DEBT-12` in `suggestions.md`. Unlike `DEBT-8`/`DEBT-9` (warn-only hooks that never blocked anything), this remediation is a staged pre-commit blocker: every cited recurrence shows the
+check firing and the commit actually aborting (`5aa9ce6`, `b70f8fa` both cite "aborted by `md-line-length`"), forcing a chase-down/re-edit/re-stage cycle before the commit landed. The check is doing
+its job — no line over 200 chars has reached a commit since `2b85b84`. What recurs is authoring-time cost (writing the overflow in the first place), not a hook failure.
+
+**Decision (Animesh):** no further hook change. The `doc-format-migration` epic (RDO-17.x/DFM series, closed prior to this session) already built `scripts/dev/reflow_md.py` and widened
+`md-line-length` repo-wide as the standard fill-to-≤200 remediation path — that is the correct answer to the authoring-time gap, not a second commit-time mechanism. Per `stories.md`'s own note,
+un-reflowable long `tasks.md` lines remain an accepted residual. DEBT-12 closes as **verified effective**, no protocol/model discussion opened.
+
+---
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/` (except 0.6c), `src/streaming/` — all empty

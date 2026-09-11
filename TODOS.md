@@ -143,6 +143,13 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-11] `docs/plan/technical-debt` **DEBT-12** closed — verified `commit_preflight.py`'s
+  staged md-line-length check (SWEEP-4, `2b85b84`) against `authored-md-prose-over-200-cap` (4
+  post-remediation recurrences through 2026-09-10). Unlike DEBT-8/-9, the check is a real
+  blocker and fired correctly each time (commits `5aa9ce6`, `b70f8fa` both aborted before
+  landing) — recurrence is authoring-time cost, not hook failure. No protocol/model discussion
+  opened; `reflow_md.py` (doc-format-migration epic) stands as the remediation. Decision +
+  rationale: `DECISIONS.md`.
 - [2026-09-11] `docs/plan/technical-debt` **DEBT-9** closed — verified `check_inline_full_suite.py`
   (warn-only since SWEEP-3, `e325e86`) did not stop `pytest-inlined-not-test-runner` (Count 17
   recurrences through 2026-09-11). Escalated to a protocol/model discussion per the DEBT-8/-9/
