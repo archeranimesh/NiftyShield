@@ -9,8 +9,9 @@ spec.
 > gate is a **real Claude subagent run**, not Antigravity's persona approximation — SEC-2 and SEC-3 touch signal / P&L-adjacent paths (CLAUDE.md §AutoTrigger). SEC-4 (discretionary), SEC-5 (a
 > keep/delete decision) and SEC-6 (docs close) stay `Owner: Claude`.
 
-- [ ] **SEC-1** — `src/market_calendar.guard_trading_day(logger, script_name) -> bool` (guard-log-return in one call) + `is_market_session_now() -> bool` (09:15–15:30 IST on a trading day); adopt in
-  `morning_signal`, `record_signal_outcome`, `signal_report`, `signal_paper_entry`, and `StrategyMonitor`'s session check. | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: <—>
+- [x] **SEC-1** — `src/market_calendar.guard_trading_day(logger, script_name) -> bool` (guard-log-return in one call) + `is_market_session_now() -> bool` (09:15–15:30 IST on a trading day); adopt in
+  `morning_signal`, `record_signal_outcome`, `signal_report`, `signal_paper_entry`, and `StrategyMonitor`'s session check. | Owner: Antigravity | Model: gemini-2.5-pro | Review: code-reviewer | SHA:
+  1ef2974
 - [ ] **SEC-2** — `DailySignal.is_actionable` property on `src/signals/models.py` (`return self.trade_action is not TradeAction.NO_TRADE`); refactor the four call sites (`morning_signal`,
   `record_signal_outcome`, `signal_report`, `signal_track_v1`). | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: <—>
 - [ ] **SEC-3** — merge `scripts/record_signal_outcome.py` + `scripts/signal_report.py` → `scripts/signal_eod.py` (phase 1 = write the `SignalOutcome` row via the current `--auto` logic, unchanged;

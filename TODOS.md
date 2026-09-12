@@ -140,79 +140,44 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
-- [2026-09-11] `docs/plan/signals-paper-track` **SPT-8** closed (docs-only) — story done, archived
-  to `docs/archive/plan/signals-paper-track/`. Updated `CONTEXT.md` (`src/strategy/` bullet +
-  `SignalTrackV1`), `DECISIONS.md` (as-built follow-up note on the SPT ruling entry),
-  `DB_REGISTRY.md` (`paper_signal_entries` / `paper_signal_marks` rows + note), `TODOS.md`
-  (Feature Backlog item removed → `TODOS_ARCHIVE.md`), `docs/plan/README.md` (collapsed to the
-  archived pointer; `signals-entrypoint-consolidation/` unblocked), and created
-  `src/strategy/CLAUDE.md` (did not previously exist — also added `strategy` to root `CLAUDE.md`'s
-  9-module index and `protocol-reference` §5). `signals/` S5.5a marked `won't-do` in the archived
-  `signals_tasks.md`. No code change.
-- [2026-09-11] `docs/plan/signals-paper-track` **SPT-6** closed (`1f52880`) — entrypoint wiring,
-  no new cron: `scripts/morning_signal.py` opens the paper entry via a guarded tail-call
-  (`await open_signal_paper_entry(signal, snapshot, broker, paper_store)`, isolated in a
-  `try/except` matching the existing entry-premium-capture pattern) right after
-  `store.record_signal`; `scripts/monitor_daemon.py` registers `SignalTrackV1` structurally
-  identically to the sibling strategies (its `due_interval_s=30` class attribute, set in SPT-4,
-  drives the 30 s cadence — no registration-time param needed); new
-  `scripts/signal_paper_entry.py` is a manual `--date` backfill/re-entry CLI for the rare
-  failed-tail-call case, calling the identical `open_signal_paper_entry` hook. No unit tests
-  (integration-only, matching `morning_signal.py`'s own precedent). Two `test_monitor_daemon.py`
-  strategy-count assertions bumped +1 for the now-always-registered `SignalTrackV1`; one
-  `test_escaping_guard.py` baseline line moved 282→296 (the tail-call shifted the already-safe
-  `notifier.send(msg)` call site, not a new escaping gap). `code-reviewer`: 0
-  CRITICAL/ERROR/WARNING. Next: SPT-8 (docs close).
-- [2026-09-11] `docs/plan/signals-paper-track` **SPT-5** closed (`06df9d8`) — caller-side exit
-  wiring: on a non-HOLD `signal_exit.evaluate()` decision, `SignalTrackV1._close_position` takes
-  the SELL fill at the observed mark via `PaperFillSimulator` (gap-through booked as-is, not
-  clamped to the SL/target threshold), closes the row + writes `paper_exit_events`, and sends
-  the new `build_signal_exit_message` Telegram exit message. `code-reviewer` and
-  `greeks-analyst` independently flagged the same issue — the closing SELL leg must go through
-  `PaperStore.record_trade`, not `record_signal_open_leg` (opening-leg-only, misleadingly
-  generic) — fixed before commit. Next: SPT-6.
-- [2026-09-11] `docs/plan/technical-debt` **DEBT-13** closed — `check_checkbox_consistency.py`'s
-  `check_readme_pointers()` was blind to an epic row (`<epic>/` with `next: **ID**` pointing at
-  a nested `<sub-story>/tasks.md`, no flat root `tasks.md`). Added
-  `_resolve_pointer_task_file()`: flat file first, then a sorted glob fallback over
-  `<epic>/**/tasks.md`. Cited ROLL-14/`strategy-rollout` repro was already stale (epic archived
-  2026-09-06) so no README correction was needed; verified via two new unit tests
-  reconstructing the epic shape. Full `tests/unit/` green (3022 passed); `@code-reviewer`
-  clean. Decision + rationale: `DECISIONS.md`.
-- [2026-09-11] `docs/plan/technical-debt` **DEBT-15** closed — verified `commit_preflight.py`'s
-  staged `ruff format --check` blocker (SWEEP-4, `2b85b84`) against `ruff-format-check-skipped-
-  precommit-abort`: one post-remediation recurrence (S5.2c, `b33a43d`), none since across the
-  dozens of sessions that followed. Like DEBT-12, the check is a real blocker and fired
-  correctly each time cited (S5.2c, S5.3) — recurrence is a pre-stage-checklist cost, not hook
-  failure. No protocol/model discussion opened. Decision + rationale: `DECISIONS.md`.
-- [2026-09-11] `docs/plan/technical-debt` **DEBT-12** closed — verified `commit_preflight.py`'s
-  staged md-line-length check (SWEEP-4, `2b85b84`) against `authored-md-prose-over-200-cap` (4
-  post-remediation recurrences through 2026-09-10). Unlike DEBT-8/-9, the check is a real
-  blocker and fired correctly each time (commits `5aa9ce6`, `b70f8fa` both aborted before
-  landing) — recurrence is authoring-time cost, not hook failure. No protocol/model discussion
-  opened; `reflow_md.py` (doc-format-migration epic) stands as the remediation. Decision +
+- [2026-09-12] `docs/plan/signals-entrypoint-consolidation` **SEC-1** closed (`1ef2974`) — Added `market_calendar.guard_trading_day` and `is_market_session_now` helpers. Adopted `guard_trading_day` at
+  the four signal script entrypoints, replacing duplicate inline logic. Adopted `is_market_session_now` inside `StrategyMonitor._tick` for its market-hours window. Unit tests updated and passing.
+- [2026-09-11] `docs/plan/signals-paper-track` **SPT-8** closed (docs-only) — story done, archived to `docs/archive/plan/signals-paper-track/`. Updated `CONTEXT.md` (`src/strategy/` bullet +
+  `SignalTrackV1`), `DECISIONS.md` (as-built follow-up note on the SPT ruling entry), `DB_REGISTRY.md` (`paper_signal_entries` / `paper_signal_marks` rows + note), `TODOS.md` (Feature Backlog item
+  removed → `TODOS_ARCHIVE.md`), `docs/plan/README.md` (collapsed to the archived pointer; `signals-entrypoint-consolidation/` unblocked), and created `src/strategy/CLAUDE.md` (did not previously
+  exist — also added `strategy` to root `CLAUDE.md`'s 9-module index and `protocol-reference` §5). `signals/` S5.5a marked `won't-do` in the archived `signals_tasks.md`. No code change.
+- [2026-09-11] `docs/plan/signals-paper-track` **SPT-6** closed (`1f52880`) — entrypoint wiring, no new cron: `scripts/morning_signal.py` opens the paper entry via a guarded tail-call (`await
+  open_signal_paper_entry(signal, snapshot, broker, paper_store)`, isolated in a `try/except` matching the existing entry-premium-capture pattern) right after `store.record_signal`;
+  `scripts/monitor_daemon.py` registers `SignalTrackV1` structurally identically to the sibling strategies (its `due_interval_s=30` class attribute, set in SPT-4, drives the 30 s cadence — no
+  registration-time param needed); new `scripts/signal_paper_entry.py` is a manual `--date` backfill/re-entry CLI for the rare failed-tail-call case, calling the identical `open_signal_paper_entry`
+  hook. No unit tests (integration-only, matching `morning_signal.py`'s own precedent). Two `test_monitor_daemon.py` strategy-count assertions bumped +1 for the now-always-registered `SignalTrackV1`;
+  one `test_escaping_guard.py` baseline line moved 282→296 (the tail-call shifted the already-safe `notifier.send(msg)` call site, not a new escaping gap). `code-reviewer`: 0 CRITICAL/ERROR/WARNING.
+  Next: SPT-8 (docs close).
+- [2026-09-11] `docs/plan/signals-paper-track` **SPT-5** closed (`06df9d8`) — caller-side exit wiring: on a non-HOLD `signal_exit.evaluate()` decision, `SignalTrackV1._close_position` takes the SELL
+  fill at the observed mark via `PaperFillSimulator` (gap-through booked as-is, not clamped to the SL/target threshold), closes the row + writes `paper_exit_events`, and sends the new
+  `build_signal_exit_message` Telegram exit message. `code-reviewer` and `greeks-analyst` independently flagged the same issue — the closing SELL leg must go through `PaperStore.record_trade`, not
+  `record_signal_open_leg` (opening-leg-only, misleadingly generic) — fixed before commit. Next: SPT-6.
+- [2026-09-11] `docs/plan/technical-debt` **DEBT-13** closed — `check_checkbox_consistency.py`'s `check_readme_pointers()` was blind to an epic row (`<epic>/` with `next: **ID**` pointing at a nested
+  `<sub-story>/tasks.md`, no flat root `tasks.md`). Added `_resolve_pointer_task_file()`: flat file first, then a sorted glob fallback over `<epic>/**/tasks.md`. Cited ROLL-14/`strategy-rollout` repro
+  was already stale (epic archived 2026-09-06) so no README correction was needed; verified via two new unit tests reconstructing the epic shape. Full `tests/unit/` green (3022 passed);
+  `@code-reviewer` clean. Decision + rationale: `DECISIONS.md`.
+- [2026-09-11] `docs/plan/technical-debt` **DEBT-15** closed — verified `commit_preflight.py`'s staged `ruff format --check` blocker (SWEEP-4, `2b85b84`) against `ruff-format-check-skipped-
+  precommit-abort`: one post-remediation recurrence (S5.2c, `b33a43d`), none since across the dozens of sessions that followed. Like DEBT-12, the check is a real blocker and fired correctly each time
+  cited (S5.2c, S5.3) — recurrence is a pre-stage-checklist cost, not hook failure. No protocol/model discussion opened. Decision + rationale: `DECISIONS.md`.
+- [2026-09-11] `docs/plan/technical-debt` **DEBT-12** closed — verified `commit_preflight.py`'s staged md-line-length check (SWEEP-4, `2b85b84`) against `authored-md-prose-over-200-cap` (4
+  post-remediation recurrences through 2026-09-10). Unlike DEBT-8/-9, the check is a real blocker and fired correctly each time (commits `5aa9ce6`, `b70f8fa` both aborted before landing) — recurrence
+  is authoring-time cost, not hook failure. No protocol/model discussion opened; `reflow_md.py` (doc-format-migration epic) stands as the remediation. Decision + rationale: `DECISIONS.md`.
+- [2026-09-11] `docs/plan/technical-debt` **DEBT-9** closed — verified `check_inline_full_suite.py` (warn-only since SWEEP-3, `e325e86`) did not stop `pytest-inlined-not-test-runner` (Count 17
+  recurrences through 2026-09-11). Escalated to a protocol/model discussion per the DEBT-8/-9/ -10/-12 procedure; made the hook blocking (exit 2 + stderr), mirroring the DEBT-8 fix. Decision +
   rationale: `DECISIONS.md`.
-- [2026-09-11] `docs/plan/technical-debt` **DEBT-9** closed — verified `check_inline_full_suite.py`
-  (warn-only since SWEEP-3, `e325e86`) did not stop `pytest-inlined-not-test-runner` (Count 17
-  recurrences through 2026-09-11). Escalated to a protocol/model discussion per the DEBT-8/-9/
-  -10/-12 procedure; made the hook blocking (exit 2 + stderr), mirroring the DEBT-8 fix.
+- [2026-09-11] `docs/plan/technical-debt` **DEBT-8** closed — verified `check_repeat_read.py` (warn-only since SWEEP-2, `68683cb`) did not stop `reread-file-already-in-context` (34 recurrences through
+  2026-09-11). Escalated to a protocol/model discussion per the DEBT-8/-9/ -10/-12 procedure; operator chose to make the hook blocking (exit 2 + stderr) over accepting it as model discipline.
   Decision + rationale: `DECISIONS.md`.
-- [2026-09-11] `docs/plan/technical-debt` **DEBT-8** closed — verified `check_repeat_read.py`
-  (warn-only since SWEEP-2, `68683cb`) did not stop `reread-file-already-in-context` (34
-  recurrences through 2026-09-11). Escalated to a protocol/model discussion per the DEBT-8/-9/
-  -10/-12 procedure; operator chose to make the hook blocking (exit 2 + stderr) over accepting
-  it as model discipline. Decision + rationale: `DECISIONS.md`.
-- [2026-09-11] Tooling: on-demand weekly feature-usage audit. `session-close` gains Step 4c —
-  appends one JSON row per session to `session_audit.jsonl` (repo root, committed) via new
-  `scripts/dev/session_audit_log.py` (`append_row`/`read_range`, frozen `SessionAuditRow`
-  dataclass). New on-demand skill `.claude/skills/weekly-audit/SKILL.md` reads that log
-  (never raw transcripts) to check for missed Claude Code features across recent sessions,
-  drilling into a flagged session's transcript only when the aggregate is ambiguous.
-  Deliberately on-demand, not cron/`/loop` — value unproven, cheapest version first. Tests:
-  `test_session_audit_log.py` (3 cases). `code-reviewer`: 0 CRITICAL / 0 ERROR / 4 WARNING
-  (missing JSON-parse error handling in `read_range`/CLI, no `main()` entry-point test, no
-  blank-line edge-case test — deferred, all robustness/coverage gaps on a non-financial
-  tooling path, no correctness impact on the happy path).
+- [2026-09-11] Tooling: on-demand weekly feature-usage audit. `session-close` gains Step 4c — appends one JSON row per session to `session_audit.jsonl` (repo root, committed) via new
+  `scripts/dev/session_audit_log.py` (`append_row`/`read_range`, frozen `SessionAuditRow` dataclass). New on-demand skill `.claude/skills/weekly-audit/SKILL.md` reads that log (never raw transcripts)
+  to check for missed Claude Code features across recent sessions, drilling into a flagged session's transcript only when the aggregate is ambiguous. Deliberately on-demand, not cron/`/loop` — value
+  unproven, cheapest version first. Tests: `test_session_audit_log.py` (3 cases). `code-reviewer`: 0 CRITICAL / 0 ERROR / 4 WARNING (missing JSON-parse error handling in `read_range`/CLI, no `main()`
+  entry-point test, no blank-line edge-case test — deferred, all robustness/coverage gaps on a non-financial tooling path, no correctness impact on the happy path).
 - [2026-09-11] signals-paper-track **SPT-3b** — new task split from SPT-5 (dependency ordering): SPT-4's spec hands `(entry, mark, now)` to `signal_exit.evaluate`, but that function was scoped to
   SPT-5 alongside the caller-side fill/close/Telegram wiring — a hard forward dependency SPT-4 couldn't satisfy standalone. Split confirmed with the operator before touching `tasks.md`/`stories.md`.
   `src/strategy/signal_exit.py` gains `SignalExitReason` (`TARGET`/`STOP_LOSS`/`TIME_EXIT`/reserved `TRAILING_STOP`), frozen `SignalExitDecision`, and pure `evaluate(entry, mark, now)` (priority:
@@ -777,5 +742,5 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
 - [2026-09-09] MVP story — reframed from price-vs-target watch to capital-deployment sim (`eaa05de`, docs only). Locked: fixed 6% tranche ladder (25% each at 0/−6/−12/−18%), tipster SL ignored,
   −30%-on-deployed-capital hard stop. Open questions (whole-share rounding, cost bps, NIFTY benchmark alpha, time stop, portfolio mode, M-A lump-sum phasing, schema council) recorded at top of
   `docs/plan/mvp/mvp_tasks.md`; M1/M2/M4 need rewrite before implementation. Not started.
-- [2026-09-11] SPT-4 (`7b11e83` + `edbc135`) and SPT-7 (`71da2d5` + `bbcf596`) shipped in parallel via two isolated subagents — SPT-7 has no code dependency on SPT-4/5/6 (only SPT-2's store
-  methods), so it ran concurrently with SPT-4 instead of waiting behind SPT-5/6 in task order. `signals-paper-track/` next: **SPT-5**.
+- [2026-09-11] SPT-4 (`7b11e83` + `edbc135`) and SPT-7 (`71da2d5` + `bbcf596`) shipped in parallel via two isolated subagents — SPT-7 has no code dependency on SPT-4/5/6 (only SPT-2's store methods),
+  so it ran concurrently with SPT-4 instead of waiting behind SPT-5/6 in task order. `signals-paper-track/` next: **SPT-5**.

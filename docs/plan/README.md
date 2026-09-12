@@ -128,9 +128,9 @@ tail-call opens the entry and `scripts/signal_paper_entry.py` is the manual `--d
 outcome message (marked `won't-do` in the archived `signals_tasks.md`). Go-live gate + pilot unexercised — 6-month window not yet elapsed. Entrypoint-dedup cleanup now unblocked →
 `signals-entrypoint-consolidation/`.
 
-**`signals-entrypoint-consolidation/`** · ⬜ Not started · unblocked 2026-09-11 (`signals-paper-track/` archived) · next: **SEC-1** One trading-day guard (`market_calendar.guard_trading_day`) + one
-`DailySignal.is_actionable` predicate across the four signal entrypoints, and merge `record_signal_outcome.py` + `signal_report.py` into one 16:00 `scripts/signal_eod.py` (2 crons → 1). No
-signal-pipeline or SPT-execution-layer behaviour change — the idealized `SignalOutcome` baseline row is written unchanged. From the 2026-09-10 SPT-plan review. No `schema.md`.
+**`signals-entrypoint-consolidation/`** · 🔄 In progress · unblocked 2026-09-11 (`signals-paper-track/` archived) · next: **SEC-2** `DailySignal.is_actionable` property on `src/signals/models.py`
+(`return self.trade_action is not TradeAction.NO_TRADE`); refactor the four call sites (`morning_signal`, `record_signal_outcome`, `signal_report`, `signal_track_v1`). No signal-pipeline or
+SPT-execution-layer behaviour change — the idealized `SignalOutcome` baseline row is written unchanged. From the 2026-09-10 SPT-plan review. No `schema.md`.
 
 **`full-repo-review/`** · ✅ Complete — see `full-repo-review-followups/` One-time multi-model, multi-persona review of design docs, source, tests, the AI-collaboration protocol, and per-job-type
 surface routing (FR-1..9).
