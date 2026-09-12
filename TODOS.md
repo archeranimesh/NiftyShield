@@ -140,6 +140,12 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-12] Fixed 3 flaky `tests/unit/paper/test_overlay_entry.py` failures (`481f326`) —
+  `_write_vix_fixture`'s `close` column was hardcoded to `rows` (252) elements while
+  `pd.date_range(end=date.today(), periods=rows, freq="B")` returns fewer dates when
+  `date.today()` falls on a non-business day (weekend runs only), raising `ValueError: All
+  arrays must be of the same length`. Fixed by matching `close` to `len(dates)`. `code-reviewer`:
+  0 CRITICAL/ERROR/WARNING.
 - [2026-09-12] Finished an incomplete `ruff` lint sweep found stashed from a prior session
   (`2d7890d`) — reran `ruff check --fix` + `ruff format` across scratch/, scripts/,
   src/portfolio/, src/strategy/, tests/unit/ (55 files) and manually resolved the 12 remaining
