@@ -304,6 +304,26 @@ class TestGuardTradingDay:
                     date="2099-04-18",
                 )
 
+    def test_uses_explicit_date_and_skips_market_today(self) -> None:
+        from unittest.mock import MagicMock, patch
+
+        import src.market_calendar.holidays as _holidays_mod
+
+        logger = MagicMock()
+        explicit_date = date(2099, 5, 1)
+        with patch.object(_holidays_mod, "market_today") as mock_today:
+            with patch.object(
+                _holidays_mod, "is_trading_day", return_value=False
+            ) as mock_is_trading:
+                assert _holidays_mod.guard_trading_day(logger, "test_script", explicit_date) is True
+                mock_today.assert_not_called()
+                mock_is_trading.assert_called_once_with(explicit_date)
+                logger.info.assert_called_once_with(
+                    "holiday_guard.skip",
+                    script="test_script",
+                    date="2099-05-01",
+                )
+
 
 # ── is_market_session_now ─────────────────────────────────────────────────────
 
@@ -327,7 +347,7 @@ class TestIsMarketSessionNow:
         "time_str",
         [
             "09:14:59",
-            "15:30:01",
+            "15:31:00",
             "00:00:00",
             "23:59:59",
         ],
@@ -349,7 +369,7 @@ class TestIsMarketSessionNow:
         [
             "09:15:00",
             "12:00:00",
-            "15:30:00",
+            "15:30:59",
         ],
     )
     def test_returns_true_within_market_hours(self, time_str: str) -> None:

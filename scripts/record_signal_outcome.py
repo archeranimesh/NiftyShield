@@ -39,6 +39,7 @@ from dotenv import load_dotenv
 
 from src.config import settings
 from src.market_calendar import market_today
+from src.market_calendar.holidays import guard_trading_day
 from src.notifications.formatting import format_money, pnl_emoji
 from src.notifications.markdown import escape_markdown
 from src.notifications.telegram import build_notifier
@@ -242,6 +243,9 @@ def main() -> None:
     except ValueError:
         print(f"ERROR: --date must be YYYY-MM-DD, got: {args.trade_date}", file=sys.stderr)
         sys.exit(1)
+
+    if guard_trading_day(logger, "record_signal_outcome", trade_date):
+        return
 
     store = SignalStore(settings.db_path)
     store.init_db()  # idempotent — applies any pending schema ALTERs to the live DB

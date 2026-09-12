@@ -244,13 +244,13 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
     ("scripts/strategies/three_track/paper_3track_snapshot.py", 2018): (
         "value escaped inside callee build_proxy_critical_alert() — guard inspects enclosing function only"
     ),
-    ("scripts/record_signal_outcome.py", 229): (
+    ("scripts/record_signal_outcome.py", 230): (
         "S5.5a — value is fully escaped inside the callee _format_outcome_notification() "
         "(the message-builder owns the MarkdownV2 boundary: escape_markdown() per dynamic "
         "value, literal * for bold), but this guard only inspects the immediate enclosing "
         "function (_notify), not the builder it calls — same shape as the morning_signal.py:218 entry"
     ),
-    ("scripts/signal_report.py", 314): (
+    ("scripts/signal_report.py", 315): (
         "S5.5d — report body is wrapped as a MarkdownV2 fenced code block inside the "
         "callee _format_report_message() (fence content only needs backslash/backtick "
         "escaping; a fence renders backslashes literally so escape_markdown() must NOT "

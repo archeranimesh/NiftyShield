@@ -31,7 +31,8 @@ load_dotenv()
 
 from src.client.factory import create_client  # noqa: E402
 from src.config import settings  # noqa: E402
-from src.market_calendar import is_trading_day, market_today  # noqa: E402
+from src.market_calendar import market_today  # noqa: E402
+from src.market_calendar.holidays import guard_trading_day  # noqa: E402
 from src.paper.store import PaperStore  # noqa: E402
 from src.signals.store import SignalStore  # noqa: E402
 from src.strategy.signal_track_v1 import open_signal_paper_entry  # noqa: E402
@@ -57,8 +58,7 @@ def _parse_args() -> argparse.Namespace:
 
 async def run(trade_date: date) -> None:
     """Load the persisted signal + snapshot for ``trade_date`` and open the entry."""
-    if not is_trading_day(trade_date):
-        logger.info("signal_paper_entry.skip_non_trading_day", date=trade_date.isoformat())
+    if guard_trading_day(logger, "signal_paper_entry", trade_date):
         return
 
     signal_store = SignalStore(settings.db_path)

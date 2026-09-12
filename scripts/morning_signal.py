@@ -31,7 +31,8 @@ load_dotenv()
 
 from src.client.factory import create_client  # noqa: E402
 from src.config import settings  # noqa: E402
-from src.market_calendar import is_trading_day, market_today  # noqa: E402
+from src.market_calendar import market_today  # noqa: E402
+from src.market_calendar.holidays import guard_trading_day  # noqa: E402
 from src.notifications.formatting import format_money, format_strike  # noqa: E402
 from src.notifications.markdown import escape_markdown  # noqa: E402
 from src.notifications.telegram import build_notifier  # noqa: E402
@@ -198,10 +199,9 @@ def _log_snapshot(snapshot: MarketSnapshot) -> None:
 
 async def run() -> None:
     """Execute the full morning signal pipeline once."""
-    trade_date = market_today()
-    if not is_trading_day(trade_date):
-        logger.info("morning_signal.skip_non_trading_day", date=trade_date.isoformat())
+    if guard_trading_day(logger, "morning_signal"):
         return
+    trade_date = market_today()
 
     providers = build_providers()
     broker = create_client(settings.upstox_env)

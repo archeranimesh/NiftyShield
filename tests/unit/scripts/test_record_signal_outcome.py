@@ -267,3 +267,25 @@ def test_auto_path_falls_back_to_consensus_when_entry_premium_none(
         outcome = mock_store.record_outcome.call_args[0][0]
         assert outcome.entry_premium == Decimal("99.99")
         mock_consensus.assert_called_once()
+
+
+@patch("scripts.record_signal_outcome.SignalStore")
+@patch("scripts.record_signal_outcome._parse_args")
+@patch("scripts.record_signal_outcome.guard_trading_day")
+def test_exits_on_guard_trading_day(
+    mock_guard: MagicMock,
+    mock_parse_args: MagicMock,
+    mock_store: MagicMock,
+) -> None:
+    mock_parse_args.return_value = MagicMock(
+        trade_date="2026-09-08",
+    )
+    mock_guard.return_value = True
+
+    from scripts.record_signal_outcome import main
+
+    main()
+
+    # Guard returned True -> main() exits before any DB work
+    mock_guard.assert_called_once()
+    mock_store.assert_not_called()

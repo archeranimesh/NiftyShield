@@ -738,6 +738,7 @@ def test_monitor_calls_apply_action_for_auto_execute_strategy() -> None:
     fake_dt = dt.datetime(2026, 6, 9, 10, 30, tzinfo=ist)
     with (
         patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
         patch("src.strategy.monitor.datetime") as mock_dt,
     ):
         mock_dt.now.return_value = fake_dt
@@ -798,6 +799,7 @@ def test_monitor_routes_to_approval_when_auto_execute_false() -> None:
     fake_dt = dt.datetime(2026, 6, 9, 10, 30, tzinfo=ist)
     with (
         patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
         patch("src.strategy.monitor.datetime") as mock_dt,
     ):
         mock_dt.now.return_value = fake_dt
@@ -854,6 +856,7 @@ def test_monitor_falls_back_to_approval_when_payload_auto_execute_false() -> Non
     fake_dt = dt.datetime(2026, 6, 9, 10, 30, tzinfo=ist)
     with (
         patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
         patch("src.strategy.monitor.datetime") as mock_dt,
     ):
         mock_dt.now.return_value = fake_dt

@@ -135,21 +135,26 @@ def market_today() -> date:
     return datetime.now(tz=_IST).date()
 
 
-def guard_trading_day(logger: structlog.types.FilteringBoundLogger, script_name: str) -> bool:
-    """Check if today is a trading day; if not, log and return True (to exit).
+def guard_trading_day(
+    logger: structlog.types.FilteringBoundLogger,
+    script_name: str,
+    date_to_check: date | None = None,
+) -> bool:
+    """Check if today (or a given date) is a trading day; if not, log and return True.
 
     Standardizes the holiday guard block across cron entrypoints.
 
     Args:
         logger: The structlog logger for the calling script.
         script_name: Name of the script for the log message.
+        date_to_check: Optional specific date to check instead of today.
 
     Returns:
-        True if the caller should exit (today is a holiday), False otherwise.
+        True if the caller should exit (date is a holiday), False otherwise.
     """
-    today = market_today()
-    if not is_trading_day(today):
-        logger.info("holiday_guard.skip", script=script_name, date=today.isoformat())
+    target = date_to_check if date_to_check is not None else market_today()
+    if not is_trading_day(target):
+        logger.info("holiday_guard.skip", script=script_name, date=target.isoformat())
         return True
     return False
 
@@ -157,7 +162,7 @@ def guard_trading_day(logger: structlog.types.FilteringBoundLogger, script_name:
 def is_market_session_now() -> bool:
     """Return True if current time is within active market hours on a trading day.
 
-    Market hours: 09:15 to 15:30 IST.
+    Market hours: 09:15:00 to 15:30:59 IST.
 
     Returns:
         True if the market is currently open for trading.
@@ -167,5 +172,5 @@ def is_market_session_now() -> bool:
         return False
 
     market_open = now.replace(hour=9, minute=15, second=0, microsecond=0)
-    market_close = now.replace(hour=15, minute=30, second=0, microsecond=0)
+    market_close = now.replace(hour=15, minute=30, second=59, microsecond=999999)
     return market_open <= now <= market_close

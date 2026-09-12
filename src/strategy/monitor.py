@@ -30,7 +30,7 @@ from src.client.exceptions import DataFetchError
 from src.client.protocol import BrokerClient
 from src.client.upstox_market import parse_upstox_option_chain
 from src.instruments.lookup import InstrumentLookup, parse_expiry
-from src.market_calendar.holidays import is_trading_day, market_today
+from src.market_calendar.holidays import is_market_session_now, is_trading_day, market_today
 from src.models.options import OptionChain
 from src.notifications.formatting import leg_role_label, strategy_label
 from src.notifications.markdown import escape_markdown
@@ -46,7 +46,6 @@ from src.utils.logging import bind_trace_id, generate_trace_id
 log = structlog.get_logger(__name__)
 
 _IST = timezone(timedelta(hours=5, minutes=30))
-_MARKET_OPEN = (9, 15)
 # Window for the live-vs-EOD-snapshot P&L diagnostic (BUG-019): only the
 # last 10 minutes before close, so this doesn't add a get_ltp batch call
 # per strategy on every ~90s tick all day — just the handful of ticks that
@@ -206,8 +205,7 @@ class StrategyMonitor:
             self._write_heartbeat(os.getpid())
             return
 
-        hour_min = (now_ist.hour, now_ist.minute)
-        if hour_min < _MARKET_OPEN or hour_min > _MARKET_CLOSE:
+        if not is_market_session_now():
             log.debug(
                 "strategy_monitor.skip",
                 reason="outside_market_hours",

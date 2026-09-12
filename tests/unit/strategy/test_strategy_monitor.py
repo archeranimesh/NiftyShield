@@ -130,6 +130,7 @@ async def test_tick_empty_strategy_list_writes_heartbeat() -> None:
     # Patch is_trading_day → True and market hours to be inside window
     with (
         patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
         patch(
             "src.strategy.monitor.datetime",
             **{
@@ -152,6 +153,7 @@ async def test_tick_strategy_returns_no_events_writes_heartbeat() -> None:
 
     with (
         patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
         patch(
             "src.strategy.monitor.datetime",
             **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
@@ -182,6 +184,7 @@ async def test_tick_info_signal_no_telegram() -> None:
 
     with (
         patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
         patch(
             "src.strategy.monitor.datetime",
             **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
@@ -212,6 +215,7 @@ async def test_tick_warn_signal_sends_plain_message() -> None:
 
     with (
         patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
         patch(
             "src.strategy.monitor.datetime",
             **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
@@ -247,6 +251,7 @@ async def test_tick_warn_signal_suppressed_when_already_active() -> None:
 
     with (
         patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
         patch(
             "src.strategy.monitor.datetime",
             **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
@@ -285,6 +290,7 @@ async def test_tick_warn_signal_first_occurrence_marks_active() -> None:
 
     with (
         patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
         patch(
             "src.strategy.monitor.datetime",
             **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
@@ -317,6 +323,7 @@ async def test_tick_action_signal_sends_approval_and_creates_pending_row() -> No
 
     with (
         patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
         patch(
             "src.strategy.monitor.datetime",
             **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
@@ -384,6 +391,7 @@ async def test_tick_action_create_approval_delegates_to_store() -> None:
 
     with (
         patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
         patch(
             "src.strategy.monitor.datetime",
             **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
@@ -435,6 +443,7 @@ async def test_route_event_threads_legs_to_open_into_approved_action() -> None:
 
     with (
         patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
         patch(
             "src.strategy.monitor.datetime",
             **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
@@ -475,6 +484,7 @@ async def test_route_event_defaults_legs_to_open_empty_for_close_only_actions() 
 
     with (
         patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
         patch(
             "src.strategy.monitor.datetime",
             **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
@@ -506,6 +516,7 @@ async def test_tick_broker_data_fetch_error_does_not_raise_heartbeat_written() -
 
     with (
         patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
         patch(
             "src.strategy.monitor.datetime",
             **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
@@ -542,6 +553,7 @@ async def test_tick_skips_if_outside_market_hours() -> None:
 
     with (
         patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=False),
         patch(
             "src.strategy.monitor.datetime",
             **{"now.return_value": _fake_ist_time(16, 0), "side_effect": None},
@@ -593,6 +605,7 @@ async def test_tick_fetches_chain_per_unique_expiry() -> None:
 
     with (
         patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
         patch(
             "src.strategy.monitor.datetime",
             **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
@@ -698,6 +711,7 @@ async def test_tick_logs_expiry_unresolved_once_per_position_per_tick() -> None:
 
     with (
         patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
         patch(
             "src.strategy.monitor.datetime",
             **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
@@ -757,6 +771,7 @@ async def test_tick_logs_expiry_fallback_used_for_unresolvable_positions() -> No
 
     with (
         patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
         patch(
             "src.strategy.monitor.datetime",
             **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
@@ -836,6 +851,7 @@ async def test_tick_single_expiry_single_chain_fetch() -> None:
 
     with (
         patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
         patch(
             "src.strategy.monitor.datetime",
             **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
@@ -871,6 +887,7 @@ async def test_tick_all_chains_fail_skips_gracefully() -> None:
 
     with (
         patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
         patch(
             "src.strategy.monitor.datetime",
             **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
@@ -932,6 +949,7 @@ async def test_live_pnl_diag_logged_inside_close_window() -> None:
 
     with (
         patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
         patch(
             "src.strategy.monitor.datetime",
             **{"now.return_value": _fake_ist_time(15, 25), "side_effect": None},
@@ -999,6 +1017,7 @@ async def test_live_pnl_diag_skipped_outside_window() -> None:
 
     with (
         patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
         patch(
             "src.strategy.monitor.datetime",
             **{"now.return_value": _fake_ist_time(11, 0), "side_effect": None},
@@ -1021,6 +1040,7 @@ async def test_live_pnl_diag_skipped_when_strategy_flat() -> None:
 
     with (
         patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
         patch(
             "src.strategy.monitor.datetime",
             **{"now.return_value": _fake_ist_time(15, 25), "side_effect": None},
@@ -1043,6 +1063,7 @@ async def test_live_pnl_diag_swallows_compute_pnl_exception() -> None:
 
     with (
         patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
         patch(
             "src.strategy.monitor.datetime",
             **{"now.return_value": _fake_ist_time(15, 25), "side_effect": None},
@@ -1068,6 +1089,7 @@ async def test_live_pnl_diag_skipped_when_compute_pnl_returns_none() -> None:
 
     with (
         patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
         patch(
             "src.strategy.monitor.datetime",
             **{"now.return_value": _fake_ist_time(15, 25), "side_effect": None},
@@ -1104,6 +1126,7 @@ async def test_chain_fetch_complete_logged() -> None:
 
     with (
         patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
         patch(
             "src.strategy.monitor.datetime",
             **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
@@ -1133,6 +1156,7 @@ async def test_tick_summary_logged() -> None:
 
     with (
         patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
         patch(
             "src.strategy.monitor.datetime",
             **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
@@ -1172,6 +1196,7 @@ async def test_tick_summary_signal_count_matches() -> None:
 
     with (
         patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
         patch(
             "src.strategy.monitor.datetime",
             **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
@@ -1232,6 +1257,7 @@ async def test_tick_picks_up_cc_overlay_position_under_strategy_overlay() -> Non
         monitor = _make_monitor(store=store, strategies=[strategy])
         with (
             patch("src.strategy.monitor.is_trading_day", return_value=True),
+            patch("src.strategy.monitor.is_market_session_now", return_value=True),
             patch(
                 "src.strategy.monitor.datetime",
                 **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
@@ -1275,6 +1301,7 @@ async def test_tick_skips_cc_overlay_position_under_old_constant() -> None:
         monitor = _make_monitor(store=store, strategies=[strategy])
         with (
             patch("src.strategy.monitor.is_trading_day", return_value=True),
+            patch("src.strategy.monitor.is_market_session_now", return_value=True),
             patch(
                 "src.strategy.monitor.datetime",
                 **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
@@ -1312,6 +1339,7 @@ async def test_event_alert_headline_humanizes_event_type() -> None:
 
     with (
         patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
         patch(
             "src.strategy.monitor.datetime",
             **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
@@ -1342,6 +1370,7 @@ async def test_event_alert_escapes_underscore_description() -> None:
 
     with (
         patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
         patch(
             "src.strategy.monitor.datetime",
             **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
@@ -1374,6 +1403,7 @@ async def test_event_alert_unmapped_strategy_falls_back() -> None:
 
     with (
         patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
         patch(
             "src.strategy.monitor.datetime",
             **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
@@ -1409,6 +1439,7 @@ async def test_event_alert_omits_leg_line_when_absent() -> None:
 
     with (
         patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
         patch(
             "src.strategy.monitor.datetime",
             **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
@@ -1435,6 +1466,7 @@ async def test_event_alert_severity_never_tiered() -> None:
 
     with (
         patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
         patch(
             "src.strategy.monitor.datetime",
             **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
@@ -1468,6 +1500,7 @@ async def test_event_alert_reference_scenarios() -> None:
 
     with (
         patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
         patch(
             "src.strategy.monitor.datetime",
             **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
@@ -1510,6 +1543,7 @@ async def test_event_alert_real_strategy_names_survive_without_raise() -> None:
 
         with (
             patch("src.strategy.monitor.is_trading_day", return_value=True),
+            patch("src.strategy.monitor.is_market_session_now", return_value=True),
             patch(
                 "src.strategy.monitor.datetime",
                 **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
@@ -1592,6 +1626,7 @@ async def test_slow_strategy_skipped_on_ticks_it_is_not_due() -> None:
 
     with (
         patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
         patch(
             "src.strategy.monitor.datetime",
             **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
@@ -1622,6 +1657,7 @@ async def test_fast_strategy_alongside_strategy_with_no_due_interval() -> None:
 
     with (
         patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
         patch(
             "src.strategy.monitor.datetime",
             **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
@@ -1650,6 +1686,7 @@ async def test_strategy_without_due_interval_runs_every_tick_backward_compat() -
 
     with (
         patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
         patch(
             "src.strategy.monitor.datetime",
             **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
