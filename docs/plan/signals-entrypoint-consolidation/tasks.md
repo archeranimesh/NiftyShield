@@ -3,7 +3,7 @@
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
 spec.
 
-**Open: SEC-1.** Blocked until `docs/plan/signals-paper-track/` is archived (see `prompt.md` §"Hard precondition").
+**Open: SEC-3.**
 
 > **Routing:** SEC-1 / SEC-2 / SEC-3 are `Owner: Antigravity` — mechanical, airtight specs, TDD-shaped (SEC-3 is regression-fixture-gated on a byte-identical `SignalOutcome` row). Each `code-reviewer`
 > gate is a **real Claude subagent run**, not Antigravity's persona approximation — SEC-2 and SEC-3 touch signal / P&L-adjacent paths (CLAUDE.md §AutoTrigger). SEC-4 (discretionary), SEC-5 (a
@@ -12,8 +12,10 @@ spec.
 - [x] **SEC-1** — `src/market_calendar.guard_trading_day(logger, script_name) -> bool` (guard-log-return in one call) + `is_market_session_now() -> bool` (09:15–15:30 IST on a trading day); adopt in
   `morning_signal`, `record_signal_outcome`, `signal_report`, `signal_paper_entry`, and `StrategyMonitor`'s session check. | Owner: Antigravity | Model: gemini-2.5-pro | Review: code-reviewer | SHA:
   1ef2974
-- [ ] **SEC-2** — `DailySignal.is_actionable` property on `src/signals/models.py` (`return self.trade_action is not TradeAction.NO_TRADE`); refactor the four call sites (`morning_signal`,
-  `record_signal_outcome`, `signal_report`, `signal_track_v1`). | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: <—>
+- [x] **SEC-2** — `DailySignal.is_actionable` property on `src/signals/models.py` (`return self.trade_action is not TradeAction.NO_TRADE`); refactor the four call sites (`morning_signal`,
+  `record_signal_outcome`, `signal_report`, `signal_track_v1`). | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: 0202291 (`819306b` — follow-up fix for escaping-guard baseline
+  line-number drift caused by the unused-import removal). `signal_report`'s two `NO_TRADE` checks operate on `SignalOutcome`, not `DailySignal` — left untouched (out of this task's authorized scope:
+  `DailySignal.is_actionable` property only); only three of the four named call sites (`morning_signal`, `record_signal_outcome`, `signal_track_v1`) were refactored.
 - [ ] **SEC-3** — merge `scripts/record_signal_outcome.py` + `scripts/signal_report.py` → `scripts/signal_eod.py` (phase 1 = write the `SignalOutcome` row via the current `--auto` logic, unchanged;
   phase 2 = the report), one 16:00 cron, one `guard_trading_day`. Retire the two old crontab lines, add the one new line. Keep `--auto` / report-only flags for manual use. | Owner: Antigravity |
   Model: n/a | Review: code-reviewer | SHA: <—>
