@@ -7,7 +7,6 @@ import pytest
 
 from src.nuvama.store import NuvamaStore
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -25,6 +24,7 @@ def _pos(isin: str, avg_price: str = "1000.00", qty: int = 100, label: str = "")
 def _holding_stub(isin: str, qty: int = 100, ltp: str = "1010.00", chg_pct: str = "0"):
     """Minimal stub that duck-types NuvamaBondHolding for record_all_snapshots."""
     from types import SimpleNamespace
+
     return SimpleNamespace(
         isin=isin,
         qty=qty,
@@ -51,18 +51,30 @@ class TestSchemaCoexistence:
 
     def test_creates_positions_table(self, tmp_path):
         import sqlite3
+
         db = str(tmp_path / "t.sqlite")
         NuvamaStore(db)
         with sqlite3.connect(db) as conn:
-            tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+            tables = {
+                r[0]
+                for r in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            }
         assert "nuvama_positions" in tables
 
     def test_creates_snapshots_table(self, tmp_path):
         import sqlite3
+
         db = str(tmp_path / "t.sqlite")
         NuvamaStore(db)
         with sqlite3.connect(db) as conn:
-            tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+            tables = {
+                r[0]
+                for r in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            }
         assert "nuvama_holdings_snapshots" in tables
 
     def test_idempotent_init(self, tmp_path):
@@ -73,6 +85,7 @@ class TestSchemaCoexistence:
 
     def test_schema_version_is_current(self, tmp_path):
         import sqlite3
+
         db = str(tmp_path / "v.sqlite")
         NuvamaStore(db)
         with sqlite3.connect(db) as conn:
@@ -166,8 +179,12 @@ class TestRecordSnapshot:
     def test_different_dates_isolated(self, store):
         store.record_snapshot("A", date(2026, 4, 14), 700, Decimal("1010"), Decimal("707000"))
         store.record_snapshot("A", date(2026, 4, 15), 700, Decimal("1014"), Decimal("709800"))
-        assert store.get_snapshot_for_date(date(2026, 4, 14))["A"]["current_value"] == Decimal("707000")
-        assert store.get_snapshot_for_date(date(2026, 4, 15))["A"]["current_value"] == Decimal("709800")
+        assert store.get_snapshot_for_date(date(2026, 4, 14))["A"]["current_value"] == Decimal(
+            "707000"
+        )
+        assert store.get_snapshot_for_date(date(2026, 4, 15))["A"]["current_value"] == Decimal(
+            "709800"
+        )
 
     def test_empty_for_unknown_date(self, store):
         assert store.get_snapshot_for_date(date(2026, 4, 15)) == {}
@@ -175,7 +192,11 @@ class TestRecordSnapshot:
     def test_chg_pct_stored_and_returned(self, store):
         """chg_pct written via record_snapshot is returned by get_snapshot_for_date."""
         store.record_snapshot(
-            "A", date(2026, 4, 15), 700, Decimal("1014"), Decimal("709800"),
+            "A",
+            date(2026, 4, 15),
+            700,
+            Decimal("1014"),
+            Decimal("709800"),
             chg_pct=Decimal("-1.28"),
         )
         result = store.get_snapshot_for_date(date(2026, 4, 15))
@@ -190,11 +211,19 @@ class TestRecordSnapshot:
     def test_upsert_updates_chg_pct(self, store):
         """A second record_snapshot on the same day overwrites chg_pct."""
         store.record_snapshot(
-            "A", date(2026, 4, 15), 700, Decimal("1014"), Decimal("709800"),
+            "A",
+            date(2026, 4, 15),
+            700,
+            Decimal("1014"),
+            Decimal("709800"),
             chg_pct=Decimal("-0.50"),
         )
         store.record_snapshot(
-            "A", date(2026, 4, 15), 700, Decimal("1016"), Decimal("711200"),
+            "A",
+            date(2026, 4, 15),
+            700,
+            Decimal("1016"),
+            Decimal("711200"),
             chg_pct=Decimal("0.20"),
         )
         result = store.get_snapshot_for_date(date(2026, 4, 15))
@@ -227,6 +256,7 @@ class TestRecordAllSnapshots:
     def test_chg_pct_missing_on_stub_defaults_to_zero(self, store):
         """Stubs without chg_pct attribute (e.g. old code paths) default to '0'."""
         from types import SimpleNamespace
+
         h = SimpleNamespace(isin="A", qty=100, ltp=Decimal("1014"), current_value=Decimal("101400"))
         store.record_all_snapshots([h], date(2026, 4, 15))
         result = store.get_snapshot_for_date(date(2026, 4, 15))
@@ -276,6 +306,7 @@ class TestGetPrevTotalValue:
         result = store.get_prev_total_value(date(2026, 4, 15))
         assert result == Decimal("288800.00")
 
+
 # ---------------------------------------------------------------------------
 # Options Snapshots
 # ---------------------------------------------------------------------------
@@ -284,7 +315,14 @@ class TestGetPrevTotalValue:
 class TestOptionsSnapshots:
     def test_record_options_snapshot(self, store):
         store.record_options_snapshot(
-            date(2026, 4, 15), "A", "Instrument A", 100, Decimal("10"), Decimal("11"), Decimal("100"), Decimal("50")
+            date(2026, 4, 15),
+            "A",
+            "Instrument A",
+            100,
+            Decimal("10"),
+            Decimal("11"),
+            Decimal("100"),
+            Decimal("50"),
         )
         result = store.get_options_snapshot_for_date(date(2026, 4, 15))
         assert len(result) == 1
@@ -295,16 +333,30 @@ class TestOptionsSnapshots:
         """Default behavior should exclude today (date.today())."""
         today = date.today()
         yesterday = today - timedelta(days=1)
-        
+
         # Yesterday
         store.record_options_snapshot(
-            yesterday, "A", "Instrument A", 0, Decimal("10"), Decimal("10"), Decimal("0"), Decimal("100")
+            yesterday,
+            "A",
+            "Instrument A",
+            0,
+            Decimal("10"),
+            Decimal("10"),
+            Decimal("0"),
+            Decimal("100"),
         )
         # Today
         store.record_options_snapshot(
-            today, "A", "Instrument A", 100, Decimal("10"), Decimal("11"), Decimal("100"), Decimal("50")
+            today,
+            "A",
+            "Instrument A",
+            100,
+            Decimal("10"),
+            Decimal("11"),
+            Decimal("100"),
+            Decimal("50"),
         )
-        
+
         # Default implementation should exclude today
         result = store.get_cumulative_realized_pnl()
         assert result["A"] == Decimal("100")
@@ -315,9 +367,15 @@ class TestOptionsSnapshots:
         d2 = date(2026, 4, 11)
         d3 = date(2026, 4, 12)
 
-        store.record_options_snapshot(d1, "A", "Ins", 0, Decimal("0"), Decimal("0"), Decimal("0"), Decimal("10"))
-        store.record_options_snapshot(d2, "A", "Ins", 0, Decimal("0"), Decimal("0"), Decimal("0"), Decimal("20"))
-        store.record_options_snapshot(d3, "A", "Ins", 0, Decimal("0"), Decimal("0"), Decimal("0"), Decimal("30"))
+        store.record_options_snapshot(
+            d1, "A", "Ins", 0, Decimal("0"), Decimal("0"), Decimal("0"), Decimal("10")
+        )
+        store.record_options_snapshot(
+            d2, "A", "Ins", 0, Decimal("0"), Decimal("0"), Decimal("0"), Decimal("20")
+        )
+        store.record_options_snapshot(
+            d3, "A", "Ins", 0, Decimal("0"), Decimal("0"), Decimal("0"), Decimal("30")
+        )
 
         # before d2 -> only d1
         assert store.get_cumulative_realized_pnl(before_date=d2)["A"] == Decimal("10")
@@ -335,6 +393,7 @@ class TestOptionsSnapshots:
 class TestRecordAllOptionsSnapshots:
     def _make_pos(self, symbol: str, unrealized: str = "1000", realized: str = "0"):
         from src.nuvama.models import NuvamaOptionPosition
+
         return NuvamaOptionPosition(
             trade_symbol=symbol,
             instrument_name=f"Inst {symbol}",
@@ -388,6 +447,7 @@ class TestIntradayStore:
 
     def _pos(self, symbol: str = "A", unrealized: str = "1000", realized: str = "200"):
         from types import SimpleNamespace
+
         return SimpleNamespace(
             trade_symbol=symbol,
             net_qty=-50,
@@ -399,6 +459,7 @@ class TestIntradayStore:
     def test_record_intraday_inserts_rows(self, store):
         import sqlite3
         from datetime import datetime
+
         ts = datetime.now()
         store.record_intraday_positions(ts, [self._pos("A")])
         with sqlite3.connect(store._db_path) as conn:
@@ -410,6 +471,7 @@ class TestIntradayStore:
 
     def test_get_intraday_extremes_single_timestamp(self, store):
         from datetime import datetime
+
         ts = datetime.now()
         store.record_intraday_positions(ts, [self._pos("A", "1000", "200")])
         max_pnl, min_pnl, nifty_high, nifty_low = store.get_intraday_extremes(ts.date())
@@ -422,6 +484,7 @@ class TestIntradayStore:
     def test_get_intraday_extremes_multiple_timestamps(self, store):
         """max/min taken across aggregated per-timestamp totals."""
         from datetime import datetime, timedelta
+
         ts1 = datetime.now() - timedelta(days=1)
         ts1 = ts1.replace(hour=10, minute=0, second=0, microsecond=0)
         ts2 = ts1 + timedelta(minutes=5)
@@ -436,6 +499,7 @@ class TestIntradayStore:
     def test_get_intraday_extremes_multi_leg_same_timestamp(self, store):
         """Multiple legs at the same timestamp are SUMMED before taking max/min."""
         from datetime import datetime
+
         ts = datetime.now()
         pos_a = self._pos("A", unrealized="1000", realized="0")
         pos_b = self._pos("B", unrealized="500", realized="100")
@@ -448,6 +512,7 @@ class TestIntradayStore:
     def test_get_intraday_extremes_date_isolation(self, store):
         """Yesterday's rows must not appear in today's query."""
         from datetime import datetime, timedelta
+
         ts_today = datetime.now()
         ts_yest = ts_today - timedelta(days=1)
         store.record_intraday_positions(ts_today, [self._pos("A", "1000", "0")])
@@ -464,6 +529,7 @@ class TestIntradayStore:
         """Rows older than the retention window are deleted by purge_old_intraday."""
         import sqlite3
         from datetime import datetime, timedelta
+
         old_ts = (datetime.now() - timedelta(days=31)).isoformat()
         with sqlite3.connect(store._db_path) as conn:
             conn.execute(
@@ -482,6 +548,7 @@ class TestIntradayStore:
         """Rows within the retention window are preserved by purge_old_intraday."""
         import sqlite3
         from datetime import datetime, timedelta
+
         recent_ts = (datetime.now() - timedelta(days=1)).isoformat()
         with sqlite3.connect(store._db_path) as conn:
             conn.execute(
@@ -500,6 +567,7 @@ class TestIntradayStore:
         """record_intraday_positions calls purge on every write — stale rows are cleaned up."""
         import sqlite3
         from datetime import datetime, timedelta
+
         old_ts = (datetime.now() - timedelta(days=31)).isoformat()
         with sqlite3.connect(store._db_path) as conn:
             conn.execute(

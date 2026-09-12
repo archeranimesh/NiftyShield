@@ -1,7 +1,6 @@
 """Unit tests for DateAwareLotSizeResolver."""
 
 from datetime import date
-import pytest
 
 from src.instruments.lot_size import DateAwareLotSizeResolver
 

@@ -41,7 +41,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from dotenv import load_dotenv
 
 from src.config import settings
-
 from src.market_calendar.holidays import guard_trading_day
 from src.notifications.telegram import build_notifier
 from src.paper.constants import LOT_SIZE

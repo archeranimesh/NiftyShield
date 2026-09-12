@@ -75,9 +75,7 @@ def test_chain_snapshot_roundtrip(store, db_conn):
         volume_day=45000,
         strike_iv_pctile_20d=decimal.Decimal("0.45"),
         gamma_gearing_pctile_dte=decimal.Decimal("0.78"),
-        created_at=datetime.datetime(
-            2026, 5, 26, 9, 50, 0, tzinfo=datetime.timezone.utc
-        ),
+        created_at=datetime.datetime(2026, 5, 26, 9, 50, 0, tzinfo=datetime.timezone.utc),
     )
 
     store.insert_chain_snapshot(db_conn, snap)
@@ -238,27 +236,19 @@ def test_get_yesterday_snapshot(store, db_conn):
     # Insert snapshots on 24, 25 (twice), and 26 May
     store.insert_chain_snapshot(
         db_conn,
-        make_snap(
-            datetime.date(2026, 5, 24), "15:20", decimal.Decimal("0.12")
-        ),
+        make_snap(datetime.date(2026, 5, 24), "15:20", decimal.Decimal("0.12")),
     )
     store.insert_chain_snapshot(
         db_conn,
-        make_snap(
-            datetime.date(2026, 5, 25), "10:30", decimal.Decimal("0.13")
-        ),
+        make_snap(datetime.date(2026, 5, 25), "10:30", decimal.Decimal("0.13")),
     )
     store.insert_chain_snapshot(
         db_conn,
-        make_snap(
-            datetime.date(2026, 5, 25), "15:20", decimal.Decimal("0.14")
-        ),
+        make_snap(datetime.date(2026, 5, 25), "15:20", decimal.Decimal("0.14")),
     )
     store.insert_chain_snapshot(
         db_conn,
-        make_snap(
-            datetime.date(2026, 5, 26), "15:20", decimal.Decimal("0.15")
-        ),
+        make_snap(datetime.date(2026, 5, 26), "15:20", decimal.Decimal("0.15")),
     )
 
     # Query with today = 2026-05-26. Should get 2026-05-25 15:20 snapshot
@@ -362,24 +352,30 @@ def test_watchlist_operations(store, db_conn):
     assert active[1].elevation_reason == "Now elevated"
 
     # Remove entry1 from watchlist - should return True
-    assert store.remove_from_watchlist(
-        db_conn,
-        expiry,
-        25000,
-        "CE",
-        "spot_moved_away",
-        datetime.date(2026, 5, 27),
-    ) is True
+    assert (
+        store.remove_from_watchlist(
+            db_conn,
+            expiry,
+            25000,
+            "CE",
+            "spot_moved_away",
+            datetime.date(2026, 5, 27),
+        )
+        is True
+    )
 
     # Try removing non-existing entry - should return False
-    assert store.remove_from_watchlist(
-        db_conn,
-        expiry,
-        25200,
-        "CE",
-        "spot_moved_away",
-        datetime.date(2026, 5, 27),
-    ) is False
+    assert (
+        store.remove_from_watchlist(
+            db_conn,
+            expiry,
+            25200,
+            "CE",
+            "spot_moved_away",
+            datetime.date(2026, 5, 27),
+        )
+        is False
+    )
 
     # Active watchlist should now only contain entry2
     active = store.get_active_watchlist(db_conn, expiry)
@@ -387,9 +383,7 @@ def test_watchlist_operations(store, db_conn):
     assert active[0].strike == 24900
 
     # Let's verify entry1 is still in DB but marked as removed
-    rows = db_conn.execute(
-        "SELECT * FROM gamma_watchlist WHERE strike = 25000"
-    ).fetchall()
+    rows = db_conn.execute("SELECT * FROM gamma_watchlist WHERE strike = 25000").fetchall()
     assert len(rows) == 1
     assert rows[0]["removed_date"] == "2026-05-27"
     assert rows[0]["removal_reason"] == "spot_moved_away"
@@ -480,6 +474,7 @@ def test_get_gearing_by_dte(store, db_conn):
     """Test get_gearing_by_dte correctly filters by target_dte and
     limits snapshot dates.
     """
+
     def insert_snap(dt_val, time_val, expiry_val, dte, gearing):
         snap = GammaChainSnapshot(
             snapshot_date=dt_val,
@@ -543,14 +538,10 @@ def test_get_gearing_by_dte(store, db_conn):
     )
 
     # Fetch gearing for DTE = 0, limit_days = 2 (dates 25 and 26)
-    gearing_list = store.get_gearing_by_dte(
-        db_conn, target_dte=0, limit_days=2
-    )
+    gearing_list = store.get_gearing_by_dte(db_conn, target_dte=0, limit_days=2)
     # Should get [10.1, 9.2] (descending order by date/time)
     assert gearing_list == [decimal.Decimal("10.1"), decimal.Decimal("9.2")]
 
     # Fetch gearing for DTE = 1
-    gearing_list_dte1 = store.get_gearing_by_dte(
-        db_conn, target_dte=1, limit_days=2
-    )
+    gearing_list_dte1 = store.get_gearing_by_dte(db_conn, target_dte=1, limit_days=2)
     assert gearing_list_dte1 == [decimal.Decimal("3.2")]

@@ -3,8 +3,6 @@
 
 from decimal import Decimal
 
-import pytest
-
 from src.paper.constants import STRATEGY_CC_OVERLAY, compute_max_lots
 
 

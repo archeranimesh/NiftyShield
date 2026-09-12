@@ -10,11 +10,10 @@ from decimal import Decimal
 
 import pytest
 
-from src.client.factory import VALID_ENVS, create_client
+from src.client.factory import create_client
 from src.client.mock_client import MockBrokerClient
 from src.client.protocol import BrokerClient
 from src.client.upstox_live import UpstoxLiveClient
-
 
 # ---------------------------------------------------------------------------
 # Helpers

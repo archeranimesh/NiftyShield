@@ -24,17 +24,25 @@ def store(db_path: Path) -> DhanStore:
 def _make_holdings() -> list[DhanHolding]:
     return [
         DhanHolding(
-            trading_symbol="NIFTYIETF", isin="INF109K012R6",
-            security_id="13611", exchange="NSE_EQ",
-            total_qty=500, collateral_qty=500,
-            avg_cost_price=Decimal("268.50"), classification=AssetType.EQUITY,
+            trading_symbol="NIFTYIETF",
+            isin="INF109K012R6",
+            security_id="13611",
+            exchange="NSE_EQ",
+            total_qty=500,
+            collateral_qty=500,
+            avg_cost_price=Decimal("268.50"),
+            classification=AssetType.EQUITY,
             ltp=Decimal("275.40"),
         ),
         DhanHolding(
-            trading_symbol="LIQUIDCASE", isin="INF0R8F01034",
-            security_id="25780", exchange="NSE_EQ",
-            total_qty=200, collateral_qty=200,
-            avg_cost_price=Decimal("1003.25"), classification=AssetType.BOND,
+            trading_symbol="LIQUIDCASE",
+            isin="INF0R8F01034",
+            security_id="25780",
+            exchange="NSE_EQ",
+            total_qty=200,
+            collateral_qty=200,
+            avg_cost_price=Decimal("1003.25"),
+            classification=AssetType.BOND,
             ltp=Decimal("1005.50"),
         ),
     ]
@@ -44,7 +52,6 @@ def _make_holdings() -> list[DhanHolding]:
 
 
 class TestRecordSnapshot:
-
     def test_records_holdings(self, store: DhanStore):
         count = store.record_snapshot(_make_holdings(), date(2026, 4, 14))
         assert count == 2
@@ -62,13 +69,19 @@ class TestRecordSnapshot:
     def test_upsert_updates_ltp(self, store: DhanStore):
         d = date(2026, 4, 14)
         store.record_snapshot(_make_holdings(), d)
-        updated = [DhanHolding(
-            trading_symbol="NIFTYIETF", isin="INF109K012R6",
-            security_id="13611", exchange="NSE_EQ",
-            total_qty=500, collateral_qty=500,
-            avg_cost_price=Decimal("268.50"), classification=AssetType.EQUITY,
-            ltp=Decimal("280.00"),
-        )]
+        updated = [
+            DhanHolding(
+                trading_symbol="NIFTYIETF",
+                isin="INF109K012R6",
+                security_id="13611",
+                exchange="NSE_EQ",
+                total_qty=500,
+                collateral_qty=500,
+                avg_cost_price=Decimal("268.50"),
+                classification=AssetType.EQUITY,
+                ltp=Decimal("280.00"),
+            )
+        ]
         store.record_snapshot(updated, d)
         result = store.get_snapshot_for_date(d)
         nifty = next(h for h in result if h.trading_symbol == "NIFTYIETF")
@@ -79,7 +92,6 @@ class TestRecordSnapshot:
 
 
 class TestGetSnapshotForDate:
-
     def test_returns_holdings_for_date(self, store: DhanStore):
         d = date(2026, 4, 14)
         store.record_snapshot(_make_holdings(), d)
@@ -104,10 +116,14 @@ class TestGetSnapshotForDate:
 
     def test_null_ltp_stored(self, store: DhanStore):
         h = DhanHolding(
-            trading_symbol="TEST", isin="INF000001",
-            security_id="99", exchange="NSE_EQ",
-            total_qty=10, collateral_qty=0,
-            avg_cost_price=Decimal("100"), classification=AssetType.EQUITY,
+            trading_symbol="TEST",
+            isin="INF000001",
+            security_id="99",
+            exchange="NSE_EQ",
+            total_qty=10,
+            collateral_qty=0,
+            avg_cost_price=Decimal("100"),
+            classification=AssetType.EQUITY,
             ltp=None,
         )
         store.record_snapshot([h], date(2026, 4, 14))
@@ -120,7 +136,6 @@ class TestGetSnapshotForDate:
 
 
 class TestGetPrevSnapshot:
-
     def test_returns_previous_day(self, store: DhanStore):
         store.record_snapshot(_make_holdings(), date(2026, 4, 11))
         store.record_snapshot(_make_holdings(), date(2026, 4, 14))
@@ -156,7 +171,6 @@ class TestGetPrevSnapshot:
 
 
 class TestSchemaCoexistence:
-
     def test_shares_db_with_portfolio(self, db_path: Path):
         """DhanStore's table coexists with other tables in the same DB."""
         from src.portfolio.store import PortfolioStore

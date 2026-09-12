@@ -71,7 +71,7 @@ session, keep the discipline going forward):
        `\\=` — MarkdownV2 reserves '=' and Telegram 400s on it unescaped, even in text Claude
        wrote itself. `escape_markdown()` only ever runs on dynamic values here.
     2. Em dash (—, U+2014) is NOT MarkdownV2-reserved — Telegram reserves ASCII punctuation
-       only (`_*[]()~\`>#+-=|{}.!`). An unescaped `\` before it doesn't error, it silently
+       only (`_*[]()~\\`>#+-=|{}.!`). An unescaped `\\` before it doesn't error, it silently
        renders as a literal backslash — this class of bug isn't caught by a live --send round
        trip failing, only by checking the actual reserved-char list.
 
@@ -199,8 +199,7 @@ def build_message(d: dict) -> str:
         price = escape_markdown(format_money(d["proxy_price"]))
         delta = escape_markdown(_fmt_delta(d["proxy_actual_delta"]))
         lines.append(
-            f"📥 Proxy: Long {d['lot_size']}x NIFTY {month} {strike} CE @ {price} "
-            f"\\(Δ\\={delta}\\)"
+            f"📥 Proxy: Long {d['lot_size']}x NIFTY {month} {strike} CE @ {price} \\(Δ\\={delta}\\)"
         )
 
     return "\n".join(lines)

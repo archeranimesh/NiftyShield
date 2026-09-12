@@ -222,7 +222,6 @@ def _resolved_label(f: PositionFinding) -> str:
     meaningless strike (futures have none) — special-cased here rather than passed through.
     """
     if f.instrument_type == "FUT":
-        expiry_label = date.fromisoformat(f.expiry_str).strftime("%d %b %y").lstrip("0")
         return f"{f.underlying_symbol} FUT"
     label = format_option_label(
         f.underlying_symbol, f.strike_price, f.instrument_type, f.expiry_str
@@ -250,50 +249,100 @@ def _unknown_token(instrument_key: str) -> str:
 SCENARIOS: dict[str, list[PositionFinding]] = {
     "roll_overdue_only": [
         PositionFinding(
-            "roll_overdue", "paper_ic_nifty_v1_weekly", "short_call", "NSE_FO|48521",
-            -50, expiry_str="2026-08-25", days_overdue=5,
-            underlying_symbol="NIFTY", strike_price=23000, instrument_type="CE",
+            "roll_overdue",
+            "paper_ic_nifty_v1_weekly",
+            "short_call",
+            "NSE_FO|48521",
+            -50,
+            expiry_str="2026-08-25",
+            days_overdue=5,
+            underlying_symbol="NIFTY",
+            strike_price=23000,
+            instrument_type="CE",
         ),
         PositionFinding(
-            "roll_overdue", "paper_csp_nifty_v1", "short_put", "NSE_FO|48530",
-            -25, expiry_str="2026-08-18", days_overdue=12,
-            underlying_symbol="NIFTY", strike_price=22500, instrument_type="PE",
+            "roll_overdue",
+            "paper_csp_nifty_v1",
+            "short_put",
+            "NSE_FO|48530",
+            -25,
+            expiry_str="2026-08-18",
+            days_overdue=12,
+            underlying_symbol="NIFTY",
+            strike_price=22500,
+            instrument_type="PE",
         ),
     ],
     "unresolved_only": [
         PositionFinding(
-            "unresolved_instrument", "paper_covered_call_v1", "overlay_cc", "NSE_FO|99999", 100,
+            "unresolved_instrument",
+            "paper_covered_call_v1",
+            "overlay_cc",
+            "NSE_FO|99999",
+            100,
         ),
     ],
     "mixed": [
         PositionFinding(
-            "roll_overdue", "paper_ic_nifty_v1_weekly", "short_call", "NSE_FO|48521",
-            -50, expiry_str="2026-08-25", days_overdue=5,
-            underlying_symbol="NIFTY", strike_price=23000, instrument_type="CE",
+            "roll_overdue",
+            "paper_ic_nifty_v1_weekly",
+            "short_call",
+            "NSE_FO|48521",
+            -50,
+            expiry_str="2026-08-25",
+            days_overdue=5,
+            underlying_symbol="NIFTY",
+            strike_price=23000,
+            instrument_type="CE",
         ),
         PositionFinding(
-            "roll_overdue", "paper_csp_nifty_v1", "short_put", "NSE_FO|48530",
-            -25, expiry_str="2026-08-18", days_overdue=12,
-            underlying_symbol="NIFTY", strike_price=22500, instrument_type="PE",
+            "roll_overdue",
+            "paper_csp_nifty_v1",
+            "short_put",
+            "NSE_FO|48530",
+            -25,
+            expiry_str="2026-08-18",
+            days_overdue=12,
+            underlying_symbol="NIFTY",
+            strike_price=22500,
+            instrument_type="PE",
         ),
         PositionFinding(
-            "unresolved_instrument", "paper_covered_call_v1", "overlay_cc", "NSE_FO|99999", 100,
+            "unresolved_instrument",
+            "paper_covered_call_v1",
+            "overlay_cc",
+            "NSE_FO|99999",
+            100,
         ),
     ],
     "single_finding": [
         PositionFinding(
-            "roll_overdue", "paper_protective_put_v1", "overlay_pp", "NSE_FO|48540",
-            10, expiry_str="2026-08-11", days_overdue=1,
-            underlying_symbol="NIFTY", strike_price=21500, instrument_type="PE",
+            "roll_overdue",
+            "paper_protective_put_v1",
+            "overlay_pp",
+            "NSE_FO|48540",
+            10,
+            expiry_str="2026-08-11",
+            days_overdue=1,
+            underlying_symbol="NIFTY",
+            strike_price=21500,
+            instrument_type="PE",
         ),
     ],
     "roll_overdue_futures": [
         # base_futures leg roll from ROLL-9 — no strike. format_option_label() isn't called
         # for FUT at all (see _resolved_label); this scenario exists to exercise that path.
         PositionFinding(
-            "roll_overdue", "paper_nifty_futures", "base_futures", "NSE_FO|11111",
-            75, expiry_str="2026-08-25", days_overdue=3,
-            underlying_symbol="NIFTY", strike_price=0, instrument_type="FUT",
+            "roll_overdue",
+            "paper_nifty_futures",
+            "base_futures",
+            "NSE_FO|11111",
+            75,
+            expiry_str="2026-08-25",
+            days_overdue=3,
+            underlying_symbol="NIFTY",
+            strike_price=0,
+            instrument_type="FUT",
         ),
     ],
 }

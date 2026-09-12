@@ -16,10 +16,7 @@ _DEFAULT_DB = Path("data/portfolio/portfolio.sqlite")
 
 def _run(db_path: Path, *, dry_run: bool) -> None:
     """Execute the migration."""
-    statement = (
-        "ALTER TABLE paper_exit_events "
-        "ADD COLUMN counterfactual_dte_marks TEXT;"
-    )
+    statement = "ALTER TABLE paper_exit_events ADD COLUMN counterfactual_dte_marks TEXT;"
 
     if dry_run:
         print(statement)
@@ -30,11 +27,11 @@ def _run(db_path: Path, *, dry_run: bool) -> None:
         # Check if column already exists
         columns = conn.execute("PRAGMA table_info(paper_exit_events)").fetchall()
         column_names = [col["name"] for col in columns]
-        
+
         if "counterfactual_dte_marks" in column_names:
             logger.info("migrate.skip", msg="Column counterfactual_dte_marks already exists")
             return
-            
+
         logger.info("migrate.start")
         conn.execute(statement)
         logger.info("migrate.complete", msg="Added counterfactual_dte_marks column")

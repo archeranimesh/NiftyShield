@@ -13,11 +13,10 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
-from unittest.mock import MagicMock, call
+from unittest.mock import MagicMock
 
 import pytest
 
-from src.models.mf import MFNavSnapshot
 from src.mf.tracker import (
     MFHolding,
     MFTracker,
@@ -26,6 +25,7 @@ from src.mf.tracker import (
     aggregate_mf_pnl,
     compute_scheme_pnl,
 )
+from src.models.mf import MFNavSnapshot
 
 # ---------------------------------------------------------------------------
 # Shared fixtures
@@ -108,9 +108,7 @@ class TestSchemePnL:
 
     def test_loss_scenario_pnl_is_negative(self) -> None:
         # NAV well below cost
-        holding = MFHolding(
-            "000001", "Test Scheme", Decimal("100"), Decimal("10000.00")
-        )
+        holding = MFHolding("000001", "Test Scheme", Decimal("100"), Decimal("10000.00"))
         result = compute_scheme_pnl(holding, Decimal("50.00"))
         assert result.pnl < Decimal("0")
         assert result.pnl_pct < Decimal("0")
@@ -180,9 +178,7 @@ class TestMFTracker:
     def test_upserts_nav_snapshot_per_scheme(self) -> None:
         holdings = {HOLDING_A.amfi_code: HOLDING_A, HOLDING_B.amfi_code: HOLDING_B}
         store = _mock_store(holdings)
-        fetcher = _mock_fetcher(
-            {HOLDING_A.amfi_code: NAV_A, HOLDING_B.amfi_code: NAV_B}
-        )
+        fetcher = _mock_fetcher({HOLDING_A.amfi_code: NAV_A, HOLDING_B.amfi_code: NAV_B})
         MFTracker(store, fetcher).record_snapshot(TODAY)
         assert store.upsert_nav_snapshot.call_count == 2
 
@@ -262,9 +258,7 @@ class TestMFTracker:
     def test_two_schemes_total_invested_is_summed(self) -> None:
         holdings = {HOLDING_A.amfi_code: HOLDING_A, HOLDING_B.amfi_code: HOLDING_B}
         store = _mock_store(holdings)
-        fetcher = _mock_fetcher(
-            {HOLDING_A.amfi_code: NAV_A, HOLDING_B.amfi_code: NAV_B}
-        )
+        fetcher = _mock_fetcher({HOLDING_A.amfi_code: NAV_A, HOLDING_B.amfi_code: NAV_B})
         result = MFTracker(store, fetcher).record_snapshot(TODAY)
         expected = HOLDING_A.total_invested + HOLDING_B.total_invested
         assert result.total_invested == expected

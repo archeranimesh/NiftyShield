@@ -5,11 +5,10 @@ Verifies that:
 2. Fixture JSON is returned verbatim.
 3. Defaults produce valid empty-JSON strings.
 """
+
 from __future__ import annotations
 
 import json
-
-import pytest
 
 from src.nuvama.mock_client import MockNuvamaClient
 from src.nuvama.protocol import NuvamaClient

@@ -228,9 +228,7 @@ def build_message(d: dict) -> str:
         gate_name = escape_markdown(gv["gate_name"])
         threshold = escape_markdown(gv["threshold"])
         actual = escape_markdown(gv["actual"])
-        lines.append(
-            f"⚠️ Gate Logged: {gate_name} \\(threshold\\={threshold}, actual\\={actual}\\)"
-        )
+        lines.append(f"⚠️ Gate Logged: {gate_name} \\(threshold\\={threshold}, actual\\={actual}\\)")
 
     return "\n".join(lines)
 

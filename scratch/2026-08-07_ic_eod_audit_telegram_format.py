@@ -71,14 +71,38 @@ data = {
     "nifty": 24571,
     "ivr": 0.16,
     "legs": [
-        {"role": "Short Put", "strike": 23000, "opt_type": "PE", "delta": -0.03,
-         "ltp": 9.30, "entry": 71.80},
-        {"role": "Long Put", "strike": 22500, "opt_type": "PE", "delta": None,
-         "ltp": 6.40, "entry": None},
-        {"role": "Short Call", "strike": 25000, "opt_type": "CE", "delta": 0.28,
-         "ltp": 100.40, "entry": 70.50},
-        {"role": "Long Call", "strike": 25500, "opt_type": "CE", "delta": None,
-         "ltp": 19.75, "entry": None},
+        {
+            "role": "Short Put",
+            "strike": 23000,
+            "opt_type": "PE",
+            "delta": -0.03,
+            "ltp": 9.30,
+            "entry": 71.80,
+        },
+        {
+            "role": "Long Put",
+            "strike": 22500,
+            "opt_type": "PE",
+            "delta": None,
+            "ltp": 6.40,
+            "entry": None,
+        },
+        {
+            "role": "Short Call",
+            "strike": 25000,
+            "opt_type": "CE",
+            "delta": 0.28,
+            "ltp": 100.40,
+            "entry": 70.50,
+        },
+        {
+            "role": "Long Call",
+            "strike": 25500,
+            "opt_type": "CE",
+            "delta": None,
+            "ltp": 19.75,
+            "entry": None,
+        },
     ],
     "mark": 83.55,
     "entry_credit": 86.68,
@@ -102,8 +126,9 @@ def _leg_table(legs: list[dict]) -> str:
         badge = "[S]" if leg["role"].startswith("Short") else "[B]"
         delta_str = f"{leg['delta']:+.2f}" if leg["delta"] is not None else "-"
         entry_str = f"{leg['entry']:.1f}" if leg["entry"] is not None else "-"
-        rows.append((badge, str(leg["strike"]), leg["opt_type"], delta_str,
-                     f"{leg['ltp']:.1f}", entry_str))
+        rows.append(
+            (badge, str(leg["strike"]), leg["opt_type"], delta_str, f"{leg['ltp']:.1f}", entry_str)
+        )
 
     widths = {
         "act": 3,
@@ -130,7 +155,9 @@ def _leg_table(legs: list[dict]) -> str:
 
 
 def build_message(d: dict) -> str:
-    captured_credit = d["entry_credit"] - d["mark"]  # credit spread: profit = credit in - cost to close
+    captured_credit = (
+        d["entry_credit"] - d["mark"]
+    )  # credit spread: profit = credit in - cost to close
     # Signal codes (DELTA_WARN, and by the same convention likely
     # GAMMA_RISK / THETA_DECAY / roll-trigger codes elsewhere) always
     # contain underscores. In legacy Markdown a lone `_` outside a code
@@ -144,7 +171,9 @@ def build_message(d: dict) -> str:
     # Same underscore risk applies here if action codes ever look like
     # ROLL_DOWN / LOCK_ZONE — empty today, but the wrapping shouldn't
     # depend on today's data staying that way.
-    actions = ", ".join(f"`{a}`" for a in d["intraday_actions"]) if d["intraday_actions"] else "None"
+    actions = (
+        ", ".join(f"`{a}`" for a in d["intraday_actions"]) if d["intraday_actions"] else "None"
+    )
 
     # NOTE: Telegram's legacy Markdown parse_mode uses single asterisks for
     # bold (*text*), not GitHub-style double asterisks (**text**). Sending

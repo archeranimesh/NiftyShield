@@ -74,8 +74,11 @@ def test_short_first_leg_open_gets_weighted_sell_price_as_entry() -> None:
     s = _strategy(_option_leg(qty=65, entry_price="0"))
     positions = {
         "NIFTY_DEC_23000_PE": Position(
-            strategy_name="ILTS", leg_role="NIFTY_DEC_23000_PE", quantity=-65,
-            average_price=Decimal("975.00"), instrument_key="NSE_FO|37810",
+            strategy_name="ILTS",
+            leg_role="NIFTY_DEC_23000_PE",
+            quantity=-65,
+            average_price=Decimal("975.00"),
+            instrument_key="NSE_FO|37810",
             realized_pnl=Decimal("0"),
         )
     }
@@ -95,8 +98,11 @@ def test_round_tripped_leg_realized_pnl_survives_leg_drop() -> None:
     s = _strategy(_equity_leg(qty=438), _option_leg())
     positions = {
         "EBBETF0431": Position(
-            strategy_name="ILTS", leg_role="EBBETF0431", quantity=0,
-            average_price=Decimal("0"), instrument_key="NSE_EQ|INF754K01LE1",
+            strategy_name="ILTS",
+            leg_role="EBBETF0431",
+            quantity=0,
+            average_price=Decimal("0"),
+            instrument_key="NSE_EQ|INF754K01LE1",
             realized_pnl=Decimal("52318.50"),
         )
     }
@@ -116,8 +122,11 @@ def test_buy_first_happy_path_unchanged() -> None:
     s = _strategy(_equity_leg(qty=438, entry_price="1388.12"))
     positions = {
         "EBBETF0431": Position(
-            strategy_name="ILTS", leg_role="EBBETF0431", quantity=465,
-            average_price=Decimal("1388.01"), instrument_key="NSE_EQ|INF754K01LE1",
+            strategy_name="ILTS",
+            leg_role="EBBETF0431",
+            quantity=465,
+            average_price=Decimal("1388.01"),
+            instrument_key="NSE_EQ|INF754K01LE1",
             realized_pnl=Decimal("0"),
         )
     }

@@ -15,7 +15,6 @@ from src.nuvama.reader import (
     parse_bond_holdings,
 )
 
-
 # ---------------------------------------------------------------------------
 # Test data helpers
 # ---------------------------------------------------------------------------
@@ -233,10 +232,14 @@ class TestBuildNuvamaSummary:
         assert s.total_day_delta == Decimal("0")
 
     def test_totals_sum_correctly(self):
-        raw = _wrap_resp([
-            _make_record(isin=_EFSL_10_ISIN, total_qty="700", ltp="1014.00"),
-            _make_record(isin=_GSEC_ISIN, cp_name=" GSec ", total_qty="2000", ltp="144.40", chg_p="-5.00"),
-        ])
+        raw = _wrap_resp(
+            [
+                _make_record(isin=_EFSL_10_ISIN, total_qty="700", ltp="1014.00"),
+                _make_record(
+                    isin=_GSEC_ISIN, cp_name=" GSec ", total_qty="2000", ltp="144.40", chg_p="-5.00"
+                ),
+            ]
+        )
         holdings = parse_bond_holdings(raw, _DEFAULT_POSITIONS)
         s = build_nuvama_summary(holdings, date(2026, 4, 15))
         assert s.total_value == Decimal("709800.00") + Decimal("288800.00")

@@ -22,10 +22,9 @@ from src.models.portfolio import (
     create_strategy_instance,
     register_strategy_type,
 )
+from src.portfolio.service import SnapshotService
 from src.portfolio.store import PortfolioStore
 from src.portfolio.tracker import PortfolioTracker
-from src.portfolio.service import SnapshotService
-
 
 # ── Helpers ──────────────────────────────────────────────────────
 
@@ -38,10 +37,7 @@ def _make_leg(
     asset_type: AssetType = AssetType.EQUITY,
     lot_size: int = 1,
 ) -> Leg:
-    ep = (
-        entry_price if isinstance(entry_price, Decimal)
-        else Decimal(str(entry_price))
-    )
+    ep = entry_price if isinstance(entry_price, Decimal) else Decimal(str(entry_price))
     return Leg(
         id=id,
         instrument_key="TEST|INST",
@@ -162,9 +158,7 @@ class TestLegValidation:
 
     def test_invalid_asset_type_invariants(self):
         # Equity with expiry
-        with pytest.raises(
-            ValidationError, match="Expiry must be None for EQUITY"
-        ):
+        with pytest.raises(ValidationError, match="Expiry must be None for EQUITY"):
             Leg(
                 instrument_key="EQ_TEST",
                 display_name="Equity Test",
@@ -178,9 +172,7 @@ class TestLegValidation:
             )
 
         # Equity with strike
-        with pytest.raises(
-            ValidationError, match="Strike must be None for EQUITY"
-        ):
+        with pytest.raises(ValidationError, match="Strike must be None for EQUITY"):
             Leg(
                 instrument_key="EQ_TEST",
                 display_name="Equity Test",
@@ -194,9 +186,7 @@ class TestLegValidation:
             )
 
         # Bond with expiry
-        with pytest.raises(
-            ValidationError, match="Expiry must be None for BOND"
-        ):
+        with pytest.raises(ValidationError, match="Expiry must be None for BOND"):
             Leg(
                 instrument_key="BOND_TEST",
                 display_name="Bond Test",
@@ -210,9 +200,7 @@ class TestLegValidation:
             )
 
         # Bond with strike
-        with pytest.raises(
-            ValidationError, match="Strike must be None for BOND"
-        ):
+        with pytest.raises(ValidationError, match="Strike must be None for BOND"):
             Leg(
                 instrument_key="BOND_TEST",
                 display_name="Bond Test",
@@ -226,9 +214,7 @@ class TestLegValidation:
             )
 
         # Futures without expiry
-        with pytest.raises(
-            ValidationError, match="Expiry must not be None for FUTURES"
-        ):
+        with pytest.raises(ValidationError, match="Expiry must not be None for FUTURES"):
             Leg(
                 instrument_key="FUT_TEST",
                 display_name="Futures Test",
@@ -241,9 +227,7 @@ class TestLegValidation:
             )
 
         # Futures with strike
-        with pytest.raises(
-            ValidationError, match="Strike must be None for FUTURES"
-        ):
+        with pytest.raises(ValidationError, match="Strike must be None for FUTURES"):
             Leg(
                 instrument_key="FUT_TEST",
                 display_name="Futures Test",
@@ -418,9 +402,7 @@ class TestLegValidation:
 
     def test_expiry_trading_day_validation(self):
         # Saturday is not a trading day
-        with pytest.raises(
-            ValidationError, match="is not a valid trading day"
-        ):
+        with pytest.raises(ValidationError, match="is not a valid trading day"):
             Leg(
                 instrument_key="FUT_TEST",
                 display_name="Futures Test",
@@ -436,9 +418,7 @@ class TestLegValidation:
     def test_expiry_thursday_logic(self):
         # Jan 1, 2026 is a Thursday (trading day)
         # Jan 2, 2026 is a Friday (trading day). Expiry on Friday should fail.
-        with pytest.raises(
-            ValidationError, match="cannot be after Thursday of its week"
-        ):
+        with pytest.raises(ValidationError, match="cannot be after Thursday of its week"):
             Leg(
                 instrument_key="FUT_TEST",
                 display_name="Futures Test",
@@ -455,10 +435,7 @@ class TestLegValidation:
         # is a trading day. So Dec 31, 2025 is not a valid expiry.
         with pytest.raises(
             ValidationError,
-            match=(
-                "must be Thursday or the preceding trading day if Thursday "
-                "is a holiday"
-            ),
+            match=("must be Thursday or the preceding trading day if Thursday is a holiday"),
         ):
             Leg(
                 instrument_key="FUT_TEST",
@@ -615,7 +592,9 @@ class TestPolymorphicStrategy:
             pass
 
         register_strategy_type("custom_test", CustomTestStrategy)
-        s_custom = create_strategy_instance(4, "custom_test", "Custom strategy description", [], None)
+        s_custom = create_strategy_instance(
+            4, "custom_test", "Custom strategy description", [], None
+        )
         assert isinstance(s_custom, CustomTestStrategy)
         assert s_custom.name == "custom_test"
 
@@ -677,11 +656,13 @@ class TestPortfolioStore:
         tmp_store.upsert_strategy(s)
         leg_id = tmp_store.get_strategy("bulk").legs[0].id
 
-        tmp_store.record_snapshots_bulk([
-            DailySnapshot(leg_id=leg_id, snapshot_date=date(2026, 4, 1), ltp=51.0),
-            DailySnapshot(leg_id=leg_id, snapshot_date=date(2026, 4, 2), ltp=52.0),
-            DailySnapshot(leg_id=leg_id, snapshot_date=date(2026, 4, 3), ltp=53.0),
-        ])
+        tmp_store.record_snapshots_bulk(
+            [
+                DailySnapshot(leg_id=leg_id, snapshot_date=date(2026, 4, 1), ltp=51.0),
+                DailySnapshot(leg_id=leg_id, snapshot_date=date(2026, 4, 2), ltp=52.0),
+                DailySnapshot(leg_id=leg_id, snapshot_date=date(2026, 4, 3), ltp=53.0),
+            ]
+        )
         assert len(tmp_store.get_snapshots(leg_id)) == 3
 
     def test_date_range_filter(self, tmp_store):
@@ -689,11 +670,13 @@ class TestPortfolioStore:
         tmp_store.upsert_strategy(s)
         leg_id = tmp_store.get_strategy("range").legs[0].id
 
-        tmp_store.record_snapshots_bulk([
-            DailySnapshot(leg_id=leg_id, snapshot_date=date(2026, 4, 1), ltp=51.0),
-            DailySnapshot(leg_id=leg_id, snapshot_date=date(2026, 4, 2), ltp=52.0),
-            DailySnapshot(leg_id=leg_id, snapshot_date=date(2026, 4, 3), ltp=53.0),
-        ])
+        tmp_store.record_snapshots_bulk(
+            [
+                DailySnapshot(leg_id=leg_id, snapshot_date=date(2026, 4, 1), ltp=51.0),
+                DailySnapshot(leg_id=leg_id, snapshot_date=date(2026, 4, 2), ltp=52.0),
+                DailySnapshot(leg_id=leg_id, snapshot_date=date(2026, 4, 3), ltp=53.0),
+            ]
+        )
         filtered = tmp_store.get_snapshots(leg_id, from_date=date(2026, 4, 2))
         assert len(filtered) == 2
 
@@ -716,18 +699,23 @@ class TestPortfolioStore:
 
     def test_get_snapshots_for_date_returns_correct_leg_ids(self, tmp_store):
         """Snapshots for the queried date are returned keyed by leg_id."""
-        s = Strategy(name="hist", legs=[
-            _make_leg(Direction.BUY, 100.0, 10),
-            _make_leg(Direction.SELL, 200.0, 5),
-        ])
+        s = Strategy(
+            name="hist",
+            legs=[
+                _make_leg(Direction.BUY, 100.0, 10),
+                _make_leg(Direction.SELL, 200.0, 5),
+            ],
+        )
         tmp_store.upsert_strategy(s)
         legs = tmp_store.get_strategy("hist").legs
         leg_a, leg_b = legs[0].id, legs[1].id
 
-        tmp_store.record_snapshots_bulk([
-            DailySnapshot(leg_id=leg_a, snapshot_date=date(2026, 4, 6), ltp=Decimal("110")),
-            DailySnapshot(leg_id=leg_b, snapshot_date=date(2026, 4, 6), ltp=Decimal("190")),
-        ])
+        tmp_store.record_snapshots_bulk(
+            [
+                DailySnapshot(leg_id=leg_a, snapshot_date=date(2026, 4, 6), ltp=Decimal("110")),
+                DailySnapshot(leg_id=leg_b, snapshot_date=date(2026, 4, 6), ltp=Decimal("190")),
+            ]
+        )
 
         result = tmp_store.get_snapshots_for_date(date(2026, 4, 6))
         assert set(result.keys()) == {leg_a, leg_b}
@@ -740,10 +728,12 @@ class TestPortfolioStore:
         tmp_store.upsert_strategy(s)
         leg_id = tmp_store.get_strategy("excl").legs[0].id
 
-        tmp_store.record_snapshots_bulk([
-            DailySnapshot(leg_id=leg_id, snapshot_date=date(2026, 4, 6), ltp=Decimal("55")),
-            DailySnapshot(leg_id=leg_id, snapshot_date=date(2026, 4, 7), ltp=Decimal("60")),
-        ])
+        tmp_store.record_snapshots_bulk(
+            [
+                DailySnapshot(leg_id=leg_id, snapshot_date=date(2026, 4, 6), ltp=Decimal("55")),
+                DailySnapshot(leg_id=leg_id, snapshot_date=date(2026, 4, 7), ltp=Decimal("60")),
+            ]
+        )
 
         result = tmp_store.get_snapshots_for_date(date(2026, 4, 6))
         assert len(result) == 1
@@ -779,10 +769,12 @@ class TestPortfolioStore:
         tmp_store.upsert_strategy(s)
         leg_id = tmp_store.get_strategy("prev").legs[0].id
 
-        tmp_store.record_snapshots_bulk([
-            DailySnapshot(leg_id=leg_id, snapshot_date=date(2026, 4, 6), ltp=Decimal("95")),
-            DailySnapshot(leg_id=leg_id, snapshot_date=date(2026, 4, 7), ltp=Decimal("100")),
-        ])
+        tmp_store.record_snapshots_bulk(
+            [
+                DailySnapshot(leg_id=leg_id, snapshot_date=date(2026, 4, 6), ltp=Decimal("95")),
+                DailySnapshot(leg_id=leg_id, snapshot_date=date(2026, 4, 7), ltp=Decimal("100")),
+            ]
+        )
 
         result = tmp_store.get_prev_snapshots(date(2026, 4, 7))
         assert set(result.keys()) == {leg_id}
@@ -908,9 +900,7 @@ class TestPortfolioTracker:
         market = FakeMarket({"X": Decimal("105.0")})
         tracker = PortfolioTracker(tmp_store, market)
 
-        count, pnl = asyncio.run(
-            tracker.record_daily_snapshot("record_test", date(2026, 4, 2))
-        )
+        count, pnl = asyncio.run(tracker.record_daily_snapshot("record_test", date(2026, 4, 2)))
         assert count == 1
         assert pnl is not None
         assert pnl.total_pnl == Decimal("50")
@@ -967,6 +957,7 @@ class TestPortfolioTracker:
 
     def test_record_daily_snapshot_uses_provided_prices(self, tmp_store):
         from unittest.mock import patch
+
         s = Strategy(
             name="pass_through_test",
             legs=[
@@ -1001,32 +992,37 @@ class TestPortfolioTracker:
 
     def test_record_all_strategies_uses_provided_prices(self, tmp_store):
         from unittest.mock import patch
+
         for name in ["strat1", "strat2"]:
-            tmp_store.upsert_strategy(Strategy(
-                name=name,
-                legs=[
-                    Leg(
-                        instrument_key=name,
-                        display_name=name,
-                        asset_type=AssetType.EQUITY,
-                        direction=Direction.BUY,
-                        quantity=10,
-                        entry_price=Decimal("100.0"),
-                        entry_date=date(2026, 4, 1),
-                        product_type=ProductType.CNC,
-                    )
-                ]
-            ))
+            tmp_store.upsert_strategy(
+                Strategy(
+                    name=name,
+                    legs=[
+                        Leg(
+                            instrument_key=name,
+                            display_name=name,
+                            asset_type=AssetType.EQUITY,
+                            direction=Direction.BUY,
+                            quantity=10,
+                            entry_price=Decimal("100.0"),
+                            entry_date=date(2026, 4, 1),
+                            product_type=ProductType.CNC,
+                        )
+                    ],
+                )
+            )
 
         market = FakeMarket({"strat1": Decimal("110.0"), "strat2": Decimal("120.0")})
         tracker = PortfolioTracker(tmp_store, market)
 
         with patch.object(market, "get_ltp", wraps=market.get_ltp) as spy:
-            counts, pnls = asyncio.run(tracker.record_all_strategies(
-                snapshot_date=date(2026, 4, 2),
-                prices={"strat1": Decimal("110.0"), "strat2": Decimal("120.0")}
-            ))
-            
+            counts, pnls = asyncio.run(
+                tracker.record_all_strategies(
+                    snapshot_date=date(2026, 4, 2),
+                    prices={"strat1": Decimal("110.0"), "strat2": Decimal("120.0")},
+                )
+            )
+
             assert spy.call_count == 0  # no internal get_ltp calls because prices were provided
             assert len(counts) == 2
             assert len(pnls) == 2
@@ -1044,9 +1040,14 @@ class TestSnapshotService:
             name="service_happy_test",
             legs=[
                 Leg(
-                    instrument_key="M1", display_name="M1", asset_type=AssetType.EQUITY,
-                    direction=Direction.BUY, quantity=10, entry_price=Decimal("100.00"),
-                    entry_date=date(2026, 4, 1), product_type=ProductType.CNC,
+                    instrument_key="M1",
+                    display_name="M1",
+                    asset_type=AssetType.EQUITY,
+                    direction=Direction.BUY,
+                    quantity=10,
+                    entry_price=Decimal("100.00"),
+                    entry_date=date(2026, 4, 1),
+                    product_type=ProductType.CNC,
                 ),
             ],
         )
@@ -1079,10 +1080,16 @@ class TestSnapshotService:
             name="service_greeks_test",
             legs=[
                 Leg(
-                    instrument_key="OPT1", display_name="OPT1", asset_type=AssetType.PE,
-                    direction=Direction.SELL, quantity=75, entry_price=Decimal("150.00"),
-                    entry_date=date(2026, 4, 1), product_type=ProductType.NRML,
-                    expiry=date(2026, 12, 29), strike=Decimal("150"),
+                    instrument_key="OPT1",
+                    display_name="OPT1",
+                    asset_type=AssetType.PE,
+                    direction=Direction.SELL,
+                    quantity=75,
+                    entry_price=Decimal("150.00"),
+                    entry_date=date(2026, 4, 1),
+                    product_type=ProductType.NRML,
+                    expiry=date(2026, 12, 29),
+                    strike=Decimal("150"),
                 ),
             ],
         )
@@ -1132,10 +1139,14 @@ class TestSnapshotService:
             legs=[
                 # Leg without id (id is None) - mimics LIQUIDBEES from overlay
                 Leg(
-                    instrument_key="LIQUIDBEES", display_name="LIQUIDBEES",
-                    asset_type=AssetType.EQUITY, direction=Direction.BUY,
-                    quantity=5, entry_price=Decimal("1000.00"),
-                    entry_date=date(2026, 4, 1), product_type=ProductType.CNC,
+                    instrument_key="LIQUIDBEES",
+                    display_name="LIQUIDBEES",
+                    asset_type=AssetType.EQUITY,
+                    direction=Direction.BUY,
+                    quantity=5,
+                    entry_price=Decimal("1000.00"),
+                    entry_date=date(2026, 4, 1),
+                    product_type=ProductType.CNC,
                 ),
             ],
         )
@@ -1186,13 +1197,19 @@ class TestSnapshotService:
     def test_tracker_uses_injected_snapshot_service(self, tmp_store):
         """PortfolioTracker.record_daily_snapshot should delegate persistence to SnapshotService."""
         from unittest.mock import MagicMock
+
         s = Strategy(
             name="tracker_delegate_test",
             legs=[
                 Leg(
-                    instrument_key="Z", display_name="Z", asset_type=AssetType.EQUITY,
-                    direction=Direction.BUY, quantity=10, entry_price=100.0,
-                    entry_date=date(2026, 4, 1), product_type=ProductType.CNC,
+                    instrument_key="Z",
+                    display_name="Z",
+                    asset_type=AssetType.EQUITY,
+                    direction=Direction.BUY,
+                    quantity=10,
+                    entry_price=100.0,
+                    entry_date=date(2026, 4, 1),
+                    product_type=ProductType.CNC,
                 ),
             ],
         )

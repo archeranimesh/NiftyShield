@@ -150,9 +150,7 @@ def test_daemon_heartbeat_roundtrip(tmp_path):
 
     # Check that there is still only 1 row
     with _connect(db_path) as conn:
-        count = conn.execute(
-            "SELECT count(*) FROM daemon_heartbeat"
-        ).fetchone()[0]
+        count = conn.execute("SELECT count(*) FROM daemon_heartbeat").fetchone()[0]
     assert count == 1
 
     hb2 = store.get_heartbeat()

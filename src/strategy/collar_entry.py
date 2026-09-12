@@ -147,7 +147,9 @@ def _resolve_expiry(bod_path: Path, today: date, *, closing_dte: int | None) -> 
     min_expiry: str | None = None
     if closing_dte is not None and closing_dte <= 5:
         # Force selection past the current month's own expiry (next month).
-        current = lookup.get_expiry_candidates(underlying="NIFTY", today=today, preference=["monthly"])
+        current = lookup.get_expiry_candidates(
+            underlying="NIFTY", today=today, preference=["monthly"]
+        )
         current_monthly = next((e for label, e in current if label == "monthly"), None)
         if current_monthly is not None:
             min_expiry = current_monthly
@@ -185,8 +187,8 @@ def _check_gates(dte: int) -> None:
 
 
 async def select_and_build_collar_entry(
-    broker: "BrokerClient",
-    store: "PaperStore",
+    broker: BrokerClient,
+    store: PaperStore,
     today: date,
     triggering_signal: str,
     *,

@@ -56,8 +56,8 @@ script inlines its own copies, matching MD-1's exact spec in
 **Confirmed format (2026-08-10, Animesh, after one on-device round-trip via `--send`):**
 
     🚨 CRITICAL: PROXY DELTA
-    📐 Current: \-0\.32 🔴
-    📉 Rule Breach: CRITICAL \(<0\.40, day 3 of 3\+\)
+    📐 Current: \\-0\\.32 🔴
+    📉 Rule Breach: CRITICAL \\(<0\\.40, day 3 of 3\\+\\)
 
 **Elimination trail:**
 1. Initial draft (`🚨 PROXY DELTA CRITICAL — Proxy Track` / `Delta: -0.32` / raw alert string)

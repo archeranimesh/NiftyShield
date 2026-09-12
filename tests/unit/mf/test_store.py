@@ -20,10 +20,9 @@ from pathlib import Path
 
 import pytest
 
-from src.models.mf import MFHolding, MFNavSnapshot, MFTransaction, TransactionType
 from src.mf.store import MFStore
+from src.models.mf import MFHolding, MFNavSnapshot, MFTransaction, TransactionType
 from src.portfolio.store import PortfolioStore
-
 
 # ── Fixtures ──────────────────────────────────────────────────────
 
@@ -79,10 +78,7 @@ def test_mf_tables_created(store: MFStore, db_path: Path) -> None:
 
     conn = sqlite3.connect(str(db_path))
     tables = {
-        r[0]
-        for r in conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        ).fetchall()
+        r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
     }
     conn.close()
     assert "mf_transactions" in tables
@@ -99,10 +95,7 @@ def test_schema_coexists_with_portfolio_store(db_path: Path) -> None:
 
     conn = sqlite3.connect(str(db_path))
     tables = {
-        r[0]
-        for r in conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        ).fetchall()
+        r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
     }
     conn.close()
 
@@ -125,10 +118,7 @@ def test_schema_coexists_init_order_reversed(db_path: Path) -> None:
 
     conn = sqlite3.connect(str(db_path))
     tables = {
-        r[0]
-        for r in conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        ).fetchall()
+        r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
     }
     conn.close()
     assert "mf_transactions" in tables
@@ -171,9 +161,7 @@ def test_insert_transaction_idempotent(store: MFStore) -> None:
 def test_insert_different_types_same_date_allowed(store: MFStore) -> None:
     """INITIAL and SIP on the same date for the same scheme are distinct rows."""
     tx_initial = make_tx(transaction_type=TransactionType.INITIAL)
-    tx_sip = make_tx(
-        transaction_type=TransactionType.SIP, amount="5000.00", units="10.000"
-    )
+    tx_sip = make_tx(transaction_type=TransactionType.SIP, amount="5000.00", units="10.000")
     store.insert_transaction(tx_initial)
     store.insert_transaction(tx_sip)
     assert len(store.get_transactions()) == 2
@@ -212,17 +200,13 @@ def test_insert_transactions_bulk_idempotent(store: MFStore) -> None:
 
 def test_get_transactions_all(store: MFStore) -> None:
     store.insert_transaction(make_tx(amfi_code="111111"))
-    store.insert_transaction(
-        make_tx(amfi_code="222222", scheme_name="DSP Midcap Fund - Reg Gr")
-    )
+    store.insert_transaction(make_tx(amfi_code="222222", scheme_name="DSP Midcap Fund - Reg Gr"))
     assert len(store.get_transactions()) == 2
 
 
 def test_get_transactions_filter_amfi_code(store: MFStore) -> None:
     store.insert_transaction(make_tx(amfi_code="111111"))
-    store.insert_transaction(
-        make_tx(amfi_code="222222", scheme_name="DSP Midcap Fund - Reg Gr")
-    )
+    store.insert_transaction(make_tx(amfi_code="222222", scheme_name="DSP Midcap Fund - Reg Gr"))
     results = store.get_transactions(amfi_code="111111")
     assert len(results) == 1
     assert results[0].amfi_code == "111111"
@@ -255,9 +239,7 @@ def test_get_transactions_date_range_both_bounds(store: MFStore) -> None:
         (date(2024, 5, 1), TransactionType.SIP),
     ]:
         store.insert_transaction(make_tx(transaction_date=d, transaction_type=tt))
-    results = store.get_transactions(
-        from_date=date(2024, 2, 1), to_date=date(2024, 4, 1)
-    )
+    results = store.get_transactions(from_date=date(2024, 2, 1), to_date=date(2024, 4, 1))
     assert len(results) == 1
     assert results[0].transaction_date == date(2024, 3, 1)
 
@@ -344,9 +326,7 @@ def test_get_holdings_full_redemption_excluded(store: MFStore) -> None:
 def test_get_holdings_multiple_schemes(store: MFStore) -> None:
     store.insert_transaction(make_tx(amfi_code="111111", units="100.000"))
     store.insert_transaction(
-        make_tx(
-            amfi_code="222222", scheme_name="DSP Midcap Fund - Reg Gr", units="200.000"
-        )
+        make_tx(amfi_code="222222", scheme_name="DSP Midcap Fund - Reg Gr", units="200.000")
     )
     holdings = store.get_holdings()
     assert len(holdings) == 2

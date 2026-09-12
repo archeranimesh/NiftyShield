@@ -8,7 +8,6 @@ from pathlib import Path
 import pytest
 
 from src.dhan.models import DhanHolding
-from src.models.portfolio import AssetType
 from src.dhan.reader import (
     build_dhan_holdings,
     build_dhan_summary,
@@ -18,6 +17,7 @@ from src.dhan.reader import (
     enrich_with_upstox_prices,
     upstox_keys_for_holdings,
 )
+from src.models.portfolio import AssetType
 
 FIXTURES = Path(__file__).resolve().parent.parent.parent / "fixtures" / "responses"
 
@@ -42,7 +42,6 @@ def ltp_response() -> dict:
 
 
 class TestClassifyHolding:
-
     def test_equity_default(self):
         assert classify_holding("NIFTYIETF") == AssetType.EQUITY
 
@@ -66,7 +65,6 @@ class TestClassifyHolding:
 
 
 class TestBuildDhanHoldings:
-
     def test_all_holdings_returned_without_filter(self, raw_holdings):
         holdings = build_dhan_holdings(raw_holdings)
         assert len(holdings) == 4
@@ -100,13 +98,29 @@ class TestBuildDhanHoldings:
             assert h.ltp is None
 
     def test_zero_qty_skipped(self):
-        raw = [{"tradingSymbol": "TEST", "isin": "INF000001", "securityId": "99",
-                "totalQty": 0, "collateralQty": 0, "avgCostPrice": 100}]
+        raw = [
+            {
+                "tradingSymbol": "TEST",
+                "isin": "INF000001",
+                "securityId": "99",
+                "totalQty": 0,
+                "collateralQty": 0,
+                "avgCostPrice": 100,
+            }
+        ]
         assert build_dhan_holdings(raw) == []
 
     def test_missing_isin_skipped(self):
-        raw = [{"tradingSymbol": "TEST", "isin": "", "securityId": "99",
-                "totalQty": 10, "collateralQty": 0, "avgCostPrice": 100}]
+        raw = [
+            {
+                "tradingSymbol": "TEST",
+                "isin": "",
+                "securityId": "99",
+                "totalQty": 10,
+                "collateralQty": 0,
+                "avgCostPrice": 100,
+            }
+        ]
         assert build_dhan_holdings(raw) == []
 
     def test_malformed_entry_skipped(self):
@@ -125,7 +139,6 @@ class TestBuildDhanHoldings:
 
 
 class TestBuildSecurityIdMap:
-
     def test_groups_by_exchange(self, raw_holdings):
         exclude = {"INF754K01LE1", "INF732E01037"}
         holdings = build_dhan_holdings(raw_holdings, exclude_isins=exclude)
@@ -138,9 +151,14 @@ class TestBuildSecurityIdMap:
 
     def test_non_numeric_security_id_skipped(self):
         h = DhanHolding(
-            trading_symbol="TEST", isin="INF000", security_id="abc",
-            exchange="NSE_EQ", total_qty=10, collateral_qty=0,
-            avg_cost_price=Decimal("100"), classification=AssetType.EQUITY,
+            trading_symbol="TEST",
+            isin="INF000",
+            security_id="abc",
+            exchange="NSE_EQ",
+            total_qty=10,
+            collateral_qty=0,
+            avg_cost_price=Decimal("100"),
+            classification=AssetType.EQUITY,
         )
         assert build_security_id_map([h]) == {}
 
@@ -149,7 +167,6 @@ class TestBuildSecurityIdMap:
 
 
 class TestEnrichWithLtp:
-
     def test_enriches_matching_holdings(self, raw_holdings, ltp_response):
         exclude = {"INF754K01LE1", "INF732E01037"}
         holdings = build_dhan_holdings(raw_holdings, exclude_isins=exclude)
@@ -172,7 +189,7 @@ class TestEnrichWithLtp:
         exclude = {"INF754K01LE1", "INF732E01037"}
         holdings = build_dhan_holdings(raw_holdings, exclude_isins=exclude)
         enriched = enrich_with_ltp(holdings, ltp_response)
-        for orig, enr in zip(holdings, enriched):
+        for orig, enr in zip(holdings, enriched, strict=True):
             assert enr.trading_symbol == orig.trading_symbol
             assert enr.isin == orig.isin
             assert enr.total_qty == orig.total_qty
@@ -184,21 +201,28 @@ class TestEnrichWithLtp:
 
 
 class TestBuildDhanSummary:
-
     def _make_enriched(self) -> list[DhanHolding]:
         return [
             DhanHolding(
-                trading_symbol="NIFTYIETF", isin="INF109K012R6",
-                security_id="13611", exchange="NSE_EQ",
-                total_qty=500, collateral_qty=500,
-                avg_cost_price=Decimal("268.50"), classification=AssetType.EQUITY,
+                trading_symbol="NIFTYIETF",
+                isin="INF109K012R6",
+                security_id="13611",
+                exchange="NSE_EQ",
+                total_qty=500,
+                collateral_qty=500,
+                avg_cost_price=Decimal("268.50"),
+                classification=AssetType.EQUITY,
                 ltp=Decimal("275.40"),
             ),
             DhanHolding(
-                trading_symbol="LIQUIDCASE", isin="INF0R8F01034",
-                security_id="25780", exchange="NSE_EQ",
-                total_qty=200, collateral_qty=200,
-                avg_cost_price=Decimal("1003.25"), classification=AssetType.BOND,
+                trading_symbol="LIQUIDCASE",
+                isin="INF0R8F01034",
+                security_id="25780",
+                exchange="NSE_EQ",
+                total_qty=200,
+                collateral_qty=200,
+                avg_cost_price=Decimal("1003.25"),
+                classification=AssetType.BOND,
                 ltp=Decimal("1005.50"),
             ),
         ]
@@ -230,17 +254,25 @@ class TestBuildDhanSummary:
     def test_day_delta_computed_with_prev(self):
         prev = {
             "INF109K012R6": DhanHolding(
-                trading_symbol="NIFTYIETF", isin="INF109K012R6",
-                security_id="13611", exchange="NSE_EQ",
-                total_qty=500, collateral_qty=500,
-                avg_cost_price=Decimal("268.50"), classification=AssetType.EQUITY,
+                trading_symbol="NIFTYIETF",
+                isin="INF109K012R6",
+                security_id="13611",
+                exchange="NSE_EQ",
+                total_qty=500,
+                collateral_qty=500,
+                avg_cost_price=Decimal("268.50"),
+                classification=AssetType.EQUITY,
                 ltp=Decimal("270.00"),
             ),
             "INF0R8F01034": DhanHolding(
-                trading_symbol="LIQUIDCASE", isin="INF0R8F01034",
-                security_id="25780", exchange="NSE_EQ",
-                total_qty=200, collateral_qty=200,
-                avg_cost_price=Decimal("1003.25"), classification=AssetType.BOND,
+                trading_symbol="LIQUIDCASE",
+                isin="INF0R8F01034",
+                security_id="25780",
+                exchange="NSE_EQ",
+                total_qty=200,
+                collateral_qty=200,
+                avg_cost_price=Decimal("1003.25"),
+                classification=AssetType.BOND,
                 ltp=Decimal("1004.00"),
             ),
         }
@@ -268,7 +300,9 @@ class TestBuildDhanSummary:
 # ── enrich_with_upstox_prices ─────────────────────────────────────
 
 
-def _bare_holding(symbol: str, isin: str, security_id: str, classification: AssetType) -> DhanHolding:
+def _bare_holding(
+    symbol: str, isin: str, security_id: str, classification: AssetType
+) -> DhanHolding:
     return DhanHolding(
         trading_symbol=symbol,
         isin=isin,

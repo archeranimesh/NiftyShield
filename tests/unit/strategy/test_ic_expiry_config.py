@@ -7,7 +7,7 @@ from decimal import Decimal
 import pytest
 
 from src.paper import constants
-from src.strategy.ic_expiry_config import CONFIGS, ICExpiryConfig
+from src.strategy.ic_expiry_config import CONFIGS
 
 
 def test_configs_has_four_keys() -> None:

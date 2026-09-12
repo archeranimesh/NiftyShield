@@ -25,12 +25,11 @@ from src.models.portfolio import (
     AssetType,
     Direction,
     Leg,
+    Position,
     ProductType,
     Strategy,
-    Position,
 )
 from src.portfolio.tracker import apply_trade_positions
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -101,10 +100,15 @@ def test_known_leg_qty_and_price_updated() -> None:
     s = _strategy(_equity_leg(qty=438, entry_price="1388.12"))
     # leg_role "EBBETF0431" != display_name "EBBETF0431 (Bharat Bond ETF Apr 2031)"
     # but instrument_key "NSE_EQ|INF754K01LE1" matches — that is the join key.
-    positions = {"EBBETF0431": Position(
-        strategy_name="ILTS", leg_role="EBBETF0431", quantity=465,
-        average_price=Decimal("1388.01"), instrument_key="NSE_EQ|INF754K01LE1",
-    )}
+    positions = {
+        "EBBETF0431": Position(
+            strategy_name="ILTS",
+            leg_role="EBBETF0431",
+            quantity=465,
+            average_price=Decimal("1388.01"),
+            instrument_key="NSE_EQ|INF754K01LE1",
+        )
+    }
     result = apply_trade_positions(s, positions)
     leg = result.legs[0]
     assert leg.quantity == 465
@@ -115,10 +119,15 @@ def test_display_name_mismatch_does_not_prevent_match() -> None:
     """display_name 'EBBETF0431 (Bharat Bond ETF Apr 2031)' does NOT block the match."""
     full_display = "EBBETF0431 (Bharat Bond ETF Apr 2031)"
     s = _strategy(_equity_leg(display_name=full_display, qty=438))
-    positions = {"EBBETF0431": Position(
-        strategy_name="ILTS", leg_role="EBBETF0431", quantity=465,
-        average_price=Decimal("1388.01"), instrument_key="NSE_EQ|INF754K01LE1",
-    )}
+    positions = {
+        "EBBETF0431": Position(
+            strategy_name="ILTS",
+            leg_role="EBBETF0431",
+            quantity=465,
+            average_price=Decimal("1388.01"),
+            instrument_key="NSE_EQ|INF754K01LE1",
+        )
+    }
     result = apply_trade_positions(s, positions)
     # If display_name were used as join key this would return 438; must be 465.
     assert result.legs[0].quantity == 465
@@ -127,10 +136,15 @@ def test_display_name_mismatch_does_not_prevent_match() -> None:
 def test_known_leg_instrument_key_preserved() -> None:
     """instrument_key on the matched Leg is preserved unchanged."""
     s = _strategy(_equity_leg(instrument_key="NSE_EQ|INF754K01LE1"))
-    positions = {"EBBETF0431": Position(
-        strategy_name="ILTS", leg_role="EBBETF0431", quantity=465,
-        average_price=Decimal("1388.01"), instrument_key="NSE_EQ|INF754K01LE1",
-    )}
+    positions = {
+        "EBBETF0431": Position(
+            strategy_name="ILTS",
+            leg_role="EBBETF0431",
+            quantity=465,
+            average_price=Decimal("1388.01"),
+            instrument_key="NSE_EQ|INF754K01LE1",
+        )
+    }
     result = apply_trade_positions(s, positions)
     assert result.legs[0].instrument_key == "NSE_EQ|INF754K01LE1"
 
@@ -138,13 +152,18 @@ def test_known_leg_instrument_key_preserved() -> None:
 def test_option_leg_not_in_positions_passes_through() -> None:
     """Options legs whose instrument_key is absent from positions pass through unchanged."""
     s = _strategy(_equity_leg(), _option_leg())
-    positions = {"EBBETF0431": Position(
-        strategy_name="ILTS", leg_role="EBBETF0431", quantity=465,
-        average_price=Decimal("1388.01"), instrument_key="NSE_EQ|INF754K01LE1",
-    )}
+    positions = {
+        "EBBETF0431": Position(
+            strategy_name="ILTS",
+            leg_role="EBBETF0431",
+            quantity=465,
+            average_price=Decimal("1388.01"),
+            instrument_key="NSE_EQ|INF754K01LE1",
+        )
+    }
     result = apply_trade_positions(s, positions)
     assert len(result.legs) == 2
-    option = next(l for l in result.legs if l.asset_type == AssetType.PE)
+    option = next(leg for leg in result.legs if leg.asset_type == AssetType.PE)
     assert option.quantity == 65
     assert option.entry_price == Decimal("975.00")
 
@@ -155,12 +174,17 @@ def test_option_leg_not_in_positions_passes_through() -> None:
 def test_zero_net_qty_leg_dropped() -> None:
     """A fully closed leg (net_qty=0) is removed from the updated strategy."""
     s = _strategy(_equity_leg(qty=438), _option_leg())
-    positions = {"EBBETF0431": Position(
-        strategy_name="ILTS", leg_role="EBBETF0431", quantity=0,
-        average_price=Decimal("0"), instrument_key="NSE_EQ|INF754K01LE1",
-    )}
+    positions = {
+        "EBBETF0431": Position(
+            strategy_name="ILTS",
+            leg_role="EBBETF0431",
+            quantity=0,
+            average_price=Decimal("0"),
+            instrument_key="NSE_EQ|INF754K01LE1",
+        )
+    }
     result = apply_trade_positions(s, positions)
-    keys = [l.instrument_key for l in result.legs]
+    keys = [leg.instrument_key for leg in result.legs]
     assert "NSE_EQ|INF754K01LE1" not in keys
     assert "NSE_FO|37810" in keys
 
@@ -173,18 +197,24 @@ def test_unknown_leg_role_appended_as_equity() -> None:
     s = _strategy(_equity_leg())
     positions = {
         "EBBETF0431": Position(
-            strategy_name="ILTS", leg_role="EBBETF0431", quantity=465,
-            average_price=Decimal("1388.01"), instrument_key="NSE_EQ|INF754K01LE1",
+            strategy_name="ILTS",
+            leg_role="EBBETF0431",
+            quantity=465,
+            average_price=Decimal("1388.01"),
+            instrument_key="NSE_EQ|INF754K01LE1",
         ),
         "LIQUIDBEES": Position(
-            strategy_name="ILTS", leg_role="LIQUIDBEES", quantity=22,
-            average_price=Decimal("1000.00"), instrument_key="NSE_EQ|INF732E01037",
+            strategy_name="ILTS",
+            leg_role="LIQUIDBEES",
+            quantity=22,
+            average_price=Decimal("1000.00"),
+            instrument_key="NSE_EQ|INF732E01037",
         ),
     }
     result = apply_trade_positions(s, positions)
-    names = [l.display_name for l in result.legs]
+    names = [leg.display_name for leg in result.legs]
     assert "LIQUIDBEES" in names
-    lb = next(l for l in result.legs if l.display_name == "LIQUIDBEES")
+    lb = next(leg for leg in result.legs if leg.display_name == "LIQUIDBEES")
     assert lb.quantity == 22
     assert lb.entry_price == Decimal("1000.00")
     assert lb.instrument_key == "NSE_EQ|INF732E01037"
@@ -198,16 +228,22 @@ def test_unknown_leg_zero_net_qty_not_appended() -> None:
     s = _strategy(_equity_leg())
     positions = {
         "EBBETF0431": Position(
-            strategy_name="ILTS", leg_role="EBBETF0431", quantity=465,
-            average_price=Decimal("1388.01"), instrument_key="NSE_EQ|INF754K01LE1",
+            strategy_name="ILTS",
+            leg_role="EBBETF0431",
+            quantity=465,
+            average_price=Decimal("1388.01"),
+            instrument_key="NSE_EQ|INF754K01LE1",
         ),
         "LIQUIDBEES": Position(
-            strategy_name="ILTS", leg_role="LIQUIDBEES", quantity=0,
-            average_price=Decimal("0"), instrument_key="NSE_EQ|INF732E01037",
+            strategy_name="ILTS",
+            leg_role="LIQUIDBEES",
+            quantity=0,
+            average_price=Decimal("0"),
+            instrument_key="NSE_EQ|INF732E01037",
         ),
     }
     result = apply_trade_positions(s, positions)
-    names = [l.display_name for l in result.legs]
+    names = [leg.display_name for leg in result.legs]
     assert "LIQUIDBEES" not in names
 
 
@@ -218,14 +254,19 @@ def test_original_strategy_not_mutated() -> None:
     """apply_trade_positions returns a new Strategy; original is unchanged."""
     original_leg = _equity_leg(qty=438, entry_price="1388.12")
     s = _strategy(original_leg)
-    positions = {"EBBETF0431": Position(
-        strategy_name="ILTS", leg_role="EBBETF0431", quantity=465,
-        average_price=Decimal("1388.01"), instrument_key="NSE_EQ|INF754K01LE1",
-    )}
+    positions = {
+        "EBBETF0431": Position(
+            strategy_name="ILTS",
+            leg_role="EBBETF0431",
+            quantity=465,
+            average_price=Decimal("1388.01"),
+            instrument_key="NSE_EQ|INF754K01LE1",
+        )
+    }
     result = apply_trade_positions(s, positions)
     assert result is not s
-    assert s.legs[0].quantity == 438        # original untouched
-    assert result.legs[0].quantity == 465   # new copy updated
+    assert s.legs[0].quantity == 438  # original untouched
+    assert result.legs[0].quantity == 465  # new copy updated
 
 
 def test_strategy_name_and_description_preserved() -> None:
@@ -252,8 +293,11 @@ def test_fully_closed_leg_realized_pnl_not_dropped() -> None:
     s = _strategy(_equity_leg(qty=438), _option_leg())
     positions = {
         "EBBETF0431": Position(
-            strategy_name="ILTS", leg_role="EBBETF0431", quantity=0,
-            average_price=Decimal("0"), instrument_key="NSE_EQ|INF754K01LE1",
+            strategy_name="ILTS",
+            leg_role="EBBETF0431",
+            quantity=0,
+            average_price=Decimal("0"),
+            instrument_key="NSE_EQ|INF754K01LE1",
             realized_pnl=Decimal("52318.50"),
         )
     }
@@ -269,8 +313,11 @@ def test_partially_closed_matched_leg_realized_pnl_included() -> None:
     s = _strategy(_equity_leg(qty=438))
     positions = {
         "EBBETF0431": Position(
-            strategy_name="ILTS", leg_role="EBBETF0431", quantity=100,
-            average_price=Decimal("1388.01"), instrument_key="NSE_EQ|INF754K01LE1",
+            strategy_name="ILTS",
+            leg_role="EBBETF0431",
+            quantity=100,
+            average_price=Decimal("1388.01"),
+            instrument_key="NSE_EQ|INF754K01LE1",
             realized_pnl=Decimal("1200.00"),
         )
     }
@@ -285,12 +332,18 @@ def test_unmatched_dropped_leg_realized_pnl_included() -> None:
     s = _strategy(_equity_leg())
     positions = {
         "EBBETF0431": Position(
-            strategy_name="ILTS", leg_role="EBBETF0431", quantity=465,
-            average_price=Decimal("1388.01"), instrument_key="NSE_EQ|INF754K01LE1",
+            strategy_name="ILTS",
+            leg_role="EBBETF0431",
+            quantity=465,
+            average_price=Decimal("1388.01"),
+            instrument_key="NSE_EQ|INF754K01LE1",
         ),
         "LIQUIDBEES": Position(
-            strategy_name="ILTS", leg_role="LIQUIDBEES", quantity=0,
-            average_price=Decimal("0"), instrument_key="NSE_EQ|INF732E01037",
+            strategy_name="ILTS",
+            leg_role="LIQUIDBEES",
+            quantity=0,
+            average_price=Decimal("0"),
+            instrument_key="NSE_EQ|INF732E01037",
             realized_pnl=Decimal("300.00"),
         ),
     }
@@ -305,13 +358,19 @@ def test_realized_pnl_summed_across_multiple_legs() -> None:
     s = _strategy(_equity_leg(qty=438), _option_leg())
     positions = {
         "EBBETF0431": Position(
-            strategy_name="ILTS", leg_role="EBBETF0431", quantity=0,
-            average_price=Decimal("0"), instrument_key="NSE_EQ|INF754K01LE1",
+            strategy_name="ILTS",
+            leg_role="EBBETF0431",
+            quantity=0,
+            average_price=Decimal("0"),
+            instrument_key="NSE_EQ|INF754K01LE1",
             realized_pnl=Decimal("500.00"),
         ),
         "NIFTY_DEC_23000_PE": Position(
-            strategy_name="ILTS", leg_role="NIFTY_DEC_23000_PE", quantity=30,
-            average_price=Decimal("975.00"), instrument_key="NSE_FO|37810",
+            strategy_name="ILTS",
+            leg_role="NIFTY_DEC_23000_PE",
+            quantity=30,
+            average_price=Decimal("975.00"),
+            instrument_key="NSE_FO|37810",
             realized_pnl=Decimal("-100.00"),
         ),
     }

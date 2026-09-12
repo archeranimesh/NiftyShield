@@ -4,16 +4,15 @@ All tests are fully offline — APIConnect is patched at module level.
 """
 
 import json
-import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+
 import pytest
 
 from src.auth.nuvama_verify import (
+    load_api_connect,
     parse_holdings,
     verify,
-    load_api_connect,
-    NUVAMA_CONF_FILE,
 )
 
 _NUVAMA_ENV_VARS = ["NUVAMA_API_KEY", "NUVAMA_API_SECRET", "NUVAMA_SETTINGS_FILE"]
@@ -29,6 +28,7 @@ def clean_env(monkeypatch):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_holdings_json(records: list[dict]) -> str:
     return json.dumps({"eq": {"data": {"rmsHdg": records}}})
@@ -46,6 +46,7 @@ def _sample_holding(
 # parse_holdings
 # ---------------------------------------------------------------------------
 
+
 def test_parse_holdings_returns_flat_list():
     raw = _make_holdings_json([_sample_holding()])
     result = parse_holdings(raw)
@@ -62,10 +63,12 @@ def test_parse_holdings_strips_company_name_whitespace():
 
 
 def test_parse_holdings_multiple_records():
-    raw = _make_holdings_json([
-        _sample_holding("INFOSYS", 5, 1800.0),
-        _sample_holding("TCS", 3, 4100.0),
-    ])
+    raw = _make_holdings_json(
+        [
+            _sample_holding("INFOSYS", 5, 1800.0),
+            _sample_holding("TCS", 3, 4100.0),
+        ]
+    )
     result = parse_holdings(raw)
     assert len(result) == 2
     assert result[1]["company_name"] == "TCS"
@@ -99,6 +102,7 @@ def test_parse_holdings_returns_empty_on_wrong_top_level():
 # ---------------------------------------------------------------------------
 # load_api_connect
 # ---------------------------------------------------------------------------
+
 
 def test_load_api_connect_raises_if_credentials_missing(tmp_path):
     env_path = tmp_path / ".env"
@@ -136,9 +140,7 @@ def test_load_api_connect_does_not_pass_json_session_as_conf(tmp_path, monkeypat
 
     env_path = tmp_path / ".env"
     env_path.write_text(
-        f"NUVAMA_API_KEY=MYKEY\n"
-        f"NUVAMA_API_SECRET=MYSECRET\n"
-        f"NUVAMA_SETTINGS_FILE={session_file}\n"
+        f"NUVAMA_API_KEY=MYKEY\nNUVAMA_API_SECRET=MYSECRET\nNUVAMA_SETTINGS_FILE={session_file}\n"
     )
 
     # Point NUVAMA_CONF_FILE to a non-existent path → conf_arg is None (safe default)
@@ -153,9 +155,9 @@ def test_load_api_connect_does_not_pass_json_session_as_conf(tmp_path, monkeypat
     call_args = mock_cls.call_args[0]
     assert call_args[0] == "MYKEY"
     assert call_args[1] == "MYSECRET"
-    assert call_args[2] == ""           # empty request_id
-    assert call_args[3] is False        # download_contract must be False
-    assert call_args[4] is None         # conf_arg is None — not the JSON session file
+    assert call_args[2] == ""  # empty request_id
+    assert call_args[3] is False  # download_contract must be False
+    assert call_args[4] is None  # conf_arg is None — not the JSON session file
     assert call_args[4] != str(session_file)
     assert result is mock_instance
 
@@ -168,9 +170,7 @@ def test_load_api_connect_uses_ini_conf_when_present(tmp_path, monkeypatch):
 
     env_path = tmp_path / ".env"
     env_path.write_text(
-        f"NUVAMA_API_KEY=MYKEY\n"
-        f"NUVAMA_API_SECRET=MYSECRET\n"
-        f"NUVAMA_SETTINGS_FILE={session_file}\n"
+        f"NUVAMA_API_KEY=MYKEY\nNUVAMA_API_SECRET=MYSECRET\nNUVAMA_SETTINGS_FILE={session_file}\n"
     )
 
     monkeypatch.setattr("src.auth.nuvama_verify.NUVAMA_CONF_FILE", str(conf_file))
@@ -188,6 +188,7 @@ def test_load_api_connect_wraps_connection_error_as_data_fetch_error(tmp_path, m
     # load_api_connect must re-raise this as DataFetchError so callers can log
     # it cleanly without the full urllib3 traceback chain.
     import requests.exceptions
+
     from src.client.exceptions import DataFetchError
 
     session_file = tmp_path / "data_MYKEY.txt"
@@ -195,14 +196,15 @@ def test_load_api_connect_wraps_connection_error_as_data_fetch_error(tmp_path, m
 
     env_path = tmp_path / ".env"
     env_path.write_text(
-        f"NUVAMA_API_KEY=MYKEY\n"
-        f"NUVAMA_API_SECRET=MYSECRET\n"
-        f"NUVAMA_SETTINGS_FILE={session_file}\n"
+        f"NUVAMA_API_KEY=MYKEY\nNUVAMA_API_SECRET=MYSECRET\nNUVAMA_SETTINGS_FILE={session_file}\n"
     )
 
     monkeypatch.setattr("src.auth.nuvama_verify.NUVAMA_CONF_FILE", str(tmp_path / "no_conf.ini"))
 
-    with patch("src.auth.nuvama_verify.APIConnect", side_effect=requests.exceptions.ConnectionError("DNS failed")):
+    with patch(
+        "src.auth.nuvama_verify.APIConnect",
+        side_effect=requests.exceptions.ConnectionError("DNS failed"),
+    ):
         with pytest.raises(DataFetchError, match="Nuvama SDK init failed"):
             load_api_connect(env_path)
 
@@ -218,14 +220,14 @@ def test_load_api_connect_wraps_arbitrary_sdk_init_error_as_data_fetch_error(tmp
 
     env_path = tmp_path / ".env"
     env_path.write_text(
-        f"NUVAMA_API_KEY=MYKEY\n"
-        f"NUVAMA_API_SECRET=MYSECRET\n"
-        f"NUVAMA_SETTINGS_FILE={session_file}\n"
+        f"NUVAMA_API_KEY=MYKEY\nNUVAMA_API_SECRET=MYSECRET\nNUVAMA_SETTINGS_FILE={session_file}\n"
     )
 
     monkeypatch.setattr("src.auth.nuvama_verify.NUVAMA_CONF_FILE", str(tmp_path / "no_conf.ini"))
 
-    with patch("src.auth.nuvama_verify.APIConnect", side_effect=RuntimeError("unexpected SDK crash")):
+    with patch(
+        "src.auth.nuvama_verify.APIConnect", side_effect=RuntimeError("unexpected SDK crash")
+    ):
         with pytest.raises(DataFetchError):
             load_api_connect(env_path)
 
@@ -238,9 +240,7 @@ def test_load_api_connect_changes_cwd_to_session_dir(tmp_path, monkeypatch):
 
     env_path = tmp_path / ".env"
     env_path.write_text(
-        f"NUVAMA_API_KEY=MYKEY\n"
-        f"NUVAMA_API_SECRET=MYSECRET\n"
-        f"NUVAMA_SETTINGS_FILE={session_file}\n"
+        f"NUVAMA_API_KEY=MYKEY\nNUVAMA_API_SECRET=MYSECRET\nNUVAMA_SETTINGS_FILE={session_file}\n"
     )
 
     monkeypatch.setattr("src.auth.nuvama_verify.NUVAMA_CONF_FILE", str(tmp_path / "no_conf.ini"))
@@ -264,6 +264,7 @@ def test_load_api_connect_changes_cwd_to_session_dir(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 # verify
 # ---------------------------------------------------------------------------
+
 
 def test_verify_returns_true_on_valid_holdings(tmp_path):
     mock_api = MagicMock()
@@ -317,10 +318,12 @@ def test_verify_returns_false_on_api_exception(tmp_path):
 
 def test_verify_shows_holdings_count(tmp_path, capsys):
     mock_api = MagicMock()
-    mock_api.Holdings.return_value = _make_holdings_json([
-        _sample_holding("HDFC BANK", 20, 1750.0),
-        _sample_holding("INFOSYS", 15, 1820.0),
-    ])
+    mock_api.Holdings.return_value = _make_holdings_json(
+        [
+            _sample_holding("HDFC BANK", 20, 1750.0),
+            _sample_holding("INFOSYS", 15, 1820.0),
+        ]
+    )
 
     with patch("src.auth.nuvama_verify.load_api_connect", return_value=mock_api):
         verify(tmp_path / ".env")

@@ -3,17 +3,16 @@
 All tests are fully offline — no network calls.
 """
 
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 from src.auth.dhan_login import (
-    build_login_url,
-    validate_token,
-    save_token,
-    login,
     DHAN_WEB_URL,
+    build_login_url,
+    login,
+    save_token,
+    validate_token,
 )
 
 # Env vars that can leak across tests if dotenv loads into os.environ
@@ -31,6 +30,7 @@ def clean_env(monkeypatch):
 # build_login_url
 # ---------------------------------------------------------------------------
 
+
 def test_build_login_url_returns_dhan_web():
     url = build_login_url()
     assert url == DHAN_WEB_URL
@@ -44,6 +44,7 @@ def test_build_login_url_contains_dhan_domain():
 # ---------------------------------------------------------------------------
 # validate_token
 # ---------------------------------------------------------------------------
+
 
 def test_validate_token_strips_whitespace():
     assert validate_token("  eyJabc123  ") == "eyJabc123"
@@ -67,6 +68,7 @@ def test_validate_token_raises_on_whitespace_only():
 # ---------------------------------------------------------------------------
 # save_token
 # ---------------------------------------------------------------------------
+
 
 def test_save_token_writes_to_env(tmp_path):
     env_path = tmp_path / ".env"
@@ -104,6 +106,7 @@ def test_save_token_preserves_other_vars(tmp_path):
 # ---------------------------------------------------------------------------
 # login (full flow)
 # ---------------------------------------------------------------------------
+
 
 def test_login_raises_if_client_id_missing(tmp_path):
     env_path = tmp_path / ".env"

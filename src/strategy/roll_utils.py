@@ -83,10 +83,7 @@ def evaluate_floor_formula(
     private copy unchanged to avoid an unrelated behavior-preserving refactor
     in the same commit as this bug fix.
     """
-    return (
-        new_width_pts + d_cum_pts + d_lock_pts + k_pts
-        <= floor_budget * entry_credit_pts
-    )
+    return new_width_pts + d_cum_pts + d_lock_pts + k_pts <= floor_budget * entry_credit_pts
 
 
 def search_narrow_wing_replacement(
@@ -148,20 +145,14 @@ def search_narrow_wing_replacement(
         # Wing above the short call; narrower = smaller strike, closer to
         # short_strike. Widest-first: descending strike order.
         ordered_strikes = sorted(
-            (
-                strike
-                for strike in chain.strikes
-                if short_strike < strike < current_wing_strike
-            ),
+            (strike for strike in chain.strikes if short_strike < strike < current_wing_strike),
             reverse=True,
         )
     else:
         # Wing below the short put; narrower = larger strike, closer to
         # short_strike. Widest-first: ascending strike order.
         ordered_strikes = sorted(
-            strike
-            for strike in chain.strikes
-            if current_wing_strike < strike < short_strike
+            strike for strike in chain.strikes if current_wing_strike < strike < short_strike
         )
 
     for strike in ordered_strikes:

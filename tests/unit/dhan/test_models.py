@@ -8,7 +8,6 @@ import pytest
 from src.dhan.models import DhanHolding, DhanPortfolioSummary
 from src.models.portfolio import AssetType
 
-
 # ── Fixtures ─────────────────────────────────────────────────────
 
 
@@ -33,7 +32,6 @@ def _make_holding(**overrides) -> DhanHolding:
 
 
 class TestDhanHoldingProperties:
-
     def test_cost_basis(self):
         h = _make_holding()
         assert h.cost_basis == Decimal("268.50") * 500
@@ -87,7 +85,6 @@ class TestDhanHoldingProperties:
 
 
 class TestDhanHoldingClassification:
-
     def test_equity_classification(self):
         h = _make_holding(classification=AssetType.EQUITY)
         assert h.classification == AssetType.EQUITY
@@ -105,7 +102,6 @@ class TestDhanHoldingClassification:
 
 
 class TestDhanPortfolioSummary:
-
     def test_empty_summary(self):
         s = DhanPortfolioSummary(
             snapshot_date=date(2026, 4, 14),

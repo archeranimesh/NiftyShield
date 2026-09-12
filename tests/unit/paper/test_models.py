@@ -24,7 +24,6 @@ from pydantic import ValidationError
 from src.models.portfolio import TradeAction
 from src.paper.models import PaperNavSnapshot, PaperPosition, PaperTrade
 
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 

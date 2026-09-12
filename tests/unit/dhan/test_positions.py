@@ -364,8 +364,10 @@ class TestBuildOptionsSummary:
         positions = [
             _make_option_position(
                 trading_symbol="NIFTY-May2026-23750-PE",
-                buy_qty=50, buy_avg=Decimal("10"),
-                sell_qty=0, sell_avg=Decimal("0"),
+                buy_qty=50,
+                buy_avg=Decimal("10"),
+                sell_qty=0,
+                sell_avg=Decimal("0"),
                 net_qty=50,
             )
         ]
@@ -389,8 +391,10 @@ class TestComputeCharges:
         # We'll use one big position to verify the math
         positions = [
             _make_option_position(
-                buy_qty=1000, buy_avg=Decimal("200"),
-                sell_qty=1000, sell_avg=Decimal("235.849"),
+                buy_qty=1000,
+                buy_avg=Decimal("200"),
+                sell_qty=1000,
+                sell_avg=Decimal("235.849"),
             )
         ]
         # turnover: buy=200k, sell=235.849k, total=435.849k
@@ -422,8 +426,10 @@ class TestComputeCharges:
         positions = [
             _make_option_position(
                 trading_symbol="NIFTY-May2026-23750-PE",
-                buy_qty=50, buy_avg=Decimal("10"),
-                sell_qty=0, sell_avg=Decimal("0"),
+                buy_qty=50,
+                buy_avg=Decimal("10"),
+                sell_qty=0,
+                sell_avg=Decimal("0"),
                 net_qty=50,
             )
         ]
@@ -436,8 +442,10 @@ class TestComputeCharges:
         positions = [
             _make_option_position(
                 trading_symbol="NIFTY-May2026-23750-PE",
-                buy_qty=0, buy_avg=Decimal("0"),
-                sell_qty=50, sell_avg=Decimal("10"),
+                buy_qty=0,
+                buy_avg=Decimal("0"),
+                sell_qty=50,
+                sell_avg=Decimal("10"),
                 net_qty=-50,
             )
         ]
@@ -455,8 +463,10 @@ class TestComputeCharges:
         positions = [
             _make_option_position(
                 trading_symbol="NIFTY2550523500CE",
-                buy_qty=50, buy_avg=Decimal("10"),
-                sell_qty=0, sell_avg=Decimal("0"),
+                buy_qty=50,
+                buy_avg=Decimal("10"),
+                sell_qty=0,
+                sell_avg=Decimal("0"),
                 net_qty=50,
             )
         ]
@@ -468,8 +478,10 @@ class TestComputeCharges:
         positions_oct = [
             _make_option_position(
                 trading_symbol="NIFTY25O1523500CE",
-                buy_qty=50, buy_avg=Decimal("10"),
-                sell_qty=0, sell_avg=Decimal("0"),
+                buy_qty=50,
+                buy_avg=Decimal("10"),
+                sell_qty=0,
+                sell_avg=Decimal("0"),
                 net_qty=50,
             )
         ]
@@ -480,8 +492,10 @@ class TestComputeCharges:
         positions_nov = [
             _make_option_position(
                 trading_symbol="NIFTY25N1523500CE",
-                buy_qty=50, buy_avg=Decimal("10"),
-                sell_qty=0, sell_avg=Decimal("0"),
+                buy_qty=50,
+                buy_avg=Decimal("10"),
+                sell_qty=0,
+                sell_avg=Decimal("0"),
                 net_qty=50,
             )
         ]
@@ -492,8 +506,10 @@ class TestComputeCharges:
         positions_dec = [
             _make_option_position(
                 trading_symbol="NIFTY25D1523500CE",
-                buy_qty=50, buy_avg=Decimal("10"),
-                sell_qty=0, sell_avg=Decimal("0"),
+                buy_qty=50,
+                buy_avg=Decimal("10"),
+                sell_qty=0,
+                sell_avg=Decimal("0"),
                 net_qty=50,
             )
         ]
@@ -504,20 +520,26 @@ class TestComputeCharges:
         positions_monthly = [
             _make_option_position(
                 trading_symbol="NIFTY25MAY23500CE",
-                buy_qty=50, buy_avg=Decimal("10"),
-                sell_qty=0, sell_avg=Decimal("0"),
+                buy_qty=50,
+                buy_avg=Decimal("10"),
+                sell_qty=0,
+                sell_avg=Decimal("0"),
                 net_qty=50,
             )
         ]
-        total_charges_monthly, _ = compute_charges(positions_monthly, trade_count=0, is_itm_expiry=True)
+        total_charges_monthly, _ = compute_charges(
+            positions_monthly, trade_count=0, is_itm_expiry=True
+        )
         assert total_charges_monthly == Decimal("1469.08")
 
     def test_itm_expiry_unparseable_symbol(self) -> None:
         positions = [
             _make_option_position(
                 trading_symbol="INVALID_SYMBOL",
-                buy_qty=50, buy_avg=Decimal("10"),
-                sell_qty=0, sell_avg=Decimal("0"),
+                buy_qty=50,
+                buy_avg=Decimal("10"),
+                sell_qty=0,
+                sell_avg=Decimal("0"),
                 net_qty=50,
             )
         ]
@@ -561,8 +583,12 @@ class TestParseFundLimit:
 
     def test_missing_typo_key_raises(self) -> None:
         """If Dhan ever fixes the typo, KeyError surfaces immediately — not silent."""
-        bad = {"availableBalance": 100.0, "utilizedAmount": 0.0,
-               "collateralAmount": 0.0, "withdrawableBalance": 0.0}
+        bad = {
+            "availableBalance": 100.0,
+            "utilizedAmount": 0.0,
+            "collateralAmount": 0.0,
+            "withdrawableBalance": 0.0,
+        }
         with pytest.raises(KeyError):
             parse_fund_limit(bad, _TS)
 

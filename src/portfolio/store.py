@@ -27,6 +27,7 @@ from src.models.portfolio import (
     create_strategy_instance,
 )
 
+
 def _weighted_avg_and_realized(
     buy_qty: Decimal,
     buy_value: Decimal,
@@ -763,9 +764,7 @@ class PortfolioStore:
             bq = Decimal(buy_qty[leg])
             sq = Decimal(sell_qty[leg])
             net = buy_qty[leg] - sell_qty[leg]
-            avg, realized_pnl = _weighted_avg_and_realized(
-                bq, buy_value[leg], sq, sell_value[leg]
-            )
+            avg, realized_pnl = _weighted_avg_and_realized(bq, buy_value[leg], sq, sell_value[leg])
             result[leg] = Position(
                 strategy_name=strategy_name,
                 leg_role=leg,

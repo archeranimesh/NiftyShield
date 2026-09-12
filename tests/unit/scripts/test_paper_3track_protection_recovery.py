@@ -202,9 +202,7 @@ def test_missing_overlay_source_yields_none_and_warns(
     assert snap.collar_pnl_inception is None
 
     warnings = [
-        e
-        for e in captured
-        if e.get("event") == "protection_recovery.overlay_source_missing"
+        e for e in captured if e.get("event") == "protection_recovery.overlay_source_missing"
     ]
     assert len(warnings) == 1
     assert warnings[0]["overlay_type"] == "collar"

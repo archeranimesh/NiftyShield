@@ -12,10 +12,10 @@ from pydantic import ValidationError
 
 from src.models.mf import MFNavSnapshot, MFTransaction, TransactionType
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _transaction(**overrides) -> dict:
     """Return a valid MFTransaction payload, with optional field overrides."""
@@ -45,6 +45,7 @@ def _nav_snapshot(**overrides) -> dict:
 # MFTransaction — valid construction
 # ---------------------------------------------------------------------------
 
+
 class TestMFTransactionValid:
     def test_initial_transaction(self):
         t = MFTransaction(**_transaction())
@@ -70,12 +71,14 @@ class TestMFTransactionValid:
             ("WhiteOak Capital Large Cap Fund - Gr", "150627", "20681.514", "299985.00"),
         ]
         for name, code, units, amount in cases:
-            t = MFTransaction(**_transaction(
-                scheme_name=name,
-                amfi_code=code,
-                units=Decimal(units),
-                amount=Decimal(amount),
-            ))
+            t = MFTransaction(
+                **_transaction(
+                    scheme_name=name,
+                    amfi_code=code,
+                    units=Decimal(units),
+                    amount=Decimal(amount),
+                )
+            )
             assert t.amfi_code == code
 
     def test_frozen_model_rejects_mutation(self):
@@ -87,6 +90,7 @@ class TestMFTransactionValid:
 # ---------------------------------------------------------------------------
 # MFTransaction — invalid construction
 # ---------------------------------------------------------------------------
+
 
 class TestMFTransactionInvalid:
     def test_empty_scheme_name_rejected(self):
@@ -132,6 +136,7 @@ class TestMFTransactionInvalid:
 # MFNavSnapshot — valid construction
 # ---------------------------------------------------------------------------
 
+
 class TestMFNavSnapshotValid:
     def test_basic_snapshot(self):
         s = MFNavSnapshot(**_nav_snapshot())
@@ -151,6 +156,7 @@ class TestMFNavSnapshotValid:
 # ---------------------------------------------------------------------------
 # MFNavSnapshot — invalid construction
 # ---------------------------------------------------------------------------
+
 
 class TestMFNavSnapshotInvalid:
     def test_zero_nav_rejected(self):
@@ -183,6 +189,7 @@ class TestMFNavSnapshotInvalid:
 # ---------------------------------------------------------------------------
 # TransactionType enum
 # ---------------------------------------------------------------------------
+
 
 class TestTransactionType:
     def test_string_values(self):

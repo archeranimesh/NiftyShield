@@ -15,8 +15,7 @@ from decimal import Decimal
 
 import pytest
 
-from src.utils.number_formatting import fmt_inr, _group_indian
-
+from src.utils.number_formatting import _group_indian, fmt_inr
 
 # ── _group_indian (pure grouping helper) ────────────────────────────────────
 

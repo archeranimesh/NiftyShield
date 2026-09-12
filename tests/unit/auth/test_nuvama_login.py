@@ -5,16 +5,16 @@ All tests are fully offline — APIConnect is patched at module level.
 
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+
 import pytest
 
 from src.auth.nuvama_login import (
+    LOGIN_URL,
     build_login_url,
     extract_request_id,
     initialize_session,
-    save_settings_path,
     login,
-    LOGIN_URL,
-    NUVAMA_CONF_FILE,
+    save_settings_path,
 )
 
 # Env vars that can leak across tests if dotenv loads into os.environ
@@ -32,6 +32,7 @@ def clean_env(monkeypatch):
 # build_login_url
 # ---------------------------------------------------------------------------
 
+
 def test_build_login_url_embeds_api_key():
     url = build_login_url("TEST_KEY_123")
     assert "api_key=TEST_KEY_123" in url
@@ -46,6 +47,7 @@ def test_build_login_url_format():
 # ---------------------------------------------------------------------------
 # extract_request_id
 # ---------------------------------------------------------------------------
+
 
 def test_extract_request_id_from_full_url():
     redirect = "https://127.0.0.1/?request_id=REQ_TOKEN_XYZ&status=ok"
@@ -73,6 +75,7 @@ def test_extract_request_id_bare_token_with_whitespace():
 # ---------------------------------------------------------------------------
 # initialize_session — patched at module level
 # ---------------------------------------------------------------------------
+
 
 def test_initialize_session_calls_apiconnect_with_conf_not_session(tmp_path):
     # SDK's conf arg must be the INI conf file, not the JSON session destination.
@@ -144,7 +147,6 @@ def test_initialize_session_creates_logs_dir_before_apiconnect(tmp_path):
     # raises FileNotFoundError before returning. initialize_session must pre-create it.
     settings_file = str(tmp_path / "session.json")
     conf_file = str(tmp_path / "settings.ini")
-    logs_dir = tmp_path / "logs"
 
     captured = {}
 
@@ -166,7 +168,9 @@ def test_initialize_session_passes_download_contract_true(tmp_path):
     mock_cls = MagicMock(return_value=MagicMock())
 
     with patch("src.auth.nuvama_login.APIConnect", mock_cls):
-        initialize_session("KEY", "SECRET", "REQ", settings_file, download_contract=True, _conf_file=conf_file)
+        initialize_session(
+            "KEY", "SECRET", "REQ", settings_file, download_contract=True, _conf_file=conf_file
+        )
 
     assert mock_cls.call_args[0][3] is True
 
@@ -184,7 +188,9 @@ def test_initialize_session_does_not_pass_json_session_as_conf(tmp_path):
         initialize_session("KEY", "SECRET", "REQ", str(session_file), _conf_file=conf_file)
 
     call_conf_arg = mock_cls.call_args[0][4]
-    assert call_conf_arg.endswith("settings.ini"), "SDK must receive INI conf path, not JSON session file"
+    assert call_conf_arg.endswith("settings.ini"), (
+        "SDK must receive INI conf path, not JSON session file"
+    )
     assert call_conf_arg != str(session_file)
     # download_contract must still be False
     assert mock_cls.call_args[0][3] is False
@@ -193,6 +199,7 @@ def test_initialize_session_does_not_pass_json_session_as_conf(tmp_path):
 # ---------------------------------------------------------------------------
 # save_settings_path
 # ---------------------------------------------------------------------------
+
 
 def test_save_settings_path_writes_key(tmp_path):
     env_path = tmp_path / ".env"
@@ -219,6 +226,7 @@ def test_save_settings_path_upserts_existing_key(tmp_path):
 # ---------------------------------------------------------------------------
 # login (full flow)
 # ---------------------------------------------------------------------------
+
 
 def test_login_raises_if_api_key_missing(tmp_path):
     env_path = tmp_path / ".env"
@@ -251,8 +259,7 @@ def test_login_full_flow(tmp_path, monkeypatch):
     settings_file = str(tmp_path / "nuvama" / "settings.json")
     env_path = tmp_path / ".env"
     env_path.write_text(
-        f"NUVAMA_API_KEY=MYKEY\nNUVAMA_API_SECRET=MYSECRET\n"
-        f"NUVAMA_SETTINGS_FILE={settings_file}\n"
+        f"NUVAMA_API_KEY=MYKEY\nNUVAMA_API_SECRET=MYSECRET\nNUVAMA_SETTINGS_FILE={settings_file}\n"
     )
 
     redirect_url = "https://127.0.0.1/?request_id=REQ_FULL_FLOW"

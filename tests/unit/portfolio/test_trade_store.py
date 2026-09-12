@@ -18,16 +18,15 @@ Coverage:
 - Schema coexistence: trades table created alongside existing tables.
 """
 
+import asyncio
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
-import asyncio
 import pytest
 
-from src.models.portfolio import Trade, TradeAction, Position
+from src.models.portfolio import Position, Trade, TradeAction
 from src.portfolio.store import PortfolioStore
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -92,9 +91,7 @@ def test_trades_table_exists(store: PortfolioStore, db_path: Path) -> None:
     conn = sqlite3.connect(str(db_path))
     tables = {
         row[0]
-        for row in conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        ).fetchall()
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
     }
     conn.close()
     assert "trades" in tables
@@ -110,8 +107,15 @@ def test_trades_schema_columns(store: PortfolioStore, db_path: Path) -> None:
     cols = {row[1] for row in conn.execute("PRAGMA table_info(trades)").fetchall()}
     conn.close()
     expected = {
-        "id", "strategy_name", "leg_role", "instrument_key",
-        "trade_date", "action", "quantity", "price", "notes",
+        "id",
+        "strategy_name",
+        "leg_role",
+        "instrument_key",
+        "trade_date",
+        "action",
+        "quantity",
+        "price",
+        "notes",
     }
     assert expected.issubset(cols)
 
@@ -230,18 +234,24 @@ def test_get_position_mixed_buy_sell_net(store: PortfolioStore) -> None:
     """BUY 100, SELL 30 → net 70."""
     store.record_trade(
         Trade(
-            strategy_name="ILTS", leg_role="EBBETF0431",
+            strategy_name="ILTS",
+            leg_role="EBBETF0431",
             instrument_key="NSE_EQ|INF754K01LE1",
-            trade_date=date(2026, 1, 15), action=TradeAction.BUY,
-            quantity=100, price=Decimal("1388.00"),
+            trade_date=date(2026, 1, 15),
+            action=TradeAction.BUY,
+            quantity=100,
+            price=Decimal("1388.00"),
         )
     )
     store.record_trade(
         Trade(
-            strategy_name="ILTS", leg_role="EBBETF0431",
+            strategy_name="ILTS",
+            leg_role="EBBETF0431",
             instrument_key="NSE_EQ|INF754K01LE1",
-            trade_date=date(2026, 2, 1), action=TradeAction.SELL,
-            quantity=30, price=Decimal("1400.00"),
+            trade_date=date(2026, 2, 1),
+            action=TradeAction.SELL,
+            quantity=30,
+            price=Decimal("1400.00"),
         )
     )
     pos = store.get_position("ILTS", "EBBETF0431")
@@ -259,9 +269,9 @@ def test_get_position_avg_price_two_buys_weighted(store: PortfolioStore) -> None
     store.record_trade(_buy(trade_date=date(2026, 1, 15), qty=438, price="1388.12"))
     store.record_trade(_buy(trade_date=date(2026, 4, 8), qty=27, price="1386.20"))
     pos = store.get_position("ILTS", "EBBETF0431")
-    expected = (
-        Decimal("438") * Decimal("1388.12") + Decimal("27") * Decimal("1386.20")
-    ) / Decimal("465")
+    expected = (Decimal("438") * Decimal("1388.12") + Decimal("27") * Decimal("1386.20")) / Decimal(
+        "465"
+    )
     assert pos.average_price == expected
 
 
@@ -270,10 +280,13 @@ def test_get_position_avg_price_ignores_sell_price(store: PortfolioStore) -> Non
     store.record_trade(_buy(leg="EBBETF0431", qty=100, price="1388.00"))
     store.record_trade(
         Trade(
-            strategy_name="ILTS", leg_role="EBBETF0431",
+            strategy_name="ILTS",
+            leg_role="EBBETF0431",
             instrument_key="NSE_EQ|INF754K01LE1",
-            trade_date=date(2026, 2, 1), action=TradeAction.SELL,
-            quantity=30, price=Decimal("9999.00"),  # artificially high — must be ignored
+            trade_date=date(2026, 2, 1),
+            action=TradeAction.SELL,
+            quantity=30,
+            price=Decimal("9999.00"),  # artificially high — must be ignored
         )
     )
     pos = store.get_position("ILTS", "EBBETF0431")
@@ -293,18 +306,24 @@ def test_get_position_sell_only_avg_price_weighted_across_two_sells(
     """Two SELL trades at different prices → weighted average, no BUY trades."""
     store.record_trade(
         Trade(
-            strategy_name="ILTS", leg_role="NIFTY_JUN_PE",
+            strategy_name="ILTS",
+            leg_role="NIFTY_JUN_PE",
             instrument_key="NSE_FO|37810",
-            trade_date=date(2026, 1, 15), action=TradeAction.SELL,
-            quantity=40, price=Decimal("840.00"),
+            trade_date=date(2026, 1, 15),
+            action=TradeAction.SELL,
+            quantity=40,
+            price=Decimal("840.00"),
         )
     )
     store.record_trade(
         Trade(
-            strategy_name="ILTS", leg_role="NIFTY_JUN_PE",
+            strategy_name="ILTS",
+            leg_role="NIFTY_JUN_PE",
             instrument_key="NSE_FO|37810",
-            trade_date=date(2026, 1, 20), action=TradeAction.SELL,
-            quantity=25, price=Decimal("820.00"),
+            trade_date=date(2026, 1, 20),
+            action=TradeAction.SELL,
+            quantity=25,
+            price=Decimal("820.00"),
         )
     )
     pos = store.get_position("ILTS", "NIFTY_JUN_PE")
@@ -325,18 +344,24 @@ def test_get_position_short_first_closed_leg_realized_pnl(store: PortfolioStore)
     """SELL 65 @ 840 then BUY 65 @ 600 (cover) → realized_pnl = (840-600)*65."""
     store.record_trade(
         Trade(
-            strategy_name="ILTS", leg_role="NIFTY_JUN_PE",
+            strategy_name="ILTS",
+            leg_role="NIFTY_JUN_PE",
             instrument_key="NSE_FO|37810",
-            trade_date=date(2026, 1, 15), action=TradeAction.SELL,
-            quantity=65, price=Decimal("840.00"),
+            trade_date=date(2026, 1, 15),
+            action=TradeAction.SELL,
+            quantity=65,
+            price=Decimal("840.00"),
         )
     )
     store.record_trade(
         Trade(
-            strategy_name="ILTS", leg_role="NIFTY_JUN_PE",
+            strategy_name="ILTS",
+            leg_role="NIFTY_JUN_PE",
             instrument_key="NSE_FO|37810",
-            trade_date=date(2026, 2, 1), action=TradeAction.BUY,
-            quantity=65, price=Decimal("600.00"),
+            trade_date=date(2026, 2, 1),
+            action=TradeAction.BUY,
+            quantity=65,
+            price=Decimal("600.00"),
         )
     )
     pos = store.get_position("ILTS", "NIFTY_JUN_PE")
@@ -348,18 +373,24 @@ def test_get_position_buy_first_round_trip_realized_pnl(store: PortfolioStore) -
     """BUY 100 @ 1388 then SELL 100 @ 1400 (round trip) → realized_pnl = (1400-1388)*100."""
     store.record_trade(
         Trade(
-            strategy_name="ILTS", leg_role="EBBETF0431",
+            strategy_name="ILTS",
+            leg_role="EBBETF0431",
             instrument_key="NSE_EQ|INF754K01LE1",
-            trade_date=date(2026, 1, 15), action=TradeAction.BUY,
-            quantity=100, price=Decimal("1388.00"),
+            trade_date=date(2026, 1, 15),
+            action=TradeAction.BUY,
+            quantity=100,
+            price=Decimal("1388.00"),
         )
     )
     store.record_trade(
         Trade(
-            strategy_name="ILTS", leg_role="EBBETF0431",
+            strategy_name="ILTS",
+            leg_role="EBBETF0431",
             instrument_key="NSE_EQ|INF754K01LE1",
-            trade_date=date(2026, 2, 1), action=TradeAction.SELL,
-            quantity=100, price=Decimal("1400.00"),
+            trade_date=date(2026, 2, 1),
+            action=TradeAction.SELL,
+            quantity=100,
+            price=Decimal("1400.00"),
         )
     )
     pos = store.get_position("ILTS", "EBBETF0431")
@@ -411,7 +442,9 @@ def test_get_all_positions_accumulates_multiple_buys(store: PortfolioStore) -> N
     pos = result["EBBETF0431"]
     assert pos.quantity == 465
     # Weighted avg: (438*1388.12 + 27*1386.20) / 465
-    expected = (Decimal("438") * Decimal("1388.12") + Decimal("27") * Decimal("1386.20")) / Decimal("465")
+    expected = (Decimal("438") * Decimal("1388.12") + Decimal("27") * Decimal("1386.20")) / Decimal(
+        "465"
+    )
     assert pos.average_price == expected
 
 
@@ -419,10 +452,13 @@ def test_get_all_positions_instrument_key_from_trades(store: PortfolioStore) -> 
     """instrument_key in result comes from the trades table, not from Leg definitions."""
     store.record_trade(
         Trade(
-            strategy_name="ILTS", leg_role="LIQUIDBEES",
+            strategy_name="ILTS",
+            leg_role="LIQUIDBEES",
             instrument_key="NSE_EQ|INF732E01037",
-            trade_date=date(2026, 4, 8), action=TradeAction.BUY,
-            quantity=22, price=Decimal("1000.00"),
+            trade_date=date(2026, 4, 8),
+            action=TradeAction.BUY,
+            quantity=22,
+            price=Decimal("1000.00"),
         )
     )
     result = store.get_all_positions_for_strategy("ILTS")
@@ -435,10 +471,13 @@ def test_get_all_positions_isolates_by_strategy(store: PortfolioStore) -> None:
     store.record_trade(_buy(strategy="ILTS", leg="EBBETF0431", qty=438))
     store.record_trade(
         Trade(
-            strategy_name="FinRakshak", leg_role="NIFTY_DEC_PE",
+            strategy_name="FinRakshak",
+            leg_role="NIFTY_DEC_PE",
             instrument_key="NSE_FO|37810",
-            trade_date=date(2026, 1, 15), action=TradeAction.BUY,
-            quantity=65, price=Decimal("962.15"),
+            trade_date=date(2026, 1, 15),
+            action=TradeAction.BUY,
+            quantity=65,
+            price=Decimal("962.15"),
         )
     )
     ilts = store.get_all_positions_for_strategy("ILTS")
@@ -451,8 +490,9 @@ def test_get_all_positions_isolates_by_strategy(store: PortfolioStore) -> None:
 
 def test_get_all_positions_single_connection(store: PortfolioStore) -> None:
     """Single DB connection for all legs; values match expected net qty and WAP."""
-    import src.portfolio.store as store_mod
     from unittest.mock import patch
+
+    import src.portfolio.store as store_mod
 
     store.record_trade(_buy(strategy="ILTS", leg="L1", qty=100, price="1000.00"))
     store.record_trade(_buy(strategy="ILTS", leg="L2", qty=50, price="500.00"))
@@ -468,12 +508,12 @@ def test_get_all_positions_single_connection(store: PortfolioStore) -> None:
     assert pos_l1.quantity == 100
     assert pos_l1.average_price == Decimal("1000.00")
     assert pos_l1.instrument_key == "NSE_EQ|INF754K01LE1"
-    
+
     pos_l2 = result["L2"]
     assert pos_l2.quantity == 50
     assert pos_l2.average_price == Decimal("500.00")
     assert pos_l2.instrument_key == "NSE_EQ|INF754K01LE1"
-    
+
     pos_l3 = result["L3"]
     assert pos_l3.quantity == 200
     assert pos_l3.average_price == Decimal("250.00")
@@ -488,10 +528,13 @@ def test_get_all_positions_short_first_avg_price_and_realized_pnl(
     actually consumes (FR-7 row 1)."""
     store.record_trade(
         Trade(
-            strategy_name="ILTS", leg_role="NIFTY_JUN_PE",
+            strategy_name="ILTS",
+            leg_role="NIFTY_JUN_PE",
             instrument_key="NSE_FO|37810",
-            trade_date=date(2026, 1, 15), action=TradeAction.SELL,
-            quantity=65, price=Decimal("840.00"),
+            trade_date=date(2026, 1, 15),
+            action=TradeAction.SELL,
+            quantity=65,
+            price=Decimal("840.00"),
         )
     )
     result = store.get_all_positions_for_strategy("ILTS")
@@ -502,10 +545,13 @@ def test_get_all_positions_short_first_avg_price_and_realized_pnl(
 
     store.record_trade(
         Trade(
-            strategy_name="ILTS", leg_role="NIFTY_JUN_PE",
+            strategy_name="ILTS",
+            leg_role="NIFTY_JUN_PE",
             instrument_key="NSE_FO|37810",
-            trade_date=date(2026, 2, 1), action=TradeAction.BUY,
-            quantity=65, price=Decimal("600.00"),
+            trade_date=date(2026, 2, 1),
+            action=TradeAction.BUY,
+            quantity=65,
+            price=Decimal("600.00"),
         )
     )
     result = store.get_all_positions_for_strategy("ILTS")
@@ -525,28 +571,48 @@ def test_get_all_positions_instrument_key_after_roll(store: PortfolioStore) -> N
     NEW_KEY = "NSE_FO|NEW_CONTRACT"
 
     # Original position: BUY old contract
-    store.record_trade(Trade(
-        strategy_name="ILTS", leg_role="NIFTY_MAY_PE",
-        instrument_key=OLD_KEY, trade_date=date(2026, 1, 15),
-        action=TradeAction.BUY, quantity=50, price=Decimal("800.00"),
-    ))
+    store.record_trade(
+        Trade(
+            strategy_name="ILTS",
+            leg_role="NIFTY_MAY_PE",
+            instrument_key=OLD_KEY,
+            trade_date=date(2026, 1, 15),
+            action=TradeAction.BUY,
+            quantity=50,
+            price=Decimal("800.00"),
+        )
+    )
     # Close old contract
-    store.record_trade(Trade(
-        strategy_name="ILTS", leg_role="NIFTY_MAY_PE",
-        instrument_key=OLD_KEY, trade_date=date(2026, 2, 15),
-        action=TradeAction.SELL, quantity=50, price=Decimal("600.00"),
-    ))
+    store.record_trade(
+        Trade(
+            strategy_name="ILTS",
+            leg_role="NIFTY_MAY_PE",
+            instrument_key=OLD_KEY,
+            trade_date=date(2026, 2, 15),
+            action=TradeAction.SELL,
+            quantity=50,
+            price=Decimal("600.00"),
+        )
+    )
     # Open new contract (roll forward)
-    store.record_trade(Trade(
-        strategy_name="ILTS", leg_role="NIFTY_MAY_PE",
-        instrument_key=NEW_KEY, trade_date=date(2026, 2, 20),
-        action=TradeAction.BUY, quantity=50, price=Decimal("700.00"),
-    ))
+    store.record_trade(
+        Trade(
+            strategy_name="ILTS",
+            leg_role="NIFTY_MAY_PE",
+            instrument_key=NEW_KEY,
+            trade_date=date(2026, 2, 20),
+            action=TradeAction.BUY,
+            quantity=50,
+            price=Decimal("700.00"),
+        )
+    )
 
     result = store.get_all_positions_for_strategy("ILTS")
 
     pos = result["NIFTY_MAY_PE"]
-    assert pos.instrument_key == NEW_KEY, f"Expected new contract key after roll, got {pos.instrument_key!r}"
+    assert pos.instrument_key == NEW_KEY, (
+        f"Expected new contract key after roll, got {pos.instrument_key!r}"
+    )
     assert pos.quantity == 50  # closed old (50-50=0) + opened new (50) = 50 net
     # avg buy price = weighted avg of both BUY legs: (50*800 + 50*700) / 100
     assert pos.average_price == Decimal("750.00")
@@ -558,26 +624,46 @@ def test_get_position_instrument_key_after_roll(store: PortfolioStore) -> None:
     NEW_KEY = "NSE_FO|NEW_CONTRACT"
 
     # Original position: BUY old contract
-    store.record_trade(Trade(
-        strategy_name="ILTS", leg_role="NIFTY_MAY_PE",
-        instrument_key=OLD_KEY, trade_date=date(2026, 1, 15),
-        action=TradeAction.BUY, quantity=50, price=Decimal("800.00"),
-    ))
+    store.record_trade(
+        Trade(
+            strategy_name="ILTS",
+            leg_role="NIFTY_MAY_PE",
+            instrument_key=OLD_KEY,
+            trade_date=date(2026, 1, 15),
+            action=TradeAction.BUY,
+            quantity=50,
+            price=Decimal("800.00"),
+        )
+    )
     # Close old contract
-    store.record_trade(Trade(
-        strategy_name="ILTS", leg_role="NIFTY_MAY_PE",
-        instrument_key=OLD_KEY, trade_date=date(2026, 2, 15),
-        action=TradeAction.SELL, quantity=50, price=Decimal("600.00"),
-    ))
+    store.record_trade(
+        Trade(
+            strategy_name="ILTS",
+            leg_role="NIFTY_MAY_PE",
+            instrument_key=OLD_KEY,
+            trade_date=date(2026, 2, 15),
+            action=TradeAction.SELL,
+            quantity=50,
+            price=Decimal("600.00"),
+        )
+    )
     # Open new contract (roll forward)
-    store.record_trade(Trade(
-        strategy_name="ILTS", leg_role="NIFTY_MAY_PE",
-        instrument_key=NEW_KEY, trade_date=date(2026, 2, 20),
-        action=TradeAction.BUY, quantity=50, price=Decimal("700.00"),
-    ))
+    store.record_trade(
+        Trade(
+            strategy_name="ILTS",
+            leg_role="NIFTY_MAY_PE",
+            instrument_key=NEW_KEY,
+            trade_date=date(2026, 2, 20),
+            action=TradeAction.BUY,
+            quantity=50,
+            price=Decimal("700.00"),
+        )
+    )
 
     pos = store.get_position("ILTS", "NIFTY_MAY_PE")
-    assert pos.instrument_key == NEW_KEY, f"Expected new contract key after roll, got {pos.instrument_key!r}"
+    assert pos.instrument_key == NEW_KEY, (
+        f"Expected new contract key after roll, got {pos.instrument_key!r}"
+    )
     assert pos.quantity == 50
     assert pos.average_price == Decimal("750.00")
 
@@ -662,11 +748,13 @@ def test_record_roll_positions_reflect_both_legs(store: PortfolioStore) -> None:
     store.record_roll(_close_trade(), _open_trade())
     pos_old = store.get_position("finideas_ilts", "NIFTY_MAY_PE_ATM")
     pos_new = store.get_position("finideas_ilts", "NIFTY_JUN_PE_ATM")
-    assert pos_old.quantity == 50   # BUY 50 → net +50
+    assert pos_old.quantity == 50  # BUY 50 → net +50
     assert pos_new.quantity == -50  # SELL 50 → net -50
+
 
 def test_create_async_factory(db_path: Path) -> None:
     """Happy path: create() returns an initialized store."""
+
     async def run():
         store = await PortfolioStore.create(db_path)
         assert isinstance(store, PortfolioStore)
@@ -674,46 +762,81 @@ def test_create_async_factory(db_path: Path) -> None:
 
         # Verify tables exist
         import sqlite3
+
         with sqlite3.connect(str(db_path)) as conn:
-            tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+            tables = {
+                row[0]
+                for row in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            }
             assert "strategies" in tables
             assert "trades" in tables
-    
+
     asyncio.run(run())
 
 
 def test_create_async_factory_empty_path() -> None:
     """Edge case: create() with empty path raises ValueError."""
+
     async def run():
         with pytest.raises(ValueError, match="db_path must not be empty"):
             await PortfolioStore.create("")
-    
+
     asyncio.run(run())
 
 
 def test_position_validation_non_negative_average_price() -> None:
     """Position average_price must be non-negative, and allows string/float coercion."""
     # Happy path: float/string/int coercion
-    pos1 = Position(strategy_name="ILTS", leg_role="L1", instrument_key="KEY1", quantity=10, average_price=1388.12)
+    pos1 = Position(
+        strategy_name="ILTS",
+        leg_role="L1",
+        instrument_key="KEY1",
+        quantity=10,
+        average_price=1388.12,
+    )
     assert pos1.average_price == Decimal("1388.12")
 
-    pos2 = Position(strategy_name="ILTS", leg_role="L1", instrument_key="KEY1", quantity=10, average_price="1388.12")
+    pos2 = Position(
+        strategy_name="ILTS",
+        leg_role="L1",
+        instrument_key="KEY1",
+        quantity=10,
+        average_price="1388.12",
+    )
     assert pos2.average_price == Decimal("1388.12")
 
-    pos3 = Position(strategy_name="ILTS", leg_role="L1", instrument_key="KEY1", quantity=10, average_price=0)
+    pos3 = Position(
+        strategy_name="ILTS", leg_role="L1", instrument_key="KEY1", quantity=10, average_price=0
+    )
     assert pos3.average_price == Decimal("0")
 
     # Error case: negative average_price
     with pytest.raises(ValueError, match="average_price must be non-negative"):
-        Position(strategy_name="ILTS", leg_role="L1", instrument_key="KEY1", quantity=10, average_price=-5.5)
+        Position(
+            strategy_name="ILTS",
+            leg_role="L1",
+            instrument_key="KEY1",
+            quantity=10,
+            average_price=-5.5,
+        )
 
     with pytest.raises(ValueError, match="average_price must be non-negative"):
-        Position(strategy_name="ILTS", leg_role="L1", instrument_key="KEY1", quantity=10, average_price="-1")
+        Position(
+            strategy_name="ILTS",
+            leg_role="L1",
+            instrument_key="KEY1",
+            quantity=10,
+            average_price="-1",
+        )
 
 
 def test_position_validation_optional_instrument_key() -> None:
     """Position allows instrument_key to be None."""
-    pos = Position(strategy_name="ILTS", leg_role="L1", instrument_key=None, quantity=0, average_price=0)
+    pos = Position(
+        strategy_name="ILTS", leg_role="L1", instrument_key=None, quantity=0, average_price=0
+    )
     assert pos.instrument_key is None
     assert pos.quantity == 0
 
@@ -725,22 +848,27 @@ def test_sync_constructor_still_works(db_path: Path) -> None:
 
     # Verify tables exist
     import sqlite3
+
     with sqlite3.connect(str(db_path)) as conn:
-        tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+        tables = {
+            row[0]
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+        }
         assert "strategies" in tables
 
 
 def test_create_bypasses_init_sentinel(tmp_path: Path) -> None:
     """Internal consistency: confirm object.__new__ bypasses initialization."""
     db_path = tmp_path / "sentinel_test.sqlite"
-    
+
     # Manually bypass __init__ like PortfolioStore.create does
     store = object.__new__(PortfolioStore)
     store.db_path = db_path
-    
+
     # Since _initialize hasn't run, the file might not even exist yet
     # or it will be empty if we connect to it.
     import sqlite3
+
     with sqlite3.connect(str(db_path)) as conn:
         tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         assert len(tables) == 0

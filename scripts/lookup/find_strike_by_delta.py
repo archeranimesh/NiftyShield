@@ -588,10 +588,7 @@ def _parse_args() -> argparse.Namespace:
         "--action",
         choices=["BUY", "SELL"],
         default=None,
-        help=(
-            "Trade action. Default: SELL (BUY, non-overridable, for "
-            f"{STRATEGY_PP_OVERLAY!r})."
-        ),
+        help=(f"Trade action. Default: SELL (BUY, non-overridable, for {STRATEGY_PP_OVERLAY!r})."),
     )
     dry_grp.add_argument(
         "--date",

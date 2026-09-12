@@ -3,20 +3,18 @@
 All tests are fully offline — requests.get is mocked via unittest.mock.patch.
 """
 
-import json
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from src.auth.dhan_verify import (
-    load_dhan_credentials,
-    fetch_profile,
+    DHAN_API_BASE,
+    _build_headers,
     fetch_holdings,
+    fetch_profile,
+    load_dhan_credentials,
     parse_holdings,
     verify,
-    _build_headers,
-    DHAN_API_BASE,
 )
 
 # Env vars that can leak across tests if dotenv loads into os.environ
@@ -34,6 +32,7 @@ def clean_env(monkeypatch):
 # _build_headers
 # ---------------------------------------------------------------------------
 
+
 def test_build_headers_includes_access_token():
     headers = _build_headers("my_jwt_token")
     assert headers["access-token"] == "my_jwt_token"
@@ -43,6 +42,7 @@ def test_build_headers_includes_access_token():
 # ---------------------------------------------------------------------------
 # load_dhan_credentials
 # ---------------------------------------------------------------------------
+
 
 def test_load_credentials_happy_path(tmp_path):
     env_path = tmp_path / ".env"
@@ -82,6 +82,7 @@ def test_load_credentials_strips_whitespace(tmp_path):
 # fetch_profile
 # ---------------------------------------------------------------------------
 
+
 def test_fetch_profile_happy_path():
     mock_response = MagicMock()
     mock_response.json.return_value = {
@@ -104,9 +105,7 @@ def test_fetch_profile_http_error():
 
     mock_response = MagicMock()
     mock_response.status_code = 401
-    mock_response.raise_for_status.side_effect = req.HTTPError(
-        response=mock_response
-    )
+    mock_response.raise_for_status.side_effect = req.HTTPError(response=mock_response)
 
     with patch("src.auth.dhan_verify.requests.get", return_value=mock_response):
         with pytest.raises(req.HTTPError):
@@ -116,6 +115,7 @@ def test_fetch_profile_http_error():
 # ---------------------------------------------------------------------------
 # fetch_holdings
 # ---------------------------------------------------------------------------
+
 
 def test_fetch_holdings_returns_list():
     mock_response = MagicMock()
@@ -161,6 +161,7 @@ def test_fetch_holdings_dict_with_data_key():
 # parse_holdings
 # ---------------------------------------------------------------------------
 
+
 def test_parse_holdings_multiple_records():
     raw = [
         {"tradingSymbol": "HDFC", "totalQty": 100, "avgCostPrice": 2655.0},
@@ -197,6 +198,7 @@ def test_parse_holdings_skips_malformed():
 # ---------------------------------------------------------------------------
 # verify (full flow)
 # ---------------------------------------------------------------------------
+
 
 def test_verify_returns_true_on_success(tmp_path, capsys):
     env_path = tmp_path / ".env"
@@ -248,9 +250,7 @@ def test_verify_returns_false_on_http_401(tmp_path, capsys):
 
     mock_response = MagicMock()
     mock_response.status_code = 401
-    mock_response.raise_for_status.side_effect = req.HTTPError(
-        response=mock_response
-    )
+    mock_response.raise_for_status.side_effect = req.HTTPError(response=mock_response)
 
     with patch("src.auth.dhan_verify.requests.get", return_value=mock_response):
         result = verify(env_path)

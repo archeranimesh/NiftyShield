@@ -89,9 +89,7 @@ class TestParse:
         assert result == {"104481": Decimal("123.00")}
 
     def test_line_with_too_few_fields_is_skipped(self) -> None:
-        raw = (
-            "104481;only_three_fields;name\n146193;INF;INF;Edelweiss;45.67;03-Apr-2026"
-        )
+        raw = "104481;only_three_fields;name\n146193;INF;INF;Edelweiss;45.67;03-Apr-2026"
         result = _parse(raw, {"104481", "146193"})
         # 104481 line has only 3 fields → skipped; 146193 is valid
         assert "104481" not in result
@@ -155,9 +153,7 @@ class TestFetchNavs:
         result = fetch_navs(ALL_VALID_CODES, source=FIXTURE)
         assert result.keys() == ALL_VALID_CODES
 
-    def test_missing_codes_logged_as_warning(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_missing_codes_logged_as_warning(self, caplog: pytest.LogCaptureFixture) -> None:
         import logging
 
         with caplog.at_level(logging.WARNING, logger="src.mf.nav_fetcher"):

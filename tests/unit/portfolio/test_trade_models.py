@@ -19,7 +19,6 @@ from pydantic import ValidationError
 
 from src.models.portfolio import Trade, TradeAction
 
-
 # ── TradeAction ──────────────────────────────────────────────────────────────
 
 

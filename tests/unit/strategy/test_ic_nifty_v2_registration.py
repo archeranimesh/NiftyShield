@@ -6,10 +6,11 @@ IC-V2-5 story: Register paper_ic_nifty_v2_monthly in daemon and factory.
 from __future__ import annotations
 
 import unittest
+from dataclasses import FrozenInstanceError
 from decimal import Decimal
 from unittest.mock import MagicMock
 
-from src.strategy.ic_expiry_config_v2 import IC_V2_MONTHLY, CONFIGS_V2, IronCondorV2ExpiryConfig
+from src.strategy.ic_expiry_config_v2 import CONFIGS_V2, IC_V2_MONTHLY
 from src.strategy.ic_nifty_v2 import IronCondorV2
 
 
@@ -65,7 +66,7 @@ class TestIronCondorV2RegistrationName(unittest.TestCase):
     def test_ic_v2_monthly_is_frozen(self) -> None:
         """Verify IC_V2_MONTHLY config is immutable (frozen dataclass)."""
         # Attempt to mutate should raise FrozenInstanceError
-        with self.assertRaises(Exception):
+        with self.assertRaises(FrozenInstanceError):
             # type: ignore
             IC_V2_MONTHLY.expiry_type = "weekly"
 

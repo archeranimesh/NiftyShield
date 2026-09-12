@@ -37,7 +37,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from src.client.upstox_market import parse_upstox_option_chain
-from src.models.options import OptionChain, OptionChainStrike, OptionLeg
+from src.models.options import OptionChain
 from src.models.portfolio import AssetType, Direction, Leg, ProductType
 from src.portfolio.tracker import PortfolioTracker, _extract_greeks_from_chain
 
@@ -252,8 +252,6 @@ async def test_fetch_greeks_correct_underlying_key() -> None:
     )
     result = await tracker._fetch_greeks([option_leg])
 
-    market.get_option_chain.assert_called_once_with(
-        "NSE_INDEX|Nifty 50", "2026-04-07"
-    )
+    market.get_option_chain.assert_called_once_with("NSE_INDEX|Nifty 50", "2026-04-07")
     assert "NSE_FO|40718" in result
     assert result["NSE_FO|40718"]["delta"] == Decimal("0.525")

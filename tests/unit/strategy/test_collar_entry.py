@@ -105,9 +105,7 @@ def test_min_net_premium_tiebreak_selects_best_combo() -> None:
         mock_find.side_effect = [call_candidates, put_candidates]
 
         trades = _run(
-            select_and_build_collar_entry(
-                mock_broker, MagicMock(), date(2026, 8, 4), "DELTA_STOP"
-            )
+            select_and_build_collar_entry(mock_broker, MagicMock(), date(2026, 8, 4), "DELTA_STOP")
         )
 
     call_trade = next(t for t in trades if t.leg_role == "overlay_collar_call")
@@ -204,11 +202,7 @@ def test_bootstrap_no_closing_dte_stays_current_month() -> None:
             [_candidate_row(23900, "NSE_FO|NIFTY23900PE", mid=38.0)],
         ]
 
-        _run(
-            select_and_build_collar_entry(
-                mock_broker, MagicMock(), date(2026, 8, 4), "bootstrap"
-            )
-        )
+        _run(select_and_build_collar_entry(mock_broker, MagicMock(), date(2026, 8, 4), "bootstrap"))
 
     assert lookup.get_expiry_candidates.call_count == 1
 
@@ -217,11 +211,7 @@ def test_bod_load_failure_raises() -> None:
     mock_broker = MagicMock()
     with patch(f"{_MODULE}.InstrumentLookup.from_file", side_effect=OSError("boom")):
         with pytest.raises(CollarEntrySelectionError, match="BOD load failed"):
-            _run(
-                select_and_build_collar_entry(
-                    mock_broker, MagicMock(), date(2026, 8, 4), "x"
-                )
-            )
+            _run(select_and_build_collar_entry(mock_broker, MagicMock(), date(2026, 8, 4), "x"))
 
 
 def test_no_monthly_expiry_raises() -> None:
@@ -230,11 +220,7 @@ def test_no_monthly_expiry_raises() -> None:
     mock_broker = MagicMock()
     with patch(f"{_MODULE}.InstrumentLookup.from_file", return_value=lookup):
         with pytest.raises(CollarEntrySelectionError, match="No monthly expiry"):
-            _run(
-                select_and_build_collar_entry(
-                    mock_broker, MagicMock(), date(2026, 8, 4), "x"
-                )
-            )
+            _run(select_and_build_collar_entry(mock_broker, MagicMock(), date(2026, 8, 4), "x"))
 
 
 def test_dte_gate_failure_raises() -> None:
@@ -243,11 +229,7 @@ def test_dte_gate_failure_raises() -> None:
     mock_broker = MagicMock()
     with patch(f"{_MODULE}.InstrumentLookup.from_file", return_value=lookup):
         with pytest.raises(CollarEntrySelectionError, match="DTE gate failed"):
-            _run(
-                select_and_build_collar_entry(
-                    mock_broker, MagicMock(), date(2026, 8, 4), "x"
-                )
-            )
+            _run(select_and_build_collar_entry(mock_broker, MagicMock(), date(2026, 8, 4), "x"))
 
 
 def test_ivr_history_insufficient_raises() -> None:
@@ -258,11 +240,7 @@ def test_ivr_history_insufficient_raises() -> None:
         patch(f"{_MODULE}.load_vix_series", return_value=pd.Series([15.0] * 10)),
     ):
         with pytest.raises(CollarEntrySelectionError, match="IVR history insufficient"):
-            _run(
-                select_and_build_collar_entry(
-                    mock_broker, MagicMock(), date(2026, 8, 4), "x"
-                )
-            )
+            _run(select_and_build_collar_entry(mock_broker, MagicMock(), date(2026, 8, 4), "x"))
 
 
 def test_ivr_below_gate_raises() -> None:
@@ -274,11 +252,7 @@ def test_ivr_below_gate_raises() -> None:
         patch(f"{_MODULE}.compute_ivr", return_value=0.10),
     ):
         with pytest.raises(CollarEntrySelectionError, match="IVR gate failed"):
-            _run(
-                select_and_build_collar_entry(
-                    mock_broker, MagicMock(), date(2026, 8, 4), "x"
-                )
-            )
+            _run(select_and_build_collar_entry(mock_broker, MagicMock(), date(2026, 8, 4), "x"))
 
 
 def test_chain_fetch_failure_raises() -> None:
@@ -290,11 +264,7 @@ def test_chain_fetch_failure_raises() -> None:
         patch(f"{_MODULE}.load_vix_series", return_value=_healthy_vix_series()),
     ):
         with pytest.raises(CollarEntrySelectionError, match="Chain fetch failed"):
-            _run(
-                select_and_build_collar_entry(
-                    mock_broker, MagicMock(), date(2026, 8, 4), "x"
-                )
-            )
+            _run(select_and_build_collar_entry(mock_broker, MagicMock(), date(2026, 8, 4), "x"))
 
 
 def test_empty_chain_raises() -> None:
@@ -306,11 +276,7 @@ def test_empty_chain_raises() -> None:
         patch(f"{_MODULE}.load_vix_series", return_value=_healthy_vix_series()),
     ):
         with pytest.raises(CollarEntrySelectionError, match="empty"):
-            _run(
-                select_and_build_collar_entry(
-                    mock_broker, MagicMock(), date(2026, 8, 4), "x"
-                )
-            )
+            _run(select_and_build_collar_entry(mock_broker, MagicMock(), date(2026, 8, 4), "x"))
 
 
 def test_no_viable_combo_raises() -> None:
@@ -325,8 +291,4 @@ def test_no_viable_combo_raises() -> None:
     ):
         mock_find.side_effect = [[], []]
         with pytest.raises(CollarEntrySelectionError, match="No viable collar combo"):
-            _run(
-                select_and_build_collar_entry(
-                    mock_broker, MagicMock(), date(2026, 8, 4), "x"
-                )
-            )
+            _run(select_and_build_collar_entry(mock_broker, MagicMock(), date(2026, 8, 4), "x"))

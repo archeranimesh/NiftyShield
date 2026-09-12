@@ -7,7 +7,6 @@ import pytest
 
 from src.nuvama.models import NuvamaBondHolding, NuvamaBondSummary
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -94,9 +93,7 @@ def test_holding_pnl_pct_rounds_to_2dp():
 def test_holding_day_delta_negative():
     # current_value=709800, chg_pct=-1.28 → 709800 * -1.28 / 100 = -9085.44
     h = _make_holding(qty=700, ltp="1014.00", chg_pct="-1.28")
-    expected = (Decimal("709800.00") * Decimal("-1.28") / 100).quantize(
-        Decimal("0.01")
-    )
+    expected = (Decimal("709800.00") * Decimal("-1.28") / 100).quantize(Decimal("0.01"))
     assert h.day_delta == expected
 
 
