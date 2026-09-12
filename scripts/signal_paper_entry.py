@@ -8,6 +8,12 @@ guarded tail-call at 09:30 — this script exists for the operator to re-run
 position, and a non-trading day are all logged no-ops (the SPT-2 one-open
 guard makes a re-run safe).
 
+SEC-5 keep-or-delete review (2026-09-12): deferred. The tail-call (SPT-6)
+only landed at 19:13 on 2026-09-11, after that day's 09:30 cron had already
+run without it — zero live production runs to judge reliability against.
+Keeping this script until the tail-call has an actual track record; revisit
+once it has run live for a while.
+
 Usage:
     python -m scripts.signal_paper_entry --date 2026-09-29
 """
