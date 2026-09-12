@@ -3,7 +3,7 @@
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
 spec.
 
-**Open: SEC-4.**
+**Open: SEC-5.**
 
 > **Routing:** SEC-1 / SEC-2 / SEC-3 are `Owner: Antigravity` — mechanical, airtight specs, TDD-shaped (SEC-3 is regression-fixture-gated on a byte-identical `SignalOutcome` row). Each `code-reviewer`
 > gate is a **real Claude subagent run**, not Antigravity's persona approximation — SEC-2 and SEC-3 touch signal / P&L-adjacent paths (CLAUDE.md §AutoTrigger). SEC-4 (discretionary), SEC-5 (a
@@ -22,9 +22,14 @@ spec.
   `send_test_telegram.py:65` entry dropped in the retire commit, cleaned up a misattributed noqa comment on the report-phase exception handler). Real `code-reviewer` run flagged 2 CRITICAL / 2 ERROR /
   5 WARNING on the first pass; all CRITICAL/ERROR resolved in the follow-up; targeted test set (`tests/unit/scripts/`, `tests/unit/signals/`, `tests/unit/notifications/test_escaping_guard.py`) green —
   527 passed.
-- [ ] **SEC-4** — extract `morning_signal.run()`'s pipeline body into `src/signals/pipeline.py::run_morning_signal_pipeline(...)` so `scripts/morning_signal.py` is orchestration + Telegram only.
+- [x] **SEC-4** — extract `morning_signal.run()`'s pipeline body into `src/signals/pipeline.py::run_morning_signal_pipeline(...)` so `scripts/morning_signal.py` is orchestration + Telegram only.
   Discretionary — if the body does not cleanly separate from the cron-boundary I/O, record why in the commit and tick with that note. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer |
-  SHA: <—>
+  SHA: 85b4744. Separated cleanly per spec — `MorningSignalResult` frozen dataclass carries `signal`/`snapshot`/`n_providers`/`day_cost_usd`/`n_priced` back to the script for the Telegram
+  notification. `code-reviewer` found 0 CRITICAL/ERROR, 2 WARNING (deferred, documented in the commit body): `morning_signal_complete` now logs before the Telegram send instead of after (a boundary
+  consequence, not a data change), and the new `src/signals/pipeline.py` keeps the `"scripts.morning_signal"` logger name for log-output continuity rather than switching to `__name__`.
+  Pipeline-behaviour tests moved to `tests/unit/signals/test_pipeline.py`; `tests/unit/scripts/test_morning_signal.py` now tests `run()` as pure orchestration. Fixed a stale escaping-guard baseline
+  entry (`tests/unit/notifications/test_escaping_guard.py`) whose line number moved with the extraction. Targeted set (`tests/unit/scripts/`, `tests/unit/signals/`, `tests/unit/strategy/`,
+  `tests/unit/notifications/`) green — 1342 passed.
 - [ ] **SEC-5** — review `scripts/signal_paper_entry.py` against the `morning_signal` tail-call's track record: keep it as the documented backfill tool, or delete it and fold re-entry into a
   `--replay-date` flag on `signal_eod` / a dev script. Act on the decision; update the runbook. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: <—>
 - [ ] **SEC-6** — docs close: `CONTEXT.md` `src/signals/` entrypoint list + the final crontab, `DECISIONS.md` §P&L & Reporting note on the `signal_eod` merge, `TODOS.md` session log + delete the

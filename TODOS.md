@@ -150,6 +150,12 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
   resolved in the follow-up commit, which also restored a `send_test_telegram.py:65` baseline entry
   collaterally dropped during the retire commit. Targeted test set (`tests/unit/scripts/`, `tests/unit/signals/`,
   `tests/unit/notifications/test_escaping_guard.py`) green — 527 passed.
+- [2026-09-12] SEC-4 (`docs/plan/signals-entrypoint-consolidation/`) — extracted `morning_signal.run()`'s
+  pipeline body into `src/signals/pipeline.py::run_morning_signal_pipeline` (`85b4744`); `scripts/morning_signal.py`
+  is now orchestration + Telegram only. `code-reviewer`: 0 CRITICAL/ERROR, 2 WARNING deferred (log-order shift,
+  logger-name mismatch) — no data-correctness impact. Fixed a stale escaping-guard baseline line-number entry
+  the extraction moved. Targeted set (`tests/unit/scripts/`, `tests/unit/signals/`, `tests/unit/strategy/`,
+  `tests/unit/notifications/`) green — 1342 passed.
 - [2026-09-12] Fixed 3 flaky `tests/unit/paper/test_overlay_entry.py` failures (`481f326`) —
   `_write_vix_fixture`'s `close` column was hardcoded to `rows` (252) elements while
   `pd.date_range(end=date.today(), periods=rows, freq="B")` returns fewer dates when
