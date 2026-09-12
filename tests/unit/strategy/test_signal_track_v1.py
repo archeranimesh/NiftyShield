@@ -65,6 +65,7 @@ def store(tmp_path) -> PaperStore:
 def _signal(action: TradeAction) -> SimpleNamespace:
     return SimpleNamespace(
         trade_action=action,
+        is_actionable=(action is not TradeAction.NO_TRADE),
         trade_date=_SIGNAL_DATE,
         recommended_strike=_STRIKE,
         consensus_confidence=Decimal("4"),

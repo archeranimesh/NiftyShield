@@ -139,6 +139,11 @@ class DailySignal(BaseModel, frozen=True):
     agreeing_models: list[str]
     dissenting_models: list[str]
 
+    @property
+    def is_actionable(self) -> bool:
+        """True when the consensus is a directional trade, not NO_TRADE."""
+        return self.trade_action is not TradeAction.NO_TRADE
+
 
 class SignalOutcome(BaseModel, frozen=True):
     """

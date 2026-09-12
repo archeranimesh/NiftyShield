@@ -144,3 +144,32 @@ def test_signal_usage_model_types() -> None:
 
     loaded = SignalUsage.model_validate(usage.model_dump(mode="json"))
     assert loaded == usage
+
+
+def test_daily_signal_is_actionable_true() -> None:
+    signal = DailySignal(
+        trade_date=date(2026, 4, 6),
+        responses=[],
+        consensus_direction=Direction.BULLISH,
+        consensus_confidence=Decimal("4"),
+        trade_action=TradeAction.BUY_CALL,
+        recommended_strike=22500,
+        entry_premium=Decimal("150.25"),
+        agreeing_models=[],
+        dissenting_models=[],
+    )
+    assert signal.is_actionable is True
+
+
+def test_daily_signal_is_actionable_false() -> None:
+    signal = DailySignal(
+        trade_date=date(2026, 4, 6),
+        responses=[],
+        consensus_direction=Direction.NEUTRAL,
+        consensus_confidence=Decimal("0"),
+        trade_action=TradeAction.NO_TRADE,
+        recommended_strike=None,
+        agreeing_models=[],
+        dissenting_models=[],
+    )
+    assert signal.is_actionable is False

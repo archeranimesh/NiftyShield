@@ -258,10 +258,9 @@ async def open_signal_paper_entry(
     Returns:
         The frozen ``SignalPaperEntry`` on a successful open, else ``None``.
     """
-    from src.signals.models import TradeAction as SignalTradeAction
     from src.signals.option_resolver import resolve_monthly_option
 
-    if signal.trade_action == SignalTradeAction.NO_TRADE:
+    if not signal.is_actionable:
         logger.info("signal_track.no_trade", signal_date=signal.trade_date.isoformat())
         return None
 

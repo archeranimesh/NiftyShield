@@ -43,7 +43,6 @@ from src.signals.models import (  # noqa: E402
     DailySignal,
     Direction,
     MarketSnapshot,
-    TradeAction,
 )
 from src.signals.option_resolver import resolve_monthly_option  # noqa: E402
 from src.signals.snapshot import assemble_market_snapshot  # noqa: E402
@@ -129,7 +128,7 @@ def _format_signal_notification(
     plural = "" if n_priced == 1 else "s"
     cost_line = _E(f"💵 LLM cost: {_format_usd(day_cost)} ({n_priced} call{plural})")
 
-    if signal.trade_action is TradeAction.NO_TRADE:
+    if not signal.is_actionable:
         if not signal.responses:
             return (
                 f"*{_E('🚨 SIGNAL PIPELINE FAILED')}*\n"
@@ -259,7 +258,7 @@ async def run() -> None:
 
     signal = build_aggregator().aggregate(snapshot, valid)
 
-    if signal.trade_action is not TradeAction.NO_TRADE:
+    if signal.is_actionable:
         try:
             option_key = await asyncio.to_thread(resolve_monthly_option, signal, DEFAULT_BOD_PATH)
             if option_key:

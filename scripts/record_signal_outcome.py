@@ -259,7 +259,7 @@ def main() -> None:
     executed = args.executed
     nifty_close = _to_decimal(args.nifty_close, "nifty-close")
 
-    is_trade = signal.trade_action is not TradeAction.NO_TRADE
+    is_trade = signal.is_actionable
 
     if args.auto and is_trade:
         if entry_premium is None:
