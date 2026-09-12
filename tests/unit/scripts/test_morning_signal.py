@@ -415,6 +415,7 @@ async def test_run_leaves_entry_premium_none_on_fetch_failure() -> None:
 
 
 @pytest.mark.asyncio
+@patch("scripts.morning_signal.market_today", return_value=date(2026, 9, 8))
 @patch("scripts.morning_signal.assemble_market_snapshot")
 @patch("scripts.morning_signal.build_aggregator")
 @patch("scripts.morning_signal.build_providers")
@@ -432,6 +433,7 @@ async def test_run_leaves_entry_premium_none_on_resolver_none(
     mock_build_providers: MagicMock,
     mock_signal_aggregator: MagicMock,
     mock_assemble_market_snapshot: AsyncMock,
+    mock_market_today: MagicMock,
 ) -> None:
     # (a) resolve_monthly_option returns None -> entry_premium stays None, no warning
     mock_build_notifier.return_value = AsyncMock()
@@ -468,6 +470,7 @@ async def test_run_leaves_entry_premium_none_on_resolver_none(
 
 
 @pytest.mark.asyncio
+@patch("scripts.morning_signal.market_today", return_value=date(2026, 9, 8))
 @patch("scripts.morning_signal.assemble_market_snapshot")
 @patch("scripts.morning_signal.build_aggregator")
 @patch("scripts.morning_signal.build_providers")
@@ -485,6 +488,7 @@ async def test_run_leaves_entry_premium_none_on_missing_key(
     mock_build_providers: MagicMock,
     mock_signal_aggregator: MagicMock,
     mock_assemble_market_snapshot: AsyncMock,
+    mock_market_today: MagicMock,
 ) -> None:
     # (b) get_ltp returns a dict without the key -> warning logged, entry_premium None.
     mock_build_notifier.return_value = AsyncMock()

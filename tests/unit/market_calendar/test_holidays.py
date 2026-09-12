@@ -272,3 +272,94 @@ class TestMarketToday:
 
         assert result == expected_ist_date
         assert result != fake_utc.date()  # must differ from UTC date
+
+
+# ── guard_trading_day ─────────────────────────────────────────────────────────
+
+
+class TestGuardTradingDay:
+    def test_returns_false_on_trading_day(self) -> None:
+        from unittest.mock import MagicMock, patch
+
+        import src.market_calendar.holidays as _holidays_mod
+
+        logger = MagicMock()
+        with patch.object(_holidays_mod, "market_today", return_value=date(2099, 4, 15)):
+            with patch.object(_holidays_mod, "is_trading_day", return_value=True):
+                assert _holidays_mod.guard_trading_day(logger, "test_script") is False
+                logger.info.assert_not_called()
+
+    def test_returns_true_and_logs_on_holiday(self) -> None:
+        from unittest.mock import MagicMock, patch
+
+        import src.market_calendar.holidays as _holidays_mod
+
+        logger = MagicMock()
+        with patch.object(_holidays_mod, "market_today", return_value=date(2099, 4, 18)):
+            with patch.object(_holidays_mod, "is_trading_day", return_value=False):
+                assert _holidays_mod.guard_trading_day(logger, "test_script") is True
+                logger.info.assert_called_once_with(
+                    "holiday_guard.skip",
+                    script="test_script",
+                    date="2099-04-18",
+                )
+
+
+# ── is_market_session_now ─────────────────────────────────────────────────────
+
+
+class TestIsMarketSessionNow:
+    def test_returns_false_on_holiday(self) -> None:
+        from datetime import datetime
+        from unittest.mock import patch
+        from zoneinfo import ZoneInfo
+
+        import src.market_calendar.holidays as _holidays_mod
+
+        ist = ZoneInfo("Asia/Kolkata")
+        fake_now = datetime(2099, 4, 18, 12, 0, tzinfo=ist)
+        with patch.object(_holidays_mod, "datetime") as mock_dt:
+            mock_dt.now.return_value = fake_now
+            with patch.object(_holidays_mod, "is_trading_day", return_value=False):
+                assert _holidays_mod.is_market_session_now() is False
+
+    @pytest.mark.parametrize(
+        "time_str",
+        [
+            "09:14:59",
+            "15:30:01",
+            "00:00:00",
+            "23:59:59",
+        ],
+    )
+    def test_returns_false_outside_market_hours(self, time_str: str) -> None:
+        from datetime import datetime
+        from unittest.mock import patch
+
+        import src.market_calendar.holidays as _holidays_mod
+
+        fake_now = datetime.fromisoformat(f"2099-04-15T{time_str}+05:30")
+        with patch.object(_holidays_mod, "datetime") as mock_dt:
+            mock_dt.now.return_value = fake_now
+            with patch.object(_holidays_mod, "is_trading_day", return_value=True):
+                assert _holidays_mod.is_market_session_now() is False
+
+    @pytest.mark.parametrize(
+        "time_str",
+        [
+            "09:15:00",
+            "12:00:00",
+            "15:30:00",
+        ],
+    )
+    def test_returns_true_within_market_hours(self, time_str: str) -> None:
+        from datetime import datetime
+        from unittest.mock import patch
+
+        import src.market_calendar.holidays as _holidays_mod
+
+        fake_now = datetime.fromisoformat(f"2099-04-15T{time_str}+05:30")
+        with patch.object(_holidays_mod, "datetime") as mock_dt:
+            mock_dt.now.return_value = fake_now
+            with patch.object(_holidays_mod, "is_trading_day", return_value=True):
+                assert _holidays_mod.is_market_session_now() is True

@@ -133,3 +133,39 @@ def market_today() -> date:
         The current calendar date in the IST timezone.
     """
     return datetime.now(tz=_IST).date()
+
+
+def guard_trading_day(logger: structlog.types.FilteringBoundLogger, script_name: str) -> bool:
+    """Check if today is a trading day; if not, log and return True (to exit).
+
+    Standardizes the holiday guard block across cron entrypoints.
+
+    Args:
+        logger: The structlog logger for the calling script.
+        script_name: Name of the script for the log message.
+
+    Returns:
+        True if the caller should exit (today is a holiday), False otherwise.
+    """
+    today = market_today()
+    if not is_trading_day(today):
+        logger.info("holiday_guard.skip", script=script_name, date=today.isoformat())
+        return True
+    return False
+
+
+def is_market_session_now() -> bool:
+    """Return True if current time is within active market hours on a trading day.
+
+    Market hours: 09:15 to 15:30 IST.
+
+    Returns:
+        True if the market is currently open for trading.
+    """
+    now = datetime.now(tz=_IST)
+    if not is_trading_day(now.date()):
+        return False
+
+    market_open = now.replace(hour=9, minute=15, second=0, microsecond=0)
+    market_close = now.replace(hour=15, minute=30, second=0, microsecond=0)
+    return market_open <= now <= market_close
