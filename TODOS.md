@@ -140,6 +140,19 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-12] Finished an incomplete `ruff` lint sweep found stashed from a prior session
+  (`2d7890d`) — reran `ruff check --fix` + `ruff format` across scratch/, scripts/,
+  src/portfolio/, src/strategy/, tests/unit/ (55 files) and manually resolved the 12 remaining
+  lint errors ruff couldn't autofix: 5 unused locals/vars, 4 ambiguous `l` renames to `leg`
+  (`test_apply_trade_positions.py`), a missing `zip(..., strict=True)`, and a blind
+  `assertRaises(Exception)` narrowed to `FrozenInstanceError`. Full suite green (2649 passed; 3
+  pre-existing unrelated failures in `test_overlay_entry.py`, an off-by-one in a VIX fixture
+  helper). `code-reviewer`: 0 CRITICAL/ERROR/WARNING. Separately, `tools/llm-council`'s own
+  uncommitted WIP (5 files, OpenRouter model-id updates + a `max_tokens` cap fixing 402
+  `openrouter_key_limit` errors) was committed inside that submodule's own repo (`dbce7fe`) and
+  the parent pointer bumped (`3a1bb5d`) — kept out of the lint-sweep commit per repo convention
+  that a submodule's inner tree is a separate decision. Graph re-indexed (7370 nodes / 30025
+  edges).
 - [2026-09-12] `docs/plan/signals-entrypoint-consolidation` **SEC-1** closed (`1ef2974`) — Added `market_calendar.guard_trading_day` and `is_market_session_now` helpers. Adopted `guard_trading_day` at
   the four signal script entrypoints, replacing duplicate inline logic. Adopted `is_market_session_now` inside `StrategyMonitor._tick` for its market-hours window. Unit tests updated and passing.
 - [2026-09-11] `docs/plan/signals-paper-track` **SPT-8** closed (docs-only) — story done, archived to `docs/archive/plan/signals-paper-track/`. Updated `CONTEXT.md` (`src/strategy/` bullet +
