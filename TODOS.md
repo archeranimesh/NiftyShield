@@ -266,20 +266,20 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 - [2026-09-09] signals S5.6 filed — the 09:15 "Entry band" is an LLM guess (`_consensus_entry_band`), and `record_signal_outcome --auto` books P&L against it while fetching the exit LTP on the
   *weekly* option though the strike was picked on the *monthly* chain. S5.6 (before S6): fetch + persist the real option LTP at 09:15 as the entry premium, use it for exit P&L, pin strike/entry/exit
   to one expiry (weekly vs monthly = a pre-code decision). Spec in `signals_tasks.md` / `signals_stories.md`. Docs-only.
-- [2026-09-09] signals S5.5b — NSE-holiday early-exit guard added to `scripts/morning_signal.py` (`run()`) and `scripts/signal_report.py` (`main()`): `if not is_trading_day(market_today()):
+- [2026-09-09] signals S5.5b — NSE-holiday early-exit guard added to `scripts/morning_signal.py` (`run()`) and `scripts/signal_eod.py` (`main()`): `if not is_trading_day(market_today()):
   logger.info(...); return`, mirroring `scripts/pipeline/upstox_chain_snapshot.py`. No new tests (matches existing cron pattern); `test_escaping_guard.py` baseline line numbers bumped (morning_signal
   215→218, signal_report 313→314) for the shifted `.send()` call sites. Full suite 3354 green. code-reviewer: 0 CRITICAL/ERROR, 1 WARNING (double `market_today()` call — fixed). — SHA `5466b9d`
-- [2026-09-09] signals S5.5d — `scripts/signal_report.py` now pushes the full 5-section performance report to Telegram on every run (was `print()`-only). Local `_format_report_message` wraps the body
+- [2026-09-09] signals S5.5d — `scripts/signal_eod.py` now pushes the full 5-section performance report to Telegram on every run (was `print()`-only). Local `_format_report_message` wraps the body
   in a MarkdownV2 fenced block with fence-safe escaping (backslash + backtick only — `escape_markdown` renders backslashes literally inside a fence); non-fatal `_notify` mirrors
   `record_signal_outcome._notify`, sent after `print()` and downstream of the empty-window early return. 4 tests + escaping-guard baseline entry. code-reviewer: 0 CRITICAL/ERROR, 3 WARNING (1 fixed, 2
   pre-existing/not in scope). — SHA `51d3e59`
-- [2026-09-09] signals S5.5a — `record_signal_outcome.py` now posts the daily outcome to Telegram on its 16:00 run (S5.5c vertical layout): executed / not-taken (would-be P&L derived in the formatter,
+- [2026-09-09] signals S5.5a — `signal_eod.py` now posts the daily outcome to Telegram on its 16:00 run (S5.5c vertical layout): executed / not-taken (would-be P&L derived in the formatter,
   no `SignalOutcome` change) / NO_TRADE / close-only fallback. Local `_format_outcome_notification` owns MarkdownV2 escaping; `_notify` send is non-fatal (guards `build_notifier() is None` + swallows
   formatter/send errors post-write). 4 render tests + escaping-guard baseline entry. code-reviewer: 0 CRITICAL/ERROR, 2 WARNING both fixed. — SHA `ce59529`
 - [2026-09-09] signals S5.5c — reformatted `morning_signal.py` 09:15 Telegram message to the agreed vertical layout (CONSENSUS / NO CONSENSUS / PIPELINE FAILED); `_format_signal_notification` now owns
   its MarkdownV2 escaping (caller sends without re-wrapping), entry band = mean of agreeing models' quoted bands. 3 formatter render tests + escaping-guard baseline entry.
 - [2026-09-09] signals — restructured `signals_tasks.md` into "Remaining work — in order" (S5.5c → S5.5a → S5.5d → S5.5b → S6 + summary table) and "Completed". 4ec58c6.
-- [2026-09-09] signals S5.5a design — revived (was superseded → SPT-5) as the Phase-1 interim 16:00 outcome message; `record_signal_outcome.py` currently sends nothing. Restyled messages 6–8 in
+- [2026-09-09] signals S5.5a design — revived (was superseded → SPT-5) as the Phase-1 interim 16:00 outcome message; `signal_eod.py` currently sends nothing. Restyled messages 6–8 in
   `scratch/2026-09-08_signal_telegram_messages.py` to the S5.5c vertical layout (executed / not-taken with would-be P&L / NO_TRADE); would-be P&L derived in the formatter, no `SignalOutcome` change.
   Docs: signals_tasks.md, signals_stories.md §S5.5a, signals-paper-track/stories.md SPT-5/SPT-8, DECISIONS.md, TODOS.md. Implementation pending.
 - [2026-09-09] signals S5.5 — rollout state recorded (discussion, no code): all 3 crons already live on the Mac host, so the cron-enablement runbook was dropped; rollout phase = Phase 1
@@ -292,10 +292,10 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
   deferred WARNING). B041.3–B041.6 remain. — SHA `f1fad55`
 - [2026-09-08] BUG-041 B041.2b — provider payloads: `max_tokens` 512→2048, default `timeout` 30→60s so the reasoning models `~x-ai/grok-latest` / `~openai/gpt-latest` don't time out or return null
   content. Probe: `scratch/2026-09-08_signal_model_probe.py`. Live `morning_signal` now gets 3/3 responses. Suite green (3334), code-reviewer 0 ERROR/CRITICAL. — SHA `9a2e9d3`
-- [2026-09-08] signals S5.4 — `scripts/signal_report.py` on-demand performance report: aggregates `get_all_outcomes` over a `--from`/`--to`/`--phase` window into OVERALL (win rate, realised EV,
+- [2026-09-08] signals S5.4 — `scripts/signal_eod.py` on-demand performance report: aggregates `get_all_outcomes` over a `--from`/`--to`/`--phase` window into OVERALL (win rate, realised EV,
   deterministic md5 coin-flip baseline), per-model direction accuracy (09:10 snapshot spot as open proxy), confidence calibration, NO_TRADE move check, phase breakdown. No unit tests (per S5.4 spec).
   — SHA: <pending>
-- [2026-09-08] signals S5.3 — `scripts/record_signal_outcome.py` 03:00 PM outcome recorder: reads the day's `DailySignal`, captures entry/exit premium (manual flags or `--auto` weekly-expiry BOD
+- [2026-09-08] signals S5.3 — `scripts/signal_eod.py` 03:00 PM outcome recorder: reads the day's `DailySignal`, captures entry/exit premium (manual flags or `--auto` weekly-expiry BOD
   lookup + live LTP), writes one `SignalOutcome` row; NO_TRADE / non-executed signals still logged for direction accuracy. `phase` from `SIGNAL_PHASE` env / key-set. No unit tests (per S5.3 spec). —
   a387349
 - [2026-09-08] signals S5.2 — `scripts/morning_signal.py` 09:15 AM cron: pure wiring over `assemble_market_snapshot` → `build_providers` → `asyncio.gather` fan-out (return_exceptions) →

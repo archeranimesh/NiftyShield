@@ -1044,7 +1044,7 @@ Verification (per `docs/plan/technical-debt/stories.md` DEBT-8/-9/-10/-12 common
 single post-remediation hit closed out the slug's Count-5 escalation and it was drained from `suggestions.md` (`ef8f555`) into this DEBT-15 line — it has not recurred in any of the dozens of sessions
 since (S5.3 through S5.6, S6, SCT-1..4, SPT-1..6, ROLL-5..17, BUG-040..046, DEBT-8/-9/-10/-11/-12/-13/-14), well past the 3-session check window `tasks.md` sets. Like DEBT-12 (and unlike
 DEBT-8/DEBT-9's warn-only hooks), this remediation is a staged pre-commit blocker: the one cited recurrence shows the check firing and the commit actually aborting before landing — `tasks.md`'s own
-note that it "caught the S5.3 case (`✗ ruff-format` on `record_signal_outcome.py`) before the commit" confirms the same behavior on the very next session. The check is doing its job — no unformatted
+note that it "caught the S5.3 case (`✗ ruff-format` on `signal_eod.py`) before the commit" confirms the same behavior on the very next session. The check is doing its job — no unformatted
 `.py` has reached a commit since `2b85b84`. What recurs (once) is a pre-stage checklist gap (`ruff check` run without `ruff format --check`), not a hook failure.
 
 **Decision (Animesh):** no further hook change. The blocker is a real, firing, effective backstop — the residual cost is a re-stage cycle when pre-stage discipline skips `ruff format --check`, which

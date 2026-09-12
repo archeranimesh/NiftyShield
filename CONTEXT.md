@@ -53,7 +53,7 @@ Top-level `src/` packages, one line each (detail → `CONTEXT_TREE.md`):
   OpenRouter + `build_providers` factory. Each provider response records OpenRouter token usage + USD cost (`signal_responses.prompt_tokens`/`completion_tokens`/`cost_usd`,
   inline `usage.include`; `NULL` for mock / Google-SDK paths), aggregated by `SignalStore.get_signal_cost()` and surfaced as today's total on the 09:30 message (`signals-cost-tracking/`,
   cost data trustworthy from 2026-09-11). All three crons live on the Mac host (Phase 1 `openrouter_only`): `scripts/morning_signal.py` 09:30,
-  `scripts/record_signal_outcome.py --auto` 16:00, `scripts/signal_report.py` 16:35 (Mon–Fri), each pushing a Telegram message.
+  `scripts/signal_eod.py --auto` 16:00, `scripts/signal_eod.py` 16:35 (Mon–Fri), each pushing a Telegram message.
 - `src/risk/` — portfolio-level delta controls: `PortfolioDelta` frozen dataclass,
   `PortfolioDeltaTracker.aggregate_delta(...)` (chain-derived `position_deltas` used as-is, else
   CE/PE approximation with logged WARNING; pure/zero-I/O per council 2026-07-02),

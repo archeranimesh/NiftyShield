@@ -16,9 +16,9 @@ spec.
   `record_signal_outcome`, `signal_report`, `signal_track_v1`). | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: 0202291 (`819306b` — follow-up fix for escaping-guard baseline
   line-number drift caused by the unused-import removal). `signal_report`'s two `NO_TRADE` checks operate on `SignalOutcome`, not `DailySignal` — left untouched (out of this task's authorized scope:
   `DailySignal.is_actionable` property only); only three of the four named call sites (`morning_signal`, `record_signal_outcome`, `signal_track_v1`) were refactored.
-- [ ] **SEC-3** — merge `scripts/record_signal_outcome.py` + `scripts/signal_report.py` → `scripts/signal_eod.py` (phase 1 = write the `SignalOutcome` row via the current `--auto` logic, unchanged;
-  phase 2 = the report), one 16:00 cron, one `guard_trading_day`. Retire the two old crontab lines, add the one new line. Keep `--auto` / report-only flags for manual use. | Owner: Antigravity |
-  Model: n/a | Review: code-reviewer | SHA: <—>
+- [ ] **SEC-3** — merge `scripts/signal_eod.py` + `scripts/signal_eod.py` → `scripts/signal_eod.py` (phase 1 = write the `SignalOutcome` row via the current `--auto` logic, unchanged; phase 2 = the
+  report), one 16:00 cron, one `guard_trading_day`. Retire the two old crontab lines, add the one new line. Keep `--auto` / report-only flags for manual use. | Owner: Antigravity | Model: n/a |
+  Review: code-reviewer | SHA: <—>
 - [ ] **SEC-4** — extract `morning_signal.run()`'s pipeline body into `src/signals/pipeline.py::run_morning_signal_pipeline(...)` so `scripts/morning_signal.py` is orchestration + Telegram only.
   Discretionary — if the body does not cleanly separate from the cron-boundary I/O, record why in the commit and tick with that note. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer |
   SHA: <—>

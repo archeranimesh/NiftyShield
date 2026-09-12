@@ -175,18 +175,6 @@ def scan_call_sites() -> list[CallSite]:
 # task names (flagged "untracked gap" - worth a future task, not this one).
 # (file, line): reason
 _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
-    ("scripts/record_signal_outcome.py", 230): "temp",
-    ("scripts/signal_report.py", 314): "temp",
-    ("scripts/signal_eod.py", 230): "temp",
-    ("scripts/signal_eod.py", 439): "temp",
-    (
-        "scripts/dev/send_test_telegram.py",
-        65,
-    ): (
-        "won't-fix (confirmed 2026-08-25, Animesh) - manual dev/debug utility invoked ad hoc "
-        "by whoever's testing, not a cron or strategy event path; deliberately excluded from "
-        "MD-7.1/MD-7.2/MD-7.3"
-    ),
     ("scripts/eod_summary.py", 200): (
         "heuristic limitation, not a real gap - ROLL-6 migrated this (SHA on the task "
         "line); the message is built and fully escaped inside build_eod_summary_message() "

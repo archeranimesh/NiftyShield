@@ -18,8 +18,8 @@
   - `is_market_session_now(now: datetime | None = None) -> bool` — `True` iff `now` (default
     `market_now()`) is a trading day and the time is within 09:15–15:30 IST. `StrategyMonitor`
     currently inlines this window check in `_tick`.
-- **Adopt** in `scripts/morning_signal.py`, `scripts/signal_report.py`, `scripts/signal_paper_entry.py`, and `src/strategy/monitor.py` (the `_tick` session check → `is_market_session_now`).
-  `record_signal_outcome` adopts it via SEC-3's `signal_eod` merge — if SEC-3 is not yet done, add the guard to `record_signal_outcome.py` directly here and SEC-3 carries it into the merged script.
+- **Adopt** in `scripts/morning_signal.py`, `scripts/signal_eod.py`, `scripts/signal_paper_entry.py`, and `src/strategy/monitor.py` (the `_tick` session check → `is_market_session_now`).
+  `record_signal_outcome` adopts it via SEC-3's `signal_eod` merge — if SEC-3 is not yet done, add the guard to `signal_eod.py` directly here and SEC-3 carries it into the merged script.
 
 **Before any code:** `get_code_snippet("is_trading_day")`, `get_code_snippet("market_today")`, `search_graph("market_now")`, `get_code_snippet("_tick")` (the monitor window check),
 `search_code("is_trading_day\\(market_today")` (every current call site).
@@ -58,20 +58,20 @@ not write the `_make_*` from memory). One regression test per refactored call si
 
 ## SEC-3 — Merge the two EOD scripts
 
-**Intent:** `record_signal_outcome.py --auto` (16:00) and `signal_report.py` (16:35) run 35 minutes apart only so the outcome row is written before the report reads it. One script, one cron, one guard
-— with the idealized `SignalOutcome` baseline row written exactly as today.
+**Intent:** `signal_eod.py --auto` (16:00) and `signal_eod.py` (16:35) run 35 minutes apart only so the outcome row is written before the report reads it. One script, one cron, one guard — with the
+idealized `SignalOutcome` baseline row written exactly as today.
 
 - **`scripts/signal_eod.py`** — `_SCRIPT_NAME = "scripts.signal_eod"`. `guard_trading_day` once at the top. Then:
-  1. **Record phase** — the current `record_signal_outcome.py --auto` body verbatim: resolve
+  1. **Record phase** — the current `signal_eod.py --auto` body verbatim: resolve
      the monthly option via `resolve_monthly_option`, fetch the 15:00 LTP, compute the
      held-to-close counterfactual, write the `SignalOutcome` row. This is the frictionless
      baseline — it is **not** the paper track and must not read `paper_*` tables.
-  2. **Report phase** — the current `signal_report.py` body: aggregate, render, push the
+  2. **Report phase** — the current `signal_eod.py` body: aggregate, render, push the
      Telegram digest.
 A failure in the record phase is logged and the report phase still runs (mirrors the existing cron-boundary isolation).
 - **Flags** — keep `--auto` (record only) and add `--report-only` for manual re-runs; default (no flag) = both phases.
-- **Retire** `scripts/record_signal_outcome.py` and `scripts/signal_report.py` (git rm) once `signal_eod.py` covers them. Update every doc reference (`CONTEXT.md`, `DECISIONS.md`, `LOGGING.md` if it
-  names them, the runbook).
+- **Retire** `scripts/signal_eod.py` and `scripts/signal_eod.py` (git rm) once `signal_eod.py` covers them. Update every doc reference (`CONTEXT.md`, `DECISIONS.md`, `LOGGING.md` if it names them, the
+  runbook).
 - **Crontab** — remove the `16:00 record_signal_outcome` and `16:35 signal_report` lines; add one `16:00 signal_eod` line. Deliver the exact replacement block.
 
 **Keeps both signals:** the paper track (SPT, on `PaperStore`) and the idealized `SignalOutcome` baseline (here, on `SignalStore`) stay separate series measuring different things — the merge is of two
