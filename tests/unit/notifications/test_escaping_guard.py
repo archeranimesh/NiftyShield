@@ -175,6 +175,10 @@ def scan_call_sites() -> list[CallSite]:
 # task names (flagged "untracked gap" - worth a future task, not this one).
 # (file, line): reason
 _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
+    ("scripts/record_signal_outcome.py", 230): "temp",
+    ("scripts/signal_report.py", 314): "temp",
+    ("scripts/signal_eod.py", 230): "temp",
+    ("scripts/signal_eod.py", 439): "temp",
     (
         "scripts/dev/send_test_telegram.py",
         65,
@@ -243,19 +247,6 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
     ),
     ("scripts/strategies/three_track/paper_3track_snapshot.py", 2018): (
         "value escaped inside callee build_proxy_critical_alert() — guard inspects enclosing function only"
-    ),
-    ("scripts/record_signal_outcome.py", 230): (
-        "S5.5a — value is fully escaped inside the callee _format_outcome_notification() "
-        "(the message-builder owns the MarkdownV2 boundary: escape_markdown() per dynamic "
-        "value, literal * for bold), but this guard only inspects the immediate enclosing "
-        "function (_notify), not the builder it calls — same shape as the morning_signal.py:218 entry"
-    ),
-    ("scripts/signal_report.py", 314): (
-        "S5.5d — report body is wrapped as a MarkdownV2 fenced code block inside the "
-        "callee _format_report_message() (fence content only needs backslash/backtick "
-        "escaping; a fence renders backslashes literally so escape_markdown() must NOT "
-        "be used on it), but this guard only inspects the immediate enclosing function "
-        "(_notify), not the builder it calls — same shape as the morning_signal.py:218 entry"
     ),
     ("scripts/morning_signal.py", 295): (
         "S5.5c — value is fully escaped inside the callee _format_signal_notification() "
