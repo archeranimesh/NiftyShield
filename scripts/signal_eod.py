@@ -614,8 +614,6 @@ def main() -> None:
     if do_report:
         try:
             run_report_phase(args)
-        # Intent: isolate record failure so report still runs.
-        # noqa BLE001: catch-all needed to prevent cron death on formatting/network errors.
         # Intent: convert uncaught report failure to clean exit(1).
         # noqa BLE001: catch-all needed to log before exit.
         except Exception as exc:  # noqa: BLE001
