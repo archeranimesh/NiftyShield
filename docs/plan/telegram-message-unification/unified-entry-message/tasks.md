@@ -3,12 +3,12 @@
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
 spec.
 
-**Open: UEM-1, UEM-2, UEM-3.**
+**Open: UEM-2, UEM-3.**
 
-- [ ] **UEM-1** — Generalize `ic_entry_message.py` → `entry_message.py` (`EntryMessage` +
+- [x] **UEM-1** — Generalize `ic_entry_message.py` → `entry_message.py` (`EntryMessage` +
       `format_entry_message`, `headline_label` field, optional `ivr`/`mode`/`expiry_type`); migrate
       both IC call sites; rename the test file.
-      | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
+      | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 08fd78c
 - [ ] **UEM-2** — CSP / CC lean entry card from `record_paper_trade.py` behind `--notify` (headline
       chosen from `--strategy`), on a successful open only (no-op on close / roll), via
       `TelegramNotifier`, non-fatal on send failure.

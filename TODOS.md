@@ -134,6 +134,15 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-12] UEM-1 (`docs/plan/telegram-message-unification/unified-entry-message/`) — generalized
+  `src/notifications/ic_entry_message.py` → `entry_message.py` (`EntryMessage` + `format_entry_message`,
+  `headline_label` field replaces the `strategy_name` v1/v2 marker, `ivr`/`mode`/`expiry_type` made
+  optional, `dte`/`spot`/`net_credit`/`expiry` stay required); migrated both IC call sites
+  (`paper_ic_entry.py`, `paper_ic_entry_v2.py`); renamed `test_ic_entry_message.py` →
+  `test_entry_message.py` (8 existing assertions kept, 2 new for optional-IVR behavior). IC output
+  byte-identical, confirmed by `code-reviewer`. Antigravity-implemented (`08fd78c`); real `code-reviewer`
+  run flagged 1 ERROR (stale `ic_entry_message.py` reference in `src/notifications/CLAUDE.md`, fixed by
+  Claude in the same commit) and 3 cosmetic WARNINGs (deferred). 119/119 notifications tests green.
 - [2026-09-12] SEC-3 (`docs/plan/signals-entrypoint-consolidation/`) — merged `scripts/record_signal_outcome.py`
   + `scripts/signal_report.py` into `scripts/signal_eod.py` (one 16:00 cron, one `guard_trading_day`,
   `--auto`/`--report-only` flags; a record-phase exception no longer blocks the report phase). Old scripts +
