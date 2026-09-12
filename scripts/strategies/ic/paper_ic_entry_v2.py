@@ -51,8 +51,8 @@ from src.instruments.strike_selector import (
     filter_strikes_by_delta,
     rank_strikes,
 )
+from src.notifications.entry_message import EntryMessage, format_entry_message
 from src.notifications.formatting import LegRow
-from src.notifications.ic_entry_message import ICEntryMessage, format_ic_entry_message
 from src.notifications.markdown import escape_markdown
 from src.notifications.telegram import build_notifier
 from src.notifications.telegram_gateway import TelegramGateway
@@ -712,9 +712,9 @@ async def run() -> None:
             ("Short", short_call, "CE"),
             ("Long", long_call, "CE"),
         ]
-        msg = format_ic_entry_message(
-            ICEntryMessage(
-                strategy_name=strategy_name,
+        msg = format_entry_message(
+            EntryMessage(
+                headline_label="IC v2",
                 expiry_type=args.expiry_type,
                 expiry=date.fromisoformat(expiry_str),
                 mode=None,

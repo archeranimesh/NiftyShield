@@ -42,8 +42,8 @@ from src.instruments.strike_selector import (
     rank_strikes,
 )
 from src.intraday.market_store import IntradayMarketStore
+from src.notifications.entry_message import EntryMessage, format_entry_message
 from src.notifications.formatting import LegRow
-from src.notifications.ic_entry_message import ICEntryMessage, format_ic_entry_message
 from src.notifications.markdown import escape_markdown
 from src.notifications.telegram import build_notifier
 from src.notifications.telegram_gateway import TelegramGateway
@@ -794,9 +794,9 @@ async def run() -> None:
             ("Short", short_call["strike"], "CE", short_call),
             ("Long", long_call_strike, "CE", long_call),
         ]
-        msg = format_ic_entry_message(
-            ICEntryMessage(
-                strategy_name=config.strategy_name,
+        msg = format_entry_message(
+            EntryMessage(
+                headline_label="IC v1",
                 expiry_type=args.expiry_type,
                 expiry=expiry_date,
                 mode=mode,

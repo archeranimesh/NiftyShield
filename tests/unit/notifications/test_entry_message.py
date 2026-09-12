@@ -1,4 +1,4 @@
-"""Tests for the unified IC entry confirmation renderer (ROLL-17)."""
+"""Tests for the unified entry confirmation renderer (UEM-1)."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from decimal import Decimal
 
 import pytest
 
+from src.notifications.entry_message import EntryMessage, format_entry_message
 from src.notifications.formatting import LegRow
-from src.notifications.ic_entry_message import ICEntryMessage, format_ic_entry_message
 from src.notifications.markdown import MARKDOWNV2_RESERVED
 
 _LEGS = [
@@ -19,9 +19,9 @@ _LEGS = [
 ]
 
 
-def _msg(**overrides) -> ICEntryMessage:
+def _msg(**overrides) -> EntryMessage:
     base = dict(
-        strategy_name="paper_ic_nifty_v1_weekly",
+        headline_label="IC v1",
         expiry_type="weekly",
         expiry=date(2026, 9, 9),
         mode="standalone",
@@ -32,11 +32,11 @@ def _msg(**overrides) -> ICEntryMessage:
         legs=_LEGS,
     )
     base.update(overrides)
-    return ICEntryMessage(**base)
+    return EntryMessage(**base)
 
 
 def test_happy_path_full_structure_in_order() -> None:
-    out = format_ic_entry_message(_msg()).splitlines()
+    out = format_entry_message(_msg()).splitlines()
     assert out[0] == "✅ *IC v1 Entry* — weekly"
     assert out[1] == "*Mode:* standalone"
     assert out[2].startswith("*IVR:* 0") and "*DTE:* 4" in out[2] and "*Exp:* 09 SEP 26" in out[2]
@@ -48,23 +48,23 @@ def test_happy_path_full_structure_in_order() -> None:
 
 
 def test_mode_none_omits_mode_line() -> None:
-    out = format_ic_entry_message(_msg(mode=None)).splitlines()
+    out = format_entry_message(_msg(mode=None)).splitlines()
     assert not any(ln.startswith("*Mode:*") for ln in out)
     assert out[0].startswith("✅ ")
     assert out[1].startswith("*IVR:*")  # kv row directly after headline
 
 
-def test_headline_marker_from_strategy_name() -> None:
-    assert format_ic_entry_message(_msg(strategy_name="paper_ic_nifty_v2_monthly")).startswith(
-        "✅ *IC v2 Entry* — "
+def test_headline_uses_headline_label() -> None:
+    assert format_entry_message(_msg(headline_label="IC v2", expiry_type="monthly")).startswith(
+        "✅ *IC v2 Entry* — monthly"
     )
-    assert format_ic_entry_message(_msg(strategy_name="paper_ic_nifty_v1_weekly")).startswith(
-        "✅ *IC v1 Entry* — "
+    assert format_entry_message(_msg(headline_label="IC v1", expiry_type="weekly")).startswith(
+        "✅ *IC v1 Entry* — weekly"
     )
 
 
 def test_leg_rows_badge_and_spaced_instrument() -> None:
-    out = format_ic_entry_message(_msg())
+    out = format_entry_message(_msg())
     fence = out.split("```")[1].splitlines()
     body = [ln for ln in fence if ln.startswith(("[S]", "[B]"))]
     assert len(body) == 4
@@ -74,14 +74,14 @@ def test_leg_rows_badge_and_spaced_instrument() -> None:
 
 
 def test_delta_via_format_greek_signed_2dp() -> None:
-    out = format_ic_entry_message(_msg())
+    out = format_entry_message(_msg())
     fence = out.split("```")[1]
     assert "-0.19" in fence and "+0.22" in fence
     assert "0.190" not in fence  # not the old 3dp abs() rendering
 
 
 def test_net_credit_line_uses_format_money_both_sides() -> None:
-    out = format_ic_entry_message(_msg()).splitlines()[-1]
+    out = format_entry_message(_msg()).splitlines()[-1]
     # ₹103.40/lot  ×65 = ₹6,721.00 — with reserved chars escaped
     assert "/lot" in out and "×65" in out
     assert "6,721" in out.replace("\\", "")
@@ -89,7 +89,7 @@ def test_net_credit_line_uses_format_money_both_sides() -> None:
 
 
 def test_reserved_chars_escaped_outside_fence() -> None:
-    out = format_ic_entry_message(_msg())
+    out = format_entry_message(_msg())
     head, _, rest = out.partition("```")
     tail = rest.split("```", 1)[1]
     for segment in (head, tail):
@@ -105,4 +105,36 @@ def test_reserved_chars_escaped_outside_fence() -> None:
 
 def test_empty_legs_raises() -> None:
     with pytest.raises(ValueError):
-        format_ic_entry_message(_msg(legs=[]))
+        format_entry_message(_msg(legs=[]))
+
+
+def test_single_leg_no_ivr_omits_ivr_segment() -> None:
+    msg = _msg(
+        headline_label="CSP",
+        ivr=None,
+        expiry_type=None,
+        mode=None,
+        legs=[LegRow(role="Short", instrument="23500 PE", delta=-0.19, ltp=70.8, entry=103.4)],
+    )
+    out = format_entry_message(msg).splitlines()
+    assert out[0] == "✅ *CSP Entry*"
+    assert "*IVR:*" not in "\n".join(out)
+
+    fence = "\n".join(out).split("```")[1].splitlines()
+    body = [ln for ln in fence if ln.startswith(("[S]", "[B]"))]
+    assert len(body) == 1
+    assert body[0].startswith("[S] 23500 PE")
+
+
+def test_ivr_present_renders_ivr_segment() -> None:
+    msg = _msg(
+        headline_label="CSP",
+        ivr=0.14,
+        expiry_type=None,
+        mode=None,
+        legs=[LegRow(role="Short", instrument="23500 PE", delta=-0.19, ltp=70.8, entry=103.4)],
+    )
+    out = format_entry_message(msg).splitlines()
+    assert out[0] == "✅ *CSP Entry*"
+    # Note: escaped 0.14 is 0\.14
+    assert "*IVR:* 0\\.14" in "\n".join(out)

@@ -1,14 +1,9 @@
-"""IC entry confirmation message — one MarkdownV2 fenced-table renderer for v1 and v2.
+"""Shared entry-confirmation renderer for paper strategies (IC, CSP, CC, etc.).
 
 ROLL-17 (`docs/plan/telegram-markdown-migration/strategy-rollout/stories.md`). Design closed
 2026-09-06 via a `message-format-workshop.md` session; reference implementation
 `scratch/2026-09-06_ic_entry_confirmation_format.py`.
-
-Before ROLL-17, `paper_ic_entry.py` and `paper_ic_entry_v2.py` each hand-rolled the "✅ …
-Entry" success message as an independent f-string that had drifted apart in both content and
-layout (v1 had a `Mode:` line, v2 none; v1 used `format_option_label()`, v2 a bare
-`{int(strike)}PE` — a live violation of `src/notifications/CLAUDE.md` §"Instrument Label
-Formatting"). This module is the single renderer both scripts now call.
+Originally built for IC, generalized in UEM-1.
 
 The confirmed message is a fenced `build_leg_table()` table — `LegRow` reused verbatim, no
 parallel leg model. Every dynamic value passes through `escape_markdown()`; the fenced block
@@ -27,62 +22,64 @@ from src.paper.constants import LOT_SIZE
 
 
 @dataclass
-class ICEntryMessage:
-    """Data for one IC entry confirmation, transport-agnostic.
+class EntryMessage:
+    """Data for one entry confirmation, transport-agnostic.
 
     Attributes:
-        strategy_name: Full strategy id (e.g. ``paper_ic_nifty_v2_monthly``); only used to
-            derive the ``v1``/``v2`` headline marker (``"v2" in strategy_name``).
-        expiry_type: ``"weekly"`` / ``"monthly"`` — shown after the em-dash in the headline.
+        headline_label: Rendered in the headline, e.g. ``"IC v1"``, ``"CSP"``, ``"CC"``.
         expiry: Contract expiry date; rendered once in the kv row via ``format_expiry``.
-        ivr: Implied volatility rank at entry.
         dte: Days to expiry at entry.
         spot: Nifty spot at entry.
         net_credit: Per-lot net credit (Decimal, monetary).
-        mode: ``"standalone"`` / ``"concurrent"`` for v1, or ``None`` for v2 (no ``Mode:``
-            line emitted when ``None``).
-        legs: The four IC legs as ``LegRow`` rows, in send order (short put, long put,
-            short call, long call).
+        ivr: Implied volatility rank at entry. Optional — omitted when not in scope (e.g. CSP entry).
+        mode: Optional ``"standalone"`` / ``"concurrent"`` (e.g. IC v1); no ``Mode:`` line when ``None``.
+        expiry_type: Optional ``"weekly"`` / ``"monthly"`` — shown after em-dash if present.
+        legs: 1..N legs in send order as ``LegRow`` rows.
     """
 
-    strategy_name: str
-    expiry_type: str
+    headline_label: str
     expiry: date
-    ivr: float
     dte: int
     spot: float
     net_credit: Decimal
+    ivr: float | None = None
     mode: str | None = None
+    expiry_type: str | None = None
     legs: list[LegRow] = field(default_factory=list)
 
 
-def _headline(msg: ICEntryMessage) -> str:
-    """``✅ *IC v1 Entry* — {expiry_type}`` — bold marker, escaped type (workshop #E)."""
-    ver = "v2" if "v2" in msg.strategy_name else "v1"
-    return f"✅ *IC {ver} Entry* — {escape_markdown(msg.expiry_type)}"
+def _headline(msg: EntryMessage) -> str:
+    """``✅ *<label> Entry*[ — <expiry_type>]`` — bold marker, optional escaped type."""
+    out = f"✅ *{escape_markdown(msg.headline_label)} Entry*"
+    if msg.expiry_type is not None:
+        out += f" — {escape_markdown(msg.expiry_type)}"
+    return out
 
 
-def _kv_row(msg: ICEntryMessage) -> str:
-    """One line: ``*IVR:* … *DTE:* … *Nifty:* … *Exp:* …`` (workshop #C)."""
-    return "  ".join(
+def _kv_row(msg: EntryMessage) -> str:
+    """One line: ``[*IVR:* …] *DTE:* … *Nifty:* … *Exp:* …`` (workshop #C)."""
+    parts = []
+    if msg.ivr is not None:
+        parts.append(f"*IVR:* {escape_markdown(f'{msg.ivr:.2f}')}")
+    parts.extend(
         [
-            f"*IVR:* {escape_markdown(f'{msg.ivr:.2f}')}",
             f"*DTE:* {escape_markdown(str(msg.dte))}",
             f"*Nifty:* {escape_markdown(f'{msg.spot:,.0f}')}",
             f"*Exp:* {escape_markdown(format_expiry(msg.expiry))}",
         ]
     )
+    return "  ".join(parts)
 
 
-def _credit_line(msg: ICEntryMessage) -> str:
+def _credit_line(msg: EntryMessage) -> str:
     """``💰 *Net credit:* ₹X/lot  ×65 = ₹Y`` — both values via ``format_money`` (#D)."""
     per_lot = escape_markdown(format_money(msg.net_credit))
     total = escape_markdown(format_money(msg.net_credit * LOT_SIZE))
     return f"💰 *Net credit:* {per_lot}/lot  ×{LOT_SIZE} \\= {total}"
 
 
-def format_ic_entry_message(msg: ICEntryMessage) -> str:
-    """Render an ``ICEntryMessage`` to a MarkdownV2 string.
+def format_entry_message(msg: EntryMessage) -> str:
+    """Render an ``EntryMessage`` to a MarkdownV2 string.
 
     Layout: bold headline, optional ``*Mode:*`` line, one-line kv row, a blank line, the
     fenced ``build_leg_table()`` block, a blank line, the net-credit line.
