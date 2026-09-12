@@ -37,7 +37,7 @@ spec.
   as-is (already uses `guard_trading_day` + `is_actionable` per SEC-1/SEC-2); documented the deferral and rationale in its module docstring. `code-reviewer`: 0 CRITICAL/0 ERROR/0 WARNING
   (docstring-only diff). Revisit once the tail-call has an actual track record.
 - [x] **SEC-6** — docs close: `CONTEXT.md` `src/signals/` entrypoint list + the final crontab, `DECISIONS.md` §P&L & Reporting note on the `signal_eod` merge, `TODOS.md` session log + delete the
-  backlog pointer, `docs/plan/README.md` status → ✅ Archived; archive per §Conventions. | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: `<pending>`. Also found and fixed a live
+  backlog pointer, `docs/plan/README.md` status → ✅ Archived; archive per §Conventions. | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: `cea8a9f`/`681f2e2`. Also found and fixed a live
   crontab gap: the Mac host still ran the two SEC-3-retired scripts; Animesh applied the corrected single 16:00 `scripts.signal_eod` line manually, verified via `crontab -l`.
 
 ## Story done when
