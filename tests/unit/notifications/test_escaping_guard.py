@@ -251,21 +251,20 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "function (_notify), not the builder it calls — same shape as the morning_signal.py:218 entry"
     ),
     ("scripts/signal_report.py", 314): (
-        "documented exception: 15:00 summary block. Values are static text or purely "
-        "MarkdownV2 fenced code block inside the "
+        "S5.5d — report body is wrapped as a MarkdownV2 fenced code block inside the "
         "callee _format_report_message() (fence content only needs backslash/backtick "
         "escaping; a fence renders backslashes literally so escape_markdown() must NOT "
         "be used on it), but this guard only inspects the immediate enclosing function "
         "(_notify), not the builder it calls — same shape as the morning_signal.py:218 entry"
     ),
-    ("scripts/morning_signal.py", 296): (
+    ("scripts/morning_signal.py", 295): (
         "S5.5c — value is fully escaped inside the callee _format_signal_notification() "
         "(the message-builder owns the MarkdownV2 boundary: escape_markdown() per dynamic "
         "value, literal * for bold), but this guard only inspects the immediate enclosing "
         "function (run), not the builder it calls — same shape as the scripts/eod_summary.py:200 entry. "
         "Line moved from 282 -> 296 by SPT-6's paper-entry tail-call above it."
     ),
-    ("src/strategy/signal_track_v1.py", 379): (
+    ("src/strategy/signal_track_v1.py", 378): (
         "SPT-3 — value is fully escaped inside the callee build_signal_entry_message() "
         "(the message-builder owns the MarkdownV2 boundary: escape_markdown() per dynamic "
         "value + literal * for bold, fenced table content passed through verbatim), but "
@@ -273,7 +272,7 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "not the builder it calls — same shape as the scripts/morning_signal.py:282 entry. "
         "Line moved from 293 -> 379 by SPT-5's new imports/helpers above it."
     ),
-    ("src/strategy/signal_track_v1.py", 646): (
+    ("src/strategy/signal_track_v1.py", 645): (
         "SPT-5 — value is fully escaped inside the callee build_signal_exit_message() "
         "(same MarkdownV2-boundary shape as the SPT-3 entry above: escape_markdown() per "
         "dynamic value + literal * for bold, fenced table content passed through verbatim), "
