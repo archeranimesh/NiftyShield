@@ -1547,7 +1547,7 @@ def _write_vix_fixture(vix_dir: Path, rows: int = 252) -> None:
 
     vix_dir.mkdir(parents=True, exist_ok=True)
     dates = pd.date_range(end=date.today(), periods=rows, freq="B").date
-    df = pd.DataFrame({"date": dates, "close": [15.0] * rows})
+    df = pd.DataFrame({"date": dates, "close": [15.0] * len(dates)})
     df.to_parquet(vix_dir / "india_vix_fixture.parquet")
 
 
