@@ -3,7 +3,7 @@
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
 spec.
 
-**Open: SEC-3.**
+**Open: SEC-4.**
 
 > **Routing:** SEC-1 / SEC-2 / SEC-3 are `Owner: Antigravity` — mechanical, airtight specs, TDD-shaped (SEC-3 is regression-fixture-gated on a byte-identical `SignalOutcome` row). Each `code-reviewer`
 > gate is a **real Claude subagent run**, not Antigravity's persona approximation — SEC-2 and SEC-3 touch signal / P&L-adjacent paths (CLAUDE.md §AutoTrigger). SEC-4 (discretionary), SEC-5 (a
@@ -16,9 +16,12 @@ spec.
   `record_signal_outcome`, `signal_report`, `signal_track_v1`). | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: 0202291 (`819306b` — follow-up fix for escaping-guard baseline
   line-number drift caused by the unused-import removal). `signal_report`'s two `NO_TRADE` checks operate on `SignalOutcome`, not `DailySignal` — left untouched (out of this task's authorized scope:
   `DailySignal.is_actionable` property only); only three of the four named call sites (`morning_signal`, `record_signal_outcome`, `signal_track_v1`) were refactored.
-- [ ] **SEC-3** — merge `scripts/signal_eod.py` + `scripts/signal_eod.py` → `scripts/signal_eod.py` (phase 1 = write the `SignalOutcome` row via the current `--auto` logic, unchanged; phase 2 = the
-  report), one 16:00 cron, one `guard_trading_day`. Retire the two old crontab lines, add the one new line. Keep `--auto` / report-only flags for manual use. | Owner: Antigravity | Model: n/a |
-  Review: code-reviewer | SHA: <—>
+- [x] **SEC-3** — merge `scripts/record_signal_outcome.py` + `scripts/signal_report.py` → `scripts/signal_eod.py` (phase 1 = write the `SignalOutcome` row via the current `--auto` logic, unchanged;
+  phase 2 = the report), one 16:00 cron, one `guard_trading_day`. Retire the two old crontab lines, add the one new line. Keep `--auto` / report-only flags for manual use. | Owner: Antigravity |
+  Model: n/a | Review: code-reviewer | SHA: 928cb22 (merge) / `b297734` (retire old scripts + docs) / `6b6177b` (follow-up fix — escaping-guard baseline entries for `signal_eod.py`, restored
+  `send_test_telegram.py:65` entry dropped in the retire commit, cleaned up a misattributed noqa comment on the report-phase exception handler). Real `code-reviewer` run flagged 2 CRITICAL / 2 ERROR /
+  5 WARNING on the first pass; all CRITICAL/ERROR resolved in the follow-up; targeted test set (`tests/unit/scripts/`, `tests/unit/signals/`, `tests/unit/notifications/test_escaping_guard.py`) green —
+  527 passed.
 - [ ] **SEC-4** — extract `morning_signal.run()`'s pipeline body into `src/signals/pipeline.py::run_morning_signal_pipeline(...)` so `scripts/morning_signal.py` is orchestration + Telegram only.
   Discretionary — if the body does not cleanly separate from the cron-boundary I/O, record why in the commit and tick with that note. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer |
   SHA: <—>

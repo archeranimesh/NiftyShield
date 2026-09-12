@@ -140,6 +140,16 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-12] SEC-3 (`docs/plan/signals-entrypoint-consolidation/`) — merged `scripts/record_signal_outcome.py`
+  + `scripts/signal_report.py` into `scripts/signal_eod.py` (one 16:00 cron, one `guard_trading_day`,
+  `--auto`/`--report-only` flags; a record-phase exception no longer blocks the report phase). Old scripts +
+  tests retired. Antigravity-implemented (`928cb22` merge, `b297734` retire, `6b6177b` follow-up fix). Real
+  `code-reviewer` run on the first pass flagged 2 CRITICAL (missing REVIEW.md G5 intent comments on the two
+  `except Exception` catches) and 2 ERROR (escaping-guard baseline entries left as placeholder `"temp"` reasons;
+  two ported tests didn't mock `guard_trading_day` and silently relied on the real holiday calendar) — all
+  resolved in the follow-up commit, which also restored a `send_test_telegram.py:65` baseline entry
+  collaterally dropped during the retire commit. Targeted test set (`tests/unit/scripts/`, `tests/unit/signals/`,
+  `tests/unit/notifications/test_escaping_guard.py`) green — 527 passed.
 - [2026-09-12] Fixed 3 flaky `tests/unit/paper/test_overlay_entry.py` failures (`481f326`) —
   `_write_vix_fixture`'s `close` column was hardcoded to `rows` (252) elements while
   `pd.date_range(end=date.today(), periods=rows, freq="B")` returns fewer dates when

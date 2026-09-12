@@ -128,10 +128,10 @@ tail-call opens the entry and `scripts/signal_paper_entry.py` is the manual `--d
 outcome message (marked `won't-do` in the archived `signals_tasks.md`). Go-live gate + pilot unexercised — 6-month window not yet elapsed. Entrypoint-dedup cleanup now unblocked →
 `signals-entrypoint-consolidation/`.
 
-**`signals-entrypoint-consolidation/`** · 🔄 In progress · SEC-2 done (`0202291`, follow-up `819306b`) — `DailySignal.is_actionable` refactored onto `morning_signal`, `record_signal_outcome`,
-`signal_track_v1` (`signal_report`'s two checks are on `SignalOutcome`, a different model, left untouched as out of scope) · next: **SEC-3** merge `record_signal_outcome.py` + `signal_report.py` into
-`scripts/signal_eod.py`. No signal-pipeline or SPT-execution-layer behaviour change — the idealized `SignalOutcome` baseline row is written unchanged. From the 2026-09-10 SPT-plan review. No
-`schema.md`.
+**`signals-entrypoint-consolidation/`** · 🔄 In progress · SEC-3 done (`928cb22`, `b297734`, follow-up `6b6177b`) — `scripts/record_signal_outcome.py` + `scripts/signal_report.py` merged into
+`scripts/signal_eod.py` (one 16:00 cron, one `guard_trading_day`, `--auto`/`--report-only` flags); the two old scripts retired. Idealized `SignalOutcome` baseline row confirmed byte-identical to the
+pre-merge output · next: **SEC-4** — extract `morning_signal.run()`'s pipeline body into `src/signals/pipeline.py` (discretionary). No signal-pipeline or SPT-execution-layer behaviour change. From the
+2026-09-10 SPT-plan review. No `schema.md`.
 
 **`full-repo-review/`** · ✅ Complete — see `full-repo-review-followups/` One-time multi-model, multi-persona review of design docs, source, tests, the AI-collaboration protocol, and per-job-type
 surface routing (FR-1..9).
