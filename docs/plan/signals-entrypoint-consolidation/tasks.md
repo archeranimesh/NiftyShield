@@ -31,11 +31,11 @@ spec.
   entry (`tests/unit/notifications/test_escaping_guard.py`) whose line number moved with the extraction. Targeted set (`tests/unit/scripts/`, `tests/unit/signals/`, `tests/unit/strategy/`,
   `tests/unit/notifications/`) green — 1342 passed.
 - [x] **SEC-5** — review `scripts/signal_paper_entry.py` against the `morning_signal` tail-call's track record: keep it as the documented backfill tool, or delete it and fold re-entry into a
-  `--replay-date` flag on `signal_eod` / a dev script. Act on the decision; update the runbook. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: <—>. Deferred keep-or-delete:
-  the SPT-6 tail-call only landed at 19:13 on 2026-09-11, after that day's 09:30 cron had already run without it — zero live production runs to judge reliability against either branch (`git log
-  --oneline -- scripts/signal_paper_entry.py` confirms the wiring commit; `grep -c paper_entry_failed logs/morning_signal.log` → 0, reflecting no data, not reliability). Kept the script as-is (already
-  uses `guard_trading_day` + `is_actionable` per SEC-1/SEC-2); documented the deferral and rationale in its module docstring. `code-reviewer`: 0 CRITICAL/0 ERROR/0 WARNING (docstring-only diff).
-  Revisit once the tail-call has an actual track record.
+  `--replay-date` flag on `signal_eod` / a dev script. Act on the decision; update the runbook. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: `290ba3a`. Deferred
+  keep-or-delete: the SPT-6 tail-call only landed at 19:13 on 2026-09-11, after that day's 09:30 cron had already run without it — zero live production runs to judge reliability against either branch
+  (`git log --oneline -- scripts/signal_paper_entry.py` confirms the wiring commit; `grep -c paper_entry_failed logs/morning_signal.log` → 0, reflecting no data, not reliability). Kept the script
+  as-is (already uses `guard_trading_day` + `is_actionable` per SEC-1/SEC-2); documented the deferral and rationale in its module docstring. `code-reviewer`: 0 CRITICAL/0 ERROR/0 WARNING
+  (docstring-only diff). Revisit once the tail-call has an actual track record.
 - [ ] **SEC-6** — docs close: `CONTEXT.md` `src/signals/` entrypoint list + the final crontab, `DECISIONS.md` §P&L & Reporting note on the `signal_eod` merge, `TODOS.md` session log + delete the
   backlog pointer, `docs/plan/README.md` status → ✅ Archived; archive per §Conventions. | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <—>
 

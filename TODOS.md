@@ -156,6 +156,15 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
   logger-name mismatch) — no data-correctness impact. Fixed a stale escaping-guard baseline line-number entry
   the extraction moved. Targeted set (`tests/unit/scripts/`, `tests/unit/signals/`, `tests/unit/strategy/`,
   `tests/unit/notifications/`) green — 1342 passed.
+- [2026-09-12] SEC-5 (`docs/plan/signals-entrypoint-consolidation/`) — reviewed
+  `scripts/signal_paper_entry.py` keep-or-delete against the `morning_signal` tail-call's track
+  record; deferred (`290ba3a`). The SPT-6 tail-call only landed at 19:13 on 2026-09-11, after
+  that day's 09:30 cron had already run without it — zero live production runs, so neither the
+  story's "failed and a re-entry fixed it" (keep) nor "reliable" (delete) criterion is met.
+  Kept the script (already uses `guard_trading_day` + `is_actionable` per SEC-1/SEC-2);
+  documented the deferral and rationale in its module docstring. `code-reviewer`: 0
+  CRITICAL/ERROR/WARNING (docstring-only diff). Revisit once the tail-call has an actual track
+  record.
 - [2026-09-12] Fixed 3 flaky `tests/unit/paper/test_overlay_entry.py` failures (`481f326`) —
   `_write_vix_fixture`'s `close` column was hardcoded to `rows` (252) elements while
   `pd.date_range(end=date.today(), periods=rows, freq="B")` returns fewer dates when

@@ -131,7 +131,9 @@ outcome message (marked `won't-do` in the archived `signals_tasks.md`). Go-live 
 **`signals-entrypoint-consolidation/`** · 🔄 In progress · SEC-3 done (`928cb22`, `b297734`, follow-up `6b6177b`) — `scripts/record_signal_outcome.py` + `scripts/signal_report.py` merged into
 `scripts/signal_eod.py` (one 16:00 cron, one `guard_trading_day`, `--auto`/`--report-only` flags); the two old scripts retired. Idealized `SignalOutcome` baseline row confirmed byte-identical to the
 pre-merge output. SEC-4 done (`85b4744`) — `morning_signal.run()`'s pipeline body extracted into `src/signals/pipeline.py::run_morning_signal_pipeline`; `scripts/morning_signal.py` is now
-orchestration + Telegram only · next: **SEC-5** — `scripts/signal_paper_entry.py` keep-or-delete decision against the tail-call's track record. From the 2026-09-10 SPT-plan review. No `schema.md`.
+orchestration + Telegram only · SEC-5 done (`290ba3a`) — keep-or-delete deferred: the SPT-6 tail-call has zero live production runs yet (wired 19:13 2026-09-11, after that day's cron already ran), so
+neither the story's keep nor delete criterion is met; script kept with the deferral documented in its docstring, revisit once it has a track record · next: **SEC-6** — docs close + archive. From the
+2026-09-10 SPT-plan review. No `schema.md`.
 
 **`full-repo-review/`** · ✅ Complete — see `full-repo-review-followups/` One-time multi-model, multi-persona review of design docs, source, tests, the AI-collaboration protocol, and per-job-type
 surface routing (FR-1..9).
