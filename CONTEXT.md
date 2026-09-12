@@ -52,8 +52,12 @@ Top-level `src/` packages, one line each (detail → `CONTEXT_TREE.md`):
   `SignalStore` (own SQLite tables `signal_inputs`/`signal_responses`/`daily_signals`/`signal_outcomes`). Three GPT-4o / Grok / Gemini providers via
   OpenRouter + `build_providers` factory. Each provider response records OpenRouter token usage + USD cost (`signal_responses.prompt_tokens`/`completion_tokens`/`cost_usd`,
   inline `usage.include`; `NULL` for mock / Google-SDK paths), aggregated by `SignalStore.get_signal_cost()` and surfaced as today's total on the 09:30 message (`signals-cost-tracking/`,
-  cost data trustworthy from 2026-09-11). All three crons live on the Mac host (Phase 1 `openrouter_only`): `scripts/morning_signal.py` 09:30,
-  `scripts/signal_eod.py --auto` 16:00, `scripts/signal_eod.py` 16:35 (Mon–Fri), each pushing a Telegram message.
+  cost data trustworthy from 2026-09-11). Two crons live on the Mac host (Phase 1 `openrouter_only`): `scripts/morning_signal.py` 09:30 (assembles snapshot, fans out to
+  LLMs, aggregates, persists, Telegram — includes the guarded SPT-6 paper-entry tail-call), `scripts/signal_eod.py` 16:00 (record phase then report phase, one `guard_trading_day` call; `--auto` /
+  `--report-only` flags for manual phase-only use), each Mon–Fri, each pushing a Telegram message. The `signal_track_v1` monitor daemon (`StrategyMonitor`) manages the paper-traded position
+  intraday at 30 s cadence. `scripts/signal_paper_entry.py` is a manual `--date` backfill/replay tool, not a cron entrypoint (kept per `signals-entrypoint-consolidation/` SEC-5's deferred
+  keep-or-delete review — no live track record yet to judge reliability against). `record_signal_outcome.py` and `signal_report.py` are retired — merged into `signal_eod.py`
+  (`signals-entrypoint-consolidation/`, archived).
 - `src/risk/` — portfolio-level delta controls: `PortfolioDelta` frozen dataclass,
   `PortfolioDeltaTracker.aggregate_delta(...)` (chain-derived `position_deltas` used as-is, else
   CE/PE approximation with logged WARNING; pure/zero-I/O per council 2026-07-02),

@@ -128,12 +128,10 @@ tail-call opens the entry and `scripts/signal_paper_entry.py` is the manual `--d
 outcome message (marked `won't-do` in the archived `signals_tasks.md`). Go-live gate + pilot unexercised — 6-month window not yet elapsed. Entrypoint-dedup cleanup now unblocked →
 `signals-entrypoint-consolidation/`.
 
-**`signals-entrypoint-consolidation/`** · 🔄 In progress · SEC-3 done (`928cb22`, `b297734`, follow-up `6b6177b`) — `scripts/record_signal_outcome.py` + `scripts/signal_report.py` merged into
-`scripts/signal_eod.py` (one 16:00 cron, one `guard_trading_day`, `--auto`/`--report-only` flags); the two old scripts retired. Idealized `SignalOutcome` baseline row confirmed byte-identical to the
-pre-merge output. SEC-4 done (`85b4744`) — `morning_signal.run()`'s pipeline body extracted into `src/signals/pipeline.py::run_morning_signal_pipeline`; `scripts/morning_signal.py` is now
-orchestration + Telegram only · SEC-5 done (`290ba3a`) — keep-or-delete deferred: the SPT-6 tail-call has zero live production runs yet (wired 19:13 2026-09-11, after that day's cron already ran), so
-neither the story's keep nor delete criterion is met; script kept with the deferral documented in its docstring, revisit once it has a track record · next: **SEC-6** — docs close + archive. From the
-2026-09-10 SPT-plan review. No `schema.md`.
+**`signals-entrypoint-consolidation/`** · ✅ Archived → `docs/archive/plan/signals-entrypoint-consolidation/` (SEC-1..6, 2026-09-12). One holiday guard (`market_calendar.guard_trading_day` +
+`is_market_session_now`), one `DailySignal.is_actionable` fire-check predicate, `record_signal_outcome.py` + `signal_report.py` merged into `scripts/signal_eod.py` (2 crons → 1, byte-identical
+`SignalOutcome` baseline), `morning_signal.py` reduced to orchestration + Telegram via `src/signals/pipeline.py::run_morning_signal_pipeline`, `signal_paper_entry.py` kept as a manual backfill tool
+(keep-or-delete deferred pending a live track record). Live crontab confirmed matching the final two-cron state as part of SEC-6.
 
 **`full-repo-review/`** · ✅ Complete — see `full-repo-review-followups/` One-time multi-model, multi-persona review of design docs, source, tests, the AI-collaboration protocol, and per-job-type
 surface routing (FR-1..9).

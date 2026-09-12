@@ -302,6 +302,10 @@ day-delta fields (all `Decimal | None`). `_build_portfolio_summary()` in `daily_
 
 **MF snapshot is non-fatal in cron:** the MF block in `daily_snapshot.py` is wrapped in `try/except Exception`. AMFI unreachable at 3:45 PM does not abort the portfolio snapshot.
 
+**`record_signal_outcome` + `signal_report` merged into `scripts/signal_eod.py`** (`signals-entrypoint-consolidation/` SEC-3, 2026-09-12): one 16:00 cron instead of two (16:00 + 16:35), one
+`guard_trading_day` call, `--auto`/`--report-only` flags preserved for manual phase-only use. The idealized `SignalOutcome` baseline row `signal_eod`'s record phase writes is byte-identical to what
+`record_signal_outcome --auto` wrote before the merge — this story only removed duplication, no baseline behaviour changed.
+
 **AMFI NAV timing:** AMFI publishes after market close (7–9 PM IST). The 3:45 PM cron fetches T-1 NAV for MFs — this is expected and correct. Combined P&L shows mixed-timestamp data by design.
 
 **`FinRakshak protection stats`:** `finrakshak_day_delta` isolated from combined `options_day_delta` in `_build_portfolio_summary`. `_format_protection_stats()` appends hedge verdict (✅/⚠️) to log

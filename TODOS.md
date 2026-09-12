@@ -96,12 +96,6 @@ rot them.
     (DHR-1..4 — remove Dhan holdings / P&L / the Dhan Options block from the snapshot; keep the Dhan
     login flow + client + tables wired). No `schema.md`. `/work` routes via the epic `prompt.md`.
     Requested by Animesh 2026-09-10.
-25. **signals-entrypoint-consolidation** — `docs/plan/signals-entrypoint-consolidation/` — next **SEC-1**.
-    Unblocked 2026-09-11 (`signals-paper-track/` archived). One trading-day guard + one `DailySignal.is_actionable`
-    predicate across the four signal entrypoints, merge `record_signal_outcome` + `signal_report` → one 16:00
-    `signal_eod` (2 crons → 1), no pipeline / execution-layer behaviour change. From the 2026-09-10 SPT-plan review.
-    No `schema.md`. Requested by Animesh 2026-09-10.
-
 ## Open Bugs
 
 Confirmed defects in shipped code live in **[`docs/bugs/`](docs/bugs/)** — registry `bugs.md` (status `🔴 Open` → `🟡 Fix in progress` → `✅ Fixed`), tasks `docs/bugs/task.md`. `/work` → Bug branch reads
@@ -165,6 +159,15 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
   documented the deferral and rationale in its module docstring. `code-reviewer`: 0
   CRITICAL/ERROR/WARNING (docstring-only diff). Revisit once the tail-call has an actual track
   record.
+- [2026-09-12] SEC-6 (`docs/plan/signals-entrypoint-consolidation/`) — docs close: updated
+  `CONTEXT.md`'s `src/signals/` entrypoint list + crontab to the merged two-cron state,
+  `DECISIONS.md` §P&L & Reporting with the `signal_eod` merge note, collapsed
+  `docs/plan/README.md`'s story row to the archived pointer, deleted this file's backlog
+  pointer. Also found and fixed a live gap: the Mac host crontab still ran the two scripts
+  SEC-3 retired (`record_signal_outcome`, `signal_report`), which no longer exist — tonight's
+  16:00/16:35 runs would have failed with `ModuleNotFoundError`. Animesh applied the corrected
+  single 16:00 `scripts.signal_eod` line manually; verified via `crontab -l`. Story archived to
+  `docs/archive/plan/signals-entrypoint-consolidation/`.
 - [2026-09-12] Fixed 3 flaky `tests/unit/paper/test_overlay_entry.py` failures (`481f326`) —
   `_write_vix_fixture`'s `close` column was hardcoded to `rows` (252) elements while
   `pd.date_range(end=date.today(), periods=rows, freq="B")` returns fewer dates when
