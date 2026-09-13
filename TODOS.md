@@ -135,6 +135,17 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-13] UXM-1 (`docs/plan/telegram-message-unification/unified-exit-message/`) —
+  gross-short-premium `short_decay_pct` (+ `short_credit_per_unit` / `short_buyback_per_unit`)
+  added to `Cycle`; short leg identified by entry-trade `action == SELL`, not `leg_role`
+  naming — stable across IC/CSP/CC/Collar, `None` for a pure-long PP. New pure
+  `cycle_stats(trades) -> CycleStats` helper (win_rate, avg_win/loss, best/worst,
+  avg_hold_days, avg_decay_pct). `resolve_target` / `LegGroup` (renamed from `_Group`) moved
+  from `scripts/dev/cycle_pnl_report.py` into `src/paper/cycle_pnl.py`; CLI output unchanged.
+  SHA 51d546c (feat), 49c9a55 (docs-close). Tests: 20/20 green
+  (`tests/unit/paper/test_cycle_pnl.py`), full suite 3091/3091. Review: code-reviewer +
+  greeks-analyst, both clean. Next: `unified-exit-message/` UXM-2 (shared `exit_message.py`
+  renderer).
 - [2026-09-13] OEM-5 (`docs/plan/telegram-message-unification/overlay-entry-message/`) —
   sub-story docs close. `CONTEXT.md` / `src/notifications/CLAUDE.md` / `DECISIONS.md` updated
   to reflect the sign-aware net line (OEM-1) and the Collar re-entry + three-track bootstrap
