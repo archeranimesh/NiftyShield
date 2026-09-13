@@ -135,13 +135,19 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-13] OEM-1 (`docs/plan/telegram-message-unification/overlay-entry-message/`) —
+  `entry_message.py::_credit_line` is sign-aware: negative `net_credit` renders `💰 *Net
+  debit:*` (absolute value); positive/zero byte-identical. Two new tests
+  (`test_net_debit_line_when_net_credit_negative`, `test_net_credit_line_unchanged_for_zero`).
+  `code-reviewer` clean (0 CRITICAL/ERROR/WARNING). SHA `2832717`. Epic `README.md` row flipped
+  to 🔄 In progress. Next: OEM-2 (`CollarOverlayV1` re-entry entry card).
 - [2026-09-13] UEM-3 (`docs/plan/telegram-message-unification/unified-entry-message/`) — docs
   close for `unified-entry-message/` (UEM-1..3). Updated `CONTEXT.md`'s `src/notifications/`
   bullet (`ic_entry_message.py` → `entry_message.py`, shared renderer note), added the UEM-2
   card note to `src/notifications/CLAUDE.md`'s `entry_message.py` entry, added a
   `DECISIONS.md` §P&L & Reporting line (renderer rename + relaxed `ivr`), flipped the epic
   `README.md` Stories-table row to ✅ (`889d860`), and this Session Log line. No code change.
-  Epic folder not archived — archives whole at UXM-8. Next: OEM-1
+  Epic folder not archived — archives whole at UXM-8. Next: OEM-2
   (`overlay-entry-message/`).
 - [2026-09-12] UEM-1 (`docs/plan/telegram-message-unification/unified-entry-message/`) — generalized
   `src/notifications/ic_entry_message.py` → `entry_message.py` (`EntryMessage` + `format_entry_message`,

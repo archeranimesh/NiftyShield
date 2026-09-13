@@ -6,12 +6,12 @@ spec.
 Sub-story 2 of the `telegram-message-unification/` epic. Depends on `unified-entry-message/` (UEM-1..3) — `src/notifications/entry_message.py` must already exist. Do not start OEM-1 before every UEM
 box is ticked (its epic `README.md` Stories-table row is ✅).
 
-**Open: OEM-1, OEM-2, OEM-3, OEM-4, OEM-5.**
+**Open: OEM-2, OEM-3, OEM-4, OEM-5.**
 
-- [ ] **OEM-1** — Sign-aware net line in `entry_message.py::_credit_line`: negative
+- [x] **OEM-1** — Sign-aware net line in `entry_message.py::_credit_line`: negative
       `net_credit` → `💰 *Net debit:* …` (absolute value, label flipped); positive / zero
       byte-identical. Two new tests.
-      | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
+      | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 2832717
 - [ ] **OEM-2** — `CollarOverlayV1._reenter_collar` sends a `✅ *Collar Entry*` card (2 legs,
       `[B]` put + `[S]` call) on a successful two-leg record, via `self._notifier`, non-fatal.
       | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer + greeks-analyst | SHA: —
