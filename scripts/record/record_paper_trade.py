@@ -25,6 +25,8 @@ Usage Examples:
 from __future__ import annotations
 
 import argparse
+import asyncio
+import re
 import sys
 from datetime import date
 from decimal import Decimal
@@ -56,8 +58,18 @@ from src.instruments.strike_selector import (
 )
 from src.intraday.market_store import IntradayMarketStore
 from src.models.portfolio import TradeAction
+from src.notifications.entry_message import EntryMessage, format_entry_message
+from src.notifications.formatting import LegRow, format_strike
+from src.notifications.telegram import build_notifier
 from src.paper._utils import safe_float
-from src.paper.constants import DEFAULT_BOD_PATH, DEFAULT_DB_PATH, LOT_SIZE, STRATEGY_CSP
+from src.paper.chain_utils import parse_expiry_from_key, parse_strike_from_key
+from src.paper.constants import (
+    DEFAULT_BOD_PATH,
+    DEFAULT_DB_PATH,
+    LOT_SIZE,
+    STRATEGY_CC_OVERLAY,
+    STRATEGY_CSP,
+)
 from src.paper.models import PaperTrade
 from src.paper.store import PaperStore
 from src.risk.delta_tracker import PortfolioDeltaTracker
@@ -226,6 +238,12 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         default=False,
         help="Force execution even if IVR checks fail the entry gate (R3 block override).",
+    )
+    parser.add_argument(
+        "--notify",
+        action="store_true",
+        default=False,
+        help="Send a Telegram entry card on a successful open (no-op on close / roll).",
     )
     parser.add_argument(
         "--ivr-gate",
@@ -669,6 +687,96 @@ def _get_ivr_and_enforce(
     return ivr
 
 
+def _build_entry_card(trade: PaperTrade, dte: int, spot: float) -> str | None:
+    """Build a lean CSP / CC entry Telegram card for a successful SELL open.
+
+    Returns None (logged) when the strike / expiry / option type cannot be
+    derived from ``trade.instrument_key`` — never raises.
+    """
+    key = trade.instrument_key or ""
+    strike = parse_strike_from_key(key)
+    expiry = parse_expiry_from_key(key)
+    opt_type_match = re.search(r"(CE|PE)", key, re.IGNORECASE)
+    option_type = opt_type_match.group(1).upper() if opt_type_match else None
+    if strike is None or expiry is None or option_type is None:
+        logger.info(
+            "entry_card.skipped",
+            reason="strike/expiry/option_type unresolvable from instrument_key",
+            instrument_key=key,
+        )
+        return None
+
+    if trade.strategy_name == STRATEGY_CSP:
+        headline_label = "CSP"
+    elif trade.strategy_name == STRATEGY_CC_OVERLAY:
+        headline_label = "CC"
+    else:
+        logger.info(
+            "entry_card.skipped",
+            reason="strategy not CSP/CC",
+            strategy_name=trade.strategy_name,
+        )
+        return None
+
+    role = "Short Put" if option_type == "PE" else "Short Call"
+    leg = LegRow(
+        role=role,
+        instrument=f"{format_strike(float(strike))} {option_type}",
+        delta=None,
+        ltp=float(trade.price),
+        entry=float(trade.price),
+    )
+    msg = EntryMessage(
+        headline_label=headline_label,
+        expiry=expiry,
+        dte=dte,
+        spot=spot,
+        net_credit=trade.price,
+        legs=[leg],
+    )
+    return format_entry_message(msg)
+
+
+def _send_entry_card_if_requested(trade: PaperTrade, args: argparse.Namespace) -> None:
+    """Send the CSP / CC entry card behind ``--notify``, non-fatal on any failure.
+
+    No-op unless: ``--notify`` set, this is an open (not ``--close``), and the
+    action is SELL (a genuine new short, not a BUY-to-close leg).
+    """
+    if not args.notify or args.close or trade.action != TradeAction.SELL:
+        return
+
+    try:
+        expiry = parse_expiry_from_key(trade.instrument_key or "")
+        if expiry is None:
+            logger.info(
+                "entry_card.skipped",
+                reason="expiry unresolvable",
+                instrument_key=trade.instrument_key,
+            )
+            return
+        dte = (expiry - trade.trade_date).days
+
+        spot_client = UpstoxMarketClient()
+        ltp_dict = spot_client.get_ltp_sync(["NSE_INDEX|Nifty 50"])
+        spot = ltp_dict.get("NSE_INDEX|Nifty 50")
+        if spot is None:
+            logger.info("entry_card.skipped", reason="spot unavailable")
+            return
+
+        card = _build_entry_card(trade, dte, float(spot))
+        if card is None:
+            return
+
+        notifier = build_notifier()
+        if notifier is None:
+            return
+        asyncio.run(notifier.send(card))
+    # Intentional: a Telegram send failure must never fail the recording.
+    except Exception as exc:
+        logger.warning("telegram.send_failed", error=str(exc))
+
+
 def main() -> None:
     """CLI entry point. Validates, optionally inserts, prints position summary."""
     args = _parse_args()
@@ -902,6 +1010,8 @@ def main() -> None:
                 )
             except Exception as exc:
                 print(f"WARNING: failed to write MANUAL_OVERRIDE event — {exc}", file=sys.stderr)
+
+        _send_entry_card_if_requested(trade, args)
 
     pos = store.get_position(trade.strategy_name, trade.leg_role, instrument_key=instrument_key)
     if pos.net_qty == 0:
