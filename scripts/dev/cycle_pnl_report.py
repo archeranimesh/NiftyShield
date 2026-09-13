@@ -33,7 +33,6 @@ from __future__ import annotations
 import argparse
 import sqlite3
 import sys
-from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -42,69 +41,13 @@ import structlog
 
 from src.notifications.formatting import format_money
 from src.paper.constants import DEFAULT_DB_PATH
-from src.paper.cycle_pnl import Cycle, reconstruct_cycles
+from src.paper.cycle_pnl import Cycle, reconstruct_cycles, resolve_target
+from src.paper.cycle_pnl import LegGroup as _Group
 from src.paper.store import PaperStore
 from src.utils.logging import setup_logging
 
 _SCRIPT_NAME = "scripts.dev.cycle_pnl_report"
 logger = structlog.get_logger(_SCRIPT_NAME)
-
-_IC_STRATEGIES = {
-    "ic-weekly": "paper_ic_nifty_v1_weekly",
-    "ic-monthly": "paper_ic_nifty_v1_monthly",
-    "ic-leaps": "paper_ic_nifty_v1_leaps",
-    "ic-v2": "paper_ic_nifty_v2_monthly",
-}
-_OVERLAY_STRATEGY = "paper_nifty_overlay"
-_OVERLAY_GROUPS = {
-    "cc": ("overlay_cc",),
-    "pp": ("overlay_pp",),
-    "collar": ("overlay_collar_put", "overlay_collar_call"),
-}
-
-
-@dataclass(frozen=True)
-class _Group:
-    """One reportable leg group: a label, its strategy, and its leg-role filter."""
-
-    label: str
-    strategy_name: str
-    leg_roles: tuple[str, ...] | None  # None = every leg of the strategy
-
-
-def resolve_target(target: str) -> list[_Group]:
-    """Map a CLI target token to the leg groups it selects.
-
-    Args:
-        target: One of the alias tokens (``ic-all``, ``cc`` …) or an exact
-            ``paper_*`` strategy name.
-
-    Returns:
-        Ordered list of groups to report.
-
-    Raises:
-        ValueError: If the target is not a known alias or ``paper_*`` name.
-    """
-    if target in _IC_STRATEGIES:
-        name = _IC_STRATEGIES[target]
-        return [_Group(name, name, None)]
-    if target in _OVERLAY_GROUPS:
-        return [_Group(f"{_OVERLAY_STRATEGY}:{target}", _OVERLAY_STRATEGY, _OVERLAY_GROUPS[target])]
-    if target == "ic-all":
-        return [_Group(n, n, None) for n in _IC_STRATEGIES.values()]
-    if target == "overlay-all":
-        return [
-            _Group(f"{_OVERLAY_STRATEGY}:{k}", _OVERLAY_STRATEGY, v)
-            for k, v in _OVERLAY_GROUPS.items()
-        ]
-    if target == "all":
-        return resolve_target("ic-all") + resolve_target("overlay-all")
-    if target.startswith("paper_"):
-        return [_Group(target, target, None)]
-    raise ValueError(
-        f"unknown target {target!r} — use an alias "
-        f"(ic-all, ic-weekly, cc, pp, collar, overlay-all, all) or a paper_* strategy name"
-    )
 
 
 def _load_exit_signals(conn: sqlite3.Connection, strategy_name: str) -> list[tuple[date, str]]:

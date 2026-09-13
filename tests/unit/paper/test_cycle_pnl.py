@@ -7,12 +7,14 @@ from decimal import Decimal
 
 import pytest
 
-from scripts.dev.cycle_pnl_report import _exit_reason, resolve_target
+from scripts.dev.cycle_pnl_report import _exit_reason
 from src.models.portfolio import TradeAction
 from src.paper.cycle_pnl import (
     Cycle,
+    cycle_stats,
     get_last_cycle_realized_pnl,
     reconstruct_cycles,
+    resolve_target,
 )
 from src.paper.models import PaperTrade
 
@@ -106,6 +108,128 @@ def test_open_cycle_has_no_exit_cost_or_decay() -> None:
     assert cycle.decay_pct is None
 
 
+def test_short_decay_pct_single_short() -> None:
+    # CSP-shaped: single short leg sold @ 88, bought back @ 12.
+    trades = [
+        _t("short_put", TradeAction.SELL, "88.0", "2026-07-08"),
+        _t("short_put", TradeAction.BUY, "12.0", "2026-07-16"),
+    ]
+
+    cycle = reconstruct_cycles(trades)[0]
+
+    assert cycle.short_credit_per_unit == Decimal("88")
+    assert cycle.short_buyback_per_unit == Decimal("12")
+    expected = (Decimal("88") - Decimal("12")) / Decimal("88") * Decimal("100")
+    assert abs(cycle.short_decay_pct - expected) < Decimal("0.01")
+    assert cycle.decay_pct is not None
+
+
+def test_short_decay_pct_multi_short() -> None:
+    # IC-shaped: short put 12 + short call 11 (credit 23), hedges ignored.
+    trades = [
+        _t("short_put", TradeAction.SELL, "12.0", "2026-07-08"),
+        _t("short_call", TradeAction.SELL, "11.0", "2026-07-08"),
+        _t("long_put_hedge", TradeAction.BUY, "2.0", "2026-07-08"),
+        _t("long_call_hedge", TradeAction.BUY, "1.5", "2026-07-08"),
+        _t("short_put", TradeAction.BUY, "5.0", "2026-07-16"),
+        _t("short_call", TradeAction.BUY, "3.0", "2026-07-16"),
+        _t("long_put_hedge", TradeAction.SELL, "0.5", "2026-07-16"),
+        _t("long_call_hedge", TradeAction.SELL, "0.3", "2026-07-16"),
+    ]
+
+    cycle = reconstruct_cycles(trades)[0]
+
+    assert cycle.short_credit_per_unit == Decimal("23")
+    assert cycle.short_buyback_per_unit == Decimal("8")
+    expected = (Decimal("23") - Decimal("8")) / Decimal("23") * Decimal("100")
+    assert abs(cycle.short_decay_pct - expected) < Decimal("0.01")
+
+
+def test_short_decay_pct_none_for_pure_long() -> None:
+    # PP-shaped: BUY-to-open only, no short leg.
+    trades = [
+        _t("long_put", TradeAction.BUY, "40.0", "2026-07-08"),
+        _t("long_put", TradeAction.SELL, "60.0", "2026-07-16"),
+    ]
+
+    cycle = reconstruct_cycles(trades)[0]
+
+    assert cycle.short_credit_per_unit == Decimal("0")
+    assert cycle.short_decay_pct is None
+
+
+def test_short_decay_pct_collar() -> None:
+    # Collar: short call basis only, long put excluded.
+    trades = [
+        _t("short_call", TradeAction.SELL, "50.0", "2026-07-08"),
+        _t("long_put", TradeAction.BUY, "30.0", "2026-07-08"),
+        _t("short_call", TradeAction.BUY, "15.0", "2026-07-16"),
+        _t("long_put", TradeAction.SELL, "20.0", "2026-07-16"),
+    ]
+
+    cycle = reconstruct_cycles(trades)[0]
+
+    assert cycle.short_credit_per_unit == Decimal("50")
+    assert cycle.short_buyback_per_unit == Decimal("15")
+    expected = (Decimal("50") - Decimal("15")) / Decimal("50") * Decimal("100")
+    assert abs(cycle.short_decay_pct - expected) < Decimal("0.01")
+
+
+def test_open_cycle_has_no_short_decay() -> None:
+    trades = [
+        _t("short_put", TradeAction.SELL, "10.0", "2026-07-08"),
+        _t("long_put_hedge", TradeAction.BUY, "4.0", "2026-07-08"),
+    ]
+
+    cycle = reconstruct_cycles(trades)[0]
+
+    assert cycle.short_credit_per_unit == Decimal("10")
+    assert cycle.short_buyback_per_unit is None
+    assert cycle.short_decay_pct is None
+
+
+# ── cycle_stats ──────────────────────────────────────────────────────────────
+
+
+def test_cycle_stats_happy() -> None:
+    trades = (
+        _ic_cycle("2026-07-01", "2026-07-05", "10.0", "3.0")  # win, +455
+        + _ic_cycle("2026-07-06", "2026-07-10", "10.0", "3.0")  # win, +455
+        + _ic_cycle("2026-07-11", "2026-07-15", "10.0", "3.0")  # win, +455
+        + _ic_cycle("2026-07-16", "2026-07-20", "5.0", "9.0")  # loss
+        + _ic_cycle("2026-07-21", "2026-07-25", "5.0", "9.0")  # loss
+    )
+
+    stats = cycle_stats(trades)
+
+    assert stats.closed_count == 5
+    assert stats.wins == 3
+    assert stats.losses == 2
+    assert stats.win_rate == pytest.approx(0.6)
+    assert stats.avg_win > 0
+    assert stats.avg_loss <= 0
+    assert stats.best == Decimal("455")
+    assert stats.avg_decay_pct is not None
+
+
+def test_cycle_stats_empty() -> None:
+    stats = cycle_stats([])
+
+    assert stats.closed_count == 0
+    assert stats.wins == 0
+    assert stats.losses == 0
+    assert stats.win_rate is None
+    assert stats.avg_win == Decimal("0")
+    assert stats.avg_loss == Decimal("0")
+    assert stats.avg_decay_pct is None
+
+
+def test_resolve_target_moved() -> None:
+    from scripts.dev.cycle_pnl_report import resolve_target as script_resolve_target
+
+    assert script_resolve_target("cc") == resolve_target("cc")
+
+
 def test_single_leg_overlay_cycle() -> None:
     trades = [
         _t("overlay_cc", TradeAction.SELL, "50.0", "2026-08-12"),
@@ -170,6 +294,9 @@ def _cycle(is_open: bool, note: str) -> Cycle:
         realized_pnl=Decimal("0"),
         is_open=is_open,
         trades=trades,
+        short_credit_per_unit=Decimal("10"),
+        short_buyback_per_unit=None if is_open else Decimal("3"),
+        short_decay_pct=None if is_open else Decimal("70"),
     )
 
 

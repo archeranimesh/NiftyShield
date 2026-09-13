@@ -47,6 +47,19 @@ class Cycle:
             cycle reports the realized portion (usually ``0``).
         is_open: ``True`` when the legs have not all returned to net-zero.
         trades: Trades belonging to this cycle, in execution order.
+        short_credit_per_unit: Sum of the per-unit SELL-to-open prices of the
+            cycle's short legs only (a leg whose entry trade is a SELL;
+            hedges/longs excluded). ``0`` when the cycle has no short leg
+            (a pure long PP).
+        short_buyback_per_unit: Sum of the per-unit BUY-to-close prices of
+            those same short legs. ``None`` while the cycle is open.
+        short_decay_pct: ``100 * (short_credit_per_unit - short_buyback_per_unit)
+            / short_credit_per_unit`` — the gross-short-premium decay basis.
+            ``None`` when the cycle is open or ``short_credit_per_unit <= 0``
+            (no short leg). Stable across IC / CSP / CC / Collar; correctly
+            absent for a pure-long PP. This is the basis every exit card and
+            ``cycle_stats`` uses — the net ``decay_pct`` above stays for the
+            report CLI.
     """
 
     index: int
@@ -59,6 +72,9 @@ class Cycle:
     realized_pnl: Decimal
     is_open: bool
     trades: tuple[PaperTrade, ...]
+    short_credit_per_unit: Decimal
+    short_buyback_per_unit: Decimal | None
+    short_decay_pct: Decimal | None
 
 
 def _segment_realized_pnl(trades: Sequence[PaperTrade]) -> Decimal:
@@ -135,6 +151,15 @@ def _build_cycle(index: int, segment: list[PaperTrade], *, is_open: bool) -> Cyc
         if entry_credit > 0:
             decay_pct = (entry_credit - exit_cost) / entry_credit * Decimal("100")
 
+    short_roles = {t.leg_role for t in entry_legs if t.action == TradeAction.SELL}
+    short_credit = sum((t.price for t in entry_legs if t.leg_role in short_roles), Decimal("0"))
+    short_buyback: Decimal | None = None
+    short_decay_pct: Decimal | None = None
+    if not is_open and short_roles:
+        short_buyback = sum((t.price for t in exit_legs if t.leg_role in short_roles), Decimal("0"))
+        if short_credit > 0:
+            short_decay_pct = (short_credit - short_buyback) / short_credit * Decimal("100")
+
     return Cycle(
         index=index,
         entry_date=entry_date,
@@ -146,6 +171,9 @@ def _build_cycle(index: int, segment: list[PaperTrade], *, is_open: bool) -> Cyc
         realized_pnl=_segment_realized_pnl(segment),
         is_open=is_open,
         trades=tuple(segment),
+        short_credit_per_unit=short_credit,
+        short_buyback_per_unit=short_buyback,
+        short_decay_pct=short_decay_pct,
     )
 
 
@@ -192,3 +220,146 @@ def get_last_cycle_realized_pnl(trades: Sequence[PaperTrade]) -> Decimal | None:
     """
     closed = [c for c in reconstruct_cycles(trades) if not c.is_open]
     return closed[-1].realized_pnl if closed else None
+
+
+@dataclass(frozen=True)
+class CycleStats:
+    """Win-rate / P&L / decay stats over a strategy's closed cycles.
+
+    Attributes:
+        closed_count: Number of closed cycles.
+        wins: Cycles with ``realized_pnl > 0``.
+        losses: Cycles with ``realized_pnl <= 0``.
+        win_rate: ``wins / closed_count``, or ``None`` when ``closed_count == 0``.
+        avg_win: Mean ``realized_pnl`` over winning cycles, ``0`` if none.
+        avg_loss: Mean ``realized_pnl`` over losing cycles (signed, ``<= 0``),
+            ``0`` if none.
+        best: Highest ``realized_pnl`` across closed cycles, ``0`` if none.
+        worst: Lowest ``realized_pnl`` across closed cycles, ``0`` if none.
+        avg_hold_days: Mean ``days_in_trade`` across closed cycles, ``0`` if none.
+        avg_decay_pct: Mean ``short_decay_pct`` over closed cycles that have
+            one, or ``None`` when none do.
+    """
+
+    closed_count: int
+    wins: int
+    losses: int
+    win_rate: float | None
+    avg_win: Decimal
+    avg_loss: Decimal
+    best: Decimal
+    worst: Decimal
+    avg_hold_days: float
+    avg_decay_pct: Decimal | None
+
+
+def cycle_stats(trades: Sequence[PaperTrade]) -> CycleStats:
+    """Win-rate / P&L / decay stats over a leg group's closed cycles.
+
+    Pure — no I/O. Args mirror ``reconstruct_cycles``: pre-filtered to one
+    strategy + leg group, execution order.
+
+    Args:
+        trades: Ledger rows for one strategy + leg group, execution order.
+
+    Returns:
+        ``CycleStats`` over the closed cycles. All-zero / ``None`` fields when
+        there are none.
+    """
+    closed = [c for c in reconstruct_cycles(trades) if not c.is_open]
+    if not closed:
+        return CycleStats(
+            closed_count=0,
+            wins=0,
+            losses=0,
+            win_rate=None,
+            avg_win=Decimal("0"),
+            avg_loss=Decimal("0"),
+            best=Decimal("0"),
+            worst=Decimal("0"),
+            avg_hold_days=0.0,
+            avg_decay_pct=None,
+        )
+
+    wins_list = [c.realized_pnl for c in closed if c.realized_pnl > 0]
+    losses_list = [c.realized_pnl for c in closed if c.realized_pnl <= 0]
+    decay_values = [c.short_decay_pct for c in closed if c.short_decay_pct is not None]
+    all_pnl = [c.realized_pnl for c in closed]
+    hold_days = [c.days_in_trade for c in closed if c.days_in_trade is not None]
+
+    return CycleStats(
+        closed_count=len(closed),
+        wins=len(wins_list),
+        losses=len(losses_list),
+        win_rate=len(wins_list) / len(closed),
+        avg_win=(sum(wins_list, Decimal("0")) / len(wins_list)) if wins_list else Decimal("0"),
+        avg_loss=(sum(losses_list, Decimal("0")) / len(losses_list))
+        if losses_list
+        else Decimal("0"),
+        best=max(all_pnl),
+        worst=min(all_pnl),
+        avg_hold_days=(sum(hold_days) / len(hold_days)) if hold_days else 0.0,
+        avg_decay_pct=(sum(decay_values, Decimal("0")) / len(decay_values))
+        if decay_values
+        else None,
+    )
+
+
+@dataclass(frozen=True)
+class LegGroup:
+    """One reportable leg group: a label, its strategy, and its leg-role filter."""
+
+    label: str
+    strategy_name: str
+    leg_roles: tuple[str, ...] | None  # None = every leg of the strategy
+
+
+_IC_STRATEGIES = {
+    "ic-weekly": "paper_ic_nifty_v1_weekly",
+    "ic-monthly": "paper_ic_nifty_v1_monthly",
+    "ic-leaps": "paper_ic_nifty_v1_leaps",
+    "ic-v2": "paper_ic_nifty_v2_monthly",
+}
+_OVERLAY_STRATEGY = "paper_nifty_overlay"
+_OVERLAY_GROUPS = {
+    "cc": ("overlay_cc",),
+    "pp": ("overlay_pp",),
+    "collar": ("overlay_collar_put", "overlay_collar_call"),
+}
+
+
+def resolve_target(target: str) -> list[LegGroup]:
+    """Map a CLI target token to the leg groups it selects.
+
+    Args:
+        target: One of the alias tokens (``ic-all``, ``cc`` …) or an exact
+            ``paper_*`` strategy name.
+
+    Returns:
+        Ordered list of groups to report.
+
+    Raises:
+        ValueError: If the target is not a known alias or ``paper_*`` name.
+    """
+    if target in _IC_STRATEGIES:
+        name = _IC_STRATEGIES[target]
+        return [LegGroup(name, name, None)]
+    if target in _OVERLAY_GROUPS:
+        return [
+            LegGroup(f"{_OVERLAY_STRATEGY}:{target}", _OVERLAY_STRATEGY, _OVERLAY_GROUPS[target])
+        ]
+    if target == "ic-all":
+        return [LegGroup(n, n, None) for n in _IC_STRATEGIES.values()]
+    if target == "overlay-all":
+        return [
+            LegGroup(f"{_OVERLAY_STRATEGY}:{k}", _OVERLAY_STRATEGY, v)
+            for k, v in _OVERLAY_GROUPS.items()
+        ]
+    if target == "all":
+        return resolve_target("ic-all") + resolve_target("overlay-all")
+    if target.startswith("paper_"):
+        return [LegGroup(target, target, None)]
+    raise ValueError(
+        f"unknown target {target!r} — use an alias "
+        f"(ic-all, ic-weekly, cc, pp, collar, overlay-all, all) or a paper_* strategy name"
+    )
