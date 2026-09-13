@@ -124,7 +124,9 @@ transport-agnostic (return a string, never call `send()` themselves):
   CC, …) as a headline + optional `*Mode:*` line + kv row + fenced `build_leg_table()` block +
   net-credit line. `ivr` / `mode` / `expiry_type` are optional; the kv row omits `IVR:` when
   `ivr is None`. Each dynamic value is `escape_markdown()`'d individually; the fence is emitted
-  literally. ROLL-17, generalized UEM-1.
+  literally. ROLL-17, generalized UEM-1. UEM-2 wired `record_paper_trade.py --notify` to emit a
+  one-leg CSP / CC card on a successful open via `TelegramNotifier` (`headline_label` /
+  `role` derived from `--strategy` and option type); silent no-op on close / roll.
 
 A new multi-line message that interpolates several typed values follows this pattern — a
 builder function taking one dataclass — rather than a hand-rolled f-string at the call site.

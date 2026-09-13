@@ -72,7 +72,7 @@ Top-level `src/` packages, one line each (detail → `CONTEXT_TREE.md`):
   complete + archived 2026-09-06, `telegram-markdown-migration/` epic; every caller escapes via `markdown.py`),
   `TelegramGateway` (council-free approval dispatch + callback polling + chat-ID allowlist),
   `alerts.py` (shared Telegram message builders), `formatting.py` (per-type value formatters + table builders),
-  `ic_entry_message.py` (IC entry confirmation renderer — v1/v2 unified, ROLL-17).
+  `entry_message.py` (shared lean entry-confirmation renderer — IC v1/v2 + CSP + CC, UEM-1/2).
 - `src/reporting/` — promoted EOD report builders. `eod_pt_summary.py`: cross-strategy paper-trade summary as 1-3 MarkdownV2 Telegram messages (open positions /
   closed-today / strategy P&L + Ann.% on margin), off live `PaperStore.get_positions()` + broker LTP. Runs alongside `scripts/eod_summary.py`, not a replacement
   (PT-2, `docs/archive/plan/eod-pt-summary/`).

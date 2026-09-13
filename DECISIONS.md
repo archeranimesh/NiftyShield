@@ -293,6 +293,11 @@ day-delta fields (all `Decimal | None`). `_build_portfolio_summary()` in `daily_
 
 **Combined portfolio P&L formula:** `total_value = MF current value + ETF mark-to-market + options net P&L`. ETF legs identified by `leg.asset_type == AssetType.EQUITY` (not string prefix).
 
+**2026-09-13 — shared entry renderer + CSP / CC entry card (UEM-1/2, `telegram-message-unification/`):** `src/notifications/entry_message.py` (renamed from `ic_entry_message.py`) generalizes the IC
+entry card into `EntryMessage` + `format_entry_message`, strategy-chosen via `headline_label` instead of a `"v2" in strategy_name` check; `record_paper_trade.py --notify` emits a one-leg CSP / CC card
+on a successful open. `ivr` relaxed to optional vs ROLL-17's required (CSP / CC have no IVR at record time); `dte` / `spot` / `net_credit` stay required. PP / collar / three-track bootstrap /
+track-comparison entry cards deferred to `overlay-entry-message/`.
+
 **Two distinct P&L metrics:** (1) Inception P&L — current value minus total invested; (2) Day-change P&L — today vs previous snapshot via `get_prev_snapshots()` / `get_prev_nav_snapshots()` (MAX date
 < today, calendar-agnostic). Δday column omitted silently on first run.
 

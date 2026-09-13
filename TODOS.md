@@ -76,8 +76,9 @@ rot them.
     audit / close, one chart per IC variation — no option model, ships now) → `chart-model-overlay/`
     (T+0 curve + ±1σ/±2σ bands + POP — blocked on `greeks-bs-fallback/` GF-2 + GF-3).
     Priority relative to items 13–21 is Animesh's call.
-23. **Telegram message unification** — `docs/plan/telegram-message-unification/` — next **UEM-1**
-    (generalize `ic_entry_message.py` → shared `entry_message.py` / `EntryMessage`). Epic, four
+23. **Telegram message unification** — `docs/plan/telegram-message-unification/` — next **OEM-1**
+    (`overlay-entry-message/`: sign-aware net line). `unified-entry-message/` (UEM-1..3) shipped
+    2026-09-13. Epic, four
     sub-stories (first three a hard renderer-lineage chain, fourth independent + closes the epic):
     `unified-entry-message/` (UEM-1..3 — shared entry renderer; IC migrated; CSP + CC entry card via
     `record_paper_trade.py --notify`) → `overlay-entry-message/` (OEM-1..5 — sign-aware net line;
@@ -134,6 +135,14 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-13] UEM-3 (`docs/plan/telegram-message-unification/unified-entry-message/`) — docs
+  close for `unified-entry-message/` (UEM-1..3). Updated `CONTEXT.md`'s `src/notifications/`
+  bullet (`ic_entry_message.py` → `entry_message.py`, shared renderer note), added the UEM-2
+  card note to `src/notifications/CLAUDE.md`'s `entry_message.py` entry, added a
+  `DECISIONS.md` §P&L & Reporting line (renderer rename + relaxed `ivr`), flipped the epic
+  `README.md` Stories-table row to ✅ (`889d860`), and this Session Log line. No code change.
+  Epic folder not archived — archives whole at UXM-8. Next: OEM-1
+  (`overlay-entry-message/`).
 - [2026-09-12] UEM-1 (`docs/plan/telegram-message-unification/unified-entry-message/`) — generalized
   `src/notifications/ic_entry_message.py` → `entry_message.py` (`EntryMessage` + `format_entry_message`,
   `headline_label` field replaces the `strategy_name` v1/v2 marker, `ivr`/`mode`/`expiry_type` made
