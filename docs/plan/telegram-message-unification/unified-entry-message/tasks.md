@@ -3,16 +3,16 @@
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
 spec.
 
-**Open: UEM-2, UEM-3.**
+**Open: UEM-3.**
 
 - [x] **UEM-1** — Generalize `ic_entry_message.py` → `entry_message.py` (`EntryMessage` +
       `format_entry_message`, `headline_label` field, optional `ivr`/`mode`/`expiry_type`); migrate
       both IC call sites; rename the test file.
       | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 08fd78c
-- [ ] **UEM-2** — CSP / CC lean entry card from `record_paper_trade.py` behind `--notify` (headline
+- [x] **UEM-2** — CSP / CC lean entry card from `record_paper_trade.py` behind `--notify` (headline
       chosen from `--strategy`), on a successful open only (no-op on close / roll), via
       `TelegramNotifier`, non-fatal on send failure.
-      | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
+      | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 889d860
 - [ ] **UEM-3** — Sub-story docs close: `CONTEXT.md` / `src/notifications/CLAUDE.md` / `DECISIONS.md` /
       the epic `README.md` Stories table / `TODOS.md` Session Log. No folder archive — the epic
       archives as a whole at UXM-8.

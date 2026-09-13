@@ -143,6 +143,15 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
   byte-identical, confirmed by `code-reviewer`. Antigravity-implemented (`08fd78c`); real `code-reviewer`
   run flagged 1 ERROR (stale `ic_entry_message.py` reference in `src/notifications/CLAUDE.md`, fixed by
   Claude in the same commit) and 3 cosmetic WARNINGs (deferred). 119/119 notifications tests green.
+- [2026-09-13] UEM-2 (`docs/plan/telegram-message-unification/unified-entry-message/`) — added
+  `--notify` to `scripts/record/record_paper_trade.py`: on a successful CSP/CC SELL open (not
+  `--close`), derives strike/expiry/option-type from `instrument_key` (`parse_strike_from_key`/
+  `parse_expiry_from_key`), fetches Nifty spot, builds an `EntryMessage`/`format_entry_message`
+  card and sends it non-fatally via `build_notifier()`/`TelegramNotifier`. 4 new tests
+  (`test_record_paper_trade.py`); added a `test_escaping_guard.py` baseline entry (the guard's
+  single-function heuristic can't see through `_build_entry_card` → `format_entry_message`'s
+  internal escaping). `code-reviewer` flagged 2 WARNINGs (Decimal→float boundary at the spot
+  value, both call site and test mock), fixed in the same commit. SHA `889d860`.
 - [2026-09-12] SEC-3 (`docs/plan/signals-entrypoint-consolidation/`) — merged `scripts/record_signal_outcome.py`
   + `scripts/signal_report.py` into `scripts/signal_eod.py` (one 16:00 cron, one `guard_trading_day`,
   `--auto`/`--report-only` flags; a record-phase exception no longer blocks the report phase). Old scripts +
