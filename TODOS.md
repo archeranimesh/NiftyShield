@@ -135,6 +135,16 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-13] OEM-2 (`docs/plan/telegram-message-unification/overlay-entry-message/`) —
+  `CollarOverlayV1._reenter_collar` now sends a `✅ *Collar Entry*` card via the shared
+  `format_entry_message` renderer after a successful automated two-leg re-entry, non-fatal on
+  notifier failure. `select_and_build_collar_entry` (`src/strategy/collar_entry.py`) widened to
+  also return the chain-fetched spot + each leg's delta (no second chain fetch). Two new tests
+  (`test_reentry_sends_collar_entry_card`, `test_reentry_notify_failure_is_non_fatal`).
+  `code-reviewer` + `greeks-analyst` clean after one round of fixes (try/except widened to cover
+  message construction; deltas threaded through instead of `None`). SHA `24946d7`. Epic
+  `README.md` row stays 🔄 In progress (OEM-3/4/5 remain). Next: OEM-3 (CC + PP re-entry entry
+  cards).
 - [2026-09-13] OEM-1 (`docs/plan/telegram-message-unification/overlay-entry-message/`) —
   `entry_message.py::_credit_line` is sign-aware: negative `net_credit` renders `💰 *Net
   debit:*` (absolute value); positive/zero byte-identical. Two new tests
