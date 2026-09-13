@@ -18,7 +18,8 @@ from src.instruments.lookup import InstrumentLookup, format_leg_label
 from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
 from src.models.portfolio import TradeAction
-from src.notifications.formatting import format_greek, format_money
+from src.notifications.entry_message import EntryMessage, format_entry_message
+from src.notifications.formatting import LegRow, format_greek, format_money
 from src.notifications.markdown import escape_markdown, mdcode
 from src.paper.constants import DEFAULT_BOD_PATH, STRATEGY_OVERLAY
 from src.paper.models import PaperPosition, PaperTrade
@@ -541,7 +542,7 @@ class CollarOverlayV1(ReEntryMixin):
                 closing_dte = (expiry - market_today()).days
 
         try:
-            new_trades = await select_and_build_collar_entry(
+            new_trades, spot, put_delta, call_delta = await select_and_build_collar_entry(
                 self._broker,
                 self._store,
                 market_today(),
@@ -581,6 +582,11 @@ class CollarOverlayV1(ReEntryMixin):
                 triggering_signal=triggering_signal,
             )
             await self._send_reentry_failure_notification(exc, triggering_signal)
+            return
+
+        await self._send_reentry_notification(
+            new_trades, spot, put_delta, call_delta, triggering_signal
+        )
 
     async def _send_reentry_failure_notification(
         self, exc: Exception, triggering_signal: str
@@ -605,6 +611,79 @@ class CollarOverlayV1(ReEntryMixin):
             log.error(
                 "collar_overlay_v1.reentry_failure_notify_failed",
                 error=str(notify_exc),
+            )
+
+    async def _send_reentry_notification(
+        self,
+        new_trades: list[PaperTrade],
+        spot: Decimal,
+        put_delta: float | None,
+        call_delta: float | None,
+        triggering_signal: str,
+    ) -> None:
+        """Non-fatal Telegram entry card for a successful automated Collar re-entry."""
+        if self._notifier is None:
+            return
+
+        try:
+            put_trade, call_trade = new_trades
+            expiry = self._parse_expiry(put_trade.instrument_key)
+            if expiry is None:
+                log.warning(
+                    "collar_overlay_v1.reentry_card.skipped",
+                    reason="expiry_unresolved",
+                    triggering_signal=triggering_signal,
+                )
+                return
+
+            lookup = self._resolve_instrument_lookup()
+            put_label = (
+                format_leg_label(put_trade.instrument_key, lookup)
+                if lookup
+                else (put_trade.instrument_key)
+            )
+            call_label = (
+                format_leg_label(call_trade.instrument_key, lookup)
+                if lookup
+                else (call_trade.instrument_key)
+            )
+
+            msg = EntryMessage(
+                headline_label="Collar",
+                expiry=expiry,
+                dte=(expiry - market_today()).days,
+                spot=float(spot),
+                net_credit=call_trade.price - put_trade.price,
+                legs=[
+                    LegRow(
+                        role="Long Put",
+                        instrument=put_label,
+                        delta=put_delta,
+                        ltp=float(put_trade.price),
+                        entry=float(put_trade.price),
+                    ),
+                    LegRow(
+                        role="Short Call",
+                        instrument=call_label,
+                        delta=call_delta,
+                        ltp=float(call_trade.price),
+                        entry=float(call_trade.price),
+                    ),
+                ],
+            )
+            card = format_entry_message(msg)
+
+            if hasattr(self._notifier, "send_notification"):
+                await self._notifier.send_notification(card)
+            elif hasattr(self._notifier, "send_plain_message"):
+                await self._notifier.send_plain_message(card)
+            elif hasattr(self._notifier, "send"):
+                await self._notifier.send(card)
+        except Exception as exc:  # noqa: BLE001 — notify failure must never crash the tick
+            log.error(
+                "collar_overlay_v1.reentry_notify_failed",
+                error=str(exc),
+                triggering_signal=triggering_signal,
             )
 
     def _build_close_trade(

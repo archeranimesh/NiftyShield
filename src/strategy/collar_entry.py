@@ -195,7 +195,7 @@ async def select_and_build_collar_entry(
     closing_dte: int | None = None,
     bod_path: Path | None = None,
     lot_size: int = LOT_SIZE,
-) -> list[PaperTrade]:
+) -> tuple[list[PaperTrade], Decimal, float | None, float | None]:
     """Resolve expiry, run Collar1/Collar2 selection, apply gates, build two legs.
 
     Resolves current vs next month's expiry per DTE<=5 rule (``closing_dte``),
@@ -219,7 +219,11 @@ async def select_and_build_collar_entry(
         lot_size: Quantity per leg.
 
     Returns:
-        [put_trade, call_trade] — always both legs, or raises.
+        ([put_trade, call_trade], spot, put_delta, call_delta) — both legs,
+        the underlying spot, and each leg's chain-derived delta (or None if
+        the chain row carried none), all already fetched during selection
+        (OEM-2: the entry-card renderer needs them and this call is the only
+        place they are fetched — no second chain fetch), or raises.
 
     Raises:
         CollarEntrySelectionError: On any structural failure — no candidate
@@ -242,6 +246,8 @@ async def select_and_build_collar_entry(
     if not raw_chain:
         raise CollarEntrySelectionError("Chain fetch returned empty result")
 
+    spot = Decimal(str(raw_chain[0].get("underlying_spot_price", 0)))
+
     call_candidates = _find_candidates_for_ladder(raw_chain, "CE", _CC_DELTA_CANDIDATES)
     put_candidates = _find_candidates_for_ladder(raw_chain, "PE", _PP_DELTA_CANDIDATES)
 
@@ -254,6 +260,8 @@ async def select_and_build_collar_entry(
 
     call_price = Decimal(str(call_row["mid"] if call_row.get("mid", 0) > 0 else call_row["ltp"]))
     put_price = Decimal(str(put_row["mid"] if put_row.get("mid", 0) > 0 else put_row["ltp"]))
+    call_delta = call_row.get("delta")
+    put_delta = put_row.get("delta")
 
     notes = f"Collar reentry via {triggering_signal}. Expiry={expiry_str} (DTE={dte})."
 
@@ -277,4 +285,4 @@ async def select_and_build_collar_entry(
         price=call_price,
         notes=notes,
     )
-    return [put_trade, call_trade]
+    return [put_trade, call_trade], spot, put_delta, call_delta

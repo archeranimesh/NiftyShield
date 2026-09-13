@@ -292,6 +292,22 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "inspects the immediate enclosing function (_send_entry_card_if_requested), "
         "not the builder it calls - same shape as the scripts/eod_summary.py:200 entry"
     ),
+    ("src/strategy/collar_overlay_v1.py", 679): (
+        "OEM-2 - heuristic limitation, not a real gap: the card is built by "
+        "format_entry_message(), which escapes every interpolated value via "
+        "escape_markdown() inside EntryMessage's own renderer "
+        "(src/notifications/entry_message.py); this guard only inspects the "
+        "immediate enclosing function (_send_reentry_notification), not the "
+        "builder it calls - same shape as the scripts/record/record_paper_trade.py:774 entry"
+    ),
+    ("src/strategy/collar_overlay_v1.py", 681): (
+        "OEM-2 - heuristic limitation, not a real gap: the card is built by "
+        "format_entry_message(), which escapes every interpolated value via "
+        "escape_markdown() inside EntryMessage's own renderer "
+        "(src/notifications/entry_message.py); this guard only inspects the "
+        "immediate enclosing function (_send_reentry_notification), not the "
+        "builder it calls - same shape as the scripts/record/record_paper_trade.py:774 entry"
+    ),
 }
 
 
@@ -363,9 +379,9 @@ def test_baseline_has_no_duplicate_or_unused_entries():
         ("src/strategy/auto_close.py", 359),
         ("src/strategy/cc_overlay_v1.py", 382),
         ("src/strategy/pp_overlay_v1.py", 402),
-        ("src/strategy/collar_overlay_v1.py", 601),
-        ("src/strategy/collar_overlay_v1.py", 603),
-        ("src/strategy/collar_overlay_v1.py", 726),
+        ("src/strategy/collar_overlay_v1.py", 607),
+        ("src/strategy/collar_overlay_v1.py", 609),
+        ("src/strategy/collar_overlay_v1.py", 805),
     ],
 )
 def test_md3_audited_close_notifications_stay_escaped(file_rel, line):

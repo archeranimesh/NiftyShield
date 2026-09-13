@@ -32,7 +32,13 @@ def _healthy_vix_series() -> pd.Series:
     return pd.Series([15.0] * 260)
 
 
-def _candidate_row(strike: float, instrument_key: str, mid: float, oi: int = 50000) -> dict:
+def _candidate_row(
+    strike: float,
+    instrument_key: str,
+    mid: float,
+    oi: int = 50000,
+    delta: float | None = None,
+) -> dict:
     return {
         "strike": strike,
         "instrument_key": instrument_key,
@@ -40,6 +46,7 @@ def _candidate_row(strike: float, instrument_key: str, mid: float, oi: int = 500
         "ltp": mid,
         "oi": oi,
         "gate_spread": 1.0,
+        "delta": delta,
     }
 
 
@@ -50,8 +57,8 @@ def _mock_lookup(expiry_str: str = "2026-09-24") -> MagicMock:
 
 
 def test_happy_path_returns_put_and_call_trades() -> None:
-    call_row = _candidate_row(25200, "NSE_FO|NIFTY25200CE", mid=45.0)
-    put_row = _candidate_row(23900, "NSE_FO|NIFTY23900PE", mid=38.0)
+    call_row = _candidate_row(25200, "NSE_FO|NIFTY25200CE", mid=45.0, delta=0.19)
+    put_row = _candidate_row(23900, "NSE_FO|NIFTY23900PE", mid=38.0, delta=-0.21)
 
     mock_broker = MagicMock()
     mock_broker.get_option_chain = AsyncMock(return_value=[{"raw": "chain"}])
@@ -64,7 +71,7 @@ def test_happy_path_returns_put_and_call_trades() -> None:
         # First call = CE ladder, second call = PE ladder (call order in source).
         mock_find.side_effect = [[call_row], [put_row]]
 
-        trades = _run(
+        trades, spot, put_delta, call_delta = _run(
             select_and_build_collar_entry(
                 mock_broker,
                 MagicMock(),
@@ -73,6 +80,9 @@ def test_happy_path_returns_put_and_call_trades() -> None:
             )
         )
 
+    assert spot == Decimal("0")
+    assert put_delta == -0.21
+    assert call_delta == 0.19
     assert len(trades) == 2
     put_trade, call_trade = trades
     assert put_trade.leg_role == "overlay_collar_put"
@@ -104,7 +114,7 @@ def test_min_net_premium_tiebreak_selects_best_combo() -> None:
     ):
         mock_find.side_effect = [call_candidates, put_candidates]
 
-        trades = _run(
+        trades, _spot, _put_delta, _call_delta = _run(
             select_and_build_collar_entry(mock_broker, MagicMock(), date(2026, 8, 4), "DELTA_STOP")
         )
 

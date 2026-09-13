@@ -13,8 +13,9 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.models.options import OptionChain, OptionChainStrike, OptionLeg
+from src.models.portfolio import TradeAction
 from src.paper.constants import STRATEGY_OVERLAY
-from src.paper.models import PaperPosition
+from src.paper.models import PaperPosition, PaperTrade
 from src.strategy.collar_overlay_v1 import CollarOverlayV1
 from src.strategy.protocol import ApprovedAction, LegClose, SignalEvent
 
@@ -649,6 +650,15 @@ def test_apply_action_close_and_reenter_selects_and_records_new_pair() -> None:
         instrument_key="NSE_FO|NIFTY22000PE",
         entry_date=date.today(),
     )
+    new_call = PaperPosition(
+        strategy_name=_STRATEGY,
+        leg_role="overlay_collar_call",
+        net_qty=-65,
+        avg_cost=Decimal("0"),
+        avg_sell_price=Decimal("60"),
+        instrument_key="NSE_FO|NIFTY25200CE",
+        entry_date=date.today(),
+    )
     action = ApprovedAction(
         action_type="CLOSE_AND_REENTER_COLLAR",
         legs_to_close=[
@@ -663,13 +673,125 @@ def test_apply_action_close_and_reenter_selects_and_records_new_pair() -> None:
 
     with patch(
         "src.strategy.collar_overlay_v1.select_and_build_collar_entry",
-        new=AsyncMock(return_value=[new_put]),
+        new=AsyncMock(return_value=([new_put, new_call], Decimal("22000"), None, None)),
     ) as mock_select:
         result = _run(strategy.apply_action([call_pos, put_pos], action))
 
     mock_select.assert_awaited_once()
     assert mock_store.record_trades.call_count == 2
     assert result == []
+
+
+def test_reentry_sends_collar_entry_card() -> None:
+    """OEM-2: a successful automated Collar re-entry sends a ✅ *Collar Entry* card
+    with the put [B] / call [S] rows and a sign-aware net line."""
+    from unittest.mock import AsyncMock, patch
+
+    mock_store = MagicMock()
+    mock_broker = MagicMock()
+    mock_notifier = AsyncMock()
+    lookup = _FakeLookup(
+        {
+            "NSE_FO|NIFTY22000PE": {
+                "instrument_type": "PE",
+                "strike_price": 22000.0,
+                "expiry": "2026-09-24",
+                "underlying_symbol": "NIFTY",
+            },
+            "NSE_FO|NIFTY25200CE": {
+                "instrument_type": "CE",
+                "strike_price": 25200.0,
+                "expiry": "2026-09-24",
+                "underlying_symbol": "NIFTY",
+            },
+        }
+    )
+    strategy = CollarOverlayV1(
+        store=mock_store, broker=mock_broker, notifier=mock_notifier, instrument_lookup=lookup
+    )
+
+    put_trade = PaperTrade(
+        strategy_name=STRATEGY_OVERLAY,
+        leg_role="overlay_collar_put",
+        instrument_key="NSE_FO|NIFTY22000PE",
+        trade_date=date(2026, 8, 4),
+        action=TradeAction.BUY,
+        quantity=65,
+        price=Decimal("50.0"),
+    )
+    call_trade = PaperTrade(
+        strategy_name=STRATEGY_OVERLAY,
+        leg_role="overlay_collar_call",
+        instrument_key="NSE_FO|NIFTY25200CE",
+        trade_date=date(2026, 8, 4),
+        action=TradeAction.SELL,
+        quantity=65,
+        price=Decimal("30.0"),
+    )
+
+    with patch(
+        "src.strategy.collar_overlay_v1.select_and_build_collar_entry",
+        new=AsyncMock(return_value=([put_trade, call_trade], Decimal("23500"), -0.21, 0.19)),
+    ):
+        _run(strategy._reenter_collar(None, "DELTA_STOP"))
+
+    mock_notifier.send_notification.assert_called_once()
+    msg = mock_notifier.send_notification.call_args[0][0]
+    assert "✅ *Collar Entry*" in msg
+    assert "[B]" in msg
+    assert "[S]" in msg
+    assert "💰 *Net debit:*" in msg
+    assert "-0.21" in msg
+    assert "+0.19" in msg
+    assert mock_store.record_trades.call_count == 1
+
+
+def test_reentry_notify_failure_is_non_fatal() -> None:
+    """A notifier failure on the reentry card must not crash the tick, and the
+    trades must already be recorded before the notify attempt."""
+    from unittest.mock import AsyncMock, patch
+
+    mock_store = MagicMock()
+    mock_broker = MagicMock()
+    mock_notifier = AsyncMock()
+    mock_notifier.send_notification.side_effect = RuntimeError("telegram down")
+
+    strategy = CollarOverlayV1(store=mock_store, broker=mock_broker, notifier=mock_notifier)
+
+    put_trade = PaperTrade(
+        strategy_name=STRATEGY_OVERLAY,
+        leg_role="overlay_collar_put",
+        instrument_key="NSE_FO|NIFTY22000PE",
+        trade_date=date(2026, 8, 4),
+        action=TradeAction.BUY,
+        quantity=65,
+        price=Decimal("50.0"),
+    )
+    call_trade = PaperTrade(
+        strategy_name=STRATEGY_OVERLAY,
+        leg_role="overlay_collar_call",
+        instrument_key="NSE_FO|NIFTY25200CE",
+        trade_date=date(2026, 8, 4),
+        action=TradeAction.SELL,
+        quantity=65,
+        price=Decimal("30.0"),
+    )
+
+    with (
+        patch(
+            "src.strategy.collar_overlay_v1.select_and_build_collar_entry",
+            new=AsyncMock(return_value=([put_trade, call_trade], Decimal("23500"), None, None)),
+        ),
+        patch.object(
+            CollarOverlayV1,
+            "_parse_expiry",
+            return_value=date(2026, 9, 24),
+        ),
+    ):
+        _run(strategy._reenter_collar(None, "DELTA_STOP"))  # must not raise
+
+    assert mock_store.record_trades.call_count == 1
+    mock_notifier.send_notification.assert_called_once()
 
 
 def test_apply_action_close_and_reenter_failure_logs_and_notifies_leaves_flat() -> None:
