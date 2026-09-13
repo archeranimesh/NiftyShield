@@ -33,7 +33,7 @@ box is ticked (its epic `README.md` Stories-table row is ✅).
 - [x] **OEM-5** — Sub-story docs close: `CONTEXT.md` / `src/notifications/CLAUDE.md` / `DECISIONS.md` /
       the epic `README.md` Stories table / `TODOS.md` Session Log. No folder archive — the epic
       archives as a whole at UXM-8.
-      | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <pending>
+      | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 61ea904
 
 ## Story done when
 
