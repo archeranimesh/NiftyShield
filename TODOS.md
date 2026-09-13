@@ -135,6 +135,17 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-13] OEM-3 (`docs/plan/telegram-message-unification/overlay-entry-message/`) —
+  merged into OEM-4, no code change. Graph inspection of `CCOverlayV1.apply_action`,
+  `PPOverlayV1.apply_action`, and `ReEntryMixin._check_reentry` found neither class performs
+  an in-tick automated re-entry the way `CollarOverlayV1._reenter_collar` does (OEM-2) —
+  `apply_action` only closes and calls `_check_reentry`, which writes an ELIGIBLE/BLOCKED
+  `paper_exit_events` row and tells the operator to run a script manually; no position is
+  reopened there. The only place a CC/PP re-entry is actually recorded is `auto_cc_bootstrap`
+  / `auto_pp_bootstrap` in `paper_3track_overlay_entry.py` — OEM-4's target. `tasks.md` and
+  `stories.md` updated to fold OEM-3's card requirement into OEM-4. Review: none (docs only).
+  Epic `README.md` row stays 🔄 In progress. Next: OEM-4 (bootstrap message onto shared
+  renderer, now covering CC/PP/Collar entry cards).
 - [2026-09-13] OEM-2 (`docs/plan/telegram-message-unification/overlay-entry-message/`) —
   `CollarOverlayV1._reenter_collar` now sends a `✅ *Collar Entry*` card via the shared
   `format_entry_message` renderer after a successful automated two-leg re-entry, non-fatal on
@@ -144,7 +155,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
   `code-reviewer` + `greeks-analyst` clean after one round of fixes (try/except widened to cover
   message construction; deltas threaded through instead of `None`). SHA `24946d7`. Epic
   `README.md` row stays 🔄 In progress (OEM-3/4/5 remain). Next: OEM-3 (CC + PP re-entry entry
-  cards).
+  cards) — see OEM-3 entry above: merged into OEM-4.
 - [2026-09-13] OEM-1 (`docs/plan/telegram-message-unification/overlay-entry-message/`) —
   `entry_message.py::_credit_line` is sign-aware: negative `net_credit` renders `💰 *Net
   debit:*` (absolute value); positive/zero byte-identical. Two new tests

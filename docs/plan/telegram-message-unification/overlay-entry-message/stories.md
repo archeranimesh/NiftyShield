@@ -78,9 +78,15 @@ No DB schema change — no `schema.md`.
 
 ---
 
-## OEM-3 — CC + PP re-entry entry cards
+## OEM-3 — CC + PP re-entry entry cards (merged into OEM-4)
 
-**Files to change:**
+**Status: merged into OEM-4, no separate implementation.** Graph inspection of `CCOverlayV1.apply_action`, `PPOverlayV1.apply_action`, and `ReEntryMixin._check_reentry` confirmed neither class
+performs an in-tick automated re-entry the way `CollarOverlayV1._reenter_collar` does (OEM-2) — `apply_action` only closes the position and calls `_check_reentry`, which writes an ELIGIBLE/BLOCKED
+`paper_exit_events` row and tells the operator to run a script manually; no position is reopened there. The only place a CC/PP re-entry is actually recorded is `auto_cc_bootstrap` /
+`auto_pp_bootstrap` in `paper_3track_overlay_entry.py` — OEM-4's target file. OEM-4 below now delivers the `✅ *CC Entry*` / `✅ *PP Entry*` cards alongside Collar's bootstrap card as part of its
+migration. The spec below is retained for record; do not implement it as a separate task.
+
+**Files to change (historical — superseded by OEM-4):**
 - `src/strategy/cc_overlay_v1.py` — `✅ *CC Entry*`, one `[S]` call leg.
 - `src/strategy/pp_overlay_v1.py` — `✅ *PP Entry*`, one `[B]` put leg (net debit).
 - `src/strategy/reentry_mixin.py` — **only if** the re-entry-success record point is shared there rather than in each `apply_action`. Confirm first; prefer per-class if ambiguous.
