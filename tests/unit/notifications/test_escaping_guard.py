@@ -217,7 +217,7 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "and fully escaped inside build_position_health_message(), but this guard only inspects "
         "the immediate enclosing function (main)"
     ),
-    ("scripts/strategies/three_track/paper_3track_overlay_entry.py", 1309): (
+    ("scripts/strategies/three_track/paper_3track_overlay_entry.py", 1333): (
         "ROLL-14 - format confirmed, real code not yet migrated (bootstrap-failure alert)"
     ),
     ("scripts/strategies/three_track/paper_3track_roll.py", 437): (

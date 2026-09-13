@@ -2,7 +2,10 @@
 paper_3track_overlay_entry.py.
 
 See docs/plan/3track-consolidation/stories.md S6 for the confirmed decision log
-(bootstrap-only per overlay leg, never a recurring re-entry).
+(bootstrap-only per overlay leg, never a recurring re-entry). OEM-4
+(docs/plan/telegram-message-unification/overlay-entry-message/) migrated the
+notify card from a hand-rolled f-string to the shared ``format_entry_message``
+renderer.
 """
 
 from __future__ import annotations
@@ -18,6 +21,8 @@ from scripts.strategies.three_track import paper_3track_overlay_entry as ov_entr
 from src.models.portfolio import TradeAction
 from src.paper.constants import STRATEGY_OVERLAY, STRATEGY_SPOT
 from src.paper.models import GateViolation, PaperTrade
+
+_SPOT = Decimal("24000.00")
 
 
 def _make_trade(leg: str = "overlay_cc", price: Decimal = Decimal("50.00")) -> PaperTrade:
@@ -39,6 +44,24 @@ class _FakeOverlayTrade:
     leg_role: str
 
 
+def _make_cfg(
+    overlay_type: str = "cc",
+    *,
+    put_strike: float = 23500,
+    call_strike: float = 24800,
+) -> MagicMock:
+    cfg = MagicMock()
+    cfg.overlay_type = overlay_type
+    cfg.call_instrument_key = None
+    cfg.expiry = "2026-09-29"
+    cfg.expiry_type = "monthly"
+    cfg.dte_at_entry = 21
+    cfg.lot_size = 65
+    cfg.put_strike = put_strike
+    cfg.call_strike = call_strike
+    return cfg
+
+
 def _run_main(
     mock_store: MagicMock,
     mock_notifier: MagicMock,
@@ -51,13 +74,7 @@ def _run_main(
         overlay_trades = overlay_trade
 
     if mock_cfg is None:
-        mock_cfg = MagicMock()
-        mock_cfg.overlay_type = "cc"
-        mock_cfg.call_instrument_key = None
-        mock_cfg.expiry = "2026-09-29"
-        mock_cfg.lot_size = 65
-        mock_cfg.put_strike = 23500
-        mock_cfg.call_strike = 24800
+        mock_cfg = _make_cfg()
 
     with (
         patch(
@@ -77,6 +94,10 @@ def _run_main(
         patch(
             "scripts.strategies.three_track.paper_3track_overlay_entry.build_notifier",
             return_value=mock_notifier,
+        ),
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry._fetch_nifty_spot",
+            return_value=_SPOT,
         ),
         patch("sys.argv", ["paper_3track_overlay_entry.py"]),
     ):
@@ -130,8 +151,7 @@ def test_overlay_entry_notifies_telegram_on_success() -> None:
 
     mock_notifier.send.assert_awaited_once()
     msg = mock_notifier.send.await_args[0][0]
-    assert "Overlay Entry" in msg
-    assert "*" not in msg
+    assert "✅ *CC Entry*" in msg
 
 
 def test_overlay_entry_notification_failure_does_not_block_trade() -> None:
@@ -157,11 +177,7 @@ def test_overlay_entry_pp_bootstrap() -> None:
     mock_notifier = MagicMock()
     mock_notifier.send = AsyncMock(return_value=True)
 
-    mock_cfg = MagicMock()
-    mock_cfg.overlay_type = "pp"
-    mock_cfg.lot_size = 65
-    mock_cfg.expiry = "2026-09-29"
-    mock_cfg.put_strike = 23500
+    mock_cfg = _make_cfg("pp", put_strike=23500)
 
     with patch("sys.argv", ["paper_3track_overlay_entry.py"]):
         _run_main(
@@ -170,10 +186,10 @@ def test_overlay_entry_pp_bootstrap() -> None:
 
     mock_notifier.send.assert_awaited_once()
     msg = mock_notifier.send.await_args[0][0]
-    expected = (
-        "📥 Overlay Entry — PP Bootstrap\n🟢 Overlay PP: Long 65x NIFTY SEP 23500 PE @ ₹142\\.10"
-    )
-    assert msg == expected
+    assert "✅ *PP Entry*" in msg
+    assert "[B]" in msg
+    assert "23500" in msg
+    assert "💰 *Net debit:*" in msg
 
 
 def test_overlay_entry_cc_bootstrap() -> None:
@@ -185,11 +201,7 @@ def test_overlay_entry_cc_bootstrap() -> None:
     mock_notifier = MagicMock()
     mock_notifier.send = AsyncMock(return_value=True)
 
-    mock_cfg = MagicMock()
-    mock_cfg.overlay_type = "cc"
-    mock_cfg.lot_size = 65
-    mock_cfg.expiry = "2026-09-29"
-    mock_cfg.call_strike = 24800
+    mock_cfg = _make_cfg("cc", call_strike=24800)
 
     with patch("sys.argv", ["paper_3track_overlay_entry.py"]):
         _run_main(
@@ -198,10 +210,10 @@ def test_overlay_entry_cc_bootstrap() -> None:
 
     mock_notifier.send.assert_awaited_once()
     msg = mock_notifier.send.await_args[0][0]
-    expected = (
-        "📥 Overlay Entry — CC Bootstrap\n🔴 Overlay CC: Short 65x NIFTY SEP 24800 CE @ ₹185\\.20"
-    )
-    assert msg == expected
+    assert "✅ *CC Entry*" in msg
+    assert "[S]" in msg
+    assert "24800" in msg
+    assert "💰 *Net credit:*" in msg
 
 
 def test_overlay_entry_collar_bootstrap() -> None:
@@ -218,12 +230,7 @@ def test_overlay_entry_collar_bootstrap() -> None:
     mock_notifier = MagicMock()
     mock_notifier.send = AsyncMock(return_value=True)
 
-    mock_cfg = MagicMock()
-    mock_cfg.overlay_type = "collar"
-    mock_cfg.lot_size = 65
-    mock_cfg.expiry = "2026-09-29"
-    mock_cfg.put_strike = 23500
-    mock_cfg.call_strike = 24800
+    mock_cfg = _make_cfg("collar", put_strike=23500, call_strike=24800)
 
     with patch("sys.argv", ["paper_3track_overlay_entry.py"]):
         _run_main(
@@ -232,17 +239,15 @@ def test_overlay_entry_collar_bootstrap() -> None:
 
     mock_notifier.send.assert_awaited_once()
     msg = mock_notifier.send.await_args[0][0]
-    expected = (
-        "📥 Overlay Entry — COLLAR Bootstrap\n"
-        "🟢 Collar Put: Long 65x NIFTY SEP 23500 PE @ ₹142\\.10\n"
-        "🔴 Collar Call: Short 65x NIFTY SEP 24800 CE @ ₹185\\.20"
-    )
-    assert msg == expected
+    assert "✅ *COLLAR Entry*" in msg
+    assert "[B]" in msg
+    assert "[S]" in msg
+    # put 142.10 debit, call 185.20 credit -> net credit of 43.10
+    assert "💰 *Net credit:*" in msg
 
 
 def test_overlay_entry_collar_shows_both_directions() -> None:
-    # Covered by test_overlay_entry_collar_bootstrap where one is 🟢 and one is 🔴
-    # Assert explicitly that both are present in the output
+    # Covered by test_overlay_entry_collar_bootstrap where one leg is [B] and one [S].
     trade1 = _make_trade("overlay_collar_put")
     trade2 = _make_trade("overlay_collar_call")
     ot1 = _FakeOverlayTrade(trade=trade1, strategy=STRATEGY_OVERLAY, leg_role="overlay_collar_put")
@@ -255,12 +260,7 @@ def test_overlay_entry_collar_shows_both_directions() -> None:
     mock_notifier = MagicMock()
     mock_notifier.send = AsyncMock(return_value=True)
 
-    mock_cfg = MagicMock()
-    mock_cfg.overlay_type = "collar"
-    mock_cfg.lot_size = 65
-    mock_cfg.expiry = "2026-09-29"
-    mock_cfg.put_strike = 23500
-    mock_cfg.call_strike = 24800
+    mock_cfg = _make_cfg("collar", put_strike=23500, call_strike=24800)
 
     with patch("sys.argv", ["paper_3track_overlay_entry.py"]):
         _run_main(
@@ -268,8 +268,8 @@ def test_overlay_entry_collar_shows_both_directions() -> None:
         )
 
     msg = mock_notifier.send.await_args[0][0]
-    assert "🟢" in msg
-    assert "🔴" in msg
+    assert "[B]" in msg
+    assert "[S]" in msg
 
 
 def test_overlay_entry_cc_bootstrap_gate_logged() -> None:
@@ -281,11 +281,7 @@ def test_overlay_entry_cc_bootstrap_gate_logged() -> None:
     mock_notifier = MagicMock()
     mock_notifier.send = AsyncMock(return_value=True)
 
-    mock_cfg = MagicMock()
-    mock_cfg.overlay_type = "cc"
-    mock_cfg.lot_size = 65
-    mock_cfg.expiry = "2026-09-29"
-    mock_cfg.call_strike = 24800
+    mock_cfg = _make_cfg("cc", call_strike=24800)
 
     gate_violation = GateViolation(
         gate_name="ivr_cc_reentry",
@@ -310,6 +306,10 @@ def test_overlay_entry_cc_bootstrap_gate_logged() -> None:
             "scripts.strategies.three_track.paper_3track_overlay_entry.build_notifier",
             return_value=mock_notifier,
         ),
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry._fetch_nifty_spot",
+            return_value=_SPOT,
+        ),
         patch("scripts.strategies.three_track.paper_3track_overlay_entry.print_summary"),
         patch(
             "scripts.strategies.three_track.paper_3track_overlay_entry.PaperStore",
@@ -320,12 +320,11 @@ def test_overlay_entry_cc_bootstrap_gate_logged() -> None:
 
     mock_notifier.send.assert_awaited_once()
     msg = mock_notifier.send.await_args[0][0]
-    expected = (
-        "📥 Overlay Entry — CC Bootstrap\n"
-        "🔴 Overlay CC: Short 65x NIFTY SEP 24800 CE @ ₹185\\.20\n"
+    assert "✅ *CC Entry*" in msg
+    expected_gate_line = (
         "⚠️ Gate Logged: ivr\\_cc\\_reentry \\(threshold\\=0\\.25, actual\\=0\\.19\\)"
     )
-    assert msg == expected
+    assert msg.endswith(expected_gate_line)
 
 
 def test_overlay_entry_gate_violation_line_omitted_when_none() -> None:
@@ -337,14 +336,11 @@ def test_overlay_entry_gate_violation_line_omitted_when_none() -> None:
     mock_notifier = MagicMock()
     mock_notifier.send = AsyncMock(return_value=True)
 
+    mock_cfg = _make_cfg("cc", call_strike=24800)
+
     with patch(
         "scripts.strategies.three_track.paper_3track_overlay_entry.load_overlay_config"
     ) as mock_load:
-        mock_cfg = MagicMock()
-        mock_cfg.overlay_type = "cc"
-        mock_cfg.lot_size = 65
-        mock_cfg.expiry = "2026-09-29"
-        mock_cfg.call_strike = 24800
         mock_load.return_value = mock_cfg
 
         with patch("sys.argv", ["paper_3track_overlay_entry.py"]):
@@ -370,14 +366,11 @@ def test_overlay_entry_unmapped_leg_role_raises() -> None:
     mock_store.record_trade.return_value = True
     mock_notifier = MagicMock()
 
+    mock_cfg = _make_cfg("cc", call_strike=24800)
+
     with patch(
         "scripts.strategies.three_track.paper_3track_overlay_entry.load_overlay_config"
     ) as mock_load:
-        mock_cfg = MagicMock()
-        mock_cfg.overlay_type = "cc"
-        mock_cfg.lot_size = 65
-        mock_cfg.expiry = "2026-09-29"
-        mock_cfg.call_strike = 24800
         mock_load.return_value = mock_cfg
 
         with patch("sys.argv", ["paper_3track_overlay_entry.py"]):
@@ -392,8 +385,9 @@ def test_overlay_entry_unmapped_leg_role_raises() -> None:
                 )
 
 
-def test_overlay_entry_all_reserved_chars_escaped() -> None:
-    # Test that reserved chars like '-', '.', '_' are escaped properly
+def test_overlay_entry_spot_unavailable_skips_card() -> None:
+    """When live spot cannot be fetched, the card is skipped (logged) rather than
+    sent with a bad value or crashing the trade."""
     trade = _make_trade("overlay_cc", price=Decimal("185.20"))
     overlay_trade = _FakeOverlayTrade(trade=trade, strategy=STRATEGY_OVERLAY, leg_role="overlay_cc")
     mock_store = MagicMock()
@@ -402,11 +396,50 @@ def test_overlay_entry_all_reserved_chars_escaped() -> None:
     mock_notifier = MagicMock()
     mock_notifier.send = AsyncMock(return_value=True)
 
-    mock_cfg = MagicMock()
-    mock_cfg.overlay_type = "cc"
-    mock_cfg.lot_size = 65
-    mock_cfg.expiry = "2026-09-29"
-    mock_cfg.call_strike = 24800.5
+    mock_cfg = _make_cfg("cc", call_strike=24800)
+
+    with (
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.load_overlay_config",
+            return_value=mock_cfg,
+        ),
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.build_overlay_trades",
+            return_value=([overlay_trade], []),
+        ),
+        patch("scripts.strategies.three_track.paper_3track_overlay_entry.print_summary"),
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.PaperStore",
+            return_value=mock_store,
+        ),
+        patch("scripts.strategies.three_track.paper_3track_overlay_entry.setup_logging"),
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.build_notifier",
+            return_value=mock_notifier,
+        ),
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry._fetch_nifty_spot",
+            return_value=None,
+        ),
+        patch("sys.argv", ["paper_3track_overlay_entry.py"]),
+    ):
+        ov_entry.main()
+
+    mock_notifier.send.assert_not_awaited()
+    mock_store.record_trade.assert_called_once()
+
+
+def test_overlay_entry_all_reserved_chars_escaped() -> None:
+    # Test that reserved chars like '-', '.', '_' in the gate line are escaped.
+    trade = _make_trade("overlay_cc", price=Decimal("185.20"))
+    overlay_trade = _FakeOverlayTrade(trade=trade, strategy=STRATEGY_OVERLAY, leg_role="overlay_cc")
+    mock_store = MagicMock()
+    mock_store.get_positions.return_value = []
+    mock_store.record_trade.return_value = True
+    mock_notifier = MagicMock()
+    mock_notifier.send = AsyncMock(return_value=True)
+
+    mock_cfg = _make_cfg("cc", call_strike=24800)
 
     gate_violation = GateViolation(
         gate_name="my_gate-with_chars",
@@ -431,6 +464,10 @@ def test_overlay_entry_all_reserved_chars_escaped() -> None:
             "scripts.strategies.three_track.paper_3track_overlay_entry.build_notifier",
             return_value=mock_notifier,
         ),
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry._fetch_nifty_spot",
+            return_value=_SPOT,
+        ),
         patch("scripts.strategies.three_track.paper_3track_overlay_entry.print_summary"),
         patch(
             "scripts.strategies.three_track.paper_3track_overlay_entry.PaperStore",
@@ -440,8 +477,6 @@ def test_overlay_entry_all_reserved_chars_escaped() -> None:
         ov_entry.main()
 
     msg = mock_notifier.send.await_args[0][0]
-    # Check escaped dot in money
-    assert "₹185\\.20" in msg
     # Check escaped minus and underscore in gate
     assert "my\\_gate\\-with\\_chars" in msg
     # Check threshold escaped minus and dot

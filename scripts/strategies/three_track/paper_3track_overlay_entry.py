@@ -80,7 +80,8 @@ from src.instruments.strike_selector import (
     rank_strikes,
 )
 from src.models.portfolio import TradeAction
-from src.notifications.formatting import format_money, format_month, leg_role_label
+from src.notifications.entry_message import EntryMessage, format_entry_message
+from src.notifications.formatting import LegRow, format_strike
 from src.notifications.markdown import escape_markdown
 from src.notifications.telegram import build_notifier
 from src.paper.constants import (
@@ -108,6 +109,14 @@ _PRIMARY_LEG_ROLE = {
     "pp": "overlay_pp",
     "cc": "overlay_cc",
     "collar": "overlay_collar_put",
+}
+
+# leg_role -> (LegRow.role, option right) for the bootstrap entry card (OEM-4).
+_LEG_ROLE_TO_ROW = {
+    "overlay_pp": ("Long Put", "PE"),
+    "overlay_collar_put": ("Long Put", "PE"),
+    "overlay_cc": ("Short Call", "CE"),
+    "overlay_collar_call": ("Short Call", "CE"),
 }
 
 DEFAULT_CONFIG = Path("data/paper/overlay_entry.yaml")
@@ -1240,6 +1249,21 @@ def _has_open_overlay_leg(store: PaperStore, leg_role: str) -> bool:
     return any(p.leg_role == leg_role for p in store.get_positions(STRATEGY_OVERLAY))
 
 
+def _fetch_nifty_spot() -> Decimal | None:
+    """Live Nifty spot for the bootstrap entry card, or None on any fetch failure.
+
+    Same client/LTP-fetch pattern as ``_check_overlay_collateral_capacity`` — never
+    raises, the caller skips the card (logged) rather than blocking the trade.
+    """
+    try:
+        client = UpstoxMarketClient(settings.upstox_analytics_token)
+        ltp_map = client.get_ltp_sync([NIFTY_UNDERLYING])
+        return ltp_map.get(NIFTY_UNDERLYING)
+    except Exception as exc:  # non-fatal — a notify-only helper must never raise
+        logger.warning("paper_3track_overlay_entry.spot_fetch_failed", error=str(exc))
+        return None
+
+
 def _check_overlay_collateral_capacity(
     store: PaperStore, strategy_name: str, lots_requested: int
 ) -> None:
@@ -1536,36 +1560,61 @@ def main() -> None:
 
             notifier = build_notifier()
             if notifier:
-                month = escape_markdown(format_month(date.fromisoformat(cfg.expiry)))
-                overlay_type = escape_markdown(cfg.overlay_type.upper())
-                lines = [f"📥 Overlay Entry — {overlay_type} Bootstrap"]
+                legs = []
+                net_credit = Decimal("0")
                 for ot in overlay_trades:
-                    label = escape_markdown(leg_role_label(ot.leg_role))
-                    if ot.leg_role in ("overlay_pp", "overlay_collar_put"):
-                        right, verb, marker = "PE", "Long", "🟢"
-                        strike = cfg.put_strike
-                    else:
-                        right, verb, marker = "CE", "Short", "🔴"
-                        strike = cfg.call_strike
-
-                    strike_str = escape_markdown(f"{strike:.0f}")
-                    price_str = escape_markdown(format_money(ot.trade.price))
-                    lines.append(
-                        f"{marker} {label}: {verb} {cfg.lot_size}x NIFTY {month} {strike_str} {right} @ {price_str}"
+                    try:
+                        role, right = _LEG_ROLE_TO_ROW[ot.leg_role]
+                    except KeyError:
+                        raise ValueError(
+                            f"no display label mapped for leg_role={ot.leg_role!r}"
+                        ) from None
+                    strike = cfg.put_strike if right == "PE" else cfg.call_strike
+                    legs.append(
+                        LegRow(
+                            role=role,
+                            instrument=f"{format_strike(strike)} {right}",
+                            delta=None,
+                            ltp=float(ot.trade.price),
+                            entry=float(ot.trade.price),
+                        )
                     )
+                    net_credit += -ot.trade.price if right == "PE" else ot.trade.price
 
-                if gate_violation is not None:
-                    gate_name = escape_markdown(gate_violation.gate_name)
-                    threshold = escape_markdown(gate_violation.threshold)
-                    actual = escape_markdown(gate_violation.actual)
-                    lines.append(
-                        f"⚠️ Gate Logged: {gate_name} \\(threshold\\={threshold}, actual\\={actual}\\)"
+                spot = _fetch_nifty_spot()
+                if spot is None:
+                    logger.warning(
+                        "paper_3track_overlay_entry.bootstrap_card_skipped",
+                        reason="spot_unavailable",
+                        overlay_type=cfg.overlay_type,
                     )
-                msg = "\n".join(lines)
-                try:
-                    asyncio.run(notifier.send(msg))
-                except Exception as exc:  # non-fatal — notify failure never blocks the trade
-                    logger.warning("paper_3track_overlay_entry.notify_failed", error=str(exc))
+                else:
+                    msg = EntryMessage(
+                        headline_label=cfg.overlay_type.upper(),
+                        expiry=date.fromisoformat(cfg.expiry),
+                        dte=cfg.dte_at_entry,
+                        spot=float(spot),
+                        net_credit=net_credit,
+                        expiry_type=None,
+                        ivr=None,
+                        mode=None,
+                        legs=legs,
+                    )
+                    card = format_entry_message(msg)
+
+                    if gate_violation is not None:
+                        gate_name = escape_markdown(gate_violation.gate_name)
+                        threshold = escape_markdown(gate_violation.threshold)
+                        actual = escape_markdown(gate_violation.actual)
+                        card += (
+                            f"\n⚠️ Gate Logged: {gate_name} "
+                            f"\\(threshold\\={threshold}, actual\\={actual}\\)"
+                        )
+
+                    try:
+                        asyncio.run(notifier.send(card))
+                    except Exception as exc:  # non-fatal — notify failure never blocks the trade
+                        logger.warning("paper_3track_overlay_entry.notify_failed", error=str(exc))
 
     print_summary(cfg, overlay_trades, warnings, args.dry_run)
 
