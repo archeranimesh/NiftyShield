@@ -42,7 +42,7 @@ Confirmed with Animesh, 2026-09-10:
 | Story | Purpose | Status | Depends on | Closing SHA |
 |---|---|---|---|---|
 | `unified-entry-message/` | Shared `entry_message.py` renderer; IC migrated onto it; CSP + CC entry card via `record_paper_trade.py --notify` (UEM-1..3) | ✅ Done | — | 889d860 |
-| `overlay-entry-message/` | Sign-aware net line; Collar / CC / PP re-entry cards; three-track bootstrap onto the renderer (OEM-1..5) | 🔄 In progress | `unified-entry-message` | — |
+| `overlay-entry-message/` | Sign-aware net line; Collar / CC / PP re-entry cards; three-track bootstrap onto the renderer (OEM-1..5) | ✅ Done | `unified-entry-message` | 3982c0e |
 | `unified-exit-message/` | Shared `exit_message.py` close renderer + P&L / win-rate / decay footer; `pre_market_brief.py` redesign (UXM-1..8) | ⬜ | `overlay-entry-message` | — |
 | `overlay-recovery-digest/` | Fix the standalone-CC-vanishes-into-Collar bug (BUG-044) in the S9 digest, then fenced-format it (ORD-1..4) | ⬜ | `unified-exit-message` | — |
 

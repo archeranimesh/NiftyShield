@@ -121,12 +121,18 @@ transport-agnostic (return a string, never call `send()` themselves):
 - **`_format_combined_summary()`** (`src/portfolio/formatting.py`) — the portfolio EOD summary.
 - **`entry_message.py`** — `EntryMessage` dataclass + `format_entry_message()` renders a
   strategy-agnostic entry confirmation (`headline_label` picks the strategy — IC v1/v2, CSP,
-  CC, …) as a headline + optional `*Mode:*` line + kv row + fenced `build_leg_table()` block +
-  net-credit line. `ivr` / `mode` / `expiry_type` are optional; the kv row omits `IVR:` when
-  `ivr is None`. Each dynamic value is `escape_markdown()`'d individually; the fence is emitted
-  literally. ROLL-17, generalized UEM-1. UEM-2 wired `record_paper_trade.py --notify` to emit a
-  one-leg CSP / CC card on a successful open via `TelegramNotifier` (`headline_label` /
-  `role` derived from `--strategy` and option type); silent no-op on close / roll.
+  CC, Collar, PP, three-track bootstrap, …) as a headline + optional `*Mode:*` line + kv row +
+  fenced `build_leg_table()` block + net line. `ivr` / `mode` / `expiry_type` are optional; the
+  kv row omits `IVR:` when `ivr is None`. Each dynamic value is `escape_markdown()`'d
+  individually; the fence is emitted literally. ROLL-17, generalized UEM-1. UEM-2 wired
+  `record_paper_trade.py --notify` to emit a one-leg CSP / CC card on a successful open via
+  `TelegramNotifier` (`headline_label` / `role` derived from `--strategy` and option type);
+  silent no-op on close / roll. **The net line is sign-aware (OEM-1):** `net_credit < 0` renders
+  `💰 *Net debit:*` with the absolute value and the label flipped; positive / zero is
+  byte-identical to the original credit-only line. OEM-2 wired a successful automated
+  `CollarOverlayV1._reenter_collar` re-entry onto the shared card (non-fatal); OEM-4 migrated
+  the three-track bootstrap message (`paper_3track_overlay_entry.py`, CC / PP / Collar) onto it
+  too, with the `⚠️ Gate Logged` line appended by the caller after the rendered card.
 
 A new multi-line message that interpolates several typed values follows this pattern — a
 builder function taking one dataclass — rather than a hand-rolled f-string at the call site.

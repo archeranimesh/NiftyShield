@@ -298,6 +298,17 @@ entry card into `EntryMessage` + `format_entry_message`, strategy-chosen via `he
 on a successful open. `ivr` relaxed to optional vs ROLL-17's required (CSP / CC have no IVR at record time); `dte` / `spot` / `net_credit` stay required. PP / collar / three-track bootstrap /
 track-comparison entry cards deferred to `overlay-entry-message/`.
 
+**2026-09-13 — overlay entries unified onto the shared renderer (OEM-1..4,
+`telegram-message-unification/overlay-entry-message/`):** `entry_message.py::_credit_line` made
+sign-aware — negative `net_credit` renders `💰 *Net debit:*` (absolute value, label flipped),
+positive / zero byte-identical, so IC / CSP / CC output is unchanged. A successful automated
+Collar re-entry (`CollarOverlayV1._reenter_collar`) now sends a `✅ *Collar Entry*` card; CC/PP
+have no in-tick automated re-entry path (OEM-3 merged into OEM-4 — only the three-track
+bootstrap actually reopens a CC/PP position). The `📥 Overlay Entry — {TYPE} Bootstrap`
+hand-rolled message in `paper_3track_overlay_entry.py` is replaced by the shared renderer for
+cc / pp / collar, with the `⚠️ Gate Logged` line appended by the caller. `nifty_track_comparison_v1`
+still deferred (not a credit structure).
+
 **Two distinct P&L metrics:** (1) Inception P&L — current value minus total invested; (2) Day-change P&L — today vs previous snapshot via `get_prev_snapshots()` / `get_prev_nav_snapshots()` (MAX date
 < today, calendar-agnostic). Δday column omitted silently on first run.
 

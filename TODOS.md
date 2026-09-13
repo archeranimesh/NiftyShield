@@ -135,6 +135,12 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-13] OEM-5 (`docs/plan/telegram-message-unification/overlay-entry-message/`) —
+  sub-story docs close. `CONTEXT.md` / `src/notifications/CLAUDE.md` / `DECISIONS.md` updated
+  to reflect the sign-aware net line (OEM-1) and the Collar re-entry + three-track bootstrap
+  cards (OEM-2/OEM-4, OEM-3 merged into OEM-4). Epic `README.md` `overlay-entry-message/` row
+  flipped to ✅ Done, closing SHA 3982c0e. Epic folder not archived — archives whole at UXM-8.
+  Review: none (docs only). Next: `unified-exit-message/` (UXM-1).
 - [2026-09-13] OEM-3 (`docs/plan/telegram-message-unification/overlay-entry-message/`) —
   merged into OEM-4, no code change. Graph inspection of `CCOverlayV1.apply_action`,
   `PPOverlayV1.apply_action`, and `ReEntryMixin._check_reentry` found neither class performs

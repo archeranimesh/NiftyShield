@@ -6,7 +6,7 @@ spec.
 Sub-story 2 of the `telegram-message-unification/` epic. Depends on `unified-entry-message/` (UEM-1..3) — `src/notifications/entry_message.py` must already exist. Do not start OEM-1 before every UEM
 box is ticked (its epic `README.md` Stories-table row is ✅).
 
-**Open: OEM-5.**
+**Open: none — story done.**
 
 - [x] **OEM-1** — Sign-aware net line in `entry_message.py::_credit_line`: negative
       `net_credit` → `💰 *Net debit:* …` (absolute value, label flipped); positive / zero
@@ -30,10 +30,10 @@ box is ticked (its epic `README.md` Stories-table row is ✅).
       `paper_3track_overlay_entry.py` to `format_entry_message`; the `⚠️ Gate Logged` line
       stays appended by the caller after the rendered card.
       | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 3982c0e
-- [ ] **OEM-5** — Sub-story docs close: `CONTEXT.md` / `src/notifications/CLAUDE.md` / `DECISIONS.md` /
+- [x] **OEM-5** — Sub-story docs close: `CONTEXT.md` / `src/notifications/CLAUDE.md` / `DECISIONS.md` /
       the epic `README.md` Stories table / `TODOS.md` Session Log. No folder archive — the epic
       archives as a whole at UXM-8.
-      | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: —
+      | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <pending>
 
 ## Story done when
 
