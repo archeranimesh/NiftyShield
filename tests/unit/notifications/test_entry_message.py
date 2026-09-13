@@ -138,3 +138,13 @@ def test_ivr_present_renders_ivr_segment() -> None:
     assert out[0] == "✅ *CSP Entry*"
     # Note: escaped 0.14 is 0\.14
     assert "*IVR:* 0\\.14" in "\n".join(out)
+
+
+def test_net_debit_line_when_net_credit_negative() -> None:
+    out = format_entry_message(_msg(net_credit=Decimal("-25.00"))).splitlines()
+    assert out[-1] == "💰 *Net debit:* ₹25\\.00/lot  ×65 \\= ₹1,625\\.00"
+
+
+def test_net_credit_line_unchanged_for_zero() -> None:
+    out = format_entry_message(_msg(net_credit=Decimal("0"))).splitlines()
+    assert out[-1] == "💰 *Net credit:* ₹0\\.00/lot  ×65 \\= ₹0\\.00"

@@ -8,6 +8,10 @@ Originally built for IC, generalized in UEM-1.
 The confirmed message is a fenced `build_leg_table()` table — `LegRow` reused verbatim, no
 parallel leg model. Every dynamic value passes through `escape_markdown()`; the fenced block
 is emitted literally (never run through whole-body escaping, which would break the fence).
+
+`net_credit` is signed: positive = credit received (IC / CSP / CC / short-call overlays),
+negative = debit paid (collar, PP re-entry) — `_credit_line` picks the label from the sign
+(OEM-1).
 """
 
 from __future__ import annotations
@@ -72,10 +76,16 @@ def _kv_row(msg: EntryMessage) -> str:
 
 
 def _credit_line(msg: EntryMessage) -> str:
-    """``💰 *Net credit:* ₹X/lot  ×65 = ₹Y`` — both values via ``format_money`` (#D)."""
-    per_lot = escape_markdown(format_money(msg.net_credit))
-    total = escape_markdown(format_money(msg.net_credit * LOT_SIZE))
-    return f"💰 *Net credit:* {per_lot}/lot  ×{LOT_SIZE} \\= {total}"
+    """``💰 *Net credit/debit:* ₹X/lot  ×65 = ₹Y`` — sign of ``net_credit`` picks the label (#D)."""
+    if msg.net_credit < 0:
+        label = "Net debit"
+        value = abs(msg.net_credit)
+    else:
+        label = "Net credit"
+        value = msg.net_credit
+    per_lot = escape_markdown(format_money(value))
+    total = escape_markdown(format_money(value * LOT_SIZE))
+    return f"💰 *{label}:* {per_lot}/lot  ×{LOT_SIZE} \\= {total}"
 
 
 def format_entry_message(msg: EntryMessage) -> str:
