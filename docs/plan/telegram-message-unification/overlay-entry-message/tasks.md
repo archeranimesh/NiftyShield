@@ -6,7 +6,7 @@ spec.
 Sub-story 2 of the `telegram-message-unification/` epic. Depends on `unified-entry-message/` (UEM-1..3) — `src/notifications/entry_message.py` must already exist. Do not start OEM-1 before every UEM
 box is ticked (its epic `README.md` Stories-table row is ✅).
 
-**Open: OEM-4, OEM-5.**
+**Open: OEM-5.**
 
 - [x] **OEM-1** — Sign-aware net line in `entry_message.py::_credit_line`: negative
       `net_credit` → `💰 *Net debit:* …` (absolute value, label flipped); positive / zero
@@ -26,10 +26,10 @@ box is ticked (its epic `README.md` Stories-table row is ✅).
       `✅ *CC Entry*` / `✅ *PP Entry*` cards (in addition to Collar's bootstrap card) as part
       of its bootstrap-message migration; no separate code change lands under OEM-3.
       | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: —
-- [ ] **OEM-4** — Migrate the `📥 Overlay Entry — {TYPE} Bootstrap` message in
+- [x] **OEM-4** — Migrate the `📥 Overlay Entry — {TYPE} Bootstrap` message in
       `paper_3track_overlay_entry.py` to `format_entry_message`; the `⚠️ Gate Logged` line
       stays appended by the caller after the rendered card.
-      | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
+      | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 3982c0e
 - [ ] **OEM-5** — Sub-story docs close: `CONTEXT.md` / `src/notifications/CLAUDE.md` / `DECISIONS.md` /
       the epic `README.md` Stories table / `TODOS.md` Session Log. No folder archive — the epic
       archives as a whole at UXM-8.
