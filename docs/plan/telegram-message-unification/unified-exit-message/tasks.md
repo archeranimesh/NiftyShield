@@ -6,7 +6,7 @@ spec.
 Sub-story 3 of the `telegram-message-unification/` epic. Depends on `unified-entry-message/` + `overlay-entry-message/` — do not start UXM-1 before every UEM and OEM box is ticked (both Stories-table
 rows in the epic `README.md` are ✅). UXM-8 is a sub-story close only — `overlay-recovery-digest/` ORD-4 archives the epic.
 
-**Open: UXM-7, UXM-8.**
+**Open: none — story complete.**
 
 - [x] **UXM-1** — gross-short-premium `short_decay_pct` (+ `short_credit_per_unit` /
       `short_buyback_per_unit`) on `Cycle`; `cycle_stats(trades) -> CycleStats` (win_rate,
@@ -31,11 +31,11 @@ rows in the epic `README.md` are ✅). UXM-8 is a sub-story close only — `over
       house-style table, `strategy_label()` names, `paper_nifty_overlay` broken into CC /
       Collar / PP sub-rows (via UXM-1's `resolve_target`), portfolio total row.
       | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 84e786b
-- [ ] **UXM-8** — Sub-story docs close: `CONTEXT.md` / `src/notifications/CLAUDE.md` / `DECISIONS.md`;
+- [x] **UXM-8** — Sub-story docs close: `CONTEXT.md` / `src/notifications/CLAUDE.md` / `DECISIONS.md`;
       flip the `unified-exit-message/` row in the epic `README.md` **Stories** table to ✅ with the
       closing SHA; `TODOS.md` Session Log line. No folder archive — `overlay-recovery-digest/` ORD-4
       archives the epic.
-      | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: —
+      | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 0ab7a19
 
 ## Story done when
 
