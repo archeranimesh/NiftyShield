@@ -214,9 +214,9 @@ class TestReal2026Yaml:
         holidays = load_holidays(2026)
         assert date(2026, 12, 25) in holidays
 
-    def test_independence_day_is_holiday(self) -> None:
+    def test_ganesh_chaturthi_is_holiday(self) -> None:
         holidays = load_holidays(2026)
-        assert date(2026, 8, 15) in holidays
+        assert date(2026, 9, 14) in holidays
 
     def test_regular_tuesday_april_7_is_trading_day(self) -> None:
         # 2026-04-07 is a Tuesday, not a holiday
