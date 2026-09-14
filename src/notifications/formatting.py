@@ -266,6 +266,70 @@ def build_leg_table(legs: list[LegRow]) -> str:
     return "\n".join(lines)
 
 
+@dataclass(frozen=True)
+class CloseLegRow:
+    """One row of input for build_close_leg_table.
+
+    role: e.g. "Short Put" / "Long Call" — same [S]/[B] badge rule as
+        LegRow (startswith "Short").
+    instrument: pre-formatted instrument label, e.g. "23000 PE".
+    entry: entry fill price.
+    exit: close fill price.
+    pnl: realized P&L for this leg, signed.
+    """
+
+    role: str
+    instrument: str
+    entry: float
+    exit: float
+    pnl: Decimal
+
+
+def build_close_leg_table(rows: list[CloseLegRow]) -> str:
+    """Fenced-code-block-ready close table: [S]/[B] badge, instrument,
+    entry, exit, P&L — right-aligned numerics.
+
+    Entry/Exit columns: 1dp, same locked-in exception as build_leg_table
+    (FORMATTING.md §3). P&L via format_money(signed=True) so a winning
+    leg shows a leading "+".
+
+    Caller wraps the return value in a ```fenced block``` — this function
+    does not add the fence itself.
+    """
+    if not rows:
+        raise ValueError("build_close_leg_table requires at least one leg")
+
+    table_rows = []
+    for row in rows:
+        badge = "[S]" if row.role.startswith("Short") else "[B]"
+        entry_str = f"{row.entry:.1f}"
+        exit_str = f"{row.exit:.1f}"
+        pnl_str = format_money(row.pnl, signed=True)
+        table_rows.append((badge, row.instrument, entry_str, exit_str, pnl_str))
+
+    widths = {
+        "act": max(len("Act"), *(len(r[0]) for r in table_rows)),
+        "instrument": max(len("Instrument"), *(len(r[1]) for r in table_rows)),
+        "entry": max(len("Entry"), *(len(r[2]) for r in table_rows)),
+        "exit": max(len("Exit"), *(len(r[3]) for r in table_rows)),
+        "pnl": max(len("P&L"), *(len(r[4]) for r in table_rows)),
+    }
+
+    header = (
+        f"{'Act':<{widths['act']}} {'Instrument':<{widths['instrument']}} "
+        f"{'Entry':>{widths['entry']}} {'Exit':>{widths['exit']}} "
+        f"{'P&L':>{widths['pnl']}}"
+    )
+    lines = [header, "-" * len(header)]
+    for act, instrument, entry_str, exit_str, pnl_str in table_rows:
+        lines.append(
+            f"{act:<{widths['act']}} {instrument:<{widths['instrument']}} "
+            f"{entry_str:>{widths['entry']}} {exit_str:>{widths['exit']}} "
+            f"{pnl_str:>{widths['pnl']}}"
+        )
+    return "\n".join(lines)
+
+
 # --- ROLL-2a: display-width-aware comparison table (FMT-3 promotion of
 # scratch/2026-08-07_ic_monthly_comparison_telegram_format.py's
 # build_compare_table, see FORMATTING.md §7 and strategy-rollout/stories.md
