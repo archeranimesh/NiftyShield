@@ -146,6 +146,20 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
   (`tests/unit/paper/test_cycle_pnl.py`), full suite 3091/3091. Review: code-reviewer +
   greeks-analyst, both clean. Next: `unified-exit-message/` UXM-2 (shared `exit_message.py`
   renderer).
+- [2026-09-14] UXM-2 (`docs/plan/telegram-message-unification/unified-exit-message/`) —
+  new `src/notifications/exit_message.py`: `ExitKind(str, Enum)`, frozen `ExitMessage`,
+  `format_exit_message()`; `CloseLegRow` + `build_close_leg_table()` added to
+  `formatting.py`. Renderer + tests only, no callers wired yet. Cycle-line collapses into
+  the this-exit line on a full close, omits on a partial close, drops the
+  credit/buyback/decay segment for a pure-long cycle (PP); win-rate row gated at
+  `closed_count >= 5`. `ExitMessage.__post_init__` enforces the cycle-field-group
+  invariants (added post code-review — a latent `TypeError` crash if `cycle_decay_pct` were
+  set without `cycle_short_credit`/`cycle_short_buyback`). SHA e9d830d. Tests: 13/13 green
+  (`tests/unit/notifications/test_exit_message.py`), full suite 3104/3104. Review:
+  code-reviewer, clean after the `__post_init__` fix (2 minor float-vs-Decimal WARNINGs on
+  `CloseLegRow`/`LegRow` deferred — matches existing display-row precedent). Epic
+  `README.md` `unified-exit-message/` row set to 🔄 In progress (not yet ✅ — 7 of 8 UXM
+  tasks remain). Next: `unified-exit-message/` UXM-3 (migrate IC v1/v2 closes).
 - [2026-09-13] OEM-5 (`docs/plan/telegram-message-unification/overlay-entry-message/`) —
   sub-story docs close. `CONTEXT.md` / `src/notifications/CLAUDE.md` / `DECISIONS.md` updated
   to reflect the sign-aware net line (OEM-1) and the Collar re-entry + three-track bootstrap
