@@ -6,7 +6,7 @@ spec.
 Sub-story 3 of the `telegram-message-unification/` epic. Depends on `unified-entry-message/` + `overlay-entry-message/` — do not start UXM-1 before every UEM and OEM box is ticked (both Stories-table
 rows in the epic `README.md` are ✅). UXM-8 is a sub-story close only — `overlay-recovery-digest/` ORD-4 archives the epic.
 
-**Open: UXM-3, UXM-4, UXM-5, UXM-6, UXM-7, UXM-8.**
+**Open: UXM-4, UXM-5, UXM-6, UXM-7, UXM-8.**
 
 - [x] **UXM-1** — gross-short-premium `short_decay_pct` (+ `short_credit_per_unit` /
       `short_buyback_per_unit`) on `Cycle`; `cycle_stats(trades) -> CycleStats` (win_rate,
@@ -17,8 +17,8 @@ rows in the epic `README.md` are ✅). UXM-8 is a sub-story close only — `over
       `format_exit_message`) + `build_close_leg_table` in `formatting.py`. Renderer + tests
       only, no callers. Win-rate row gated at `closed_count >= 5`.
       | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: e9d830d
-- [ ] **UXM-3** — Migrate IC v1 + v2 `_send_close_notification` to `format_exit_message`.
-      | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
+- [x] **UXM-3** — Migrate IC v1 + v2 `_send_close_notification` to `format_exit_message`.
+      | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 22359bf
 - [ ] **UXM-4** — Migrate CSP (`_reentry_notification` + `⛔ waiting`); extend
       `record_paper_trade.py --notify` to send an exit card on `--close`.
       | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —

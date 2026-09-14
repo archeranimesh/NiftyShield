@@ -160,6 +160,27 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
   `CloseLegRow`/`LegRow` deferred — matches existing display-row precedent). Epic
   `README.md` `unified-exit-message/` row set to 🔄 In progress (not yet ✅ — 7 of 8 UXM
   tasks remain). Next: `unified-exit-message/` UXM-3 (migrate IC v1/v2 closes).
+- [2026-09-14] UXM-3 (`docs/plan/telegram-message-unification/unified-exit-message/`) —
+  `IronCondorV1`/`IronCondorV2._send_close_notification` migrated off the hand-rolled
+  `✅ *IC closed — …*` f-string onto `format_exit_message(ExitMessage(...))`. Per-leg
+  entry/exit price now comes from the pre-close `positions` list (threaded through as a new
+  4th param on both methods) via `avg_sell_price`/`avg_cost`; per-leg P&L computed locally
+  from `_SHORT_ROLES` sign convention; DTE via the existing `_parse_expiry` pattern; the
+  cycle/inception/win-rate footer via `reconstruct_cycles`/`cycle_stats` (UXM-1) +
+  `get_strategy_realized_pnl`. Instrument labels via `format_leg_label` against a
+  freshly-loaded `InstrumentLookup` (falls back to the raw key on failure, matching the
+  existing roll-target pattern in these files); local `_CLOSE_ROLE_LABELS` dict covers the
+  two hedge roles `formatting.py`'s shared `LEG_ROLE_LABELS` doesn't (out of this story's
+  file scope to extend). `ExitMessage` construction and `format_exit_message()` now sit in
+  their own try/except (code-review fix — a validation/format crash there must not
+  propagate through `apply_action`), separate from the `send_notification` try/except. SHA
+  22359bf. Tests: 108/108 green (`test_ic_nifty_v1.py` + `test_ic_nifty_v2_signals.py`,
+  incl. new held-days and notify-failure-non-fatal coverage), `tests/unit/strategy/`
+  709/709, full suite otherwise green (4 pre-existing unrelated failures: 3
+  escaping-guard baseline drift from `eod_summary.py` line shifts, 1 NSE-2025-calendar
+  message-text mismatch — neither touched by this task). Review: code-reviewer, clean after
+  the try/except fix. Next: `unified-exit-message/` UXM-4 (migrate CSP + recorder
+  `--close`).
 - [2026-09-13] OEM-5 (`docs/plan/telegram-message-unification/overlay-entry-message/`) —
   sub-story docs close. `CONTEXT.md` / `src/notifications/CLAUDE.md` / `DECISIONS.md` updated
   to reflect the sign-aware net line (OEM-1) and the Collar re-entry + three-track bootstrap
