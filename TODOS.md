@@ -528,6 +528,12 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
   `graph_snippet.py` + `portfolio`/`client`/`notifications` `NOTES.md` references at the archive path, collapsed the `docs/plan/README.md` entry. See `docs/archive/TODOS_ARCHIVE.md` 2026-09-03. Open
   follow-ups: DEBT-8..DEBT-12.
 
+### 2026-09-14
+- **NSE 2026 holiday YAML corrected** (`c300769`). `src/market_calendar/data/nse_2026.yaml` had wrong dates (Ganesh Chaturthi listed 09-17 instead of 09-14, plus several other mismatches vs. NSE's
+  published calendar) — `guard_trading_day()`'s fail-open lookup found 09-14 absent from the holiday set and let `morning_signal` fire a consensus signal on today's actual market holiday. Rebuilt
+  the full list from `nseindia.com/resources/exchange-communication-holidays`; replaced `test_independence_day_is_holiday` (asserted a Saturday, already a non-trading day, was in the set — an
+  artifact of the old wrong data) with `test_ganesh_chaturthi_is_holiday`. Root cause: annual-only manual refresh with no staleness alert — worth a follow-up if this recurs.
+
 ### 2026-09-10
 - **SPT-2a closed as a no-op** (docs-only). Antigravity handoff surfaced that `get_expiry_candidates(preference=["monthly"])` already enforces a `dte >= 14` floor, so `resolve_monthly_option` never
   returns a `≤ 13-DTE` contract — the next-month roll SPT-2a asked for already happens at 14 DTE, consistent with `snapshot.py` / overlays / IC. A `≤ 7` hold would need a floor bypass + a
