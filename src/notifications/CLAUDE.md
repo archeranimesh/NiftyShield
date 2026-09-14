@@ -133,6 +133,13 @@ transport-agnostic (return a string, never call `send()` themselves):
   `CollarOverlayV1._reenter_collar` re-entry onto the shared card (non-fatal); OEM-4 migrated
   the three-track bootstrap message (`paper_3track_overlay_entry.py`, CC / PP / Collar) onto it
   too, with the `⚠️ Gate Logged` line appended by the caller after the rendered card.
+- **`exit_message.py`** — `ExitMessage` dataclass + `format_exit_message()` renders a
+  strategy-agnostic close card: Act/Instrument/Entry/Exit/P&L leg table + a three-level P&L
+  footer (this-exit / cycle / inception), rows collapsing when this-exit == cycle. The
+  **inception** number is `get_strategy_realized_pnl(store, ...)` — authoritative, store-derived
+  — never the summed cycle P&L, which is only an approximation. Win-rate + avg-decay-% (from
+  `cycle_stats`) appear only when `closed_count >= 5`. IC v1/v2, CSP, CC, PP, and Collar all
+  route through this one renderer (UXM-1..6), including the `auto_close.py` daemon paths.
 
 A new multi-line message that interpolates several typed values follows this pattern — a
 builder function taking one dataclass — rather than a hand-rolled f-string at the call site.

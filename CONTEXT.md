@@ -73,7 +73,13 @@ Top-level `src/` packages, one line each (detail → `CONTEXT_TREE.md`):
   `TelegramGateway` (council-free approval dispatch + callback polling + chat-ID allowlist),
   `alerts.py` (shared Telegram message builders), `formatting.py` (per-type value formatters + table builders),
   `entry_message.py` (shared lean entry-confirmation renderer — IC v1/v2 + CSP + CC +
-  Collar/PP + 3track bootstrap, UEM-1/2 + OEM-1..4).
+  Collar/PP + 3track bootstrap, UEM-1/2 + OEM-1..4),
+  `exit_message.py` (shared close-confirmation renderer — IC/CSP/CC/PP/Collar + this-exit /
+  cycle / inception P&L + win-rate, UXM-1..7). `src/paper/cycle_pnl.py`'s `Cycle` gained
+  `short_decay_pct` (gross-short-premium ratio) and the module gained `cycle_stats`,
+  `LegGroup`, `resolve_target` (moved in from `scripts/dev/cycle_pnl_report.py`).
+  `scripts/pre_market_brief.py` redesigned to MarkdownV2 fenced tables with the overlay
+  broken into CC/Collar/PP sub-rows (UXM-7).
 - `src/reporting/` — promoted EOD report builders. `eod_pt_summary.py`: cross-strategy paper-trade summary as 1-3 MarkdownV2 Telegram messages (open positions /
   closed-today / strategy P&L + Ann.% on margin), off live `PaperStore.get_positions()` + broker LTP. Runs alongside `scripts/eod_summary.py`, not a replacement
   (PT-2, `docs/archive/plan/eod-pt-summary/`).

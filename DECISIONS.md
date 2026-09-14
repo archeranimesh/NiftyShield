@@ -298,6 +298,18 @@ entry card into `EntryMessage` + `format_entry_message`, strategy-chosen via `he
 on a successful open. `ivr` relaxed to optional vs ROLL-17's required (CSP / CC have no IVR at record time); `dte` / `spot` / `net_credit` stay required. PP / collar / three-track bootstrap /
 track-comparison entry cards deferred to `overlay-entry-message/`.
 
+**2026-09-14 — unified exit renderer + brief redesign (UXM-1..8,
+`telegram-message-unification/unified-exit-message/`):** `src/notifications/exit_message.py`
+(`ExitMessage` + `format_exit_message`) renders a strategy-agnostic close card with three P&L
+levels — this-exit / cycle / inception — inception always from `get_strategy_realized_pnl`
+(the store), never the summed cycle P&L, which stays an approximation; win-rate + avg-decay%
+(from `src/paper/cycle_pnl.py::cycle_stats`) gate at `closed_count >= 5`. Decay is reported on
+the **gross-short-premium** basis (`Cycle.short_decay_pct`, `None` for pure-long PP), not the
+net `decay_pct`. IC v1/v2, CSP, CC, PP, Collar strategy-class closes and all three
+`auto_close.py` daemon branches route through this one renderer.
+`scripts/pre_market_brief.py` migrated off hand-rolled `<b>` HTML onto a MarkdownV2 fenced
+table, with the `paper_nifty_overlay` row broken into CC / Collar / PP sub-rows.
+
 **2026-09-13 — overlay entries unified onto the shared renderer (OEM-1..4,
 `telegram-message-unification/overlay-entry-message/`):** `entry_message.py::_credit_line` made
 sign-aware — negative `net_credit` renders `💰 *Net debit:*` (absolute value, label flipped),

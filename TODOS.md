@@ -147,6 +147,11 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
   test_escaping_guard.py` has 4 failing assertions from UXM-4/5/6's `auto_close.py` /
   `eod_summary.py` / `record_paper_trade.py` migrations whose escaping baseline was never
   updated — confirmed present at HEAD before this task, not touched here.
+- [2026-09-14] UXM-8 (`docs/plan/telegram-message-unification/unified-exit-message/`) — sub-story
+  docs close: `CONTEXT.md` / `src/notifications/CLAUDE.md` / `DECISIONS.md` reflect the shared
+  exit renderer, `cycle_stats`, and the brief redesign; epic `README.md` Stories-table row
+  flipped to ✅ Done (closing SHA `84e786b`, UXM-7's commit). No code change. Epic folder not
+  archived — archives whole at ORD-4 (`overlay-recovery-digest/`). Next: ORD-1.
 - [2026-09-13] UXM-1 (`docs/plan/telegram-message-unification/unified-exit-message/`) —
   gross-short-premium `short_decay_pct` (+ `short_credit_per_unit` / `short_buyback_per_unit`)
   added to `Cycle`; short leg identified by entry-trade `action == SELL`, not `leg_role`
