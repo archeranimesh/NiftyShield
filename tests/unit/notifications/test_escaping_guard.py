@@ -300,21 +300,47 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "immediate enclosing function (_send_close_card_if_requested), not the "
         "builder it calls - same shape as the scripts/eod_summary.py:200 entry"
     ),
-    ("src/strategy/collar_overlay_v1.py", 679): (
+    ("src/strategy/collar_overlay_v1.py", 680): (
         "OEM-2 - heuristic limitation, not a real gap: the card is built by "
         "format_entry_message(), which escapes every interpolated value via "
         "escape_markdown() inside EntryMessage's own renderer "
         "(src/notifications/entry_message.py); this guard only inspects the "
         "immediate enclosing function (_send_reentry_notification), not the "
-        "builder it calls - same shape as the scripts/record/record_paper_trade.py:775 entry"
+        "builder it calls - same shape as the scripts/record/record_paper_trade.py:775 entry. "
+        "Line moved from 679 -> 680 by UXM-5's _send_close_notification rewrite above it."
     ),
-    ("src/strategy/collar_overlay_v1.py", 681): (
+    ("src/strategy/collar_overlay_v1.py", 682): (
         "OEM-2 - heuristic limitation, not a real gap: the card is built by "
         "format_entry_message(), which escapes every interpolated value via "
         "escape_markdown() inside EntryMessage's own renderer "
         "(src/notifications/entry_message.py); this guard only inspects the "
         "immediate enclosing function (_send_reentry_notification), not the "
-        "builder it calls - same shape as the scripts/record/record_paper_trade.py:775 entry"
+        "builder it calls - same shape as the scripts/record/record_paper_trade.py:775 entry. "
+        "Line moved from 681 -> 682 by UXM-5's _send_close_notification rewrite above it."
+    ),
+    ("src/strategy/cc_overlay_v1.py", 447): (
+        "UXM-5 - heuristic limitation, not a real gap: the card is built by "
+        "format_exit_message(), which escapes every interpolated value via "
+        "escape_markdown() inside ExitMessage's own renderer "
+        "(src/notifications/exit_message.py); this guard only inspects the "
+        "immediate enclosing function (_send_close_notification), not the "
+        "builder it calls - same shape as the scripts/record/record_paper_trade.py:845 entry"
+    ),
+    ("src/strategy/pp_overlay_v1.py", 470): (
+        "UXM-5 - heuristic limitation, not a real gap: the card is built by "
+        "format_exit_message(), which escapes every interpolated value via "
+        "escape_markdown() inside ExitMessage's own renderer "
+        "(src/notifications/exit_message.py); this guard only inspects the "
+        "immediate enclosing function (_send_close_notification), not the "
+        "builder it calls - same shape as the scripts/record/record_paper_trade.py:845 entry"
+    ),
+    ("src/strategy/collar_overlay_v1.py", 863): (
+        "UXM-5 - heuristic limitation, not a real gap: the card is built by "
+        "format_exit_message(), which escapes every interpolated value via "
+        "escape_markdown() inside ExitMessage's own renderer "
+        "(src/notifications/exit_message.py); this guard only inspects the "
+        "immediate enclosing function (_send_close_notification), not the "
+        "builder it calls - same shape as the scripts/record/record_paper_trade.py:845 entry"
     ),
 }
 
@@ -329,9 +355,11 @@ def test_scan_finds_the_known_escaped_call_sites():
     assert sites, "scanner found zero .send()/.send_plain_message() call sites - scan is broken"
     escaped_files = {s.file for s in sites if s.escaped}
     # MD-3's audited close-notification methods - known escaped as of this task.
+    # UXM-5 moved cc_overlay_v1.py / pp_overlay_v1.py's close notification onto
+    # format_exit_message() (escaping lives in the renderer, not this file), so
+    # they no longer have an escaped call site of their own — dropped here.
     assert "src/strategy/auto_close.py" in escaped_files
-    assert "src/strategy/cc_overlay_v1.py" in escaped_files
-    assert "src/strategy/pp_overlay_v1.py" in escaped_files
+    assert "src/strategy/collar_overlay_v1.py" in escaped_files
 
 
 def test_no_new_unescaped_send_call_sites():
@@ -385,11 +413,8 @@ def test_baseline_has_no_duplicate_or_unused_entries():
     "file_rel, line",
     [
         ("src/strategy/auto_close.py", 359),
-        ("src/strategy/cc_overlay_v1.py", 382),
-        ("src/strategy/pp_overlay_v1.py", 402),
-        ("src/strategy/collar_overlay_v1.py", 607),
-        ("src/strategy/collar_overlay_v1.py", 609),
-        ("src/strategy/collar_overlay_v1.py", 805),
+        ("src/strategy/collar_overlay_v1.py", 608),
+        ("src/strategy/collar_overlay_v1.py", 610),
     ],
 )
 def test_md3_audited_close_notifications_stay_escaped(file_rel, line):
@@ -399,6 +424,14 @@ def test_md3_audited_close_notifications_stay_escaped(file_rel, line):
     without touching this line number would otherwise slip past
     test_no_new_unescaped_send_call_sites (which only complains about *new*
     unescaped sites, not regressions on already-escaped ones at the same line).
+
+    UXM-5 dropped the cc_overlay_v1.py / pp_overlay_v1.py close-notification
+    entries and collar_overlay_v1.py's old 805 entry from this list: those
+    methods no longer build their own escape_markdown()-wrapped string —
+    escaping now happens inside format_exit_message() (see the corresponding
+    _BASELINE_UNESCAPED entries for the new call sites this introduced). The
+    collar_overlay_v1.py reentry-failure entries stay pinned, shifted
+    607 -> 608 and 609 -> 610 by UXM-5's edit above them.
     """
     sites = {(s.file, s.line): s for s in scan_call_sites()}
     site = sites.get((file_rel, line))

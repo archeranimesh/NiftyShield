@@ -19,8 +19,9 @@ from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
 from src.models.portfolio import TradeAction
 from src.notifications.entry_message import EntryMessage, format_entry_message
-from src.notifications.formatting import LegRow, format_greek, format_money
-from src.notifications.markdown import escape_markdown, mdcode
+from src.notifications.exit_message import ExitKind, ExitMessage, format_exit_message
+from src.notifications.formatting import CloseLegRow, LegRow
+from src.notifications.markdown import escape_markdown
 from src.paper.constants import DEFAULT_BOD_PATH, STRATEGY_OVERLAY
 from src.paper.models import PaperPosition, PaperTrade
 from src.strategy._price_utils import find_option_leg, resolve_option_expiry
@@ -723,13 +724,13 @@ class CollarOverlayV1(ReEntryMixin):
         put_pos: PaperPosition | None,
         action: ApprovedAction,
     ) -> None:
-        """Send MarkdownV2 notification for closed Collar legs. Non-fatal."""
+        """Send the shared exit-confirmation card for closed Collar legs. Non-fatal."""
         if self._notifier is None:
             return
 
         try:
             metadata = action.metadata or {}
-            triggering_signal = metadata.get("triggering_signal")
+            triggering_signal = metadata.get("triggering_signal") or "MANUAL"
 
             lookup = self._resolve_instrument_lookup()
             call_key = (
@@ -738,20 +739,11 @@ class CollarOverlayV1(ReEntryMixin):
                 else (call_pos.instrument_key if call_pos else "None")
             )
             call_entry = call_pos.avg_sell_price if call_pos else Decimal("0")
-
             call_exit = (
                 Decimal(str(metadata.get("mark")))
                 if metadata.get("mark") is not None
                 else call_entry
             )
-            call_exit_fmt = format_money(call_exit)
-            call_exit_str = escape_markdown(
-                call_exit_fmt if metadata.get("mark") is not None else f"~{call_exit_fmt}"
-            )
-
-            call_delta_val = metadata.get("delta")
-            call_delta = float(call_delta_val) if call_delta_val is not None else None
-            call_delta_str = escape_markdown(format_greek(call_delta))
 
             call_dte = 0
             call_dte_raw = metadata.get("dte")
@@ -771,38 +763,104 @@ class CollarOverlayV1(ReEntryMixin):
             )
             put_entry = put_pos.avg_cost if put_pos else Decimal("0")
             put_exit = put_entry
-            put_exit_fmt = format_money(put_exit)
-            put_exit_str = escape_markdown(f"~{put_exit_fmt}" if put_pos else put_exit_fmt)
 
             call_pnl = (
                 (call_entry - call_exit) * abs(call_pos.net_qty) if call_pos else Decimal("0")
             )
             put_pnl = (put_exit - put_entry) * abs(put_pos.net_qty) if put_pos else Decimal("0")
-            net_pnl = call_pnl + put_pnl
+            this_exit_pnl = call_pnl + put_pnl
 
-            pnl_prefix = "~" if (call_pos is not None or put_pos is not None) else ""
+            legs = [
+                CloseLegRow(
+                    role="Short Call",
+                    instrument=call_key,
+                    entry=float(call_entry),
+                    exit=float(call_exit),
+                    pnl=call_pnl,
+                ),
+                CloseLegRow(
+                    role="Long Put",
+                    instrument=put_key,
+                    entry=float(put_entry),
+                    exit=float(put_exit),
+                    pnl=put_pnl,
+                ),
+            ]
 
-            call_entry_str = escape_markdown(format_money(call_entry))
-            put_entry_str = escape_markdown(format_money(put_entry))
-            call_dte_str = escape_markdown(str(call_dte))
-            if net_pnl > 0:
-                net_pnl_str = escape_markdown(f"{pnl_prefix}+{format_money(net_pnl)}")
-            else:
-                net_pnl_str = escape_markdown(f"{pnl_prefix}{format_money(net_pnl)}")
-
-            msg = (
-                f"✅ *Collar closed — {escape_markdown(triggering_signal or 'MANUAL')}*\n"
-                f"📤 Short Call: {mdcode(call_key)} @ {call_exit_str}\n"
-                f"   Entry {call_entry_str} · Delta {call_delta_str} · DTE {call_dte_str}\n"
-                f"📤 Long Put: {mdcode(put_key)} @ {put_exit_str}\n"
-                f"   Entry {put_entry_str}\n"
-                f"Net P&L: *{net_pnl_str}*"
+            entry_dates = [p.entry_date for p in (call_pos, put_pos) if p and p.entry_date]
+            held_days = (market_today() - min(entry_dates)).days if entry_dates else 0
+        except Exception as exc:
+            log.error(
+                "collar_overlay_v1.send_close_notification_failed",
+                error=str(exc),
             )
+            return
 
+        cycle_pnl = None
+        cycle_index = None
+        cycle_decay_pct = None
+        cycle_short_credit = None
+        cycle_short_buyback = None
+        cycle_held_days = None
+        overlay_total_pnl = Decimal("0")
+        stats = None
+        if self._store is None:
+            log.warning("collar_overlay_v1.footer_calc_skipped_no_store")
+        else:
+            try:
+                from src.paper.cycle_pnl import cycle_stats, reconstruct_cycles
+                from src.paper.tracker import get_strategy_realized_pnl
+
+                collar_roles = {SHORT_CALL_ROLE, LONG_PUT_ROLE}
+                trades = [
+                    t
+                    for t in self._store.get_trades(self.strategy_name)
+                    if t.leg_role in collar_roles
+                ]
+                cycles_all = reconstruct_cycles(trades)
+                if cycles_all and not cycles_all[-1].is_open:
+                    last = cycles_all[-1]
+                    cycle_pnl = last.realized_pnl
+                    cycle_index = last.index
+                    cycle_decay_pct = last.short_decay_pct
+                    cycle_short_credit = last.short_credit_per_unit
+                    cycle_short_buyback = last.short_buyback_per_unit
+                    cycle_held_days = last.days_in_trade
+                stats = cycle_stats(trades)
+                overlay_total_pnl = get_strategy_realized_pnl(self._store, self.strategy_name)
+            except Exception as exc:
+                log.warning("collar_overlay_v1.footer_calc_failed", error=str(exc))
+
+        try:
+            text = format_exit_message(
+                ExitMessage(
+                    headline_label="Collar",
+                    kind=ExitKind.CLOSE,
+                    signal=triggering_signal,
+                    dte=call_dte,
+                    held_days=held_days,
+                    legs=legs,
+                    this_exit_pnl=this_exit_pnl,
+                    cycle_pnl=cycle_pnl,
+                    cycle_index=cycle_index,
+                    cycle_decay_pct=cycle_decay_pct,
+                    cycle_short_credit=cycle_short_credit,
+                    cycle_short_buyback=cycle_short_buyback,
+                    cycle_held_days=cycle_held_days,
+                    inception_pnl=overlay_total_pnl,
+                    stats=stats,
+                    overlay_total_pnl=overlay_total_pnl,
+                )
+            )
+        except Exception as exc:
+            log.warning("collar_overlay_v1.format_exit_message_failed", error=str(exc))
+            return
+
+        try:
             if hasattr(self._notifier, "send_notification"):
-                await self._notifier.send_notification(msg)
+                await self._notifier.send_notification(text)
             elif hasattr(self._notifier, "send_plain_message"):
-                await self._notifier.send_plain_message(msg)
+                await self._notifier.send_plain_message(text)
             else:
                 log.warning(
                     "collar_overlay_v1.notifier_method_missing",

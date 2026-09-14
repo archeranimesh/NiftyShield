@@ -18,8 +18,8 @@ from src.instruments.lookup import InstrumentLookup, format_leg_label
 from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
 from src.models.portfolio import TradeAction
-from src.notifications.formatting import format_greek, format_money
-from src.notifications.markdown import escape_markdown, mdcode
+from src.notifications.exit_message import ExitKind, ExitMessage, format_exit_message
+from src.notifications.formatting import CloseLegRow
 from src.paper.constants import DEFAULT_BOD_PATH, STRATEGY_OVERLAY
 from src.paper.models import PaperPosition, PaperTrade
 from src.strategy._price_utils import find_option_leg, resolve_option_expiry
@@ -354,7 +354,7 @@ class PPOverlayV1(ReEntryMixin):
         pos: PaperPosition | None,
         action: ApprovedAction,
     ) -> None:
-        """Send MarkdownV2 notification for closed PP leg. Non-fatal."""
+        """Send the shared exit-confirmation card for a closed PP leg. Non-fatal."""
         if pos is None or self._notifier is None:
             return
 
@@ -365,8 +365,6 @@ class PPOverlayV1(ReEntryMixin):
                 if metadata.get("mark") is not None
                 else pos.avg_cost
             )
-            delta_raw = metadata.get("delta")
-            delta = float(delta_raw) if delta_raw is not None else None
 
             expiry = self._parse_expiry(pos.instrument_key)
             dte = (expiry - market_today()).days if expiry is not None else 0
@@ -378,33 +376,103 @@ class PPOverlayV1(ReEntryMixin):
                     pass
 
             entry_debit = pos.avg_cost
-            emoji = "🔄" if action.action_type == "ROLL_PP" else "💰"
-            action_name = action.action_type
+            is_crash_monetize = action.action_type == "MONETIZE_PP"
+            kind = ExitKind.CRASH_MONETIZE if is_crash_monetize else ExitKind.ROLL
+            state_line = (
+                "RE_ENTRY_PENDING (monitoring IVR ≤ 0.60, DTE ≥ 14)" if is_crash_monetize else None
+            )
+            this_exit_pnl = (exit_price - entry_debit) * abs(pos.net_qty)
 
             lookup = self._resolve_instrument_lookup()
             label = format_leg_label(pos.instrument_key, lookup) if lookup else pos.instrument_key
 
-            exit_price_str = escape_markdown(format_money(exit_price))
-            entry_debit_str = escape_markdown(format_money(entry_debit))
-            delta_str = escape_markdown(format_greek(delta))
-            dte_str = escape_markdown(str(dte))
-
-            msg = (
-                f"{emoji} *PP: {escape_markdown(action_name)}*\n"
-                f"📤 Closed: {mdcode(label)} @ {exit_price_str}\n"
-                f"   Entry {entry_debit_str} · Delta {delta_str} "
-                f"· DTE {dte_str}"
+            legs = [
+                CloseLegRow(
+                    role="Long Put",
+                    instrument=label,
+                    entry=float(entry_debit),
+                    exit=float(exit_price),
+                    pnl=this_exit_pnl,
+                )
+            ]
+            held_days = (market_today() - (pos.entry_date or market_today())).days
+        except Exception as exc:
+            log.error(
+                "pp_overlay_v1.send_close_notification_failed",
+                error=str(exc),
             )
-            if self._notifier is not None:
-                if hasattr(self._notifier, "send_notification"):
-                    await self._notifier.send_notification(msg)
-                elif hasattr(self._notifier, "send_plain_message"):
-                    await self._notifier.send_plain_message(msg)
-                else:
-                    log.warning(
-                        "pp_overlay_v1.notifier_method_missing",
-                        notifier_type=type(self._notifier).__name__,
-                    )
+            return
+
+        cycle_pnl = None
+        cycle_index = None
+        cycle_decay_pct = None
+        cycle_short_credit = None
+        cycle_short_buyback = None
+        cycle_held_days = None
+        overlay_total_pnl = Decimal("0")
+        stats = None
+        if self._store is None:
+            log.warning("pp_overlay_v1.footer_calc_skipped_no_store")
+        else:
+            try:
+                from src.paper.cycle_pnl import cycle_stats, reconstruct_cycles
+                from src.paper.tracker import get_strategy_realized_pnl
+
+                trades = [
+                    t
+                    for t in self._store.get_trades(self.strategy_name)
+                    if t.leg_role in LONG_PUT_ROLES
+                ]
+                cycles_all = reconstruct_cycles(trades)
+                if cycles_all and not cycles_all[-1].is_open:
+                    last = cycles_all[-1]
+                    cycle_pnl = last.realized_pnl
+                    cycle_index = last.index
+                    cycle_decay_pct = last.short_decay_pct
+                    cycle_short_credit = last.short_credit_per_unit
+                    cycle_short_buyback = last.short_buyback_per_unit
+                    cycle_held_days = last.days_in_trade
+                stats = cycle_stats(trades)
+                overlay_total_pnl = get_strategy_realized_pnl(self._store, self.strategy_name)
+            except Exception as exc:
+                log.warning("pp_overlay_v1.footer_calc_failed", error=str(exc))
+
+        try:
+            text = format_exit_message(
+                ExitMessage(
+                    headline_label="PP",
+                    kind=kind,
+                    signal=action.action_type,
+                    dte=dte,
+                    held_days=held_days,
+                    legs=legs,
+                    this_exit_pnl=this_exit_pnl,
+                    cycle_pnl=cycle_pnl,
+                    cycle_index=cycle_index,
+                    cycle_decay_pct=cycle_decay_pct,
+                    cycle_short_credit=cycle_short_credit,
+                    cycle_short_buyback=cycle_short_buyback,
+                    cycle_held_days=cycle_held_days,
+                    inception_pnl=overlay_total_pnl,
+                    stats=stats,
+                    overlay_total_pnl=overlay_total_pnl,
+                    state_line=state_line,
+                )
+            )
+        except Exception as exc:
+            log.warning("pp_overlay_v1.format_exit_message_failed", error=str(exc))
+            return
+
+        try:
+            if hasattr(self._notifier, "send_notification"):
+                await self._notifier.send_notification(text)
+            elif hasattr(self._notifier, "send_plain_message"):
+                await self._notifier.send_plain_message(text)
+            else:
+                log.warning(
+                    "pp_overlay_v1.notifier_method_missing",
+                    notifier_type=type(self._notifier).__name__,
+                )
         except Exception as exc:
             log.error(
                 "pp_overlay_v1.send_close_notification_failed",

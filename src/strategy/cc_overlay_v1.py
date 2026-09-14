@@ -18,8 +18,8 @@ from src.instruments.lookup import InstrumentLookup, format_leg_label
 from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
 from src.models.portfolio import TradeAction
-from src.notifications.formatting import format_greek, format_money
-from src.notifications.markdown import escape_markdown, mdcode
+from src.notifications.exit_message import ExitKind, ExitMessage, format_exit_message
+from src.notifications.formatting import CloseLegRow
 from src.paper.constants import DEFAULT_BOD_PATH, STRATEGY_OVERLAY
 from src.paper.models import PaperPosition, PaperTrade
 from src.strategy._price_utils import find_option_leg, resolve_option_expiry
@@ -336,7 +336,7 @@ class CCOverlayV1(ReEntryMixin):
         signal: str | None,
         action: ApprovedAction,
     ) -> None:
-        """Send MarkdownV2 notification for closed CC leg. Non-fatal."""
+        """Send the shared exit-confirmation card for a closed CC leg. Non-fatal."""
         if pos is None or self._notifier is None:
             return
 
@@ -347,8 +347,6 @@ class CCOverlayV1(ReEntryMixin):
                 if metadata.get("mark") is not None
                 else pos.avg_sell_price
             )
-            delta_raw = metadata.get("delta")
-            delta = float(delta_raw) if delta_raw is not None else None
 
             expiry = self._parse_expiry(pos.instrument_key)
             dte = (expiry - market_today()).days if expiry is not None else 0
@@ -361,25 +359,92 @@ class CCOverlayV1(ReEntryMixin):
 
             entry_credit = pos.avg_sell_price
             signal_name = signal or "UNKNOWN"
+            this_exit_pnl = (entry_credit - exit_price) * abs(pos.net_qty)
 
             lookup = self._resolve_instrument_lookup()
             label = format_leg_label(pos.instrument_key, lookup) if lookup else pos.instrument_key
 
-            exit_price_str = escape_markdown(format_money(exit_price))
-            entry_credit_str = escape_markdown(format_money(entry_credit))
-            delta_str = escape_markdown(format_greek(delta))
-            dte_str = escape_markdown(str(dte))
-
-            msg = (
-                f"✅ *CC closed — {escape_markdown(signal_name)}*\n"
-                f"📤 Closed: {mdcode(label)} @ {exit_price_str}\n"
-                f"   Entry {entry_credit_str} · Delta {delta_str} "
-                f"· DTE {dte_str}"
+            legs = [
+                CloseLegRow(
+                    role="Short Call",
+                    instrument=label,
+                    entry=float(entry_credit),
+                    exit=float(exit_price),
+                    pnl=this_exit_pnl,
+                )
+            ]
+            held_days = (market_today() - (pos.entry_date or market_today())).days
+        except Exception as exc:
+            log.error(
+                "cc_overlay_v1.send_close_notification_failed",
+                error=str(exc),
             )
+            return
+
+        cycle_pnl = None
+        cycle_index = None
+        cycle_decay_pct = None
+        cycle_short_credit = None
+        cycle_short_buyback = None
+        cycle_held_days = None
+        overlay_total_pnl = Decimal("0")
+        stats = None
+        if self._store is None:
+            log.warning("cc_overlay_v1.footer_calc_skipped_no_store")
+        else:
+            try:
+                from src.paper.cycle_pnl import cycle_stats, reconstruct_cycles
+                from src.paper.tracker import get_strategy_realized_pnl
+
+                trades = [
+                    t
+                    for t in self._store.get_trades(self.strategy_name)
+                    if t.leg_role in SHORT_CALL_ROLES
+                ]
+                cycles_all = reconstruct_cycles(trades)
+                if cycles_all and not cycles_all[-1].is_open:
+                    last = cycles_all[-1]
+                    cycle_pnl = last.realized_pnl
+                    cycle_index = last.index
+                    cycle_decay_pct = last.short_decay_pct
+                    cycle_short_credit = last.short_credit_per_unit
+                    cycle_short_buyback = last.short_buyback_per_unit
+                    cycle_held_days = last.days_in_trade
+                stats = cycle_stats(trades)
+                overlay_total_pnl = get_strategy_realized_pnl(self._store, self.strategy_name)
+            except Exception as exc:
+                log.warning("cc_overlay_v1.footer_calc_failed", error=str(exc))
+
+        try:
+            text = format_exit_message(
+                ExitMessage(
+                    headline_label="CC",
+                    kind=ExitKind.CLOSE,
+                    signal=signal_name,
+                    dte=dte,
+                    held_days=held_days,
+                    legs=legs,
+                    this_exit_pnl=this_exit_pnl,
+                    cycle_pnl=cycle_pnl,
+                    cycle_index=cycle_index,
+                    cycle_decay_pct=cycle_decay_pct,
+                    cycle_short_credit=cycle_short_credit,
+                    cycle_short_buyback=cycle_short_buyback,
+                    cycle_held_days=cycle_held_days,
+                    inception_pnl=overlay_total_pnl,
+                    stats=stats,
+                    overlay_total_pnl=overlay_total_pnl,
+                )
+            )
+        except Exception as exc:
+            log.warning("cc_overlay_v1.format_exit_message_failed", error=str(exc))
+            return
+
+        try:
             if hasattr(self._notifier, "send_notification"):
-                await self._notifier.send_notification(msg)
+                await self._notifier.send_notification(text)
             else:
-                await self._notifier.send_plain_message(msg)
+                await self._notifier.send_plain_message(text)
         except Exception as exc:
             log.error(
                 "cc_overlay_v1.send_close_notification_failed",

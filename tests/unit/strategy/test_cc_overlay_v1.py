@@ -643,9 +643,9 @@ def test_apply_action_close_cc_notification_uses_formatted_label() -> None:
     msg = mock_notifier.send_notification.call_args[0][0]
     assert "NIFTY 24000 CE 07 JUL 26" in msg
     assert "NSE_FO|65900" not in msg
-    assert "24\\.00" in msg
-    assert "80\\.00" in msg
-    assert "\\+0\\.20" in msg
+    assert "24.0" in msg
+    assert "80.0" in msg
+    assert "\\+₹3,640\\.00" in msg
 
 
 def test_apply_action_close_cc_notification_falls_back_when_unresolvable() -> None:
@@ -760,5 +760,44 @@ def test_apply_action_close_cc_escapes_signal_name() -> None:
 
     notifier.send_notification.assert_called_once()
     msg = notifier.send_notification.call_args[0][0]
-    assert "closed" in msg
+    assert "Closed" in msg
     assert "PROFIT\\_TARGET\\_CC" in msg
+
+
+def test_apply_action_close_cc_shows_overlay_total_footer_row() -> None:
+    """The close card carries the Overlay P&L (total realized) footer row."""
+    mock_store = MagicMock()
+    mock_notifier = AsyncMock()
+    strategy = CCOverlayV1(store=mock_store, notifier=mock_notifier)
+    pos = _make_position()
+    action = ApprovedAction(
+        action_type="CLOSE_CC",
+        legs_to_close=[LegClose(leg_role="short_call")],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+        metadata={"triggering_signal": "PROFIT_TARGET"},
+    )
+    _run(strategy.apply_action([pos], action))
+
+    msg = mock_notifier.send_notification.call_args[0][0]
+    assert "📊 *Overlay P&L \\(total realized\\):*" in msg
+
+
+def test_apply_action_close_cc_notify_failure_is_non_fatal() -> None:
+    """A notifier failure on the close card must not raise."""
+    mock_notifier = AsyncMock()
+    mock_notifier.send_notification.side_effect = RuntimeError("telegram down")
+    strategy = CCOverlayV1(notifier=mock_notifier)
+    pos = _make_position()
+    action = ApprovedAction(
+        action_type="CLOSE_CC",
+        legs_to_close=[LegClose(leg_role="short_call")],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+        metadata={"triggering_signal": "PROFIT_TARGET"},
+    )
+    result = _run(strategy.apply_action([pos], action))
+    assert len(result) == 0
+    mock_notifier.send_notification.assert_called_once()

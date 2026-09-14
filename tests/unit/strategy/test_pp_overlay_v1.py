@@ -195,12 +195,11 @@ def test_apply_action_monetize_pp() -> None:
     strategy._check_reentry.assert_awaited_once()
     mock_notifier.send_notification.assert_called_once()
     msg = mock_notifier.send_notification.call_args[0][0]
-    assert "💰 *PP: MONETIZE\\_PP*" in msg
+    assert "💰 *PP Closed* — MONETIZE\\_PP" in msg
     assert "NIFTY 23000 PE" in msg
     assert key not in msg
-    assert "80\\.00" in msg
-    assert "Entry ₹80\\.00" in msg
-    assert "Delta \\-" in msg
+    assert "[B]" in msg
+    assert "→ *State:* RE\\_ENTRY\\_PENDING \\(monitoring IVR ≤ 0\\.60, DTE ≥ 14\\)" in msg
 
 
 def test_apply_action_monetize_pp_notification_falls_back_when_unresolvable() -> None:
@@ -245,7 +244,28 @@ def test_apply_action_roll_pp() -> None:
     # Rolling shouldn't trigger check_reentry
     strategy._check_reentry.assert_not_called()
     mock_notifier.send_notification.assert_called_once()
-    assert "🔄 *PP: ROLL\\_PP*" in mock_notifier.send_notification.call_args[0][0]
+    msg = mock_notifier.send_notification.call_args[0][0]
+    assert "🔄 *PP Rolled* — ROLL\\_PP" in msg
+    assert "State:" not in msg
+
+
+def test_apply_action_close_notify_failure_is_non_fatal() -> None:
+    """A notifier failure on the close card must not raise."""
+    mock_notifier = AsyncMock()
+    mock_notifier.send_notification.side_effect = RuntimeError("telegram down")
+    strategy = PPOverlayV1(notifier=mock_notifier)
+    strategy._check_reentry = AsyncMock()
+    pos = _make_position()
+    action = ApprovedAction(
+        action_type="ROLL_PP",
+        legs_to_close=[LegClose(leg_role="protective_put")],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+    )
+    result = _run(strategy.apply_action([pos], action))
+    assert len(result) == 0
+    mock_notifier.send_notification.assert_called_once()
 
 
 def test_apply_action_invalid_raises() -> None:
@@ -299,7 +319,7 @@ def test_apply_action_send_plain_message_fallback() -> None:
     result = _run(strategy.apply_action([pos], action))
     assert len(result) == 0
     mock_notifier.send_plain_message.assert_called_once()
-    assert "🔄 *PP: ROLL\\_PP*" in mock_notifier.send_plain_message.call_args[0][0]
+    assert "🔄 *PP Rolled* — ROLL\\_PP" in mock_notifier.send_plain_message.call_args[0][0]
 
 
 def test_apply_action_notifier_missing_methods_non_fatal() -> None:
@@ -343,7 +363,7 @@ def test_apply_action_dte_float_casting() -> None:
     result = _run(strategy.apply_action([pos], action))
     assert len(result) == 0
     mock_notifier.send_notification.assert_called_once()
-    assert "DTE 4" in mock_notifier.send_notification.call_args[0][0]
+    assert "*DTE:* 4" in mock_notifier.send_notification.call_args[0][0]
 
 
 # ---------------------------------------------------------------------------

@@ -1014,10 +1014,38 @@ def test_apply_action_close_collar_notification_uses_formatted_labels() -> None:
     assert "NIFTY 21500 PE 07 JUL 26" in msg
     assert "NSE_FO|65900" not in msg
     assert "NSE_FO|65901" not in msg
-    assert "30\\.00" in msg
-    assert "80\\.00" in msg
-    assert "\\~₹50\\.00" in msg
+    assert "30.0" in msg
+    assert "80.0" in msg
+    assert "50.0" in msg
     assert "\\+₹3,250\\.00" in msg
+    assert "📊 *Overlay P&L \\(total realized\\):*" in msg
+
+
+def test_apply_action_close_collar_notify_failure_is_non_fatal() -> None:
+    """A notifier failure on the close card must not raise."""
+    from unittest.mock import AsyncMock
+
+    mock_store = MagicMock()
+    mock_notifier = AsyncMock()
+    mock_notifier.send_notification.side_effect = RuntimeError("telegram down")
+    strategy = CollarOverlayV1(store=mock_store, notifier=mock_notifier)
+
+    call_pos = _make_short_call_position(instrument_key="NSE_FO|65900", avg_sell_price="80")
+    put_pos = _make_long_put_position(instrument_key="NSE_FO|65901", avg_cost="50")
+    action = ApprovedAction(
+        action_type="CLOSE_COLLAR",
+        legs_to_close=[
+            LegClose(leg_role="overlay_collar_call"),
+            LegClose(leg_role="overlay_collar_put"),
+        ],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+        metadata={"mark": "30.0"},
+    )
+    result = _run(strategy.apply_action([call_pos, put_pos], action))
+    assert len(result) == 0
+    mock_notifier.send_notification.assert_called_once()
 
 
 def test_apply_action_close_collar_notification_falls_back_when_unresolvable() -> None:
