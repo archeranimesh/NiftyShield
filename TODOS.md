@@ -181,6 +181,24 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
   message-text mismatch — neither touched by this task). Review: code-reviewer, clean after
   the try/except fix. Next: `unified-exit-message/` UXM-4 (migrate CSP + recorder
   `--close`).
+- [2026-09-14] UXM-4 (`docs/plan/telegram-message-unification/unified-exit-message/`) —
+  `CSPNiftyV1`'s two close sites migrated onto `format_exit_message`: the CLOSE_AND_ROLL
+  `_reentry_notification` follow-up (`ExitKind.CLOSE`) and the CLOSE_AND_WAIT `⛔ waiting`
+  message (`ExitKind.WAITING` + `state_line="RE_ENTRY_PENDING — no new position opened."`).
+  `_close_leg` now returns the written `PaperTrade | None` (was `None`) so the close price
+  reaches the card; `_reentry_notification` gained a `close_trade` 3rd param. New shared
+  `_send_close_card` helper mirrors IC v1's footer-calc + triple try/except pattern
+  (`_send_close_card` build, `format_exit_message`, `send_notification` each logged
+  distinctly). `scripts/record/record_paper_trade.py --notify` now also fires on a
+  successful `--close` via new `_send_close_card_if_requested` (reads the just-closed cycle
+  off `reconstruct_cycles`/`cycle_stats`, headline via `strategy_label()`, falls back to the
+  raw strategy id on an unmapped one). SHA 21a8449. Tests: 66/66 green
+  (`test_csp_nifty_v1.py` + `test_record_paper_trade.py`); escaping-guard baseline bumped
+  for the entry-card call site's line shift (774→775) plus one new documented entry for the
+  exit-card call site (845). Review: code-reviewer, clean after 2 minor WARNING fixes
+  (narrowed a bare `except Exception` around `strategy_label()` to `except ValueError` +
+  logged it; added missing `-> None` test annotations). Next: `unified-exit-message/` UXM-5
+  (migrate CC/PP/Collar strategy-class closes).
 - [2026-09-13] OEM-5 (`docs/plan/telegram-message-unification/overlay-entry-message/`) —
   sub-story docs close. `CONTEXT.md` / `src/notifications/CLAUDE.md` / `DECISIONS.md` updated
   to reflect the sign-aware net line (OEM-1) and the Collar re-entry + three-track bootstrap

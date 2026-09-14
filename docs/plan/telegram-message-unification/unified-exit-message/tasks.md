@@ -21,7 +21,7 @@ rows in the epic `README.md` are ✅). UXM-8 is a sub-story close only — `over
       | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 22359bf
 - [x] **UXM-4** — Migrate CSP (`_reentry_notification` + `⛔ waiting`); extend
       `record_paper_trade.py --notify` to send an exit card on `--close`.
-      | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: PENDING
+      | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 21a8449
 - [ ] **UXM-5** — Migrate CC + PP + Collar strategy-class `_send_close_notification`.
       | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer + greeks-analyst | SHA: —
 - [ ] **UXM-6** — Migrate `auto_close.py` daemon paths (Collar / CC / PP); keep the
