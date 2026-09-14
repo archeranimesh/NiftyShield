@@ -167,6 +167,23 @@ async def test_mixed_futures_and_option_legs_combine_correctly(
     assert unrealized == Decimal("1000.00") + Decimal("3000")
 
 
+_CSP = "paper_csp_nifty_v1"
+
+
+def _open_position(
+    strategy_name: str = _CSP, leg_role: str = "short_put", net_qty: int = 1
+) -> PaperPosition:
+    return PaperPosition(
+        strategy_name=strategy_name,
+        leg_role=leg_role,
+        net_qty=net_qty,
+        avg_cost=Decimal("0"),
+        avg_sell_price=Decimal("0"),
+        instrument_key="123",
+        option_type="CE",
+    )
+
+
 @pytest.mark.asyncio
 async def test_main_escapes_markdown_in_telegram_message(tmp_path: Path) -> None:
     """Ensure dynamic values and static punctuation are properly escaped for MarkdownV2."""
@@ -187,18 +204,8 @@ async def test_main_escapes_markdown_in_telegram_message(tmp_path: Path) -> None
         ) as mock_send,
     ):
         mock_store = mock_store_cls.return_value
-        mock_store.get_strategy_names.return_value = ["paper_nifty_futures_v1_under_score"]
-
-        pos = PaperPosition(
-            strategy_name="paper_nifty_futures_v1_under_score",
-            leg_role="test",
-            net_qty=1,
-            avg_cost=Decimal("0"),
-            avg_sell_price=Decimal("0"),
-            instrument_key="123",
-            option_type="CE",
-        )
-        mock_store.get_positions.return_value = [pos]
+        mock_store.get_strategy_names.return_value = [_CSP]
+        mock_store.get_positions.return_value = [_open_position()]
         mock_send.return_value = True
 
         from scripts.pre_market_brief import main
@@ -208,12 +215,187 @@ async def test_main_escapes_markdown_in_telegram_message(tmp_path: Path) -> None
         mock_send.assert_called_once()
         msg = mock_send.call_args[0][0]
 
-        assert r"`paper_nifty_futures_v1_under_score`" in msg, (
-            "Strategy name should be mdcode escaped"
-        )
-        assert r"₹\+123\.45" in msg, "P&L should be backslash escaped"
+        assert "CSP V1" in msg, "Strategy label should be shown, not the raw id"
+        assert "+₹123.45" in msg, "Signed P&L renders literally inside the fenced table"
         assert r"53\.2\%" in msg or r"53\.2%" in msg, "IVR should be backslash escaped"
-        assert r"\-" in msg, "Date should have hyphens escaped"
-        assert r"<\b\>" in msg or r"<b\>" in msg, (
-            "Literal HTML should be escaped (due to > being reserved)"
-        )
+        assert "<b>" not in msg and "</b>" not in msg, "No HTML tags in the redesigned brief"
+        assert "```" in msg, "Table must be fenced"
+
+
+@pytest.mark.asyncio
+async def test_brief_is_markdownv2_no_html(tmp_path: Path) -> None:
+    """The redesigned brief never emits literal <b> HTML tags."""
+    with (
+        patch("scripts.pre_market_brief.settings.telegram_bot_token", "dummy"),
+        patch("scripts.pre_market_brief.settings.telegram_chat_id", "dummy"),
+        patch("scripts.pre_market_brief.settings.db_path", str(tmp_path / "test.db")),
+        patch("scripts.pre_market_brief.settings.upstox_env", "test"),
+        patch("scripts.pre_market_brief.create_client"),
+        patch("scripts.pre_market_brief.get_current_ivr", return_value=None),
+        patch("scripts.pre_market_brief.PaperStore") as mock_store_cls,
+        patch(
+            "scripts.pre_market_brief._compute_unrealized_with_fallback",
+            return_value=Decimal("-50.00"),
+        ),
+        patch(
+            "scripts.pre_market_brief.TelegramGateway.send_plain_message", new_callable=AsyncMock
+        ) as mock_send,
+    ):
+        mock_store = mock_store_cls.return_value
+        mock_store.get_strategy_names.return_value = [_CSP]
+        mock_store.get_positions.return_value = [_open_position()]
+        mock_send.return_value = True
+
+        from scripts.pre_market_brief import main
+
+        await main()
+
+        msg = mock_send.call_args[0][0]
+        assert "<b>" not in msg and "</b>" not in msg
+        assert "☀️ *NiftyShield Pre\\-Market Brief*" in msg
+
+
+@pytest.mark.asyncio
+async def test_overlay_breaks_into_cc_collar_pp(tmp_path: Path) -> None:
+    """paper_nifty_overlay renders as a parent row plus CC/Collar/PP sub-rows,
+    the empty sub-group showing em-dashes."""
+    with (
+        patch("scripts.pre_market_brief.settings.telegram_bot_token", "dummy"),
+        patch("scripts.pre_market_brief.settings.telegram_chat_id", "dummy"),
+        patch("scripts.pre_market_brief.settings.db_path", str(tmp_path / "test.db")),
+        patch("scripts.pre_market_brief.settings.upstox_env", "test"),
+        patch("scripts.pre_market_brief.create_client"),
+        patch("scripts.pre_market_brief.get_current_ivr", return_value=None),
+        patch("scripts.pre_market_brief.PaperStore") as mock_store_cls,
+        patch(
+            "scripts.pre_market_brief._compute_unrealized_with_fallback",
+            side_effect=lambda store, broker, name, positions: Decimal(len(positions) * 100),
+        ),
+        patch(
+            "scripts.pre_market_brief.TelegramGateway.send_plain_message", new_callable=AsyncMock
+        ) as mock_send,
+    ):
+        mock_store = mock_store_cls.return_value
+        mock_store.get_strategy_names.return_value = ["paper_nifty_overlay"]
+        mock_store.get_positions.return_value = [
+            _open_position("paper_nifty_overlay", "overlay_cc"),
+            _open_position("paper_nifty_overlay", "overlay_collar_put"),
+            _open_position("paper_nifty_overlay", "overlay_collar_call"),
+        ]
+        mock_send.return_value = True
+
+        from scripts.pre_market_brief import main
+
+        await main()
+
+        msg = mock_send.call_args[0][0]
+        assert "Nifty Overlay" in msg
+        assert "├ CC" in msg
+        assert "├ Collar" in msg
+        assert "└ PP" in msg
+        # PP has no open legs in this fixture — both columns show an em-dash.
+        pp_line = next(line for line in msg.splitlines() if "└ PP" in line)
+        assert "—" in pp_line
+
+
+@pytest.mark.asyncio
+async def test_total_row_sums_without_double_counting_overlay(tmp_path: Path) -> None:
+    """Total P&L equals the sum of the per-strategy aggregates — the overlay
+    parent counted once, not again via its sub-rows."""
+    with (
+        patch("scripts.pre_market_brief.settings.telegram_bot_token", "dummy"),
+        patch("scripts.pre_market_brief.settings.telegram_chat_id", "dummy"),
+        patch("scripts.pre_market_brief.settings.db_path", str(tmp_path / "test.db")),
+        patch("scripts.pre_market_brief.settings.upstox_env", "test"),
+        patch("scripts.pre_market_brief.create_client"),
+        patch("scripts.pre_market_brief.get_current_ivr", return_value=None),
+        patch("scripts.pre_market_brief.PaperStore") as mock_store_cls,
+        patch(
+            "scripts.pre_market_brief._compute_unrealized_with_fallback",
+            side_effect=lambda store, broker, name, positions: Decimal(len(positions) * 100),
+        ),
+        patch(
+            "scripts.pre_market_brief.TelegramGateway.send_plain_message", new_callable=AsyncMock
+        ) as mock_send,
+    ):
+        mock_store = mock_store_cls.return_value
+        mock_store.get_strategy_names.return_value = [_CSP, "paper_nifty_overlay"]
+
+        def _positions(name: str) -> list[PaperPosition]:
+            if name == _CSP:
+                return [_open_position(_CSP)]
+            return [
+                _open_position("paper_nifty_overlay", "overlay_cc"),
+                _open_position("paper_nifty_overlay", "overlay_pp"),
+            ]
+
+        mock_store.get_positions.side_effect = _positions
+        mock_send.return_value = True
+
+        from scripts.pre_market_brief import main
+
+        await main()
+
+        msg = mock_send.call_args[0][0]
+        # CSP: 1 leg -> ₹100. Overlay parent: 2 legs -> ₹200 (not summed again
+        # via its CC/PP sub-rows). Total legs = 3, total P&L = ₹300.
+        total_line = next(line for line in msg.splitlines() if line.startswith("Total"))
+        assert "3" in total_line
+        assert "+₹300.00" in total_line
+
+
+@pytest.mark.asyncio
+async def test_unmapped_strategy_id(tmp_path: Path) -> None:
+    """Every paper_* id get_strategy_names can return must be in STRATEGY_LABELS —
+    an unmapped id raises loudly rather than rendering the raw id."""
+    with (
+        patch("scripts.pre_market_brief.settings.telegram_bot_token", "dummy"),
+        patch("scripts.pre_market_brief.settings.telegram_chat_id", "dummy"),
+        patch("scripts.pre_market_brief.settings.db_path", str(tmp_path / "test.db")),
+        patch("scripts.pre_market_brief.settings.upstox_env", "test"),
+        patch("scripts.pre_market_brief.create_client"),
+        patch("scripts.pre_market_brief.get_current_ivr", return_value=None),
+        patch("scripts.pre_market_brief.PaperStore") as mock_store_cls,
+        patch(
+            "scripts.pre_market_brief._compute_unrealized_with_fallback",
+            return_value=Decimal("0"),
+        ),
+    ):
+        mock_store = mock_store_cls.return_value
+        mock_store.get_strategy_names.return_value = ["paper_no_such_strategy"]
+        mock_store.get_positions.return_value = [_open_position("paper_no_such_strategy")]
+
+        from scripts.pre_market_brief import main
+
+        with pytest.raises(ValueError, match="no display label mapped"):
+            await main()
+
+
+@pytest.mark.asyncio
+async def test_no_open_positions_path(tmp_path: Path) -> None:
+    """Every strategy has trades but none are open -> clean MarkdownV2, no HTML."""
+    with (
+        patch("scripts.pre_market_brief.settings.telegram_bot_token", "dummy"),
+        patch("scripts.pre_market_brief.settings.telegram_chat_id", "dummy"),
+        patch("scripts.pre_market_brief.settings.db_path", str(tmp_path / "test.db")),
+        patch("scripts.pre_market_brief.settings.upstox_env", "test"),
+        patch("scripts.pre_market_brief.create_client"),
+        patch("scripts.pre_market_brief.get_current_ivr", return_value=None),
+        patch("scripts.pre_market_brief.PaperStore") as mock_store_cls,
+        patch(
+            "scripts.pre_market_brief.TelegramGateway.send_plain_message", new_callable=AsyncMock
+        ) as mock_send,
+    ):
+        mock_store = mock_store_cls.return_value
+        mock_store.get_strategy_names.return_value = [_CSP]
+        mock_store.get_positions.return_value = [_open_position(_CSP, net_qty=0)]
+        mock_send.return_value = True
+
+        from scripts.pre_market_brief import main
+
+        await main()
+
+        msg = mock_send.call_args[0][0]
+        assert "<b>" not in msg
+        assert "No active open positions" in msg
+        assert "```" not in msg
