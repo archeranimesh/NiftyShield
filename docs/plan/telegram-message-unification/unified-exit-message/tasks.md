@@ -27,10 +27,10 @@ rows in the epic `README.md` are ✅). UXM-8 is a sub-story close only — `over
 - [x] **UXM-6** — Migrate `auto_close.py` daemon paths (Collar / CC / PP); keep the
       `Overlay P&L (total realized)` line as the footer's overlay-total row.
       | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer + greeks-analyst | SHA: 3f812a8
-- [ ] **UXM-7** — Redesign `scripts/pre_market_brief.py`: drop the broken `<b>` HTML, fenced
+- [x] **UXM-7** — Redesign `scripts/pre_market_brief.py`: drop the broken `<b>` HTML, fenced
       house-style table, `strategy_label()` names, `paper_nifty_overlay` broken into CC /
       Collar / PP sub-rows (via UXM-1's `resolve_target`), portfolio total row.
-      | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
+      | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 84e786b
 - [ ] **UXM-8** — Sub-story docs close: `CONTEXT.md` / `src/notifications/CLAUDE.md` / `DECISIONS.md`;
       flip the `unified-exit-message/` row in the epic `README.md` **Stories** table to ✅ with the
       closing SHA; `TODOS.md` Session Log line. No folder archive — `overlay-recovery-digest/` ORD-4

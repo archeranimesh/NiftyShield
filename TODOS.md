@@ -135,6 +135,18 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-14] UXM-7 (`docs/plan/telegram-message-unification/unified-exit-message/`) —
+  `scripts/pre_market_brief.py` redesigned: dropped the broken `<b>` HTML (previously
+  escaped and sent literally under MarkdownV2), now a fenced `Strategy | Legs | Unrealized
+  P&L` table using `strategy_label()`; `paper_nifty_overlay` breaks into a parent row plus
+  `├ CC / ├ Collar / └ PP` sub-rows via `resolve_target` leg-role filters (empty sub-group
+  shows `—`); trailing `Total` row counts the overlay once via its parent aggregate. Added
+  the missing `paper_signal_track_v1` entry to `STRATEGY_LABELS` (`strategy_label()` raises
+  on an unmapped id — this would have crashed the brief on the day a signal-track paper
+  position opens). SHA: 84e786b. Pre-existing, out-of-scope: `tests/unit/notifications/
+  test_escaping_guard.py` has 4 failing assertions from UXM-4/5/6's `auto_close.py` /
+  `eod_summary.py` / `record_paper_trade.py` migrations whose escaping baseline was never
+  updated — confirmed present at HEAD before this task, not touched here.
 - [2026-09-13] UXM-1 (`docs/plan/telegram-message-unification/unified-exit-message/`) —
   gross-short-premium `short_decay_pct` (+ `short_credit_per_unit` / `short_buyback_per_unit`)
   added to `Cycle`; short leg identified by entry-trade `action == SELL`, not `leg_role`
