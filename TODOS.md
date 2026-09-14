@@ -222,6 +222,21 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
   (`format_money`/`mdcode` left over from the removed hand-rolled f-strings); greeks-analyst
   clean (P&L signs verified correct for all three, no cross-strategy cycle blending). Next:
   `unified-exit-message/` UXM-6 (migrate `auto_close.py` daemon paths).
+- [2026-09-14] UXM-6 (`docs/plan/telegram-message-unification/unified-exit-message/`) —
+  `auto_close.py`'s `_send_close_notification` (Collar/CC/PP daemon paths) migrated onto
+  `format_exit_message`, mirroring UXM-5's strategy-class pattern. `dte`/`held_days` — never
+  tracked by the old hand-rolled messages — now computed in `auto_close_overlay` from
+  `chain.expiry`/`pos.entry_date` via `market_today()` and threaded through (Collar uses the
+  earliest entry date across both legs), flagged by greeks-analyst as a WARNING against a
+  hardcoded-0 first draft and fixed before commit. Cycle/`cycle_stats` footer filtered per
+  overlay type against `src/paper/cycle_pnl.py`'s `_OVERLAY_GROUPS` leg-role tuples. Per-leg
+  delta dropped from the CRASH_MONETIZE line (consistent with UXM-5, not load-bearing
+  post-close per greeks-analyst). SHA 3f812a8. Tests: 715/715 green
+  (`tests/unit/strategy/`). Review: code-reviewer — 1 CRITICAL (missing G5 intent comment on
+  the new footer-calc `except Exception`) fixed before commit; remaining WARNINGs (line-length
+  false positives against the repo's actual 100-char limit, and a defensive
+  `Decimal(str(leg["pnl"]))` round-trip on the `Any`-typed legs dict) deferred as non-blocking.
+  Next: `unified-exit-message/` UXM-7 (`pre_market_brief.py` redesign).
 - [2026-09-13] OEM-5 (`docs/plan/telegram-message-unification/overlay-entry-message/`) —
   sub-story docs close. `CONTEXT.md` / `src/notifications/CLAUDE.md` / `DECISIONS.md` updated
   to reflect the sign-aware net line (OEM-1) and the Collar re-entry + three-track bootstrap

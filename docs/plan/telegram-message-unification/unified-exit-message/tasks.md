@@ -6,7 +6,7 @@ spec.
 Sub-story 3 of the `telegram-message-unification/` epic. Depends on `unified-entry-message/` + `overlay-entry-message/` — do not start UXM-1 before every UEM and OEM box is ticked (both Stories-table
 rows in the epic `README.md` are ✅). UXM-8 is a sub-story close only — `overlay-recovery-digest/` ORD-4 archives the epic.
 
-**Open: UXM-6, UXM-7, UXM-8.**
+**Open: UXM-7, UXM-8.**
 
 - [x] **UXM-1** — gross-short-premium `short_decay_pct` (+ `short_credit_per_unit` /
       `short_buyback_per_unit`) on `Cycle`; `cycle_stats(trades) -> CycleStats` (win_rate,
@@ -24,9 +24,9 @@ rows in the epic `README.md` are ✅). UXM-8 is a sub-story close only — `over
       | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 21a8449
 - [x] **UXM-5** — Migrate CC + PP + Collar strategy-class `_send_close_notification`.
       | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer + greeks-analyst | SHA: 7e19e78
-- [ ] **UXM-6** — Migrate `auto_close.py` daemon paths (Collar / CC / PP); keep the
+- [x] **UXM-6** — Migrate `auto_close.py` daemon paths (Collar / CC / PP); keep the
       `Overlay P&L (total realized)` line as the footer's overlay-total row.
-      | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer + greeks-analyst | SHA: —
+      | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer + greeks-analyst | SHA: 3f812a8
 - [ ] **UXM-7** — Redesign `scripts/pre_market_brief.py`: drop the broken `<b>` HTML, fenced
       house-style table, `strategy_label()` names, `paper_nifty_overlay` broken into CC /
       Collar / PP sub-rows (via UXM-1's `resolve_target`), portfolio total row.
