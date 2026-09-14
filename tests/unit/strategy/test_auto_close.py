@@ -156,9 +156,10 @@ async def test_auto_close_overlay_cc_profit_target(
     await asyncio.sleep(0.1)
     notifier.send.assert_called_once()
     msg = notifier.send.call_args[0][0]
-    assert "*CC closed" in msg
+    assert "*CC Closed*" in msg
     assert "NIFTY 23000 CE 25 JUN 26" in msg
     assert "NSE_FO|NIFTY23000CE" not in msg
+    assert "📊 *Overlay P&L \\(total realized\\):*" in msg
 
 
 @pytest.mark.asyncio
@@ -350,11 +351,12 @@ async def test_auto_close_overlay_collar_put_pnl_uses_preclose_qty(
 
     notifier.send.assert_called_once()
     msg = notifier.send.call_args[0][0]
-    assert "*Collar closed" in msg
-    # Put leg lost ~(26.15-141.90)*65 = -7,523.75 -> displayed as -7,523.75.
-    # Before the fix this rendered as "→ ₹-0".
-    assert "\\-₹7,523\\.75" in msg
-    assert "paper\\_nifty\\_futures" in msg
+    assert "*Collar Closed*" in msg
+    # Put leg lost ~(26.15-141.90)*65 = -7,523.75 -> displayed as -7,523.75
+    # in the fenced leg table (raw, unescaped). Before the fix this
+    # rendered as "→ ₹-0".
+    assert "-₹7,523.75" in msg
+    assert "📊 *Overlay P&L \\(total realized\\):*" in msg
     assert "₹0\\.00\n" not in msg
 
 
@@ -480,7 +482,7 @@ async def test_auto_close_overlay_collar_write_failure_sends_failed_not_closed(
     notifier.send.assert_called_once()
     msg = notifier.send.call_args[0][0]
     assert "AUTO\\-CLOSE FAILED" in msg  # MarkdownV2-escaped hyphen
-    assert "*Collar closed" not in msg
+    assert "*Collar Closed*" not in msg
     # MD-7.3: strategy_name ("paper_nifty_futures") is underscore-bearing —
     # mdcode() must survive it intact inside a code span rather than
     # opening/closing spurious _italic_ entities under MarkdownV2.
@@ -570,7 +572,7 @@ async def test_auto_close_overlay_pp_profit_target(
     await asyncio.sleep(0.1)
     notifier.send.assert_called_once()
     msg = notifier.send.call_args[0][0]
-    assert "*PP closed" in msg
+    assert "*PP Closed*" in msg
     assert "NIFTY 23000 PE 25 JUN 26" in msg
     # Flipped P&L check: (100 - 50) * 65 = 3250
     assert "\\+₹3,250\\.00" in msg
@@ -658,9 +660,9 @@ async def test_auto_close_overlay_pp_crash_monetize(
     await asyncio.sleep(0.1)
     notifier.send.assert_called_once()
     msg = notifier.send.call_args[0][0]
-    assert "*PP crash monetized" in msg
+    assert "💰 *PP Closed*" in msg
+    assert "CRASH\\_MONETIZE" in msg
     assert "RE\\_ENTRY\\_PENDING" in msg
-    assert "delta \\-0\\.85" in msg
     # Flipped P&L check: (200 - 50) * 65 = 9750
     assert "\\+₹9,750\\.00" in msg
 

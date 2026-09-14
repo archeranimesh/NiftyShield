@@ -13,9 +13,12 @@ import structlog
 from src.backtest.ivr import compute_ivr
 from src.backtest.vix_ingest import load_vix_series
 from src.instruments.lookup import format_leg_label
+from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain
-from src.notifications.formatting import format_greek, format_money
+from src.notifications.exit_message import ExitKind, ExitMessage, format_exit_message
+from src.notifications.formatting import CloseLegRow, format_money
 from src.notifications.markdown import escape_markdown, mdcode
+from src.paper.cycle_pnl import cycle_stats, reconstruct_cycles
 from src.paper.models import PaperPosition
 
 if TYPE_CHECKING:
@@ -83,6 +86,8 @@ async def auto_close_overlay(
     leg_role = pos.leg_role
     is_short = pos.net_qty < 0
     entry_price = pos.avg_sell_price if is_short else pos.avg_cost
+    dte = (chain.expiry - market_today()).days
+    held_days = (market_today() - (pos.entry_date or market_today())).days
 
     try:
         is_loss = _is_loss_stop_signal(store, event_id)
@@ -126,6 +131,8 @@ async def auto_close_overlay(
                 store,
                 is_collar=False,
                 lookup=lookup,
+                dte=dte,
+                held_days=held_days,
             )
 
         elif leg_role == "overlay_collar_call":
@@ -140,6 +147,8 @@ async def auto_close_overlay(
             put_entry = put_pos.avg_cost if put_pos else Decimal("0")
             put_key = put_pos.instrument_key if put_pos else "overlay_collar_put"
             put_qty = abs(put_pos.net_qty) if put_pos else 0
+            entry_dates = [p.entry_date for p in (pos, put_pos) if p and p.entry_date]
+            collar_held_days = (market_today() - min(entry_dates)).days if entry_dates else 0
 
             closed_ok = closer.close_collar_all(
                 strategy_name=strategy_name,
@@ -187,6 +196,8 @@ async def auto_close_overlay(
                 store,
                 is_collar=True,
                 lookup=lookup,
+                dte=dte,
+                held_days=collar_held_days,
             )
 
         elif leg_role == "overlay_pp":
@@ -217,6 +228,8 @@ async def auto_close_overlay(
                 store,
                 is_collar=False,
                 lookup=lookup,
+                dte=dte,
+                held_days=held_days,
             )
 
         else:
@@ -255,6 +268,14 @@ async def auto_close_overlay(
     return True
 
 
+_ROLE_LABEL = {
+    "overlay_cc": ("CC", "Short Call"),
+    "overlay_pp": ("PP", "Long Put"),
+}
+
+_COLLAR_ROLES = ("overlay_collar_call", "overlay_collar_put")
+
+
 async def _send_close_notification(
     notifier: Any | None,
     strategy_name: str,
@@ -263,8 +284,10 @@ async def _send_close_notification(
     store: PaperStore,
     is_collar: bool = False,
     lookup: Any | None = None,
+    dte: int = 0,
+    held_days: int = 0,
 ) -> None:
-    """Send unified, formatted close notifications to Telegram."""
+    """Send the shared exit-confirmation card for a daemon overlay close. Non-fatal."""
     if notifier is None:
         return
 
@@ -274,89 +297,94 @@ async def _send_close_notification(
     try:
         realized_pnl = get_strategy_realized_pnl(store, strategy_name)
 
-        def _fmt_pnl(val: float) -> str:
-            v = Decimal(str(val))
-            if v > 0:
-                return escape_markdown(f"+{format_money(v)}")
-            return escape_markdown(format_money(v))
-
-        realized_pnl_str = _fmt_pnl(realized_pnl)
-
         if is_collar:
-            # Collar format
-            call_leg = legs[0]
-            put_leg = legs[1]
-            net_pnl = call_leg["pnl"] + put_leg["pnl"]
-
-            c_exit = escape_markdown(format_money(Decimal(str(call_leg["exit"]))))
-            c_entry = escape_markdown(f"(entry {format_money(Decimal(str(call_leg['entry'])))})")
-            c_pnl = _fmt_pnl(call_leg["pnl"])
-
-            p_exit = escape_markdown(format_money(Decimal(str(put_leg["exit"]))))
-            p_entry = escape_markdown(f"(entry {format_money(Decimal(str(put_leg['entry'])))})")
-            p_pnl = _fmt_pnl(put_leg["pnl"])
-
-            net_pnl_str = _fmt_pnl(net_pnl)
-
-            msg = (
-                f"✅ *Collar closed — {escape_markdown(strategy_name)}*\n"
-                f"📤 Short Call: {mdcode(_label(call_leg['key']))} "
-                f"@ {c_exit}  {c_entry}  → {c_pnl}\n"
-                f"📤 Long Put:   {mdcode(_label(put_leg['key']))} "
-                f"@ {p_exit}  {p_entry}  → {p_pnl}\n"
-                f"Signal    : {escape_markdown(exit_signal)}\n"
-                f"Net P&L   : {net_pnl_str}  "
-                f"{escape_markdown('(call + put combined)')}\n"
-                f"Overlay P&L {escape_markdown('(total realized)')}: "
-                f"{realized_pnl_str}"
-            )
+            call_leg, put_leg = legs[0], legs[1]
+            close_legs = [
+                CloseLegRow(
+                    role="Short Call",
+                    instrument=_label(call_leg["key"]),
+                    entry=float(call_leg["entry"]),
+                    exit=float(call_leg["exit"]),
+                    pnl=Decimal(str(call_leg["pnl"])),
+                ),
+                CloseLegRow(
+                    role="Long Put",
+                    instrument=_label(put_leg["key"]),
+                    entry=float(put_leg["entry"]),
+                    exit=float(put_leg["exit"]),
+                    pnl=Decimal(str(put_leg["pnl"])),
+                ),
+            ]
+            this_exit_pnl = Decimal(str(call_leg["pnl"])) + Decimal(str(put_leg["pnl"]))
+            headline_label = "Collar"
+            kind = ExitKind.CLOSE
+            state_line = None
+            leg_roles = _COLLAR_ROLES
         else:
             leg = legs[0]
-            l_exit = escape_markdown(format_money(Decimal(str(leg["exit"]))))
-            l_entry = escape_markdown(f"(entry {format_money(Decimal(str(leg['entry'])))})")
-            l_pnl = _fmt_pnl(leg["pnl"])
-
-            if leg["role"] == "overlay_cc":
-                msg = (
-                    f"✅ *CC closed — {escape_markdown(strategy_name)}*\n"
-                    f"📤 {mdcode(_label(leg['key']))} @ {l_exit}  "
-                    f"{l_entry}\n"
-                    f"Signal : {escape_markdown(exit_signal)}\n"
-                    f"Leg P&L: {l_pnl}\n"
-                    f"Overlay P&L {escape_markdown('(total realized)')}: "
-                    f"{realized_pnl_str}"
+            headline_label, role = _ROLE_LABEL[leg["role"]]
+            close_legs = [
+                CloseLegRow(
+                    role=role,
+                    instrument=_label(leg["key"]),
+                    entry=float(leg["entry"]),
+                    exit=float(leg["exit"]),
+                    pnl=Decimal(str(leg["pnl"])),
                 )
-            else:  # overlay_pp
-                if exit_signal == "CRASH_MONETIZE":
-                    delta_val = leg.get("delta")
-                    delta = float(delta_val) if delta_val is not None else None
-                    l_delta = escape_markdown(f"(delta {format_greek(delta)})")
-                    msg = (
-                        f"💰 *PP crash monetized — "
-                        f"{escape_markdown(strategy_name)}*\n"
-                        f"📤 {mdcode(_label(leg['key']))} @ {l_exit}  "
-                        f"{l_entry}\n"
-                        f"Signal : {escape_markdown('CRASH_MONETIZE')}  "
-                        f"{l_delta}\n"
-                        f"Leg P&L: {l_pnl}\n"
-                        f"State  : → {escape_markdown('RE_ENTRY_PENDING')} "
-                        f"{escape_markdown('(monitoring IVR ≤ 0.60, ')}"
-                        f"{escape_markdown('DTE ≥ 14)')}\n"
-                        f"Overlay P&L {escape_markdown('(total realized)')}: "
-                        f"{realized_pnl_str}"
-                    )
-                else:  # PROFIT_TARGET / ROLL_ELIGIBLE
-                    msg = (
-                        f"✅ *PP closed — {escape_markdown(strategy_name)}*\n"
-                        f"📤 {mdcode(_label(leg['key']))} @ {l_exit}  "
-                        f"{l_entry}\n"
-                        f"Signal : {escape_markdown(exit_signal)}\n"
-                        f"Leg P&L: {l_pnl}\n"
-                        f"Overlay P&L {escape_markdown('(total realized)')}: "
-                        f"{realized_pnl_str}"
-                    )
+            ]
+            this_exit_pnl = Decimal(str(leg["pnl"]))
+            leg_roles = (leg["role"],)
+            if leg["role"] == "overlay_pp" and exit_signal == "CRASH_MONETIZE":
+                kind = ExitKind.CRASH_MONETIZE
+                state_line = "RE_ENTRY_PENDING (monitoring IVR ≤ 0.60, DTE ≥ 14)"
+            else:
+                kind = ExitKind.CLOSE
+                state_line = None
 
-        await notifier.send(msg)
+        cycle_pnl = None
+        cycle_index = None
+        cycle_decay_pct = None
+        cycle_short_credit = None
+        cycle_short_buyback = None
+        cycle_held_days = None
+        stats = None
+        try:
+            trades = [t for t in store.get_trades(strategy_name) if t.leg_role in leg_roles]
+            cycles_all = reconstruct_cycles(trades)
+            if cycles_all and not cycles_all[-1].is_open:
+                last = cycles_all[-1]
+                cycle_pnl = last.realized_pnl
+                cycle_index = last.index
+                cycle_decay_pct = last.short_decay_pct
+                cycle_short_credit = last.short_credit_per_unit
+                cycle_short_buyback = last.short_buyback_per_unit
+                cycle_held_days = last.days_in_trade
+            stats = cycle_stats(trades)
+        except Exception as exc:  # Intentional: footer stats are optional, card still sends
+            log.warning("auto_close.footer_calc_failed", error=str(exc))
+
+        text = format_exit_message(
+            ExitMessage(
+                headline_label=headline_label,
+                kind=kind,
+                signal=exit_signal,
+                dte=dte,
+                held_days=held_days,
+                legs=close_legs,
+                this_exit_pnl=this_exit_pnl,
+                cycle_pnl=cycle_pnl,
+                cycle_index=cycle_index,
+                cycle_decay_pct=cycle_decay_pct,
+                cycle_short_credit=cycle_short_credit,
+                cycle_short_buyback=cycle_short_buyback,
+                cycle_held_days=cycle_held_days,
+                inception_pnl=realized_pnl,
+                stats=stats,
+                overlay_total_pnl=realized_pnl,
+                state_line=state_line,
+            )
+        )
+        await notifier.send(text)
     except Exception as exc:
         log.warning("auto_close.notification_failed", error=str(exc))
 
