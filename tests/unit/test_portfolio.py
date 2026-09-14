@@ -449,8 +449,8 @@ class TestLegValidation:
                 expiry=date(2025, 12, 31),
             )
 
-        # Thursday April 2, 2026 is a holiday (Shri Ram Navami).
-        # Wednesday April 1, 2026 is a valid expiry (preceding trading day).
+        # Thursday March 26, 2026 is a holiday (Shri Ram Navami).
+        # Wednesday March 25, 2026 is a valid expiry (preceding trading day).
         Leg(
             instrument_key="FUT_TEST",
             display_name="Futures Test",
@@ -458,14 +458,14 @@ class TestLegValidation:
             direction=Direction.BUY,
             quantity=75,
             entry_price=Decimal("22000.00"),
-            entry_date=date(2026, 4, 1),
+            entry_date=date(2026, 3, 2),
             product_type=ProductType.NRML,
-            expiry=date(2026, 4, 1),
+            expiry=date(2026, 3, 25),
         )
 
-        # Tuesday March 31, 2026: nominal Thursday is April 2, 2026 (holiday),
-        # but Wednesday April 1, 2026 is a trading day, so Tuesday cannot
-        # be the expiry.
+        # Tuesday March 24, 2026: nominal Thursday is March 26, 2026 (a
+        # holiday, Shri Ram Navami), but Wednesday March 25, 2026 is a
+        # trading day, so Tuesday cannot be the expiry.
         with pytest.raises(
             ValidationError,
             match="is a trading day after .* in the same week",
@@ -477,9 +477,9 @@ class TestLegValidation:
                 direction=Direction.BUY,
                 quantity=75,
                 entry_price=Decimal("22000.00"),
-                entry_date=date(2026, 4, 1),
+                entry_date=date(2026, 3, 2),
                 product_type=ProductType.NRML,
-                expiry=date(2026, 3, 31),
+                expiry=date(2026, 3, 24),
             )
 
     def test_pre_2019_expiry_logic(self):
