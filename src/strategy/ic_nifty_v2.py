@@ -41,11 +41,12 @@ from typing import TYPE_CHECKING, Literal
 
 import structlog
 
-from src.instruments.lookup import InstrumentLookup
+from src.instruments.lookup import InstrumentLookup, format_leg_label
 from src.instruments.lookup import parse_expiry as _parse_expiry_epoch
 from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
-from src.notifications.formatting import format_money
+from src.notifications.exit_message import ExitKind, ExitMessage, format_exit_message
+from src.notifications.formatting import CloseLegRow
 from src.notifications.markdown import escape_markdown, mdcode
 from src.paper.constants import DEFAULT_BOD_PATH
 from src.paper.models import PaperPosition, PaperTrade
@@ -53,6 +54,13 @@ from src.strategy import roll_utils
 from src.strategy.ic_close_executor import close_ic_legs, roll_ic_legs
 from src.strategy.profit_lock_engine import ProfitLockDecision, ProfitLockEngine, ProfitLockState
 from src.strategy.protocol import ApprovedAction, LegClose, LegSpec, SignalEvent
+
+_CLOSE_ROLE_LABELS = {
+    "short_put": "Short Put",
+    "short_call": "Short Call",
+    "long_put_hedge": "Long Put",
+    "long_call_hedge": "Long Call",
+}
 
 if TYPE_CHECKING:
     from src.client.protocol import BrokerClient
@@ -2123,7 +2131,7 @@ class IronCondorV2:
                 # triggered by PROFIT_TARGET) were silent. See DECISIONS.md
                 # 2026-07-20 and docs/bugs/bugs.md BUG-013.
                 await self._send_close_notification(
-                    action.action_type, triggering_signal, closed_trades
+                    action.action_type, triggering_signal, closed_trades, positions
                 )
         elif action.action_type in ("ROLL_WING", "PROFIT_LOCK_ZONE2") and self._is_auto_execute(
             action
@@ -2188,11 +2196,11 @@ class IronCondorV2:
         action_type: str,
         triggering_signal: str,
         closed_trades: list[PaperTrade],
+        positions: list[PaperPosition] | None = None,
     ) -> None:
-        """Send a plain MarkdownV2 close-confirmation notification. Non-fatal.
+        """Send the shared exit-confirmation card (format_exit_message). Non-fatal.
 
-        Mirrors IronCondorV1._send_close_notification and the existing
-        _send_profit_lock_notification pattern already used here for Zone 2.
+        Mirrors IronCondorV1._send_close_notification.
 
         Args:
             action_type: The ApprovedAction.action_type that was executed
@@ -2202,40 +2210,124 @@ class IronCondorV2:
                 reasons this strategy uses).
             closed_trades: The closing PaperTrade rows actually persisted by
                 close_ic_legs(); empty when nothing was open to close.
+            positions: Open positions prior to this close, used for per-leg
+                entry price and DTE. Empty/absent falls back to the close
+                price as entry (that leg's P&L then reads 0).
         """
         if self._notifier is None:
             return
         if not closed_trades:
             return
-        legs_text = "\n".join(
-            f"  {escape_markdown(t.leg_role)}: "
-            f"{escape_markdown(t.action.value)} {t.quantity} "
-            f"@ {escape_markdown(format_money(t.price))}"
-            for t in closed_trades
-        )
-        try:
-            # Deferred import: src.paper.tracker -> src.paper.store ->
-            # src.strategy.profit_lock_engine creates a circular import if
-            # hoisted to module level, since src/strategy/__init__.py eagerly
-            # imports this module.
-            from src.paper.tracker import get_strategy_realized_pnl
 
-            net_pnl = get_strategy_realized_pnl(self._store, self.strategy_name)
-            pnl_text = f"Net P&L: {format_money(net_pnl)}\n"
+        positions = positions or []
+        pos_by_role = {p.leg_role: p for p in positions}
+
+        try:
+            lookup: InstrumentLookup | None = InstrumentLookup.from_file(DEFAULT_BOD_PATH)
         except Exception as exc:
-            log.warning("ic_nifty_v2.net_pnl_calc_failed", error=str(exc))
-            pnl_text = ""
-        text = (
-            f"✅ *IC V2 closed — {escape_markdown(triggering_signal)}*\n"
-            f"Strategy: {mdcode(self.strategy_name)}\n"
-            f"Action: {escape_markdown(action_type)}\n"
-            f"{escape_markdown(pnl_text)}"
-            f"{legs_text}"
-        )
+            log.warning("ic_nifty_v2.instrument_lookup_failed", error=str(exc))
+            lookup = None
+
+        legs: list[CloseLegRow] = []
+        this_exit_pnl = Decimal("0")
+        for t in closed_trades:
+            pos = pos_by_role.get(t.leg_role)
+            is_short = t.leg_role in _SHORT_ROLES
+            entry = (
+                (pos.avg_sell_price if is_short else pos.avg_cost) if pos is not None else t.price
+            )
+            exit_price = t.price
+            leg_pnl = (
+                (entry - exit_price) * t.quantity if is_short else (exit_price - entry) * t.quantity
+            )
+            this_exit_pnl += leg_pnl
+            label = (
+                format_leg_label(t.instrument_key, lookup)
+                if lookup is not None
+                else t.instrument_key
+            )
+            legs.append(
+                CloseLegRow(
+                    role=_CLOSE_ROLE_LABELS.get(t.leg_role, t.leg_role),
+                    instrument=label,
+                    entry=float(entry),
+                    exit=float(exit_price),
+                    pnl=leg_pnl,
+                )
+            )
+
+        expiry = next((self._parse_expiry(p.instrument_key) for p in positions), None)
+        dte = (expiry - market_today()).days if expiry is not None else 0
+        entry_dates = [
+            ed
+            for t in closed_trades
+            if (pos := pos_by_role.get(t.leg_role)) is not None
+            and (ed := pos.entry_date) is not None
+        ]
+        held_days = (closed_trades[0].trade_date - min(entry_dates)).days if entry_dates else 0
+
+        cycle_pnl = None
+        cycle_index = None
+        cycle_decay_pct = None
+        cycle_short_credit = None
+        cycle_short_buyback = None
+        cycle_held_days = None
+        inception_pnl = Decimal("0")
+        stats = None
+        if self._store is None:
+            log.warning("ic_nifty_v2.footer_calc_skipped_no_store")
+        else:
+            try:
+                # Deferred import: src.paper.tracker -> src.paper.store ->
+                # src.strategy.profit_lock_engine creates a circular import if
+                # hoisted to module level, since src/strategy/__init__.py eagerly
+                # imports this module.
+                from src.paper.cycle_pnl import cycle_stats, reconstruct_cycles
+                from src.paper.tracker import get_strategy_realized_pnl
+
+                trades = self._store.get_trades(self.strategy_name)
+                cycles_all = reconstruct_cycles(trades)
+                if cycles_all and not cycles_all[-1].is_open:
+                    last = cycles_all[-1]
+                    cycle_pnl = last.realized_pnl
+                    cycle_index = last.index
+                    cycle_decay_pct = last.short_decay_pct
+                    cycle_short_credit = last.short_credit_per_unit
+                    cycle_short_buyback = last.short_buyback_per_unit
+                    cycle_held_days = last.days_in_trade
+                stats = cycle_stats(trades)
+                inception_pnl = get_strategy_realized_pnl(self._store, self.strategy_name)
+            except Exception as exc:
+                log.warning("ic_nifty_v2.footer_calc_failed", error=str(exc))
+
+        try:
+            text = format_exit_message(
+                ExitMessage(
+                    headline_label="IC v2",
+                    kind=ExitKind.CLOSE,
+                    signal=triggering_signal,
+                    dte=dte,
+                    held_days=held_days,
+                    legs=legs,
+                    this_exit_pnl=this_exit_pnl,
+                    per_lot=True,
+                    cycle_pnl=cycle_pnl,
+                    cycle_index=cycle_index,
+                    cycle_decay_pct=cycle_decay_pct,
+                    cycle_short_credit=cycle_short_credit,
+                    cycle_short_buyback=cycle_short_buyback,
+                    cycle_held_days=cycle_held_days,
+                    inception_pnl=inception_pnl,
+                    stats=stats,
+                )
+            )
+        except Exception as exc:
+            log.warning("ic_nifty_v2.format_exit_message_failed", error=str(exc))
+            return
         try:
             await self._notifier.send_notification(text)
         except Exception as exc:
-            log.error("ic_nifty_v2.send_notification_failed", error=str(exc))
+            log.warning("ic_nifty_v2.send_notification_failed", error=str(exc))
 
     # ── Private helpers (copied verbatim from ic_nifty_v1) ───────────────────
 

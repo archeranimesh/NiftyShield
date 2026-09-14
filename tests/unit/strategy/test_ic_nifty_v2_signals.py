@@ -735,6 +735,7 @@ def test_apply_action_close_full_auto_execute_sends_close_notification() -> None
     )
     store = MagicMock(spec=PaperStore)
     store.record_trades = MagicMock(side_effect=lambda trades: (trades, []))
+    store.get_trades = MagicMock(return_value=[])
     notifier = MagicMock()
     notifier.send_notification = AsyncMock()
 
@@ -756,11 +757,51 @@ def test_apply_action_close_full_auto_execute_sends_close_notification() -> None
 
     notifier.send_notification.assert_called_once()
     (message,), _ = notifier.send_notification.call_args
+    assert "✅ *IC v2 Closed*" in message
     assert "LOSS\\_STOP" in message
-    assert "short\\\\_put" not in message
-    assert _STRATEGY_NAME in message
-    assert r"₹30\.00" in message
-    assert r"Net P&L: \-₹5,432\.10" in message
+    assert "30.0" in message
+    assert r"📈 *Inception:* \-₹5,432\.10" in message
+
+
+def test_apply_action_close_full_auto_execute_notify_failure_non_fatal() -> None:
+    """A Telegram send failure must not raise or block the close itself."""
+    import asyncio
+    from unittest.mock import AsyncMock
+
+    from src.client.protocol import BrokerClient
+    from src.paper.store import PaperStore
+
+    broker = MagicMock(spec=BrokerClient)
+    broker.get_ltp = AsyncMock(
+        return_value={
+            _key("23900", "PE"): Decimal("30.00"),
+            _key("23200", "PE"): Decimal("2.00"),
+            _key("25100", "CE"): Decimal("28.00"),
+            _key("25800", "CE"): Decimal("2.50"),
+        }
+    )
+    store = MagicMock(spec=PaperStore)
+    store.record_trades = MagicMock(side_effect=lambda trades: (trades, []))
+    store.get_trades = MagicMock(return_value=[])
+    notifier = MagicMock()
+    notifier.send_notification = AsyncMock(side_effect=RuntimeError("telegram down"))
+
+    strategy = IronCondorV2(config=IC_V2_MONTHLY, broker=broker, store=store, notifier=notifier)
+    strategy.set_original_credit(Decimal("100"))
+    positions = _standard_ic_positions()
+    action = ApprovedAction(
+        action_type="CLOSE_FULL",
+        legs_to_close=[],
+        legs_to_open=[],
+        rationale="auto-execute",
+        council_rank=1,
+        metadata={"auto_selected": True, "event_type": "LOSS_STOP"},
+    )
+
+    result = asyncio.run(strategy.apply_action(positions, action))
+
+    assert result == []
+    notifier.send_notification.assert_called_once()
 
 
 def test_apply_action_close_full_auto_execute_without_broker_skips_persist_no_raise() -> None:

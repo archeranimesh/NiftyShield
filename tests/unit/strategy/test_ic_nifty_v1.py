@@ -997,6 +997,9 @@ def test_apply_action_close_full_auto_execute_sends_close_notification() -> None
 
     IronCondorV1 accepted a notifier but never called it — every auto-close
     was silent, unlike CSP/CC/Collar/PP. See docs/bugs/bugs.md BUG-013.
+
+    UXM-3: the confirmation is now the shared ``format_exit_message`` card —
+    headline, 4-leg table, and an ``📈 *Inception:*`` footer line.
     """
     from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -1014,6 +1017,7 @@ def test_apply_action_close_full_auto_execute_sends_close_notification() -> None
     )
     store = MagicMock(spec=PaperStore)
     store.record_trades = MagicMock(side_effect=lambda trades: (trades, []))
+    store.get_trades = MagicMock(return_value=[])
     notifier = MagicMock()
     notifier.send_notification = AsyncMock()
 
@@ -1027,12 +1031,44 @@ def test_apply_action_close_full_auto_execute_sends_close_notification() -> None
 
     notifier.send_notification.assert_called_once()
     (message,), _ = notifier.send_notification.call_args
+    assert "✅ *IC v1 Closed*" in message
     assert "PROFIT\\_TARGET" in message
-    assert _STRATEGY in message
-    assert "short\\_put" in message
-    assert "short\\\\_put" not in message  # guard against double-escaping
-    assert r"₹7\.70" in message
-    assert r"Net P&L: \-₹1,234\.50" in message
+    assert "[S]" in message
+    assert _SHORT_PUT_KEY in message
+    assert "7.7" in message
+    assert r"📈 *Inception:* \-₹1,234\.50" in message
+
+
+def test_apply_action_close_full_auto_execute_notify_failure_non_fatal() -> None:
+    """A Telegram send failure must not raise or block the close itself."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from src.client.protocol import BrokerClient
+    from src.paper.store import PaperStore
+
+    broker = MagicMock(spec=BrokerClient)
+    broker.get_ltp = AsyncMock(
+        return_value={
+            _SHORT_PUT_KEY: Decimal("7.70"),
+            _LONG_PUT_KEY: Decimal("3.95"),
+            _SHORT_CALL_KEY: Decimal("3.35"),
+            _LONG_CALL_KEY: Decimal("1.20"),
+        }
+    )
+    store = MagicMock(spec=PaperStore)
+    store.record_trades = MagicMock(side_effect=lambda trades: (trades, []))
+    store.get_trades = MagicMock(return_value=[])
+    notifier = MagicMock()
+    notifier.send_notification = AsyncMock(side_effect=RuntimeError("telegram down"))
+
+    strat = IronCondorV1(broker=broker, store=store, notifier=notifier)
+    positions = _make_ic_positions()
+    action = _make_auto_close_action("CLOSE_FULL")
+
+    result = asyncio.run(strat.apply_action(positions, action))
+
+    assert result == []
+    notifier.send_notification.assert_called_once()
 
 
 def test_apply_action_no_notifier_does_not_raise() -> None:
@@ -1062,14 +1098,54 @@ def test_apply_action_no_notifier_does_not_raise() -> None:
     assert result == []  # close still happens; notification is best-effort only
 
 
-def test_send_close_notification_no_store_skips_pnl_without_raising() -> None:
-    """store=None: notification still sends, net P&L text omitted, no crash.
+def test_send_close_notification_computes_held_days_from_position_entry_date() -> None:
+    """held_days is derived from the matched position's entry_date, not left at 0."""
+    from unittest.mock import AsyncMock, MagicMock
 
-    Regression guard for the mypy gap fixed 2026-07-29 — get_strategy_realized_pnl
-    requires PaperStore, not PaperStore | None. _send_close_notification is only
-    reached via apply_action's own None-store guard today (line ~557), so this
-    branch is unreachable through that path; this test exercises the private
-    method directly so the guard has real coverage rather than being dead code.
+    from src.models.portfolio import TradeAction
+    from src.paper.models import PaperTrade
+
+    notifier = MagicMock()
+    notifier.send_notification = AsyncMock()
+
+    strat = IronCondorV1(notifier=notifier)  # store=None
+    positions = [
+        _make_position(
+            leg_role="short_put",
+            instrument_key=_SHORT_PUT_KEY,
+            avg_sell_price=_SHORT_PUT_SELL,
+            net_qty=-65,
+            entry_date=date(2026, 4, 20),
+        )
+    ]
+    closed_trades = [
+        PaperTrade(
+            strategy_name=_STRATEGY,
+            leg_role="short_put",
+            instrument_key=_SHORT_PUT_KEY,
+            trade_date=date(2026, 5, 1),
+            action=TradeAction.BUY,
+            quantity=75,
+            price=Decimal("7.70"),
+            notes="close",
+        )
+    ]
+
+    asyncio.run(
+        strat._send_close_notification("CLOSE_FULL", "PROFIT_TARGET", closed_trades, positions)
+    )
+
+    (message,), _ = notifier.send_notification.call_args
+    assert "*Held:* 11d" in message
+
+
+def test_send_close_notification_no_store_skips_footer_without_raising() -> None:
+    """store=None: notification still sends, footer P&L defaults to 0, no crash.
+
+    _send_close_notification is only reached via apply_action's own None-store
+    guard today, so this branch is unreachable through that path; this test
+    exercises the private method directly so the guard has real coverage
+    rather than being dead code.
     """
     from unittest.mock import AsyncMock, MagicMock
 
@@ -1098,9 +1174,9 @@ def test_send_close_notification_no_store_skips_pnl_without_raising() -> None:
 
     notifier.send_notification.assert_called_once()
     (message,), _ = notifier.send_notification.call_args
-    assert "Net P&L" not in message
-    assert r"₹7\.70" in message
-    assert any(log.get("event") == "ic_nifty_v1.net_pnl_calc_skipped_no_store" for log in logs)
+    assert r"📈 *Inception:* ₹0\.00" in message
+    assert "7.7" in message
+    assert any(log.get("event") == "ic_nifty_v1.footer_calc_skipped_no_store" for log in logs)
 
 
 def test_apply_action_close_full_manual_action_does_not_auto_persist() -> None:
