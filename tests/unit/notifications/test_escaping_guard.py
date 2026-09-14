@@ -195,19 +195,19 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "by whoever's testing, not a cron or strategy event path; deliberately excluded from "
         "MD-7.1/MD-7.2/MD-7.3"
     ),
-    ("scripts/eod_summary.py", 200): (
+    ("scripts/eod_summary.py", 198): (
         "heuristic limitation, not a real gap - ROLL-6 migrated this (SHA on the task "
         "line); the message is built and fully escaped inside build_eod_summary_message() "
         "(escape_markdown() on every out-of-fence line), but this guard only inspects the "
         "immediate enclosing function (main), not the builder it calls - same shape as the "
-        "paper_3track_snapshot.py:2030 entry"
+        "paper_3track_snapshot.py:2030 entry. Line moved from 200 -> 198 by UXM's edits."
     ),
     ("scripts/healthcheck.py", 324): (
         "heuristic limitation, not a real gap - ROLL-11 migrated this (SHA on the task "
         "line); the message is built and fully escaped inside build_healthcheck_alert() "
         "(escape_markdown() on every label, status word, detail and the bracketed time), "
         "but this guard only inspects the immediate enclosing function (main), not the "
-        "builder it calls - same shape as the scripts/eod_summary.py:200 entry"
+        "builder it calls - same shape as the scripts/eod_summary.py:198 entry"
     ),
     (
         "scripts/position_health_check.py",
@@ -225,7 +225,7 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "line); the message is built and fully escaped inside build_roll_notification() "
         "(escape_markdown() on every dynamic value + static punctuation), but this guard "
         "only inspects the immediate enclosing function (check_and_roll_leg), not the "
-        "builder it calls - same shape as the scripts/eod_summary.py:200 entry"
+        "builder it calls - same shape as the scripts/eod_summary.py:198 entry"
     ),
     # base-expiry notifier.send (was line 511) - ROLL-15 (SHA 3855f8f) migrated it;
     # msg is now fully escaped (escape_markdown/mdcode on every value), so it is no
@@ -260,7 +260,7 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "S5.5c — value is fully escaped inside the callee _format_signal_notification() "
         "(the message-builder owns the MarkdownV2 boundary: escape_markdown() per dynamic "
         "value, literal * for bold), but this guard only inspects the immediate enclosing "
-        "function (run), not the builder it calls — same shape as the scripts/eod_summary.py:200 entry. "
+        "function (run), not the builder it calls — same shape as the scripts/eod_summary.py:198 entry. "
         "Line moved from 295 -> 181 by SEC-4's extraction of the pipeline body into "
         "src/signals/pipeline.py::run_morning_signal_pipeline."
     ),
@@ -290,15 +290,16 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "interpolated value via escape_markdown() inside EntryMessage's own "
         "renderer (src/notifications/entry_message.py); this guard only "
         "inspects the immediate enclosing function (_send_entry_card_if_requested), "
-        "not the builder it calls - same shape as the scripts/eod_summary.py:200 entry"
+        "not the builder it calls - same shape as the scripts/eod_summary.py:198 entry"
     ),
-    ("scripts/record/record_paper_trade.py", 845): (
+    ("scripts/record/record_paper_trade.py", 846): (
         "UXM-4 - heuristic limitation, not a real gap: the card is built by "
         "format_exit_message(), which escapes every interpolated value via "
         "escape_markdown() inside ExitMessage's own renderer "
         "(src/notifications/exit_message.py); this guard only inspects the "
         "immediate enclosing function (_send_close_card_if_requested), not the "
-        "builder it calls - same shape as the scripts/eod_summary.py:200 entry"
+        "builder it calls - same shape as the scripts/eod_summary.py:198 entry. "
+        "Line moved from 845 -> 846 by a later edit above it."
     ),
     ("src/strategy/collar_overlay_v1.py", 680): (
         "OEM-2 - heuristic limitation, not a real gap: the card is built by "
@@ -324,7 +325,7 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "escape_markdown() inside ExitMessage's own renderer "
         "(src/notifications/exit_message.py); this guard only inspects the "
         "immediate enclosing function (_send_close_notification), not the "
-        "builder it calls - same shape as the scripts/record/record_paper_trade.py:845 entry"
+        "builder it calls - same shape as the scripts/record/record_paper_trade.py:846 entry"
     ),
     ("src/strategy/pp_overlay_v1.py", 470): (
         "UXM-5 - heuristic limitation, not a real gap: the card is built by "
@@ -332,7 +333,7 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "escape_markdown() inside ExitMessage's own renderer "
         "(src/notifications/exit_message.py); this guard only inspects the "
         "immediate enclosing function (_send_close_notification), not the "
-        "builder it calls - same shape as the scripts/record/record_paper_trade.py:845 entry"
+        "builder it calls - same shape as the scripts/record/record_paper_trade.py:846 entry"
     ),
     ("src/strategy/collar_overlay_v1.py", 863): (
         "UXM-5 - heuristic limitation, not a real gap: the card is built by "
@@ -340,7 +341,18 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "escape_markdown() inside ExitMessage's own renderer "
         "(src/notifications/exit_message.py); this guard only inspects the "
         "immediate enclosing function (_send_close_notification), not the "
-        "builder it calls - same shape as the scripts/record/record_paper_trade.py:845 entry"
+        "builder it calls - same shape as the scripts/record/record_paper_trade.py:846 entry"
+    ),
+    ("src/strategy/auto_close.py", 387): (
+        "UXM-6 - heuristic limitation, not a real gap: the card is built by "
+        "format_exit_message(), which escapes every interpolated value via "
+        "escape_markdown() inside ExitMessage's own renderer "
+        "(src/notifications/exit_message.py); this guard only inspects the "
+        "immediate enclosing function (_send_close_notification), not the "
+        "builder it calls - same shape as the scripts/record/record_paper_trade.py:846 entry. "
+        "This is the daemon path's own _send_close_notification, unrelated to the "
+        "MD-3-audited line 359 it replaced — that hand-built, pre-escaped string was "
+        "removed by UXM-6's migration onto format_exit_message()."
     ),
 }
 
@@ -412,7 +424,6 @@ def test_baseline_has_no_duplicate_or_unused_entries():
 @pytest.mark.parametrize(
     "file_rel, line",
     [
-        ("src/strategy/auto_close.py", 359),
         ("src/strategy/collar_overlay_v1.py", 608),
         ("src/strategy/collar_overlay_v1.py", 610),
     ],
@@ -432,6 +443,11 @@ def test_md3_audited_close_notifications_stay_escaped(file_rel, line):
     _BASELINE_UNESCAPED entries for the new call sites this introduced). The
     collar_overlay_v1.py reentry-failure entries stay pinned, shifted
     607 -> 608 and 609 -> 610 by UXM-5's edit above them.
+
+    UXM-6 removed the auto_close.py:359 entry from this pin too: that daemon
+    close path's hand-built, pre-escaped string was replaced by a delegation
+    to format_exit_message() (see the new src/strategy/auto_close.py:387
+    _BASELINE_UNESCAPED entry above) — same shape as the UXM-5 drops.
     """
     sites = {(s.file, s.line): s for s in scan_call_sites()}
     site = sites.get((file_rel, line))
