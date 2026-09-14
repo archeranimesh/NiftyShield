@@ -1271,6 +1271,89 @@ def test_apply_action_close_and_wait_escapes_signal() -> None:
     assert "CLOSE\\_WAIT\\_TEST" in msg
 
 
+def test_csp_close_sends_exit_card(tmp_path: Path) -> None:
+    """CLOSE_FULL close emits the shared exit card with a [S] leg row and inception line."""
+    from unittest.mock import AsyncMock
+
+    from src.notifications.exit_message import ExitKind
+    from src.strategy.csp_nifty_v1 import CSPNiftyV1
+
+    broker_mock = AsyncMock()
+    broker_mock.get_ltp.return_value = {"NSE_FO|NIFTY23000PE": "12.0"}
+    notifier_mock = AsyncMock()
+    store = PaperStore(tmp_path / "test_csp_close.sqlite")
+    store.record_trade(
+        PaperTrade(
+            strategy_name=_STRATEGY,
+            leg_role="short_put",
+            instrument_key="NSE_FO|NIFTY23000PE",
+            trade_date=date.today() - timedelta(days=5),
+            action=TradeAction.SELL,
+            quantity=65,
+            price=Decimal("80"),
+        )
+    )
+    strategy = CSPNiftyV1(broker=broker_mock, store=store, notifier=notifier_mock)
+    pos = _make_position()
+
+    close_trade = _run(strategy._close_leg(pos, date.today()))
+    _run(
+        strategy._send_close_card(
+            closed_pos=pos,
+            close_trade=close_trade,
+            today=date.today(),
+            kind=ExitKind.CLOSE,
+            triggering_signal="PROFIT_TARGET",
+        )
+    )
+
+    notifier_mock.send_notification.assert_called_once()
+    msg = notifier_mock.send_notification.call_args[0][0]
+    assert r"✅ *CSP Closed* — PROFIT\_TARGET" in msg
+    assert "[S]" in msg
+    assert "📈 *Inception:*" in msg
+
+
+def test_csp_waiting_uses_waiting_kind(tmp_path: Path) -> None:
+    """CLOSE_AND_WAIT emits the shared card with the WAITING headline + state line."""
+    from unittest.mock import AsyncMock
+
+    from src.strategy.csp_nifty_v1 import CSPNiftyV1
+
+    broker_mock = AsyncMock()
+    broker_mock.get_ltp.return_value = {"NSE_FO|NIFTY23000PE": "150.0"}
+    notifier_mock = AsyncMock()
+    store = PaperStore(tmp_path / "test_csp_waiting.sqlite")
+    store.record_trade(
+        PaperTrade(
+            strategy_name=_STRATEGY,
+            leg_role="short_put",
+            instrument_key="NSE_FO|NIFTY23000PE",
+            trade_date=date.today() - timedelta(days=3),
+            action=TradeAction.SELL,
+            quantity=65,
+            price=Decimal("80"),
+        )
+    )
+    strategy = CSPNiftyV1(broker=broker_mock, store=store, notifier=notifier_mock)
+    pos = _make_position()
+
+    action = ApprovedAction(
+        action_type="CLOSE_AND_WAIT",
+        legs_to_close=[LegClose(leg_role="short_put")],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+        metadata={"triggering_signal": "HARD_STOP"},
+    )
+    _run(strategy.apply_action([pos], action))
+
+    notifier_mock.send_notification.assert_called_once()
+    msg = notifier_mock.send_notification.call_args[0][0]
+    assert r"⛔ *CSP Closed — waiting* — HARD\_STOP" in msg
+    assert r"→ *State:* RE\_ENTRY\_PENDING — no new position opened\." in msg
+
+
 @patch("src.instruments.lookup.InstrumentLookup.from_file")
 def test_roll_down_notification_format(mock_lookup: MagicMock) -> None:
     """Verify that _roll_down produces correct Markdown formatting using format_money."""
@@ -1330,21 +1413,22 @@ def test_open_new_error_notification_format(mock_lookup: MagicMock) -> None:
 
 
 def test_reentry_notification_format() -> None:
-    """Verify that _reentry_notification formats the close confirmation correctly."""
-    from unittest.mock import AsyncMock, MagicMock, patch
+    """Verify that _reentry_notification sends the shared exit card (UXM-4)."""
+    from unittest.mock import AsyncMock, patch
 
     from src.strategy.csp_nifty_v1 import CSPNiftyV1
     from src.strategy.protocol import ApprovedAction, LegClose
 
     broker_mock = AsyncMock()
-    store_mock = MagicMock()
     notifier_mock = AsyncMock()
 
-    strategy = CSPNiftyV1(broker=broker_mock, store=store_mock, notifier=notifier_mock)
+    # store=None → no cycle/inception footer, but the card still sends (mirrors
+    # IronCondorV1's "no store" path).
+    strategy = CSPNiftyV1(broker=broker_mock, store=None, notifier=notifier_mock)
     pos = _make_position()
 
     action = ApprovedAction(
-        action_type="CLOSE_AND_WAIT",
+        action_type="CLOSE_AND_ROLL",
         legs_to_close=[LegClose(leg_role="short_put")],
         legs_to_open=[],
         rationale="test",
@@ -1353,14 +1437,11 @@ def test_reentry_notification_format() -> None:
     )
 
     with patch.object(strategy, "_check_reentry", new_callable=AsyncMock):
-        _run(strategy._reentry_notification(closed_pos=pos, action=action))
+        _run(strategy._reentry_notification(closed_pos=pos, action=action, close_trade=None))
 
     notifier_mock.send_notification.assert_called_once()
     msg = notifier_mock.send_notification.call_args[0][0]
 
-    assert r"✅ *CSP closed — TEST\_TRIGGER\_123*" in msg
-    assert f"Instrument: `{pos.instrument_key}`" in msg
-    assert (
-        r"New position opened\.  Re\-entry eligibility check written to paper\_exit\_events\."
-        in msg
-    )
+    assert r"✅ *CSP Closed* — TEST\_TRIGGER\_123" in msg
+    assert "[S]" in msg
+    assert r"📈 *Inception:* ₹0\.00" in msg

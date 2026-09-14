@@ -284,7 +284,7 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "_build_recovery_digest() (MD-4.2 scope) but this guard only inspects the "
         "immediate enclosing function (_run), not callees"
     ),
-    ("scripts/record/record_paper_trade.py", 774): (
+    ("scripts/record/record_paper_trade.py", 775): (
         "UEM-2 - heuristic limitation, not a real gap: the card is built by "
         "_build_entry_card() -> format_entry_message(), which escapes every "
         "interpolated value via escape_markdown() inside EntryMessage's own "
@@ -292,13 +292,21 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "inspects the immediate enclosing function (_send_entry_card_if_requested), "
         "not the builder it calls - same shape as the scripts/eod_summary.py:200 entry"
     ),
+    ("scripts/record/record_paper_trade.py", 845): (
+        "UXM-4 - heuristic limitation, not a real gap: the card is built by "
+        "format_exit_message(), which escapes every interpolated value via "
+        "escape_markdown() inside ExitMessage's own renderer "
+        "(src/notifications/exit_message.py); this guard only inspects the "
+        "immediate enclosing function (_send_close_card_if_requested), not the "
+        "builder it calls - same shape as the scripts/eod_summary.py:200 entry"
+    ),
     ("src/strategy/collar_overlay_v1.py", 679): (
         "OEM-2 - heuristic limitation, not a real gap: the card is built by "
         "format_entry_message(), which escapes every interpolated value via "
         "escape_markdown() inside EntryMessage's own renderer "
         "(src/notifications/entry_message.py); this guard only inspects the "
         "immediate enclosing function (_send_reentry_notification), not the "
-        "builder it calls - same shape as the scripts/record/record_paper_trade.py:774 entry"
+        "builder it calls - same shape as the scripts/record/record_paper_trade.py:775 entry"
     ),
     ("src/strategy/collar_overlay_v1.py", 681): (
         "OEM-2 - heuristic limitation, not a real gap: the card is built by "
@@ -306,7 +314,7 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "escape_markdown() inside EntryMessage's own renderer "
         "(src/notifications/entry_message.py); this guard only inspects the "
         "immediate enclosing function (_send_reentry_notification), not the "
-        "builder it calls - same shape as the scripts/record/record_paper_trade.py:774 entry"
+        "builder it calls - same shape as the scripts/record/record_paper_trade.py:775 entry"
     ),
 }
 

@@ -243,7 +243,8 @@ def _parse_args() -> argparse.Namespace:
         "--notify",
         action="store_true",
         default=False,
-        help="Send a Telegram entry card on a successful open (no-op on close / roll).",
+        help="Send a Telegram entry card on a successful open, or an exit card on "
+        "a successful --close (no-op on roll).",
     )
     parser.add_argument(
         "--ivr-gate",
@@ -777,6 +778,77 @@ def _send_entry_card_if_requested(trade: PaperTrade, args: argparse.Namespace) -
         logger.warning("telegram.send_failed", error=str(exc))
 
 
+def _send_close_card_if_requested(
+    trade: PaperTrade, store: PaperStore, args: argparse.Namespace
+) -> None:
+    """Send the shared exit card behind ``--notify --close``, non-fatal on any failure.
+
+    No-op unless: ``--notify`` and ``--close`` are both set and the just-recorded
+    trade closed a cycle (``reconstruct_cycles`` sees the last cycle as closed).
+    """
+    if not args.notify or not args.close:
+        return
+
+    try:
+        from src.notifications.exit_message import ExitKind, ExitMessage, format_exit_message
+        from src.notifications.formatting import CloseLegRow, strategy_label
+        from src.paper.cycle_pnl import cycle_stats, reconstruct_cycles
+        from src.paper.tracker import get_strategy_realized_pnl
+
+        trades = store.get_trades(trade.strategy_name)
+        cycles_all = reconstruct_cycles(trades)
+        if not cycles_all or cycles_all[-1].is_open:
+            logger.info("exit_card.skipped", reason="no closed cycle found")
+            return
+        last = cycles_all[-1]
+
+        expiry = parse_expiry_from_key(trade.instrument_key or "")
+        dte = (expiry - trade.trade_date).days if expiry is not None else 0
+
+        legs = [
+            CloseLegRow(
+                role=trade.leg_role.replace("_", " ").title(),
+                instrument=trade.instrument_key or "",
+                entry=float(last.entry_credit_per_unit),
+                exit=float(last.exit_cost_per_unit) if last.exit_cost_per_unit is not None else 0.0,
+                pnl=last.realized_pnl,
+            )
+        ]
+
+        try:
+            headline_label = strategy_label(trade.strategy_name)
+        except ValueError:
+            logger.info("exit_card.unmapped_strategy_label", strategy_name=trade.strategy_name)
+            headline_label = trade.strategy_name
+
+        msg = ExitMessage(
+            headline_label=headline_label,
+            kind=ExitKind.CLOSE,
+            signal="record_paper_trade --close",
+            dte=dte,
+            held_days=last.days_in_trade,
+            legs=legs,
+            this_exit_pnl=last.realized_pnl,
+            cycle_pnl=last.realized_pnl,
+            cycle_index=last.index,
+            cycle_decay_pct=last.short_decay_pct,
+            cycle_short_credit=last.short_credit_per_unit,
+            cycle_short_buyback=last.short_buyback_per_unit,
+            cycle_held_days=last.days_in_trade,
+            inception_pnl=get_strategy_realized_pnl(store, trade.strategy_name),
+            stats=cycle_stats(trades),
+        )
+        card = format_exit_message(msg)
+
+        notifier = build_notifier()
+        if notifier is None:
+            return
+        asyncio.run(notifier.send(card))
+    # Intentional: a Telegram send failure must never fail the recording.
+    except Exception as exc:
+        logger.warning("telegram.send_failed", error=str(exc))
+
+
 def main() -> None:
     """CLI entry point. Validates, optionally inserts, prints position summary."""
     args = _parse_args()
@@ -1016,6 +1088,7 @@ def main() -> None:
     pos = store.get_position(trade.strategy_name, trade.leg_role, instrument_key=instrument_key)
     if pos.net_qty == 0:
         print(f"{trade.strategy_name} / {trade.leg_role}: position closed (net qty = 0)")
+        _send_close_card_if_requested(trade, store, args)
     else:
         direction = "short" if pos.net_qty < 0 else "long"
         ref_price = pos.avg_sell_price if pos.net_qty < 0 else pos.avg_cost

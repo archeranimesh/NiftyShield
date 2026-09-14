@@ -40,13 +40,14 @@ from typing import Any
 import structlog
 
 from src.config import settings
-from src.instruments.lookup import InstrumentLookup
+from src.instruments.lookup import InstrumentLookup, format_leg_label
 from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
-from src.notifications.formatting import format_money
+from src.notifications.exit_message import ExitKind, ExitMessage, format_exit_message
+from src.notifications.formatting import CloseLegRow, format_money
 from src.notifications.markdown import escape_markdown, mdcode
 from src.paper.constants import DEFAULT_BOD_PATH
-from src.paper.models import PaperPosition, TradeState
+from src.paper.models import PaperPosition, PaperTrade, TradeState
 from src.strategy.csp_roll_executor import close_csp_leg, open_new_csp_leg, roll_down_and_out
 from src.strategy.exit_signals import ExitSignalEngine
 from src.strategy.protocol import ApprovedAction, LegClose, LegSpec, SignalEvent
@@ -454,22 +455,23 @@ class CSPNiftyV1(ReEntryMixin):
         remaining = [p for p in positions if p is not short_put]
 
         if action.action_type in ("CLOSE_AND_ROLL", "CLOSE_FULL"):
-            await self._close_leg(short_put, today)
+            close_trade = await self._close_leg(short_put, today)
             if action.action_type == "CLOSE_AND_ROLL":
                 remaining = await self._open_new(remaining, today, quantity=abs(short_put.net_qty))
-                await self._reentry_notification(short_put, action)
+                await self._reentry_notification(short_put, action, close_trade)
             return remaining
 
         if action.action_type == "CLOSE_AND_WAIT":
-            await self._close_leg(short_put, today)
+            close_trade = await self._close_leg(short_put, today)
             meta = action.metadata or {}
-            sig = escape_markdown(meta.get("triggering_signal", "CLOSE_AND_WAIT"))
-            state_msg = escape_markdown("RE_ENTRY_PENDING — no new position opened.")
-            await self._send_notification(
-                f"⛔ *CSP closed — waiting*\n"
-                f"Signal: {sig}\n"
-                f"Instrument: {mdcode(short_put.instrument_key)}\n"
-                f"State → {state_msg}"
+            triggering_signal = meta.get("triggering_signal", "CLOSE_AND_WAIT")
+            await self._send_close_card(
+                closed_pos=short_put,
+                close_trade=close_trade,
+                today=today,
+                kind=ExitKind.WAITING,
+                triggering_signal=triggering_signal,
+                state_line="RE_ENTRY_PENDING — no new position opened.",
             )
             return remaining
 
@@ -499,13 +501,11 @@ class CSPNiftyV1(ReEntryMixin):
 
     # ── Action helpers ────────────────────────────────────────────────────────
 
-    async def _close_leg(self, pos: PaperPosition, today: date) -> None:
+    async def _close_leg(self, pos: PaperPosition, today: date) -> PaperTrade | None:
         """Fetch live LTP and record a close trade for ``pos``."""
-        from src.paper.models import PaperTrade
-
         if self._broker is None or self._store is None:
             log.warning("csp_nifty_v1._close_leg: broker or store not set — skipping DB write")
-            return
+            return None
 
         # Reconstruct a minimal PaperTrade for close_csp_leg.
         from src.paper.models import TradeAction
@@ -519,7 +519,7 @@ class CSPNiftyV1(ReEntryMixin):
             quantity=abs(pos.net_qty),
             price=pos.avg_sell_price,
         )
-        await close_csp_leg(
+        return await close_csp_leg(
             broker=self._broker,
             store=self._store,
             existing=existing,
@@ -620,9 +620,12 @@ class CSPNiftyV1(ReEntryMixin):
         return remaining
 
     async def _reentry_notification(
-        self, closed_pos: PaperPosition, action: ApprovedAction
+        self,
+        closed_pos: PaperPosition,
+        action: ApprovedAction,
+        close_trade: PaperTrade | None,
     ) -> None:
-        """Run re-entry eligibility check and notify."""
+        """Run re-entry eligibility check and send the close card."""
         triggering = (action.metadata or {}).get("triggering_signal", "CLOSE_AND_ROLL")
         expiry = self._parse_expiry(closed_pos.instrument_key)
         await self._check_reentry(
@@ -631,12 +634,115 @@ class CSPNiftyV1(ReEntryMixin):
             instrument_key=closed_pos.instrument_key,
             trade_id=0,
         )
-        await self._send_notification(
-            f"✅ *CSP closed — {escape_markdown(triggering)}*\n"
-            f"Instrument: {mdcode(closed_pos.instrument_key)}\n"
-            f"{escape_markdown('New position opened.  Re-entry eligibility check written')} "
-            f"{escape_markdown('to paper_exit_events.')}"
+        await self._send_close_card(
+            closed_pos=closed_pos,
+            close_trade=close_trade,
+            today=market_today(),
+            kind=ExitKind.CLOSE,
+            triggering_signal=triggering,
         )
+
+    async def _send_close_card(
+        self,
+        *,
+        closed_pos: PaperPosition,
+        close_trade: PaperTrade | None,
+        today: date,
+        kind: ExitKind,
+        triggering_signal: str,
+        state_line: str | None = None,
+    ) -> None:
+        """Build and send the shared exit-confirmation card for a CSP close."""
+        if self._notifier is None:
+            return
+
+        entry = closed_pos.avg_sell_price
+        exit_price = close_trade.price if close_trade is not None else entry
+        quantity = abs(closed_pos.net_qty)
+        this_exit_pnl = (entry - exit_price) * quantity
+
+        try:
+            lookup: InstrumentLookup | None = InstrumentLookup.from_file(DEFAULT_BOD_PATH)
+        except Exception as exc:
+            log.warning("csp_nifty_v1.instrument_lookup_failed", error=str(exc))
+            lookup = None
+        label = (
+            format_leg_label(closed_pos.instrument_key, lookup)
+            if lookup is not None
+            else closed_pos.instrument_key
+        )
+        legs = [
+            CloseLegRow(
+                role="Short Put",
+                instrument=label,
+                entry=float(entry),
+                exit=float(exit_price),
+                pnl=this_exit_pnl,
+            )
+        ]
+
+        expiry = self._parse_expiry(closed_pos.instrument_key)
+        dte = (expiry - today).days if expiry is not None else 0
+        held_days = (today - (closed_pos.entry_date or today)).days
+
+        cycle_pnl = None
+        cycle_index = None
+        cycle_decay_pct = None
+        cycle_short_credit = None
+        cycle_short_buyback = None
+        cycle_held_days = None
+        inception_pnl = Decimal("0")
+        stats = None
+        if self._store is None:
+            log.warning("csp_nifty_v1.footer_calc_skipped_no_store")
+        else:
+            try:
+                from src.paper.cycle_pnl import cycle_stats, reconstruct_cycles
+                from src.paper.tracker import get_strategy_realized_pnl
+
+                trades = self._store.get_trades(self.strategy_name)
+                cycles_all = reconstruct_cycles(trades)
+                if cycles_all and not cycles_all[-1].is_open:
+                    last = cycles_all[-1]
+                    cycle_pnl = last.realized_pnl
+                    cycle_index = last.index
+                    cycle_decay_pct = last.short_decay_pct
+                    cycle_short_credit = last.short_credit_per_unit
+                    cycle_short_buyback = last.short_buyback_per_unit
+                    cycle_held_days = last.days_in_trade
+                stats = cycle_stats(trades)
+                inception_pnl = get_strategy_realized_pnl(self._store, self.strategy_name)
+            except Exception as exc:
+                log.warning("csp_nifty_v1.footer_calc_failed", error=str(exc))
+
+        try:
+            text = format_exit_message(
+                ExitMessage(
+                    headline_label="CSP",
+                    kind=kind,
+                    signal=triggering_signal,
+                    dte=dte,
+                    held_days=held_days,
+                    legs=legs,
+                    this_exit_pnl=this_exit_pnl,
+                    cycle_pnl=cycle_pnl,
+                    cycle_index=cycle_index,
+                    cycle_decay_pct=cycle_decay_pct,
+                    cycle_short_credit=cycle_short_credit,
+                    cycle_short_buyback=cycle_short_buyback,
+                    cycle_held_days=cycle_held_days,
+                    inception_pnl=inception_pnl,
+                    stats=stats,
+                    state_line=state_line,
+                )
+            )
+        except Exception as exc:
+            log.warning("csp_nifty_v1.format_exit_message_failed", error=str(exc))
+            return
+        try:
+            await self._notifier.send_notification(text)
+        except Exception as exc:
+            log.warning("csp_nifty_v1.send_notification_failed", error=str(exc))
 
     async def _send_notification(self, message: str) -> None:
         """Send a plain MarkdownV2 notification; non-fatal if notifier is absent."""
