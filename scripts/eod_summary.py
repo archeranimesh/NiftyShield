@@ -59,9 +59,7 @@ _STRATEGY_META: dict[str, tuple[str, str]] = {
     "paper_ic_nifty_v1_leaps": ("IC", "V1 Leap"),
     "paper_ic_nifty_v1_yearly": ("IC", "V1 Yrly"),
     "paper_ic_nifty_v2_monthly": ("IC", "V2 Mth"),
-    "paper_collar_v1": ("Overlay", "Collar"),
-    "paper_covered_call_v1": ("Overlay", "CC"),
-    "paper_protective_put_v1": ("Overlay", "PP"),
+    "paper_nifty_overlay": ("Overlay", "Overlay"),
     "paper_csp_nifty_v1": ("CSP", "V1"),
 }
 _BUCKET_ORDER = ["Track", "IC", "Overlay", "CSP"]

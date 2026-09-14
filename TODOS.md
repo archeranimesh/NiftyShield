@@ -883,3 +883,7 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
 - [2026-09-11] SPT-4 (`7b11e83` + `edbc135`) and SPT-7 (`71da2d5` + `bbcf596`) shipped in parallel via two isolated subagents — SPT-7 has no code dependency on SPT-4/5/6 (only SPT-2's store methods),
   so it ran concurrently with SPT-4 instead of waiting behind SPT-5/6 in task order. `signals-paper-track/` next: **SPT-5**.
 - [2026-09-12] SEC-2 Phase A shipped (`0202291`) — added `DailySignal.is_actionable` and replaced inline NO_TRADE checks across entrypoint scripts and signal_track_v1.
+- [2026-09-14] Fixed `scripts/eod_summary.py` `_STRATEGY_META` — daily `ValueError`/aborted EOD Telegram send since 2026-09-02 (`logs/eod_summary.log`). Root cause: S1r (2026-07-29) consolidated
+  CC/PP/Collar legs under one strategy_name `paper_nifty_overlay` (`STRATEGY_OVERLAY`, `src/paper/constants.py:37`), but `_STRATEGY_META` still mapped the three stale pre-migration names
+  (`paper_collar_v1`/`paper_covered_call_v1`/`paper_protective_put_v1`) and lacked the new one. Replaced the three stale keys with `"paper_nifty_overlay": ("Overlay", "Overlay")` — can't split
+  by leg_role here (unlike `src/reporting/eod_pt_summary.py`) since `eod_summary.py` only sees strategy-level NAV rows.

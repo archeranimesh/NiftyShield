@@ -30,7 +30,7 @@ _SAMPLE: list[tuple[str, Decimal, Decimal]] = [
     ("paper_nifty_spot", Decimal("50640.05"), Decimal("0.00")),
     ("paper_ic_nifty_v1_weekly", Decimal("0.00"), Decimal("2759.25")),
     ("paper_ic_nifty_v1_monthly", Decimal("359.12"), Decimal("3486.44")),
-    ("paper_collar_v1", Decimal("210.00"), Decimal("-85.50")),
+    ("paper_nifty_overlay", Decimal("210.00"), Decimal("-85.50")),
     ("paper_csp_nifty_v1", Decimal("0.00"), Decimal("11024.00")),
 ]
 
