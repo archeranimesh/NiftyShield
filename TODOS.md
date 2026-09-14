@@ -199,6 +199,29 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
   (narrowed a bare `except Exception` around `strategy_label()` to `except ValueError` +
   logged it; added missing `-> None` test annotations). Next: `unified-exit-message/` UXM-5
   (migrate CC/PP/Collar strategy-class closes).
+- [2026-09-14] UXM-5 (`docs/plan/telegram-message-unification/unified-exit-message/`) —
+  `CCOverlayV1` / `PPOverlayV1` / `CollarOverlayV1`'s `_send_close_notification` migrated onto
+  `format_exit_message`, mirroring UXM-3/UXM-4's footer pattern. Since all three share
+  `strategy_name=STRATEGY_OVERLAY`, `cycle_stats`/`reconstruct_cycles` are pre-filtered by each
+  strategy's own `leg_role`(s) (`SHORT_CALL_ROLES={"overlay_cc"}`,
+  `LONG_PUT_ROLES={"overlay_pp"}`, `{SHORT_CALL_ROLE, LONG_PUT_ROLE}` for Collar) before
+  reconstruction, so CC/PP/Collar cycles never blend; `inception_pnl` and `overlay_total_pnl`
+  both resolve to `get_strategy_realized_pnl(store, STRATEGY_OVERLAY)` (same number in both
+  footer rows — intentional per the epic's "store number" decision, flagged but accepted by
+  greeks-analyst as spec-consistent, not a bug). PP: `MONETIZE_PP` → `ExitKind.CRASH_MONETIZE` +
+  `state_line`; `ROLL_PP` → `ExitKind.ROLL`, no state_line. Per-leg delta/DTE dropped from the
+  close card (deliberate simplification — delta is not load-bearing post-close). SHA 7e19e78.
+  Tests: 106/106 green across the three strategy test files + escaping-guard; escaping-guard
+  baseline updated for line shifts (`collar_overlay_v1.py` reentry-failure entries 607→608,
+  609→610) and three new documented heuristic-limitation entries (`cc_overlay_v1.py:447`,
+  `pp_overlay_v1.py:470`, `collar_overlay_v1.py:863`). Full suite: 3 pre-existing unrelated
+  failures confirmed independent of this task (`tests/unit/notifications/test_escaping_guard.py`
+  baseline drift on `scripts/eod_summary.py:198/200` and `scripts/record/record_paper_trade.py:
+  845/846` — reproduced identically with this task's changes fully reverted; neither file is
+  touched by UXM-5). Review: code-reviewer, clean after 4 unused-import WARNING fixes
+  (`format_money`/`mdcode` left over from the removed hand-rolled f-strings); greeks-analyst
+  clean (P&L signs verified correct for all three, no cross-strategy cycle blending). Next:
+  `unified-exit-message/` UXM-6 (migrate `auto_close.py` daemon paths).
 - [2026-09-13] OEM-5 (`docs/plan/telegram-message-unification/overlay-entry-message/`) —
   sub-story docs close. `CONTEXT.md` / `src/notifications/CLAUDE.md` / `DECISIONS.md` updated
   to reflect the sign-aware net line (OEM-1) and the Collar re-entry + three-track bootstrap
