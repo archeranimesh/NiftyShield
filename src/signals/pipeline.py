@@ -170,7 +170,6 @@ async def run_morning_signal_pipeline(
 
     try:
         paper_store = PaperStore(settings.db_path)
-        await asyncio.to_thread(paper_store.init_db)
         await open_signal_paper_entry(signal, snapshot, broker, paper_store)
     except Exception as exc:  # noqa: BLE001 -- Intentional: isolate paper entry at cron boundary; the advisory pipeline must still complete
         logger.warning(
