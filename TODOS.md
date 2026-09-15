@@ -135,6 +135,17 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-15] ORD-2 (`docs/plan/telegram-message-unification/overlay-recovery-digest/`) —
+  fixed BUG-044 per ORD-1's heuristic (a): `_overlay_type_groups` no longer merges a
+  standalone `overlay_cc` into the `collar` group; `overlay_cc` always gets its own `cc`
+  row, `collar` only ever reflects its own legs. `_compute_overlay_pnl_snapshots` needed no
+  change (already iterates groups generically). Rewrote the BUG-030 regression tests to the
+  no-merge behavior, added an end-to-end digest test. Also fixed a line-number drift in
+  `tests/unit/notifications/test_escaping_guard.py`'s baseline (5 pre-existing unescaped
+  call sites shifted by -1 line from this edit — no new unescaped sends). code-reviewer:
+  0 CRITICAL/ERROR, 2 WARNING (one pre-existing has_call+has_cc key-collision edge case,
+  deferred — practically impossible given the entry-time dedup guard; one line-length nit,
+  fixed). SHA: 7c255fd. Next: ORD-3.
 - [2026-09-15] ORD-1 (`docs/plan/telegram-message-unification/overlay-recovery-digest/`) —
   investigated BUG-044: confirmed from live `paper_trades` that a standalone `overlay_cc`
   and a collar-put-only position genuinely coexist (the collar's original call leg closed
