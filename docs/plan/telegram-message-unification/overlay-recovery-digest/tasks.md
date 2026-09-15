@@ -6,7 +6,7 @@ spec.
 Sub-story 4 (last) of the `telegram-message-unification/` epic. Independent of the `entry_message.py` / `exit_message.py` renderer chain — but listed last, and ORD-4 is the epic close. No `schema.md`.
 ORD-2 and ORD-3 touch overlay P&L / financial-logic paths → `code-reviewer` is mandatory.
 
-**Open: ORD-3, ORD-4.**
+**Open: ORD-4.**
 
 - [x] **ORD-1** — Investigate whether a standalone `overlay_cc` bootstrap and a collar
       genuinely coexist (vs. `overlay_cc` always being the collar call when a collar put is
@@ -17,10 +17,10 @@ ORD-2 and ORD-3 touch overlay P&L / financial-logic paths → `code-reviewer` is
       standalone CC gets its own `cc` `OverlayPnLSnapshot` row; the collar total stops
       absorbing it; the genuine collar-call-tagged-`overlay_cc` case still works.
       | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 7c255fd
-- [ ] **ORD-3** — Migrate `_build_recovery_digest` to one MarkdownV2 fenced block (no
+- [x] **ORD-3** — Migrate `_build_recovery_digest` to one MarkdownV2 fenced block (no
       per-line `escape_markdown`), matching the `pre_market_brief.py` house style; fix the
       BUG-042 send path for this caller.
-      | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
+      | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 8f0e8e4
 - [ ] **ORD-4** — Epic close: `CONTEXT.md` / `DECISIONS.md` / `src/notifications/CLAUDE.md`;
       flip the last epic `README.md` Stories row + **Epic done when**; `git mv` the whole
       `telegram-message-unification/` folder to `docs/archive/plan/`; collapse the

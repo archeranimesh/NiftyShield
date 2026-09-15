@@ -135,6 +135,17 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-15] ORD-3 (`docs/plan/telegram-message-unification/overlay-recovery-digest/`) —
+  migrated `_build_recovery_digest` off per-line `escape_markdown` onto a single MarkdownV2
+  fenced block (matches the `pre_market_brief.py` house style, fixes the BUG-042 send-path
+  class for this caller); call site unchanged, content now literal per the fence contract.
+  Added red/flat-day golden-string tests + a not-double-escaped guard. Fixed two line-number
+  drifts in `tests/unit/notifications/test_escaping_guard.py`'s baseline (2017→2020,
+  2063→2066) and reworded the digest entry's rationale to the now-fenced shape. code-reviewer:
+  0 CRITICAL/ERROR, 2 WARNING (docstring wording, fixed inline; emoji header line inside the
+  fence not yet on-device confirmed per FORMATTING.md §7 — deferred, non-columnar header
+  carries no alignment risk like the rejected 🔴 case). SHA: 8f0e8e4. Next: ORD-4 (epic
+  close).
 - [2026-09-15] ORD-2 (`docs/plan/telegram-message-unification/overlay-recovery-digest/`) —
   fixed BUG-044 per ORD-1's heuristic (a): `_overlay_type_groups` no longer merges a
   standalone `overlay_cc` into the `collar` group; `overlay_cc` always gets its own `cc`
