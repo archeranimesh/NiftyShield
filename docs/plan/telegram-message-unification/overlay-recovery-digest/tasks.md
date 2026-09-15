@@ -6,13 +6,13 @@ spec.
 Sub-story 4 (last) of the `telegram-message-unification/` epic. Independent of the `entry_message.py` / `exit_message.py` renderer chain — but listed last, and ORD-4 is the epic close. No `schema.md`.
 ORD-2 and ORD-3 touch overlay P&L / financial-logic paths → `code-reviewer` is mandatory.
 
-**Open: ORD-1, ORD-2, ORD-3, ORD-4.**
+**Open: ORD-2, ORD-3, ORD-4.**
 
-- [ ] **ORD-1** — Investigate whether a standalone `overlay_cc` bootstrap and a collar
+- [x] **ORD-1** — Investigate whether a standalone `overlay_cc` bootstrap and a collar
       genuinely coexist (vs. `overlay_cc` always being the collar call when a collar put is
       present); decide the correct `_overlay_type_groups` behaviour; file BUG-044 with the
       finding + decision.
-      | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: —
+      | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 9883981
 - [ ] **ORD-2** — Fix `_overlay_type_groups` + `_compute_overlay_pnl_snapshots` per ORD-1: a
       standalone CC gets its own `cc` `OverlayPnLSnapshot` row; the collar total stops
       absorbing it; the genuine collar-call-tagged-`overlay_cc` case still works.

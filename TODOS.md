@@ -135,6 +135,16 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-15] ORD-1 (`docs/plan/telegram-message-unification/overlay-recovery-digest/`) —
+  investigated BUG-044: confirmed from live `paper_trades` that a standalone `overlay_cc`
+  and a collar-put-only position genuinely coexist (the collar's original call leg closed
+  2026-08-25; every `overlay_cc` since has been an unrelated weekly `--auto-cc` re-entry on
+  a different strike). No field in `paper_trades` reliably links a later `overlay_cc` back
+  to its collar once the linked leg closes — the `Cycle N` note tag is an overlay-wide
+  counter, not a per-collar marker. Decision: heuristic (a) — retire the BUG-030
+  `has_cc and has_put → collar` merge branch outright; always emit separate `cc` and
+  `collar` (put-only) groups. BUG-044 updated with the finding + decision. No code change.
+  SHA: 9883981. Next: ORD-2.
 - [2026-09-14] UXM-7 (`docs/plan/telegram-message-unification/unified-exit-message/`) —
   `scripts/pre_market_brief.py` redesigned: dropped the broken `<b>` HTML (previously
   escaped and sent literally under MarkdownV2), now a fenced `Strategy | Legs | Unrealized
