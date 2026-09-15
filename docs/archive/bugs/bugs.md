@@ -34,6 +34,33 @@ call sites existed repo-wide, the other being on the unrelated `SignalStore`
 
 ---
 
+## BUG-048 — `signal_eod` recorded `executed=False` for a day with a live paper entry
+
+**Status:** ✅ Fixed, SHA `674ca65`, closed 2026-09-15.
+
+**Symptom:** `SignalOutcome` for 2026-09-15 was recorded with `executed=False`,
+`pnl_per_lot=None`, even though `paper_signal_entries` had a live row (`trade_id` 295,
+`signal_date` 2026-09-15, entered 10:27:50 IST via `signal_paper_entry.py` right after
+BUG-047's fix landed) — BUY_CALL, NIFTY 23450 29-SEP-26 CE, qty 65 @ ₹210.025.
+
+**Root cause:** `run_record_phase()` in `scripts/signal_eod.py` set `executed = args.executed`
+— purely from the `--executed` CLI flag (`action="store_true"`, default `False`). The 16:00
+cron entry never passes `--executed`, so every cron-driven run recorded `executed=False`
+regardless of whether `paper_signal_entries` actually had a matching row for that trade date.
+Discovered as a same-day downstream consequence of BUG-047: BUG-047 blocked entries entirely
+(so `executed=False` was accidentally correct until fixed); once entries started landing,
+`signal_eod`'s flag-only logic became actively wrong.
+
+**Fix:** before falling back to the flag, `run_record_phase` now queries
+`PaperStore.get_entries(trade_date, trade_date)`; if a live entry exists it sets
+`executed = True` and backfills `entry_premium` from the entry when not explicitly passed.
+
+**Scope check:** isolated to `scripts/signal_eod.py`'s record phase; `get_entries` already
+existed on `PaperStore` (used elsewhere for `cumulative_pnl`). No changes to `paper_signal_entries`
+writes or the entry path itself (BUG-047's fix).
+
+---
+
 ## BUG-002 — Option delta sign/magnitude corrupted by put-call misclassification
 
 | Field | Value |
