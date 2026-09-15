@@ -311,3 +311,96 @@ async def test_digest_single_telegram_call_per_run(tmp_path: Path) -> None:
         await notifier.send(_build_recovery_digest(recovery_snap))
 
     assert notifier.send.call_count == 1
+
+
+def test_digest_red_day_fenced() -> None:
+    """ORD-3: red-day digest is one fenced block, sorted, with pcts + Best:."""
+    snap = ProtectionRecoverySnapshot(
+        snapshot_date=_SNAP_DATE,
+        niftybees_pnl_1d=Decimal("-1000"),
+        cc_pnl_1d=Decimal("300"),
+        pp_pnl_1d=Decimal("200"),
+        collar_pnl_1d=Decimal("500"),
+        niftybees_pnl_inception=Decimal("-1000"),
+        cc_pnl_inception=Decimal("300"),
+        pp_pnl_inception=Decimal("200"),
+        collar_pnl_inception=Decimal("500"),
+        best_overlay="collar",
+        best_recovery_pct=Decimal("0.5"),
+        best_overlay_inception="collar",
+        best_recovery_pct_inception=Decimal("0.5"),
+    )
+
+    digest = _build_recovery_digest(snap)
+
+    assert digest == "\n".join(
+        [
+            "```",
+            "📊 NiftyBees vs overlays — 28 Jul",
+            "NiftyBees: -1000",
+            "  Collar +500 (50%)",
+            "  CC     +300 (30%)",
+            "  PP     +200 (20%)",
+            "Best: Collar",
+            "```",
+        ]
+    )
+
+
+def test_digest_flat_day_fenced() -> None:
+    """ORD-3: flat/green-day digest is fenced, raw-P&L sorted, no pcts/Best:."""
+    snap = ProtectionRecoverySnapshot(
+        snapshot_date=_SNAP_DATE,
+        niftybees_pnl_1d=Decimal("0"),
+        cc_pnl_1d=Decimal("100"),
+        pp_pnl_1d=Decimal("300"),
+        collar_pnl_1d=Decimal("200"),
+        niftybees_pnl_inception=Decimal("0"),
+        cc_pnl_inception=Decimal("100"),
+        pp_pnl_inception=Decimal("300"),
+        collar_pnl_inception=Decimal("200"),
+        best_overlay=None,
+        best_recovery_pct=None,
+        best_overlay_inception=None,
+        best_recovery_pct_inception=None,
+    )
+
+    digest = _build_recovery_digest(snap)
+
+    assert digest == "\n".join(
+        [
+            "```",
+            "📊 NiftyBees vs overlays — 28 Jul",
+            "NiftyBees: +0",
+            "  PP     +300",
+            "  Collar +200",
+            "  CC     +100",
+            "```",
+        ]
+    )
+
+
+def test_digest_send_not_double_escaped() -> None:
+    """ORD-3/BUG-042: fenced digest has no escape_markdown() pass — sent literally."""
+    snap = ProtectionRecoverySnapshot(
+        snapshot_date=_SNAP_DATE,
+        niftybees_pnl_1d=Decimal("-1000"),
+        cc_pnl_1d=Decimal("300"),
+        pp_pnl_1d=Decimal("200"),
+        collar_pnl_1d=Decimal("500"),
+        niftybees_pnl_inception=Decimal("-1000"),
+        cc_pnl_inception=Decimal("300"),
+        pp_pnl_inception=Decimal("200"),
+        collar_pnl_inception=Decimal("500"),
+        best_overlay="collar",
+        best_recovery_pct=Decimal("0.5"),
+        best_overlay_inception="collar",
+        best_recovery_pct_inception=Decimal("0.5"),
+    )
+
+    digest = _build_recovery_digest(snap)
+
+    assert digest.startswith("```\n")
+    assert digest.endswith("\n```")
+    assert "\\-" not in digest
+    assert "\\." not in digest

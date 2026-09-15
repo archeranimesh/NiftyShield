@@ -1840,7 +1840,10 @@ def _build_recovery_digest(snap: ProtectionRecoverySnapshot) -> str:
         snap: The computed recovery snapshot for one date.
 
     Returns:
-        Multi-line digest text, ready for ``notifier.send()``.
+        One fenced MarkdownV2 block, ready for ``notifier.send()``. The
+        fence makes the body literal, so no line is individually escaped
+        (BUG-042 send-path fix for this caller — date/label/numeric strings
+        cannot contain a backtick or backslash).
     """
     overlay_pnls: dict[str, Decimal | None] = {
         "cc": snap.cc_pnl_1d,
@@ -1852,8 +1855,8 @@ def _build_recovery_digest(snap: ProtectionRecoverySnapshot) -> str:
 
     date_str = snap.snapshot_date.strftime("%d %b")
     lines = [
-        escape_markdown(f"📊 NiftyBees vs overlays — {date_str}"),
-        escape_markdown(f"NiftyBees: {snap.niftybees_pnl_1d:+.0f}"),
+        f"📊 NiftyBees vs overlays — {date_str}",
+        f"NiftyBees: {snap.niftybees_pnl_1d:+.0f}",
     ]
 
     is_red = snap.niftybees_pnl_1d < 0
@@ -1863,22 +1866,22 @@ def _build_recovery_digest(snap: ProtectionRecoverySnapshot) -> str:
         for overlay_type, pnl in ordered:
             pct = (pnl / denom) * 100 if denom else Decimal("0")
             label = _RECOVERY_OVERLAY_LABELS[overlay_type]
-            lines.append(escape_markdown(f"  {label:<6} {pnl:+.0f} ({pct:.0f}%)"))
+            lines.append(f"  {label:<6} {pnl:+.0f} ({pct:.0f}%)")
         for overlay_type in missing:
             label = _RECOVERY_OVERLAY_LABELS[overlay_type]
-            lines.append(escape_markdown(f"  {label:<6} No data"))
+            lines.append(f"  {label:<6} No data")
         if snap.best_overlay:
-            lines.append(escape_markdown(f"Best: {_RECOVERY_OVERLAY_LABELS[snap.best_overlay]}"))
+            lines.append(f"Best: {_RECOVERY_OVERLAY_LABELS[snap.best_overlay]}")
     else:
         ordered = sorted(known.items(), key=lambda kv: kv[1], reverse=True)
         for overlay_type, pnl in ordered:
             label = _RECOVERY_OVERLAY_LABELS[overlay_type]
-            lines.append(escape_markdown(f"  {label:<6} {pnl:+.0f}"))
+            lines.append(f"  {label:<6} {pnl:+.0f}")
         for overlay_type in missing:
             label = _RECOVERY_OVERLAY_LABELS[overlay_type]
-            lines.append(escape_markdown(f"  {label:<6} No data"))
+            lines.append(f"  {label:<6} No data")
 
-    return "\n".join(lines)
+    return "\n".join(["```", *lines, "```"])
 
 
 # ── Summary table ─────────────────────────────────────────────────────────────
