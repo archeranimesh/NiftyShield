@@ -21,12 +21,12 @@ ORD-2 and ORD-3 touch overlay P&L / financial-logic paths → `code-reviewer` is
       per-line `escape_markdown`), matching the `pre_market_brief.py` house style; fix the
       BUG-042 send path for this caller.
       | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 8f0e8e4
-- [ ] **ORD-4** — Epic close: `CONTEXT.md` / `DECISIONS.md` / `src/notifications/CLAUDE.md`;
+- [x] **ORD-4** — Epic close: `CONTEXT.md` / `DECISIONS.md` / `src/notifications/CLAUDE.md`;
       flip the last epic `README.md` Stories row + **Epic done when**; `git mv` the whole
       `telegram-message-unification/` folder to `docs/archive/plan/`; collapse the
       `docs/plan/README.md` epic entry to a pointer; move the `TODOS.md` Feature Backlog line
       to `TODOS_ARCHIVE.md`; flip BUG-044 to ✅ Fixed with the ORD-2 SHA.
-      | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: —
+      | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: f71911b
 
 ## Story done when
 
