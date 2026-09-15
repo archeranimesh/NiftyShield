@@ -27,12 +27,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from scripts.strategies.three_track.paper_3track_snapshot import (
+    _build_recovery_digest,
     _compute_overlay_pnl_snapshots,
+    _compute_protection_recovery_snapshot,
     _overlay_type_groups,
 )
 from src.models.portfolio import TradeAction
-from src.paper.constants import STRATEGY_OVERLAY
-from src.paper.models import PaperLegSnapshot, PaperTrade
+from src.paper.constants import STRATEGY_OVERLAY, STRATEGY_SPOT
+from src.paper.models import PaperLegSnapshot, PaperTrade, TrackComparisonSnapshot
 from src.paper.store import PaperStore
 
 _TRACK = STRATEGY_OVERLAY
@@ -325,18 +327,19 @@ def test_overlay_with_no_legs_produces_no_rows(tmp_path: Path) -> None:
     assert results == []
 
 
-def test_overlay_type_groups_cc_and_collar_put_merge_into_collar() -> None:
-    """BUG-030 regression: overlay_cc + collar_put must not drop the cc leg.
+def test_group_standalone_cc_with_collar_put() -> None:
+    """BUG-044 fix: overlay_cc + collar_put must split into two groups.
 
-    This is the exact live combination from 2026-08-12/13 (see docs/bugs/bugs.md
-    BUG-030): a short call intentionally tagged overlay_cc (not
-    overlay_collar_call, per build_overlay_trades' dedup guard in
-    paper_3track_overlay_entry.py — "the existing CC serves as the collar
-    call") coexisting with an overlay_collar_put. The old if/elif chain fell
-    into the has_put branch and silently dropped overlay_cc from every group.
+    A standalone weekly overlay_cc bootstrap can genuinely coexist with an
+    unrelated, already-open collar (put leg only, call leg closed/rolled
+    off) — see docs/bugs/bugs.md BUG-044. No marker distinguishes "overlay_cc
+    is the collar's own call" from "unrelated standalone CC" after the fact,
+    so the two must never be merged: overlay_cc always gets its own "cc"
+    group, and the put alone reports as "collar" (BUG-030's old merge
+    silently added the standalone CC's P&L into the Collar total).
     """
     groups = _overlay_type_groups({"overlay_cc", "overlay_collar_put"})
-    assert groups == {"collar": ["overlay_cc", "overlay_collar_put"]}
+    assert groups == {"cc": ["overlay_cc"], "collar": ["overlay_collar_put"]}
 
 
 def test_overlay_type_groups_call_and_put_still_merge_into_collar() -> None:
@@ -369,20 +372,22 @@ def test_overlay_type_groups_pp_is_independent_of_collar_combinations() -> None:
     cc/collar combo fires."""
     groups = _overlay_type_groups({"overlay_cc", "overlay_collar_put", "overlay_pp"})
     assert groups == {
-        "collar": ["overlay_cc", "overlay_collar_put"],
+        "cc": ["overlay_cc"],
+        "collar": ["overlay_collar_put"],
         "pp": ["overlay_pp"],
     }
 
 
-def test_cc_and_collar_put_merged_into_one_collar_row_end_to_end(
+def test_standalone_cc_and_collar_put_split_into_two_rows_end_to_end(
     tmp_path: Path,
 ) -> None:
-    """BUG-030 end-to-end: must not drop the cc leg's P&L.
+    """BUG-044 end-to-end: standalone CC and collar-put report separately.
 
-    Reproduces the live 2026-08-13 scenario: an overlay_cc short call
-    (+53.625 P&L) and an overlay_collar_put (-973.375 P&L) open the same day.
-    Before the fix, no ``overlay_type='cc'`` row was ever emitted and the cc
-    leg's P&L silently vanished from both the row set and the digest.
+    Reproduces the live 2026-09-09 scenario: an overlay_cc short call
+    (+53.625 P&L) and an unrelated, already-open overlay_collar_put
+    (-973.375 P&L) present the same day. Before the fix, no
+    ``overlay_type='cc'`` row was ever emitted and the cc leg's P&L was
+    silently folded into the ``collar`` row's total (BUG-044).
     """
     store = _store(tmp_path)
     entry_date = date(2026, 5, 1)
@@ -419,8 +424,71 @@ def test_cc_and_collar_put_merged_into_one_collar_row_end_to_end(
     )
 
     results = _compute_overlay_pnl_snapshots(store, snap_date)
+    cc_rows = [r for r in results if r.overlay_type == "cc"]
     collar_rows = [r for r in results if r.overlay_type == "collar"]
+    assert len(cc_rows) == 1
     assert len(collar_rows) == 1
-    # Merged P&L must include both legs — cc leg's P&L must not vanish.
-    assert collar_rows[0].pnl_inception_abs == Decimal("53.625") + Decimal("-973.375")
-    assert not any(r.overlay_type == "cc" for r in results)
+    # Each row's P&L is its own leg only — no cross-contamination.
+    assert cc_rows[0].pnl_inception_abs == Decimal("53.625")
+    assert collar_rows[0].pnl_inception_abs == Decimal("-973.375")
+
+
+def test_recovery_digest_shows_cc_line_for_standalone_cc(tmp_path: Path) -> None:
+    """BUG-044 end-to-end: the S9 digest gets a real CC line, not 'No data'.
+
+    With a standalone overlay_cc leg open alongside an unrelated collar-put,
+    ``_compute_overlay_pnl_snapshots`` must now persist a standalone "cc"
+    row (per the grouping fix above), so
+    ``_compute_protection_recovery_snapshot`` reads it back without firing
+    ``protection_recovery.overlay_source_missing`` for "cc", and the digest
+    shows a real CC figure instead of "No data".
+    """
+    store = _store(tmp_path)
+    entry_date = date(2026, 5, 1)
+    snap_date = date(2026, 5, 2)
+    qty = 50
+
+    store.record_track_comparison_snapshot(
+        TrackComparisonSnapshot(
+            strategy_name=STRATEGY_SPOT,
+            snapshot_date=snap_date,
+            pnl_1d_abs=Decimal("-10724"),
+            pnl_1d_pct=Decimal("0"),
+            pnl_inception_abs=Decimal("-10724"),
+            pnl_inception_pct=Decimal("0"),
+        )
+    )
+    _open_leg(
+        store,
+        "overlay_cc",
+        entry_date,
+        qty=qty,
+        price=Decimal("53.90"),
+        instrument_key="NSE_FO|77777",
+    )
+    _open_leg(
+        store,
+        "overlay_collar_put",
+        entry_date,
+        qty=qty,
+        price=Decimal("20.00"),
+        action=TradeAction.BUY,
+        instrument_key="NSE_FO|66666",
+    )
+    store.record_leg_snapshot(_leg_snap("overlay_cc", Decimal("793"), snap_date, ltp=Decimal("38")))
+    store.record_leg_snapshot(
+        _leg_snap("overlay_collar_put", Decimal("5694"), snap_date, ltp=Decimal("15"))
+    )
+
+    for snap in _compute_overlay_pnl_snapshots(store, snap_date):
+        store.record_overlay_pnl_snapshot(snap)
+
+    recovery_snap = _compute_protection_recovery_snapshot(store, snap_date)
+    assert recovery_snap is not None
+    assert recovery_snap.cc_pnl_1d == Decimal("793")
+    # Collar figure reflects only the collar's own leg — no CC leakage.
+    assert recovery_snap.collar_pnl_1d == Decimal("5694")
+
+    digest = _build_recovery_digest(recovery_snap)
+    assert "CC" in digest
+    assert "CC     No data" not in digest

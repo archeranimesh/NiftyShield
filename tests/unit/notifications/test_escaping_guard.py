@@ -240,21 +240,22 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
     ): "untracked gap - not named in any MD-*/ROLL-* task",
     (
         "scripts/strategies/three_track/paper_3track_snapshot.py",
-        1401,
-    ): "ROLL-15/16 area - not itself named, untracked gap",
+        1400,
+    ): "ROLL-15/16 area - not itself named, untracked gap. Line moved from 1401 -> 1400 by ORD-2's edit.",
     (
         "scripts/strategies/three_track/paper_3track_snapshot.py",
-        1427,
-    ): "ROLL-15/16 area - not itself named, untracked gap",
+        1426,
+    ): "ROLL-15/16 area - not itself named, untracked gap. Line moved from 1427 -> 1426 by ORD-2's edit.",
     (
         "scripts/strategies/three_track/paper_3track_snapshot.py",
-        1548,
-    ): "untracked gap - not named in any MD-*/ROLL-* task",
+        1547,
+    ): "untracked gap - not named in any MD-*/ROLL-* task. Line moved from 1548 -> 1547 by ORD-2's edit.",
     ("scripts/dev/paper_track_snapshot.py", 171): (
         "value escaped inside callee build_proxy_critical_alert() — guard inspects enclosing function only"
     ),
-    ("scripts/strategies/three_track/paper_3track_snapshot.py", 2018): (
-        "value escaped inside callee build_proxy_critical_alert() — guard inspects enclosing function only"
+    ("scripts/strategies/three_track/paper_3track_snapshot.py", 2017): (
+        "value escaped inside callee build_proxy_critical_alert() — guard inspects enclosing "
+        "function only. Line moved from 2018 -> 2017 by ORD-2's edit."
     ),
     ("scripts/morning_signal.py", 181): (
         "S5.5c — value is fully escaped inside the callee _format_signal_notification() "
@@ -279,10 +280,11 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "but this guard only inspects the immediate enclosing function (_close_position), "
         "not the builder it calls."
     ),
-    ("scripts/strategies/three_track/paper_3track_snapshot.py", 2064): (
+    ("scripts/strategies/three_track/paper_3track_snapshot.py", 2063): (
         "heuristic limitation, not a real gap - value is escaped inside the callee "
         "_build_recovery_digest() (MD-4.2 scope) but this guard only inspects the "
-        "immediate enclosing function (_run), not callees"
+        "immediate enclosing function (_run), not callees. Line moved from 2064 -> 2063 "
+        "by ORD-2's edit."
     ),
     ("scripts/record/record_paper_trade.py", 775): (
         "UEM-2 - heuristic limitation, not a real gap: the card is built by "

@@ -1155,29 +1155,28 @@ def _overlay_type_groups(present_roles: set[str]) -> dict[str, list[str]]:
         groups["collar"] = ["overlay_collar_call", "overlay_collar_put"]
     elif has_call:
         groups["cc"] = ["overlay_collar_call"]
-    elif has_cc and has_put:
-        # BUG-030 fix (2026-08-24): the call leg was intentionally tagged
-        # overlay_cc rather than overlay_collar_call — see
-        # build_overlay_trades()/_record_collar_trades()'s dedup guard in
-        # paper_3track_overlay_entry.py, which deliberately skips inserting a
-        # second short-call leg when an overlay_cc already covers the same
-        # instrument key ("the existing CC serves as the collar call").
-        # Economically this is a collar; both legs' P&L must be reported
-        # together or the overlay_cc leg silently vanishes from every
-        # downstream snapshot/digest (BUG-030).
-        groups["collar"] = ["overlay_cc", "overlay_collar_put"]
     elif has_put:
-        # Call leg closed/rolled off, put leg still open — still a "collar"
-        # position (the protective put), not a dropped/orphaned leg. Logged
-        # so a real lifecycle transition (not a bug) is visible in the cron
-        # output, same spirit as _compute_track_comparison_snapshot's
-        # no-base-leg-snapshot WARNING.
+        # Call leg closed/rolled off (or a standalone overlay_cc is open
+        # unrelated to this collar, per BUG-044 — no reliable marker
+        # distinguishes the two after the fact) — put leg still open, still
+        # a "collar" position (the protective put), not a dropped/orphaned
+        # leg. Logged so a real lifecycle transition (not a bug) is visible
+        # in the cron output, same spirit as _compute_track_comparison_
+        # snapshot's no-base-leg-snapshot WARNING.
         logger.warning(
             "overlay_pnl.collar_put_without_call",
             detail="Collar call leg absent today, put leg still open — reporting as collar-put-only",
         )
         groups["collar"] = ["overlay_collar_put"]
-    elif has_cc:
+
+    # BUG-044 fix (heuristic (a), 2026-09-10): overlay_cc always gets its own
+    # standalone "cc" group, never merged into "collar" — the BUG-030 merge
+    # assumed overlay_cc coexisting with overlay_collar_put always meant the
+    # overlay_cc leg WAS the collar's shared call, but a standalone weekly
+    # overlay_cc bootstrap can genuinely coexist with an unrelated open
+    # collar. No marker distinguishes the two after the fact (BUG-044); this
+    # fails safe by never silently folding an unrelated CC's P&L into Collar.
+    if has_cc:
         groups["cc"] = ["overlay_cc"]
 
     if has_pp:
