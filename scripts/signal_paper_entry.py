@@ -82,7 +82,6 @@ async def run(trade_date: date) -> None:
 
     broker = create_client(settings.upstox_env)
     paper_store = PaperStore(settings.db_path)
-    await asyncio.to_thread(paper_store.init_db)
 
     entry = await open_signal_paper_entry(signal, snapshot, broker, paper_store)
     if entry is None:
