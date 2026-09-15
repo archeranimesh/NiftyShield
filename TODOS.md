@@ -123,6 +123,13 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-15] BUG-047 (`docs/archive/bugs/bugs.md`) — signal_track_v1 paper entries and
+  Telegram entry messages were never sent: `src/signals/pipeline.py`'s SPT-6 tail-call
+  called `paper_store.init_db`, a method that doesn't exist on `PaperStore` (its `__init__`
+  already creates schema), silently swallowed by the cron-boundary `except Exception` on
+  every run since introduced. Confirmed via empty `paper_signal_entries` table + two days of
+  `paper_entry_failed` warnings in `logs/morning_signal.log`. Fixed by deleting the stray
+  call. SHA `e8d91c1`. CC/PP/Collar/IC unaffected — isolated to the signal-track path.
 - [2026-09-15] ORD-4 (`docs/plan/telegram-message-unification/overlay-recovery-digest/`) —
   epic close. Updated `CONTEXT.md` (`src/notifications/` entry — fenced recovery digest +
   BUG-044 fix note), `DECISIONS.md` (epic-close + `_overlay_type_groups` grouping decision

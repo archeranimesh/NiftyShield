@@ -7,6 +7,33 @@
 
 ---
 
+## BUG-047 — `signal_track_v1` paper entries and Telegram messages never sent (`PaperStore.init_db` AttributeError)
+
+**Status:** ✅ Fixed, SHA `e8d91c1`, closed 2026-09-15.
+
+**Symptom:** Every morning-signal run computed and stored the consensus in `daily_signals`, but
+`paper_signal_entries` stayed empty (0 rows, all-time) and no signal-track entry confirmation
+ever reached Telegram — confirmed missing for 2026-09-14 and 2026-09-15's BULLISH/23450
+consensus.
+
+**Root cause:** `src/signals/pipeline.py`'s SPT-6 tail-call constructed a `PaperStore` then
+called `await asyncio.to_thread(paper_store.init_db)` before `open_signal_paper_entry(...)`.
+`PaperStore` has no `init_db` method — its `__init__` already runs `_SCHEMA` on construction
+(`src/paper/store.py`). The call raised `AttributeError` on every invocation, caught and
+logged as `morning_signal.paper_entry_failed` by the surrounding cron-boundary `except
+Exception`, which silently skipped `open_signal_paper_entry` (and therefore the Telegram
+send) on every run since the line was introduced.
+
+**Fix:** deleted the stray `init_db` call; `PaperStore(settings.db_path)` already leaves the
+store fully initialized.
+
+**Scope check:** isolated to the signal-track paper-entry path — CC/PP/Collar/IC use
+`PaperStore` instances constructed the normal way (never call `init_db`); only two `init_db`
+call sites existed repo-wide, the other being on the unrelated `SignalStore`
+(`scripts/morning_signal.py`), which is correct.
+
+---
+
 ## BUG-002 — Option delta sign/magnitude corrupted by put-call misclassification
 
 | Field | Value |

@@ -24,6 +24,10 @@
 
 ---
 
+## BUG-047 [MOVED] — see `docs/archive/bugs/bugs.md` (closed 2026-09-15, SHA `e8d91c1`)
+
+---
+
 ## BUG-043 — "Net P&L" in close notifications has no stable meaning: inception-cumulative for IC v1/v2, cycle-only for collar, absent for CSP
 
 | Field | Value |
