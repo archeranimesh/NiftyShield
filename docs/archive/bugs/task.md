@@ -793,3 +793,8 @@ P&L whenever an overlay role has two open positions
 - [x] **B046.3** — `pytest tests/unit/notifications/test_escaping_guard.py` 10/10 green; full unit suite green (3421 passed). | SHA `35d464d`
 - [x] **B046.4** — Committed; `bugs.md` BUG-046 flipped ✅ Fixed; both sections moved to `docs/archive/bugs/`; `TODOS.md` session-log line. | SHA `35d464d`
 
+## BUG-044 — standalone CC overlay vanishes from the S9 digest; its P&L is folded into Collar
+
+Fix was tracked as plan tasks, not here — `docs/plan/telegram-message-unification/overlay-recovery-digest/tasks.md` **ORD-1** (investigate + decide the grouping, SHA `9883981`) and **ORD-2**
+(implement, SHA `7c255fd`). Full detail in `docs/archive/bugs/bugs.md`. ORD-4 flipped this bug to ✅ Fixed and moved both entries here.
+

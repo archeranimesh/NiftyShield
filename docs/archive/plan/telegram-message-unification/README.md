@@ -44,7 +44,7 @@ Confirmed with Animesh, 2026-09-10:
 | `unified-entry-message/` | Shared `entry_message.py` renderer; IC migrated onto it; CSP + CC entry card via `record_paper_trade.py --notify` (UEM-1..3) | ✅ Done | — | 889d860 |
 | `overlay-entry-message/` | Sign-aware net line; Collar / CC / PP re-entry cards; three-track bootstrap onto the renderer (OEM-1..5) | ✅ Done | `unified-entry-message` | 3982c0e |
 | `unified-exit-message/` | Shared `exit_message.py` close renderer + P&L / win-rate / decay footer; `pre_market_brief.py` redesign (UXM-1..8) | ✅ Done | `overlay-entry-message` | 84e786b |
-| `overlay-recovery-digest/` | Fix the standalone-CC-vanishes-into-Collar bug (BUG-044) in the S9 digest, then fenced-format it (ORD-1..4) | 🔄 In progress | `unified-exit-message` | — |
+| `overlay-recovery-digest/` | Fix the standalone-CC-vanishes-into-Collar bug (BUG-044) in the S9 digest, then fenced-format it (ORD-1..4) | ✅ Done | `unified-exit-message` | 8f0e8e4 |
 
 Status: ⬜ Not started · 🔄 In progress · ✅ Done. This column is the epic's progress view — per-task checkboxes live only in each sub-story's `tasks.md`.
 
@@ -75,5 +75,7 @@ Status: ⬜ Not started · 🔄 In progress · ✅ Done. This column is the epic
 - **`unified-exit-message`** — `format_exit_message` renders the Act/Instrument/Entry/Exit/P&L table + the this-exit / cycle / inception / win-rate footer; all six strategies and both paths
   (strategy-class + `auto_close.py`) plus `record_paper_trade.py --close --notify` emit it; win rate shown only at `closed_count >= 5`; `pre_market_brief.py` sends a MarkdownV2 fenced table with the
   overlay split into CC / Collar / PP and a portfolio total; no hand-rolled `✅ … closed` / `📤 Closed:` f-string remains in `src/strategy/`.
-- **`overlay-recovery-digest`** — when a standalone CC overlay is open the S9 digest shows a real `CC` line and the `Collar` figure excludes it; `protection_recovery.overlay_source_missing` no longer
-  fires for a CC that has a leg snapshot; `_build_recovery_digest` returns one fenced MarkdownV2 block and sends without a 400; BUG-044 is `✅ Fixed`.
+- **`overlay-recovery-digest`** — ✅ when a standalone CC overlay is open the S9 digest shows a real `CC` line and the `Collar` figure excludes it; `protection_recovery.overlay_source_missing` no
+  longer fires for a CC that has a leg snapshot; `_build_recovery_digest` returns one fenced MarkdownV2 block and sends without a 400; BUG-044 is `✅ Fixed` (SHA `7c255fd`).
+
+**Epic closed 2026-09-15 (ORD-4).** All four sub-stories shipped; archived to `docs/archive/plan/telegram-message-unification/`.

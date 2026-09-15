@@ -76,18 +76,6 @@ rot them.
     audit / close, one chart per IC variation — no option model, ships now) → `chart-model-overlay/`
     (T+0 curve + ±1σ/±2σ bands + POP — blocked on `greeks-bs-fallback/` GF-2 + GF-3).
     Priority relative to items 13–21 is Animesh's call.
-23. **Telegram message unification** — `docs/plan/telegram-message-unification/` — next **OEM-1**
-    (`overlay-entry-message/`: sign-aware net line). `unified-entry-message/` (UEM-1..3) shipped
-    2026-09-13. Epic, four
-    sub-stories (first three a hard renderer-lineage chain, fourth independent + closes the epic):
-    `unified-entry-message/` (UEM-1..3 — shared entry renderer; IC migrated; CSP + CC entry card via
-    `record_paper_trade.py --notify`) → `overlay-entry-message/` (OEM-1..5 — sign-aware net line;
-    Collar / CC / PP re-entry cards; three-track bootstrap onto the renderer) → `unified-exit-message/`
-    (UXM-1..8 — shared `exit_message.py` close renderer; `short_decay_pct` + `cycle_stats` +
-    `resolve_target` into `src/paper/cycle_pnl.py`; P&L + win-rate footer; `pre_market_brief.py`
-    redesign) → `overlay-recovery-digest/` (ORD-1..4 — fix BUG-044 standalone-CC-into-Collar in the S9
-    digest, then fenced-format it). No DB schema change. `/work` routes via the epic `prompt.md`.
-    Requested by Animesh 2026-09-10.
 24. **Portfolio snapshot slimdown** — `docs/plan/portfolio-snapshot-slimdown/` — next **FD-1**
     (pre-delete audit). Epic, two sequenced sub-stories that both rework `_build_portfolio_summary` +
     `_format_combined_summary`: `finideas-decommission/` (FD-1..7 — full removal of `finideas_ilts` +
@@ -135,6 +123,17 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-15] ORD-4 (`docs/plan/telegram-message-unification/overlay-recovery-digest/`) —
+  epic close. Updated `CONTEXT.md` (`src/notifications/` entry — fenced recovery digest +
+  BUG-044 fix note), `DECISIONS.md` (epic-close + `_overlay_type_groups` grouping decision
+  entry), `src/notifications/CLAUDE.md` (recovery digest is its own fenced block, not a
+  renderer-lineage caller). Flipped the epic `README.md`'s `overlay-recovery-digest/` row to
+  ✅ Done (SHA `8f0e8e4`) and its "Epic done when" bullet. `git mv`'d the whole
+  `telegram-message-unification/` folder to `docs/archive/plan/`. Collapsed the
+  `docs/plan/README.md` entry to a one-line pointer. Moved this Feature Backlog line to
+  `docs/archive/TODOS_ARCHIVE.md`. Flipped BUG-044 to ✅ Fixed (SHA `7c255fd`) and moved both
+  `docs/bugs/bugs.md` and `docs/bugs/task.md` entries to `docs/archive/bugs/`. Review: none
+  (docs only). Epic complete.
 - [2026-09-15] ORD-3 (`docs/plan/telegram-message-unification/overlay-recovery-digest/`) —
   migrated `_build_recovery_digest` off per-line `escape_markdown` onto a single MarkdownV2
   fenced block (matches the `pre_market_brief.py` house style, fixes the BUG-042 send-path

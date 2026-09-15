@@ -5,6 +5,22 @@
 
 ---
 
+## 2026-09-15 — `telegram-message-unification` epic archived
+
+Moved to `docs/archive/plan/telegram-message-unification/`. Four sub-stories, sequenced and
+shipped in order: `unified-entry-message/` (UEM-1..3 — shared `entry_message.py` renderer; IC
+migrated; CSP + CC entry card via `record_paper_trade.py --notify`, SHA `889d860`) →
+`overlay-entry-message/` (OEM-1..5 — sign-aware net/debit line; Collar / CC / PP automated
+re-entry cards; three-track bootstrap onto the renderer, SHA `3982c0e`) →
+`unified-exit-message/` (UXM-1..8 — shared `exit_message.py` close renderer; this-exit / cycle
+/ inception P&L + win-rate footer; `pre_market_brief.py` fenced-table redesign, SHA `84e786b`)
+→ `overlay-recovery-digest/` (ORD-1..4 — fixed BUG-044, the standalone-CC-into-Collar bug in
+the S9 "NiftyBees vs overlays" digest, then migrated it onto the fenced MarkdownV2 house
+style; ORD-2 SHA `7c255fd`, ORD-3 SHA `8f0e8e4`). No DB schema change anywhere in the epic.
+Requested by Animesh 2026-09-10; closed 2026-09-15.
+
+---
+
 ## 2026-09-09 — `signals` story archived
 
 Moved to `docs/archive/plan/signals/`. **S1.1–S6** — the multi-LLM daily directional signal

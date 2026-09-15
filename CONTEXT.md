@@ -79,7 +79,11 @@ Top-level `src/` packages, one line each (detail → `CONTEXT_TREE.md`):
   `short_decay_pct` (gross-short-premium ratio) and the module gained `cycle_stats`,
   `LegGroup`, `resolve_target` (moved in from `scripts/dev/cycle_pnl_report.py`).
   `scripts/pre_market_brief.py` redesigned to MarkdownV2 fenced tables with the overlay
-  broken into CC/Collar/PP sub-rows (UXM-7).
+  broken into CC/Collar/PP sub-rows (UXM-7). The S9 "NiftyBees vs overlays" recovery digest
+  (`_build_recovery_digest`, `scripts/strategies/three_track/paper_3track_snapshot.py`) is
+  fenced-format MarkdownV2 too (ORD-3) and `_overlay_type_groups` no longer folds a standalone
+  CC bootstrap into the collar total (BUG-044 fix, ORD-2) — `telegram-message-unification/`
+  epic archived 2026-09-15.
 - `src/reporting/` — promoted EOD report builders. `eod_pt_summary.py`: cross-strategy paper-trade summary as 1-3 MarkdownV2 Telegram messages (open positions /
   closed-today / strategy P&L + Ann.% on margin), off live `PaperStore.get_positions()` + broker LTP. Runs alongside `scripts/eod_summary.py`, not a replacement
   (PT-2, `docs/archive/plan/eod-pt-summary/`).

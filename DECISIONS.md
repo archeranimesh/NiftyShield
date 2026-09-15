@@ -1098,6 +1098,28 @@ ticked (flags) and one with it open (clean). Full `tests/unit/` suite green (302
 
 ---
 
+## `telegram-message-unification` epic closed — recovery digest grouping decision (ORD-4, 2026-09-15)
+
+Epic (`unified-entry-message` → `overlay-entry-message` → `unified-exit-message` →
+`overlay-recovery-digest`) archived to `docs/archive/plan/telegram-message-unification/`.
+Every paper-strategy Telegram entry/close card now routes through `entry_message.py` /
+`exit_message.py`; the S9 recovery digest is a fenced MarkdownV2 block (ORD-3, SHA `8f0e8e4`).
+
+`_overlay_type_groups` grouping decision (ORD-1, BUG-044): a standalone `overlay_cc` bootstrap
+and a `collar` can genuinely coexist as unrelated positions — confirmed from live
+`paper_trades` history, not just in theory. The prior BUG-030 fix's `has_cc and has_put →
+collar` merge branch conflated that case with the collar's own dedup-exempted call leg, so it
+was retired (ORD-2, SHA `7c255fd`): `_overlay_type_groups` now always emits a standalone `cc`
+group when `overlay_cc` is present and a put-only `collar` group when only
+`overlay_collar_put` is present, never merging the two. No reliable marker distinguishes a
+genuine dedup-exempted collar call from an unrelated CC re-entry after the fact (the
+`call_instrument_key` link is established only at entry time and never persisted as a
+relationship), so the freshly-entered dedup-exempted case now surfaces as separate `CC` /
+`Collar (put only)` lines instead of one merged `Collar` line — a labeling ambiguity flagged as
+worth a workshop, not a blocker.
+
+---
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/` (except 0.6c), `src/streaming/` — all empty

@@ -144,6 +144,14 @@ transport-agnostic (return a string, never call `send()` themselves):
 A new multi-line message that interpolates several typed values follows this pattern — a
 builder function taking one dataclass — rather than a hand-rolled f-string at the call site.
 
+The S9 "NiftyBees vs overlays" recovery digest (`_build_recovery_digest`,
+`scripts/strategies/three_track/paper_3track_snapshot.py`) is not a renderer-lineage caller —
+it builds its own single MarkdownV2 fenced block (ORD-3, matching the `pre_market_brief.py`
+house style) rather than going through `entry_message.py` / `exit_message.py`, since it has no
+leg table or P&L footer shape in common with either. `_overlay_type_groups` always emits a
+standalone `cc` `OverlayPnLSnapshot` alongside `collar` (BUG-044 fix, ORD-2) — never merge a
+standalone CC bootstrap into the collar total.
+
 ---
 
 ## Instrument Label Formatting
