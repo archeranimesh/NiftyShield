@@ -32,6 +32,7 @@ from src.notifications.formatting import format_money, pnl_emoji
 from src.notifications.markdown import escape_markdown
 from src.notifications.telegram import build_notifier
 from src.paper.constants import DEFAULT_BOD_PATH, LOT_SIZE
+from src.paper.store import PaperStore
 from src.signals.models import (
     DailySignal,
     Direction,
@@ -461,6 +462,15 @@ def run_record_phase(args: argparse.Namespace) -> None:
     nifty_close = _to_decimal(args.nifty_close, "nifty-close")
 
     is_trade = signal.is_actionable
+
+    if is_trade and not executed:
+        live_entries = PaperStore(settings.db_path).get_entries(trade_date, trade_date)
+        if live_entries:
+            executed = True
+            if entry_premium is None:
+                # one open position at a time (open_signal_entry) -> earliest
+                # trade_id is the entry for this signal_date
+                entry_premium = live_entries[0].entry_premium
 
     if is_trade:
         if entry_premium is None:
