@@ -1,13 +1,9 @@
 # MVP — Story Specs
 
-> One task per session. Find the first unchecked item in `mvp_tasks.md`. That is your only task.
-> Full implementation rules in `CLAUDE.md` and `REVIEW.md`.
-> After each task: tick `mvp_tasks.md`, append `| SHA: <sha>`, add one line to `TODOS.md`.
->
-> ⚠️ **Read the "Design decisions & open questions" block at the top of `mvp_tasks.md`
-> first.** This story predates the capital-deployment framing (fixed ₹1L notional,
-> 6% tranche ladder, −30% deployed-drawdown hard stop). M1/M2/M4 need rewriting against
-> those decisions before implementation.
+> One task per session. Find the first unchecked item in `mvp_tasks.md`. That is your only task. Full implementation rules in `CLAUDE.md` and `REVIEW.md`. After each task: tick `mvp_tasks.md`, append
+> `| SHA: <sha>`, add one line to `TODOS.md`. ⚠️ **Read the "Design decisions" block at the top of `mvp_tasks.md` first** — resolved 2026-09-18. Fixed ₹1L notional, 6% tranche ladder, −30%
+> deployed-drawdown hard stop. **M-A** (this pass) ships a single lump-sum fill (`qty = capital / price` at recommendation price); **M-B** (later) adds the staggered 4-tranche ladder on top of the
+> same schema.
 
 ---
 
@@ -15,13 +11,11 @@
 
 **Files to change:**
 - `src/mvp/__init__.py` — new package, single comment line only
-- `src/mvp/models.py` — Provider, Category, Pick, MVPSnapshot models
+- `src/mvp/models.py` — Provider, Category, Pick, MVPTranche, MVPSnapshot models
 - `tests/unit/mvp/__init__.py` — new test package
 - `tests/unit/mvp/test_mvp_models.py` — model tests
 
-**Before any code:**
-`search_graph("PaperTrade")` — confirm Pydantic frozen pattern used in this codebase;
-`search_graph("PortfolioDelta")` — confirm frozen dataclass pattern;
+**Before any code:** `search_graph("PaperTrade")` — confirm Pydantic frozen pattern used in this codebase; `search_graph("PortfolioDelta")` — confirm frozen dataclass pattern;
 `search_graph("MVPStore")` — confirm it does NOT yet exist (zero results expected).
 
 **What to implement:**
@@ -67,13 +61,33 @@ class Pick(frozen Pydantic):
     entry_price: Decimal | None = None     # None = PENDING
     pick_date: str            # ISO datetime UTC
     target_price: Decimal | None = None
-    stop_loss: Decimal | None = None
+    stop_loss: Decimal | None = None       # tipster value, recorded only — not acted on
     notes: str | None = None
     status: PickStatus = PickStatus.PENDING
     closed_at: str | None = None
     close_price: Decimal | None = None
+    capital_allotted: Decimal = Decimal("100000")
+    tranche_step_pct: Decimal = Decimal("6")
+    max_drawdown_pct: Decimal = Decimal("30")   # hard-stop trigger, fully-deployed capital
+    deployed_capital: Decimal = Decimal("0")
+    total_qty: int = 0
+    avg_cost: Decimal | None = None        # blended entry; None pre-fill
+    idle_cash: Decimal = Decimal("0")      # floor-rounding residue; not rolled to next tranche
+    realized_pnl: Decimal = Decimal("0")   # set on close
+    benchmark_entry: Decimal | None = None  # NIFTY 50 level captured live at pick add-time
     created_at: str
     updated_at: str
+    # Dividends are out of scope for MVP — not tracked.
+
+class MVPTranche(frozen Pydantic):
+    tranche_id: str            # UUID
+    pick_id: str
+    tranche_index: int         # 0..3; M-A (lump-sum) uses a single index-0 row
+    trigger_pct: Decimal       # 0 / -6 / -12 / -18 from pick price
+    fill_price: Decimal | None = None      # None until filled
+    qty: int | None = None                 # floored share qty; None until filled
+    cost_bps: Decimal = Decimal("25")      # round-trip cost knob, applied on this fill
+    filled_at: str | None = None           # ISO datetime UTC; None until filled
 
 class MVPSnapshot(frozen Pydantic):
     snapshot_id: int | None = None   # autoincrement; None before DB insert
@@ -82,19 +96,25 @@ class MVPSnapshot(frozen Pydantic):
     captured_at: str          # ISO datetime UTC
 ```
 
-Monetary fields (`entry_price`, `target_price`, `stop_loss`, `ltp`, `close_price`) use
-`Decimal`. DB layer (store.py) serialises them as TEXT — models hold `Decimal` objects.
+Monetary fields (`entry_price`, `target_price`, `stop_loss`, `ltp`, `close_price`, `capital_allotted`, `deployed_capital`, `avg_cost`, `idle_cash`, `realized_pnl`, `benchmark_entry`, `fill_price`) use
+`Decimal`. DB layer (store.py) serialises them as TEXT — models hold `Decimal` objects. Percent fields (`tranche_step_pct`, `max_drawdown_pct`, `trigger_pct`, `cost_bps`) are also `Decimal`, same TEXT
+convention.
 
 All models `frozen=True`. Google-style docstrings on each class.
+
+**M-A scope note:** this task defines the full `Pick`/`MVPTranche` shape (including the 4-tranche fields) so the schema doesn't need a second migration for M-B, but M-A callers (M2/M3/M4 in this pass)
+only ever create a single `MVPTranche(tranche_index=0, trigger_pct=0)` per pick — the ladder logic (indices 1–3, −6/−12/−18% triggers) is M-B's job, appended to `mvp_tasks.md` once M-A ships.
 
 **Tests (`tests/unit/mvp/test_mvp_models.py`):**
 - `Pick` with all fields populated → `status` is `PickStatus.PENDING` by default.
 - `Pick` with `entry_price=None` → `status` defaults to `PENDING` (not OPEN).
+- `Pick` defaults: `capital_allotted=Decimal("100000")`, `tranche_step_pct=Decimal("6")`, `max_drawdown_pct=Decimal("30")` when not explicitly set.
 - `ProviderSource` enum members match expected string values (`"TV"`, `"TELEGRAM"`, etc.).
 - `Pick` with `entry_price=Decimal("1200")` and `target_price=None` → round-trips without error.
+- `MVPTranche` with `tranche_index=0`, `fill_price=None`, `qty=None` → valid (pre-fill state).
 - `MVPSnapshot` with `snapshot_id=None` → valid (pre-insert state).
 
-**Commit:** `feat(mvp): add MVP data models — Provider, Category, Pick, MVPSnapshot`
+**Commit:** `feat(mvp): add MVP data models — Provider, Category, Pick, MVPTranche, MVPSnapshot`
 
 ---
 
@@ -104,35 +124,24 @@ All models `frozen=True`. Google-style docstrings on each class.
 - `src/mvp/store.py` — MVPStore with init_db, provider/category methods
 - `tests/unit/mvp/test_mvp_store.py` — store tests (in-memory SQLite)
 
-**Before any code:**
-`get_code_snippet("MVPStore")` — confirm it does NOT yet exist;
-`get_code_snippet("db_connection")` — confirm shared SQLite context manager signature
-  (`src/db.py`);
-`get_code_snippet("Provider")` — get exact field list from M1.1 models;
-`get_code_snippet("Category")` — same.
+**Before any code:** `get_code_snippet("MVPStore")` — confirm it does NOT yet exist; `get_code_snippet("db_connection")` — confirm shared SQLite context manager signature (`src/db.py`);
+`get_code_snippet("Provider")` — get exact field list from M1.1 models; `get_code_snippet("Category")` — same.
 
 **What to implement:**
 
-`MVPStore.__init__(self, db_path: str)` — stores path only, no connection held open.
-Uses `db_connection(db_path)` context manager from `src/db.py` for every operation.
+`MVPStore.__init__(self, db_path: str)` — stores path only, no connection held open. Uses `db_connection(db_path)` context manager from `src/db.py` for every operation.
 
-`init_db(self) → None` — creates all four tables if not exists (exact DDL from
-`docs/plan/mvp/mvp_schema.md`). Safe to call repeatedly.
+`init_db(self) → None` — creates all four tables if not exists (exact DDL from `docs/plan/mvp/mvp_schema.md`). Safe to call repeatedly.
 
-`add_provider(self, provider: Provider) → None` — INSERT OR IGNORE on `mvp_providers`.
-`get_provider(self, slug: str) → Provider | None` — by slug.
-`list_providers(self) → list[Provider]` — all rows, ordered by `display_name`.
+`add_provider(self, provider: Provider) → None` — INSERT OR IGNORE on `mvp_providers`. `get_provider(self, slug: str) → Provider | None` — by slug. `list_providers(self) → list[Provider]` — all rows,
+ordered by `display_name`.
 
-`add_category(self, category: Category) → None` — INSERT OR IGNORE on `mvp_categories`.
-`get_category(self, provider_id: str, slug: str) → Category | None` — by composite key.
-`list_categories(self, provider_id: str) → list[Category]` — for one provider.
+`add_category(self, category: Category) → None` — INSERT OR IGNORE on `mvp_categories`. `get_category(self, provider_id: str, slug: str) → Category | None` — by composite key. `list_categories(self,
+provider_id: str) → list[Category]` — for one provider.
 
-Monetary fields: stored as `str(value)` (TEXT in SQLite), read back as
-`Decimal(row["col"])`. Never use float.
+Monetary fields: stored as `str(value)` (TEXT in SQLite), read back as `Decimal(row["col"])`. Never use float.
 
-**Tests (`tests/unit/mvp/test_mvp_store.py`):**
-All tests use `tmp_path` fixture with `MVPStore(str(tmp_path / "test.sqlite"))` and
-call `init_db()` before any operation.
+**Tests (`tests/unit/mvp/test_mvp_store.py`):** All tests use `tmp_path` fixture with `MVPStore(str(tmp_path / "test.sqlite"))` and call `init_db()` before any operation.
 
 - `init_db()` called twice → no error (idempotent).
 - `add_provider` → `get_provider` round-trip returns identical slug and display_name.
@@ -151,30 +160,17 @@ call `init_db()` before any operation.
 - `src/mvp/store.py` — add pick and snapshot methods (extend existing class)
 - `tests/unit/mvp/test_mvp_store.py` — extend with pick/snapshot tests
 
-**Before any code:**
-`get_code_snippet("MVPStore")` — get current method list (post M1.2);
-`get_code_snippet("Pick")` — exact field list;
-`get_code_snippet("MVPSnapshot")` — exact field list.
+**Before any code:** `get_code_snippet("MVPStore")` — get current method list (post M1.2); `get_code_snippet("Pick")` — exact field list; `get_code_snippet("MVPSnapshot")` — exact field list.
 
 **What to implement (all on `MVPStore`):**
 
-`add_pick(self, pick: Pick) → None` — INSERT into `mvp_recommendations`.
-`get_pick(self, pick_id: str) → Pick | None`.
-`update_pick(self, pick_id: str, **kwargs) → None` — UPDATE only provided fields +
-  always updates `updated_at` to current UTC ISO. Allowed kwargs:
-  `category_id`, `symbol`, `instrument_key`, `analyst`, `entry_price`, `target_price`,
-  `stop_loss`, `notes`, `status`. If `entry_price` is set and current status is PENDING,
-  auto-advance status to OPEN.
-`close_pick(self, pick_id: str, close_price: Decimal, status: PickStatus) → None` —
-  sets `closed_at`, `close_price`, `status`. `status` must be a terminal value
-  (TARGET_HIT / SL_HIT / MANUAL_CLOSE); raises `ValueError` otherwise.
-`get_open_picks(self) → list[Pick]` — WHERE status = 'OPEN'.
-`list_picks(self, status: PickStatus | None = None, provider_id: str | None = None,
-  category_id: str | None = None) → list[Pick]` — filtered list for CLI.
+`add_pick(self, pick: Pick) → None` — INSERT into `mvp_recommendations`. `get_pick(self, pick_id: str) → Pick | None`. `update_pick(self, pick_id: str, **kwargs) → None` — UPDATE only provided
+fields + always updates `updated_at` to current UTC ISO. Allowed kwargs: `category_id`, `symbol`, `instrument_key`, `analyst`, `entry_price`, `target_price`, `stop_loss`, `notes`, `status`. If
+`entry_price` is set and current status is PENDING, auto-advance status to OPEN. `close_pick(self, pick_id: str, close_price: Decimal, status: PickStatus) → None` — sets `closed_at`, `close_price`,
+`status`. `status` must be a terminal value (TARGET_HIT / SL_HIT / MANUAL_CLOSE); raises `ValueError` otherwise. `get_open_picks(self) → list[Pick]` — WHERE status = 'OPEN'. `list_picks(self, status:
+PickStatus | None = None, provider_id: str | None = None, category_id: str | None = None) → list[Pick]` — filtered list for CLI.
 
-`record_snapshot(self, snapshot: MVPSnapshot) → None` — INSERT into `mvp_snapshots`.
-`get_snapshots(self, pick_id: str, limit: int = 10) → list[MVPSnapshot]` — ordered
-  by `captured_at DESC`.
+`record_snapshot(self, snapshot: MVPSnapshot) → None` — INSERT into `mvp_snapshots`. `get_snapshots(self, pick_id: str, limit: int = 10) → list[MVPSnapshot]` — ordered by `captured_at DESC`.
 
 **Tests (add to `tests/unit/mvp/test_mvp_store.py`):**
 - `add_pick` → `get_pick` round-trip; all Decimal fields survive TEXT serialisation.
@@ -195,9 +191,7 @@ call `init_db()` before any operation.
 - `src/mvp/tracker.py` — MVPEvent dataclass + check_prices pure function
 - `tests/unit/mvp/test_mvp_tracker.py` — new test file
 
-**Before any code:**
-`get_code_snippet("Pick")` — exact field list, confirm `target_price`, `stop_loss` types;
-`get_code_snippet("PickStatus")` — confirm terminal status names;
+**Before any code:** `get_code_snippet("Pick")` — exact field list, confirm `target_price`, `stop_loss` types; `get_code_snippet("PickStatus")` — confirm terminal status names;
 `search_graph("check_prices")` — confirm does NOT yet exist.
 
 **What to implement:**
@@ -245,10 +239,8 @@ Rules:
 - `src/mvp/tracker.py` — extend with format_telegram_summary
 - `tests/unit/mvp/test_mvp_tracker.py` — extend with summary tests
 
-**Before any code:**
-`get_code_snippet("format_telegram_summary")` — confirm not yet implemented;
-`search_code("format_telegram")` in `src/notifications/` — check existing Telegram
-  formatting patterns in this codebase for HTML parse_mode conventions.
+**Before any code:** `get_code_snippet("format_telegram_summary")` — confirm not yet implemented; `search_code("format_telegram")` in `src/notifications/` — check existing Telegram formatting patterns
+in this codebase for HTML parse_mode conventions.
 
 **What to implement:**
 
@@ -280,8 +272,7 @@ Output format (HTML for Telegram `parse_mode=HTML`):
 Rules:
 - OPEN picks: group by provider → category (unassigned picks under `Unassigned (PENDING)`).
 - P&L % = `(ltp - entry_price) / entry_price * 100`; prefix `+` when positive.
-- "X% away" for target: `(target_price - ltp) / ltp * 100` (absolute value); omit if no
-  target. Same for SL.
+- "X% away" for target: `(target_price - ltp) / ltp * 100` (absolute value); omit if no target. Same for SL.
 - PENDING picks (no `entry_price`): listed by symbol only in the Unassigned block.
 - Picks whose `instrument_key` is not in `ltp_map`: show last known price or `—` for ltp.
 - Returns empty string if no picks at all.
@@ -304,18 +295,14 @@ Rules:
 **Files to change:**
 - `scripts/mvp.py` — new script, provider/category subcommands only
 
-**Before any code:**
-`get_code_snippet("MVPStore")` — current public API;
-`get_code_snippet("Provider")` — field list;
-`get_code_snippet("Category")` — field list;
-`search_code("argparse")` in `scripts/record_paper_trade.py` — existing argparse pattern.
+**Before any code:** `get_code_snippet("MVPStore")` — current public API; `get_code_snippet("Provider")` — field list; `get_code_snippet("Category")` — field list; `search_code("argparse")` in
+`scripts/record_paper_trade.py` — existing argparse pattern.
 
 **What to implement:**
 
 Entry point: `python -m scripts.mvp <subcommand>`.
 
-Subcommands in this task only — do NOT implement `add`, `update`, `list`, `close`,
-`summary` yet:
+Subcommands in this task only — do NOT implement `add`, `update`, `list`, `close`, `summary` yet:
 
 ```
 mvp provider add <slug> <display_name> --source <tv|telegram|youtube|other>
@@ -325,15 +312,12 @@ mvp category add <provider_slug> <slug> <display_name>
 mvp category list <provider_slug>
 ```
 
-- `provider add`: creates `Provider`, calls `MVPStore.add_provider`. Prints
-  `✓ Provider '<slug>' added.` on success.
+- `provider add`: creates `Provider`, calls `MVPStore.add_provider`. Prints `✓ Provider '<slug>' added.` on success.
 - `provider list`: prints table: `SLUG | DISPLAY_NAME | SOURCE`. Empty → `No providers.`
-- `category add`: resolves provider by slug via `get_provider`; exits 1 if not found.
-  Creates `Category`, calls `add_category`. Prints `✓ Category '<slug>' added.`
+- `category add`: resolves provider by slug via `get_provider`; exits 1 if not found. Creates `Category`, calls `add_category`. Prints `✓ Category '<slug>' added.`
 - `category list`: resolves provider; prints table: `SLUG | DISPLAY_NAME`. Empty → `No categories.`
 
-DB path: `data/portfolio/portfolio.sqlite` (constant in script). `MVPStore.init_db()`
-called at script startup always.
+DB path: `data/portfolio/portfolio.sqlite` (constant in script). `MVPStore.init_db()` called at script startup always.
 
 No tests required for CLI scripts (no unit-testable logic beyond what store tests cover).
 
@@ -346,11 +330,8 @@ No tests required for CLI scripts (no unit-testable logic beyond what store test
 **Files to change:**
 - `scripts/mvp.py` — extend with add/update/close subcommands
 
-**Before any code:**
-`get_code_snippet("MVPStore")` — confirm `add_pick`, `update_pick`, `close_pick` APIs;
-`get_code_snippet("InstrumentLookup")` — confirm `search_equity` signature and return shape;
-`get_code_snippet("Pick")` — exact field list;
-`search_code("DEFAULT_BOD_PATH")` in `scripts/instrument_lookup.py` — get the BOD path constant.
+**Before any code:** `get_code_snippet("MVPStore")` — confirm `add_pick`, `update_pick`, `close_pick` APIs; `get_code_snippet("InstrumentLookup")` — confirm `search_equity` signature and return shape;
+`get_code_snippet("Pick")` — exact field list; `search_code("DEFAULT_BOD_PATH")` in `scripts/instrument_lookup.py` — get the BOD path constant.
 
 **What to implement:**
 
@@ -361,26 +342,18 @@ mvp close <pick_id> --price <n>
 ```
 
 **`mvp add` instrument resolution flow:**
-1. Load `InstrumentLookup.from_file(DEFAULT_BOD_PATH)` — if file missing, warn and skip
-   resolution (`instrument_key = None`).
+1. Load `InstrumentLookup.from_file(DEFAULT_BOD_PATH)` — if file missing, warn and skip resolution (`instrument_key = None`).
 2. Call `search_equity(symbol)`.
-3. Single result with score 1.0 (exact match) → auto-resolve, print
-   `  → instrument_key: NSE_EQ|...`.
-4. Multiple results or top score < 1.0 → print numbered table
-   (`#  SYMBOL  NAME  KEY`) and prompt `Select [1-N / s=skip / q=quit]:`.
-   `s` → `instrument_key = None`; `q` → abort without insert.
+3. Single result with score 1.0 (exact match) → auto-resolve, print ` → instrument_key: NSE_EQ|...`.
+4. Multiple results or top score < 1.0 → print numbered table (`# SYMBOL NAME KEY`) and prompt `Select [1-N / s=skip / q=quit]:`. `s` → `instrument_key = None`; `q` → abort without insert.
 5. `--defer-key` → skip resolution entirely.
 
-**`mvp add`** creates a `Pick` (UUID for `pick_id`, current UTC for `pick_date` /
-`created_at` / `updated_at`) and calls `add_pick`. Resolves `category_id` from provider
-slug + category slug if both provided; exits 1 if either not found.
-Prints `✓ Pick added: <pick_id[:8]> — SYMBOL (PENDING)`.
+**`mvp add`** creates a `Pick` (UUID for `pick_id`, current UTC for `pick_date` / `created_at` / `updated_at`) and calls `add_pick`. Resolves `category_id` from provider slug + category slug if both
+provided; exits 1 if either not found. Prints `✓ Pick added: <pick_id[:8]> — SYMBOL (PENDING)`.
 
-**`mvp update`** calls `update_pick` with only provided kwargs. Prints `✓ Updated.`
-Flipping PENDING → OPEN (by setting `--price`) is handled inside `update_pick` already.
+**`mvp update`** calls `update_pick` with only provided kwargs. Prints `✓ Updated.` Flipping PENDING → OPEN (by setting `--price`) is handled inside `update_pick` already.
 
-**`mvp close`** calls `close_pick(pick_id, close_price, PickStatus.MANUAL_CLOSE)`.
-Prints `✓ Closed at <price>.`
+**`mvp close`** calls `close_pick(pick_id, close_price, PickStatus.MANUAL_CLOSE)`. Prints `✓ Closed at <price>.`
 
 No tests required for CLI scripts.
 
@@ -393,9 +366,7 @@ No tests required for CLI scripts.
 **Files to change:**
 - `scripts/mvp.py` — extend with list/summary subcommands
 
-**Before any code:**
-`get_code_snippet("MVPStore.list_picks")` — confirm signature and filter params;
-`get_code_snippet("Pick")` — field list for display columns.
+**Before any code:** `get_code_snippet("MVPStore.list_picks")` — confirm signature and filter params; `get_code_snippet("Pick")` — field list for display columns.
 
 **What to implement:**
 
@@ -405,17 +376,13 @@ mvp summary [-p <provider_slug>] [-c <category_slug>]
 mvp summary <SYMBOL>
 ```
 
-**`mvp list`** defaults to `--status PENDING`.
-`--open` → status=OPEN. `--all` → no status filter.
-Output columns: `ID[:8] | SYMBOL | STATUS | ENTRY | TARGET | SL | PROVIDER/CATEGORY | DATE`.
-Empty → `No picks.`
+**`mvp list`** defaults to `--status PENDING`. `--open` → status=OPEN. `--all` → no status filter. Output columns: `ID[:8] | SYMBOL | STATUS | ENTRY | TARGET | SL | PROVIDER/CATEGORY | DATE`. Empty →
+`No picks.`
 
-**`mvp summary`** with no SYMBOL: groups picks by provider → category.
-Per group prints: count OPEN, count TARGET_HIT, count SL_HIT, win rate (TARGET_HIT /
-(TARGET_HIT + SL_HIT)), total closed picks. No live LTP fetch — summary is DB-only.
+**`mvp summary`** with no SYMBOL: groups picks by provider → category. Per group prints: count OPEN, count TARGET_HIT, count SL_HIT, win rate (TARGET_HIT / (TARGET_HIT + SL_HIT)), total closed picks.
+No live LTP fetch — summary is DB-only.
 
-**`mvp summary <SYMBOL>`**: cross-provider view. Lists every pick for that symbol across
-all providers/categories, one row per pick: `PROVIDER | CATEGORY | ENTRY | STATUS | CLOSE_PRICE | DATE`.
+**`mvp summary <SYMBOL>`**: cross-provider view. Lists every pick for that symbol across all providers/categories, one row per pick: `PROVIDER | CATEGORY | ENTRY | STATUS | CLOSE_PRICE | DATE`.
 
 No tests required for CLI scripts.
 
@@ -428,12 +395,8 @@ No tests required for CLI scripts.
 **Files to change:**
 - `scripts/mvp_watch.py` — new hourly cron script
 
-**Before any code:**
-`get_code_snippet("MVPStore.get_open_picks")` — confirm return type;
-`get_code_snippet("MVPStore.record_snapshot")` — confirm signature;
-`get_code_snippet("MVPStore.close_pick")` — confirm signature;
-`search_code("UPSTOX_ANALYTICS_TOKEN")` in `src/dhan/ltp_fetcher.py` or similar — find
-  the existing V3 batch LTP fetch pattern (same endpoint used by `src/dhan/`);
+**Before any code:** `get_code_snippet("MVPStore.get_open_picks")` — confirm return type; `get_code_snippet("MVPStore.record_snapshot")` — confirm signature; `get_code_snippet("MVPStore.close_pick")`
+— confirm signature; `search_code("UPSTOX_ANALYTICS_TOKEN")` in `src/dhan/ltp_fetcher.py` or similar — find the existing V3 batch LTP fetch pattern (same endpoint used by `src/dhan/`);
 `search_code("batch_ltp")` — find the helper if it exists.
 
 **What to implement:**
@@ -458,12 +421,9 @@ async def run() -> None:
         # per-alert Telegram message (M4.2)
 ```
 
-LTP fetch: use the same `UPSTOX_ANALYTICS_TOKEN` batch endpoint already used by
-`src/dhan/ltp_fetcher.py`. Reuse that function directly — do not reimplement.
+LTP fetch: use the same `UPSTOX_ANALYTICS_TOKEN` batch endpoint already used by `src/dhan/ltp_fetcher.py`. Reuse that function directly — do not reimplement.
 
-Graceful: any Telegram failure (M4.2 not yet wired) logs warning, does not abort.
-Writes structured log to `logs/mvp_watch.log` via Python `logging` (JSON format, same
-as other cron scripts).
+Graceful: any Telegram failure (M4.2 not yet wired) logs warning, does not abort. Writes structured log to `logs/mvp_watch.log` via Python `logging` (JSON format, same as other cron scripts).
 
 No unit tests for this script — integration-only.
 
@@ -476,11 +436,8 @@ No unit tests for this script — integration-only.
 **Files to change:**
 - `scripts/mvp_watch.py` — extend with Telegram notifications
 
-**Before any code:**
-`get_code_snippet("TelegramNotifier")` — confirm `send_message` signature and HTML parse_mode;
-`get_code_snippet("build_notifier")` — confirm factory function signature;
-`get_code_snippet("format_telegram_summary")` — confirm signature from M2.2;
-`search_code("build_notifier")` in an existing cron script — see usage pattern.
+**Before any code:** `get_code_snippet("TelegramNotifier")` — confirm `send_message` signature and HTML parse_mode; `get_code_snippet("build_notifier")` — confirm factory function signature;
+`get_code_snippet("format_telegram_summary")` — confirm signature from M2.2; `search_code("build_notifier")` in an existing cron script — see usage pattern.
 
 **What to implement:**
 
@@ -492,19 +449,16 @@ Extend `run()` in `mvp_watch.py`:
    Entry: 1200 | Exit: 1401 | +16.75%
    DSIJ / Value Picks
    ```
-   or:
+or:
    ```
    🛑 SL HIT — TCS
    Entry: 3400 | Exit: 3098 | -8.88%
    DSIJ / Value Picks
    ```
 
-2. After per-alert messages: build and send consolidated hourly summary via
-   `format_telegram_summary(...)`. Requires loading providers and categories from store
-   to pass the lookup dicts.
+2. After per-alert messages: build and send consolidated hourly summary via `format_telegram_summary(...)`. Requires loading providers and categories from store to pass the lookup dicts.
 
-3. `build_notifier()` returns `None` when env vars missing — check for `None` before
-   any `send_message` call.
+3. `build_notifier()` returns `None` when env vars missing — check for `None` before any `send_message` call.
 
 No unit tests for this script.
 
@@ -514,22 +468,16 @@ No unit tests for this script.
 
 ## M6 — Historical backfill + retrospective SL/target detection (Good-to-Have)
 
-> **Not part of core story. Implement only after M5 is complete.**
-> Useful when adding picks that were issued in the past (e.g. a tip from 1 Jan 2026
-> recorded today). Without this, `mvp_snapshots` will only have data from the day of
-> recording forward.
+> **Not part of core story. Implement only after M5 is complete.** Useful when adding picks that were issued in the past (e.g. a tip from 1 Jan 2026 recorded today). Without this, `mvp_snapshots` will
+> only have data from the day of recording forward.
 
 **What it adds:**
 
-1. **`MVPStore.backfill_snapshots(pick_id, daily_closes: list[tuple[date, Decimal]]) → None`**
-   — bulk-inserts historical daily close prices into `mvp_snapshots` for dates between
-   `pick_date` and today. Skips dates already present (INSERT OR IGNORE keyed on
-   `pick_id + captured_at date`). Monetary values follow TEXT/Decimal invariant.
+1. **`MVPStore.backfill_snapshots(pick_id, daily_closes: list[tuple[date, Decimal]]) → None`** — bulk-inserts historical daily close prices into `mvp_snapshots` for dates between `pick_date` and
+   today. Skips dates already present (INSERT OR IGNORE keyed on `pick_id + captured_at date`). Monetary values follow TEXT/Decimal invariant.
 
-2. **`src/mvp/backfill.py` — `fetch_historical_closes(symbol, from_date, to_date) → list[tuple[date, Decimal]]`**
-   — fetches daily EOD close prices from NSE Bhavcopy Parquet (already ingested at
-   `data/historical/bhavcopy/`). Falls back to a warning + empty list if data not available.
-   No live API calls — Bhavcopy only.
+2. **`src/mvp/backfill.py` — `fetch_historical_closes(symbol, from_date, to_date) → list[tuple[date, Decimal]]`** — fetches daily EOD close prices from NSE Bhavcopy Parquet (already ingested at
+   `data/historical/bhavcopy/`). Falls back to a warning + empty list if data not available. No live API calls — Bhavcopy only.
 
 3. **`scripts/mvp.py backfill <pick_id>`** subcommand:
    - Loads pick; derives `from_date = pick_date.date()`, `to_date = date.today()`.
@@ -552,10 +500,8 @@ No unit tests for this script.
 ## M5 — Docs close
 
 **Files to change:**
-- `CONTEXT.md` — add `src/mvp/` to module tree; add `scripts/mvp.py` and
-  `scripts/mvp_watch.py` to scripts list
-- `DECISIONS.md` — one entry: "MVP module added; instrument_key resolved at add-time
-  via InstrumentLookup; monetary fields TEXT/Decimal invariant maintained"
+- `CONTEXT.md` — add `src/mvp/` to module tree; add `scripts/mvp.py` and `scripts/mvp_watch.py` to scripts list
+- `DECISIONS.md` — one entry: "MVP module added; instrument_key resolved at add-time via InstrumentLookup; monetary fields TEXT/Decimal invariant maintained"
 - `TODOS.md` — session log entry
 
 No code changes. No tests. Targeted `Edit` calls only — never `Write` on these files.
