@@ -123,287 +123,148 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
-- [2026-09-15] BUG-047 (`docs/archive/bugs/bugs.md`) — signal_track_v1 paper entries and
-  Telegram entry messages were never sent: `src/signals/pipeline.py`'s SPT-6 tail-call
-  called `paper_store.init_db`, a method that doesn't exist on `PaperStore` (its `__init__`
-  already creates schema), silently swallowed by the cron-boundary `except Exception` on
-  every run since introduced. Confirmed via empty `paper_signal_entries` table + two days of
-  `paper_entry_failed` warnings in `logs/morning_signal.log`. Fixed by deleting the stray
-  call. SHA `e8d91c1`. CC/PP/Collar/IC unaffected — isolated to the signal-track path.
-- [2026-09-15] ORD-4 (`docs/plan/telegram-message-unification/overlay-recovery-digest/`) —
-  epic close. Updated `CONTEXT.md` (`src/notifications/` entry — fenced recovery digest +
-  BUG-044 fix note), `DECISIONS.md` (epic-close + `_overlay_type_groups` grouping decision
-  entry), `src/notifications/CLAUDE.md` (recovery digest is its own fenced block, not a
-  renderer-lineage caller). Flipped the epic `README.md`'s `overlay-recovery-digest/` row to
-  ✅ Done (SHA `8f0e8e4`) and its "Epic done when" bullet. `git mv`'d the whole
-  `telegram-message-unification/` folder to `docs/archive/plan/`. Collapsed the
-  `docs/plan/README.md` entry to a one-line pointer. Moved this Feature Backlog line to
-  `docs/archive/TODOS_ARCHIVE.md`. Flipped BUG-044 to ✅ Fixed (SHA `7c255fd`) and moved both
-  `docs/bugs/bugs.md` and `docs/bugs/task.md` entries to `docs/archive/bugs/`. Review: none
-  (docs only). Epic complete.
-- [2026-09-15] ORD-3 (`docs/plan/telegram-message-unification/overlay-recovery-digest/`) —
-  migrated `_build_recovery_digest` off per-line `escape_markdown` onto a single MarkdownV2
-  fenced block (matches the `pre_market_brief.py` house style, fixes the BUG-042 send-path
-  class for this caller); call site unchanged, content now literal per the fence contract.
-  Added red/flat-day golden-string tests + a not-double-escaped guard. Fixed two line-number
-  drifts in `tests/unit/notifications/test_escaping_guard.py`'s baseline (2017→2020,
-  2063→2066) and reworded the digest entry's rationale to the now-fenced shape. code-reviewer:
-  0 CRITICAL/ERROR, 2 WARNING (docstring wording, fixed inline; emoji header line inside the
-  fence not yet on-device confirmed per FORMATTING.md §7 — deferred, non-columnar header
-  carries no alignment risk like the rejected 🔴 case). SHA: 8f0e8e4. Next: ORD-4 (epic
-  close).
-- [2026-09-15] ORD-2 (`docs/plan/telegram-message-unification/overlay-recovery-digest/`) —
-  fixed BUG-044 per ORD-1's heuristic (a): `_overlay_type_groups` no longer merges a
-  standalone `overlay_cc` into the `collar` group; `overlay_cc` always gets its own `cc`
-  row, `collar` only ever reflects its own legs. `_compute_overlay_pnl_snapshots` needed no
-  change (already iterates groups generically). Rewrote the BUG-030 regression tests to the
-  no-merge behavior, added an end-to-end digest test. Also fixed a line-number drift in
-  `tests/unit/notifications/test_escaping_guard.py`'s baseline (5 pre-existing unescaped
-  call sites shifted by -1 line from this edit — no new unescaped sends). code-reviewer:
-  0 CRITICAL/ERROR, 2 WARNING (one pre-existing has_call+has_cc key-collision edge case,
-  deferred — practically impossible given the entry-time dedup guard; one line-length nit,
-  fixed). SHA: 7c255fd. Next: ORD-3.
-- [2026-09-15] ORD-1 (`docs/plan/telegram-message-unification/overlay-recovery-digest/`) —
-  investigated BUG-044: confirmed from live `paper_trades` that a standalone `overlay_cc`
-  and a collar-put-only position genuinely coexist (the collar's original call leg closed
-  2026-08-25; every `overlay_cc` since has been an unrelated weekly `--auto-cc` re-entry on
-  a different strike). No field in `paper_trades` reliably links a later `overlay_cc` back
-  to its collar once the linked leg closes — the `Cycle N` note tag is an overlay-wide
-  counter, not a per-collar marker. Decision: heuristic (a) — retire the BUG-030
-  `has_cc and has_put → collar` merge branch outright; always emit separate `cc` and
-  `collar` (put-only) groups. BUG-044 updated with the finding + decision. No code change.
+- [2026-09-18] MVP design decisions (`docs/plan/mvp/`) — resolved the 9 open questions blocking M1 in `mvp_tasks.md` (whole-share tranche rounding + idle cash, 25bps cost per transaction, live-fetch
+  benchmark_entry, N=6mo time stop, independent-per-pick portfolio mode, M-A lump-sum-first / M-B ladder phasing, no council call needed). Added `mvp_tranches` table + new `mvp_recommendations`
+  columns to `mvp_schema.md`, rewrote M1.1's spec in `mvp_stories.md` for the full capital-deployment field set, and added a new M0 (equity+index bhavcopy ingest) task ahead of M6 since
+  `src/backtest/bhavcopy_ingest.py` is F&O-only. SHA `cb36eaf`. Docs only, no code — next session picks up M1.1.
+- [2026-09-15] BUG-047 (`docs/archive/bugs/bugs.md`) — signal_track_v1 paper entries and Telegram entry messages were never sent: `src/signals/pipeline.py`'s SPT-6 tail-call called
+  `paper_store.init_db`, a method that doesn't exist on `PaperStore` (its `__init__` already creates schema), silently swallowed by the cron-boundary `except Exception` on every run since introduced.
+  Confirmed via empty `paper_signal_entries` table + two days of `paper_entry_failed` warnings in `logs/morning_signal.log`. Fixed by deleting the stray call. SHA `e8d91c1`. CC/PP/Collar/IC unaffected
+  — isolated to the signal-track path.
+- [2026-09-15] ORD-4 (`docs/plan/telegram-message-unification/overlay-recovery-digest/`) — epic close. Updated `CONTEXT.md` (`src/notifications/` entry — fenced recovery digest + BUG-044 fix note),
+  `DECISIONS.md` (epic-close + `_overlay_type_groups` grouping decision entry), `src/notifications/CLAUDE.md` (recovery digest is its own fenced block, not a renderer-lineage caller). Flipped the epic
+  `README.md`'s `overlay-recovery-digest/` row to ✅ Done (SHA `8f0e8e4`) and its "Epic done when" bullet. `git mv`'d the whole `telegram-message-unification/` folder to `docs/archive/plan/`. Collapsed
+  the `docs/plan/README.md` entry to a one-line pointer. Moved this Feature Backlog line to `docs/archive/TODOS_ARCHIVE.md`. Flipped BUG-044 to ✅ Fixed (SHA `7c255fd`) and moved both
+  `docs/bugs/bugs.md` and `docs/bugs/task.md` entries to `docs/archive/bugs/`. Review: none (docs only). Epic complete.
+- [2026-09-15] ORD-3 (`docs/plan/telegram-message-unification/overlay-recovery-digest/`) — migrated `_build_recovery_digest` off per-line `escape_markdown` onto a single MarkdownV2 fenced block
+  (matches the `pre_market_brief.py` house style, fixes the BUG-042 send-path class for this caller); call site unchanged, content now literal per the fence contract. Added red/flat-day golden-string
+  tests + a not-double-escaped guard. Fixed two line-number drifts in `tests/unit/notifications/test_escaping_guard.py`'s baseline (2017→2020, 2063→2066) and reworded the digest entry's rationale to
+  the now-fenced shape. code-reviewer: 0 CRITICAL/ERROR, 2 WARNING (docstring wording, fixed inline; emoji header line inside the fence not yet on-device confirmed per FORMATTING.md §7 — deferred,
+  non-columnar header carries no alignment risk like the rejected 🔴 case). SHA: 8f0e8e4. Next: ORD-4 (epic close).
+- [2026-09-15] ORD-2 (`docs/plan/telegram-message-unification/overlay-recovery-digest/`) — fixed BUG-044 per ORD-1's heuristic (a): `_overlay_type_groups` no longer merges a standalone `overlay_cc`
+  into the `collar` group; `overlay_cc` always gets its own `cc` row, `collar` only ever reflects its own legs. `_compute_overlay_pnl_snapshots` needed no change (already iterates groups generically).
+  Rewrote the BUG-030 regression tests to the no-merge behavior, added an end-to-end digest test. Also fixed a line-number drift in `tests/unit/notifications/test_escaping_guard.py`'s baseline (5
+  pre-existing unescaped call sites shifted by -1 line from this edit — no new unescaped sends). code-reviewer: 0 CRITICAL/ERROR, 2 WARNING (one pre-existing has_call+has_cc key-collision edge case,
+  deferred — practically impossible given the entry-time dedup guard; one line-length nit, fixed). SHA: 7c255fd. Next: ORD-3.
+- [2026-09-15] ORD-1 (`docs/plan/telegram-message-unification/overlay-recovery-digest/`) — investigated BUG-044: confirmed from live `paper_trades` that a standalone `overlay_cc` and a collar-put-only
+  position genuinely coexist (the collar's original call leg closed 2026-08-25; every `overlay_cc` since has been an unrelated weekly `--auto-cc` re-entry on a different strike). No field in
+  `paper_trades` reliably links a later `overlay_cc` back to its collar once the linked leg closes — the `Cycle N` note tag is an overlay-wide counter, not a per-collar marker. Decision: heuristic (a)
+  — retire the BUG-030 `has_cc and has_put → collar` merge branch outright; always emit separate `cc` and `collar` (put-only) groups. BUG-044 updated with the finding + decision. No code change.
   SHA: 9883981. Next: ORD-2.
-- [2026-09-14] UXM-7 (`docs/plan/telegram-message-unification/unified-exit-message/`) —
-  `scripts/pre_market_brief.py` redesigned: dropped the broken `<b>` HTML (previously
-  escaped and sent literally under MarkdownV2), now a fenced `Strategy | Legs | Unrealized
-  P&L` table using `strategy_label()`; `paper_nifty_overlay` breaks into a parent row plus
-  `├ CC / ├ Collar / └ PP` sub-rows via `resolve_target` leg-role filters (empty sub-group
-  shows `—`); trailing `Total` row counts the overlay once via its parent aggregate. Added
-  the missing `paper_signal_track_v1` entry to `STRATEGY_LABELS` (`strategy_label()` raises
-  on an unmapped id — this would have crashed the brief on the day a signal-track paper
-  position opens). SHA: 84e786b. Pre-existing, out-of-scope: `tests/unit/notifications/
-  test_escaping_guard.py` has 4 failing assertions from UXM-4/5/6's `auto_close.py` /
-  `eod_summary.py` / `record_paper_trade.py` migrations whose escaping baseline was never
+- [2026-09-14] UXM-7 (`docs/plan/telegram-message-unification/unified-exit-message/`) — `scripts/pre_market_brief.py` redesigned: dropped the broken `<b>` HTML (previously escaped and sent literally
+  under MarkdownV2), now a fenced `Strategy | Legs | Unrealized P&L` table using `strategy_label()`; `paper_nifty_overlay` breaks into a parent row plus `├ CC / ├ Collar / └ PP` sub-rows via
+  `resolve_target` leg-role filters (empty sub-group shows `—`); trailing `Total` row counts the overlay once via its parent aggregate. Added the missing `paper_signal_track_v1` entry to
+  `STRATEGY_LABELS` (`strategy_label()` raises on an unmapped id — this would have crashed the brief on the day a signal-track paper position opens). SHA: 84e786b. Pre-existing, out-of-scope:
+  `tests/unit/notifications/ test_escaping_guard.py` has 4 failing assertions from UXM-4/5/6's `auto_close.py` / `eod_summary.py` / `record_paper_trade.py` migrations whose escaping baseline was never
   updated — confirmed present at HEAD before this task, not touched here.
-- [2026-09-14] UXM-8 (`docs/plan/telegram-message-unification/unified-exit-message/`) — sub-story
-  docs close: `CONTEXT.md` / `src/notifications/CLAUDE.md` / `DECISIONS.md` reflect the shared
-  exit renderer, `cycle_stats`, and the brief redesign; epic `README.md` Stories-table row
-  flipped to ✅ Done (closing SHA `84e786b`, UXM-7's commit). No code change. Epic folder not
-  archived — archives whole at ORD-4 (`overlay-recovery-digest/`). Next: ORD-1.
-- [2026-09-13] UXM-1 (`docs/plan/telegram-message-unification/unified-exit-message/`) —
-  gross-short-premium `short_decay_pct` (+ `short_credit_per_unit` / `short_buyback_per_unit`)
-  added to `Cycle`; short leg identified by entry-trade `action == SELL`, not `leg_role`
-  naming — stable across IC/CSP/CC/Collar, `None` for a pure-long PP. New pure
-  `cycle_stats(trades) -> CycleStats` helper (win_rate, avg_win/loss, best/worst,
-  avg_hold_days, avg_decay_pct). `resolve_target` / `LegGroup` (renamed from `_Group`) moved
-  from `scripts/dev/cycle_pnl_report.py` into `src/paper/cycle_pnl.py`; CLI output unchanged.
-  SHA 51d546c (feat), 49c9a55 (docs-close). Tests: 20/20 green
-  (`tests/unit/paper/test_cycle_pnl.py`), full suite 3091/3091. Review: code-reviewer +
-  greeks-analyst, both clean. Next: `unified-exit-message/` UXM-2 (shared `exit_message.py`
-  renderer).
-- [2026-09-14] UXM-2 (`docs/plan/telegram-message-unification/unified-exit-message/`) —
-  new `src/notifications/exit_message.py`: `ExitKind(str, Enum)`, frozen `ExitMessage`,
-  `format_exit_message()`; `CloseLegRow` + `build_close_leg_table()` added to
-  `formatting.py`. Renderer + tests only, no callers wired yet. Cycle-line collapses into
-  the this-exit line on a full close, omits on a partial close, drops the
-  credit/buyback/decay segment for a pure-long cycle (PP); win-rate row gated at
-  `closed_count >= 5`. `ExitMessage.__post_init__` enforces the cycle-field-group
-  invariants (added post code-review — a latent `TypeError` crash if `cycle_decay_pct` were
-  set without `cycle_short_credit`/`cycle_short_buyback`). SHA e9d830d. Tests: 13/13 green
-  (`tests/unit/notifications/test_exit_message.py`), full suite 3104/3104. Review:
-  code-reviewer, clean after the `__post_init__` fix (2 minor float-vs-Decimal WARNINGs on
-  `CloseLegRow`/`LegRow` deferred — matches existing display-row precedent). Epic
-  `README.md` `unified-exit-message/` row set to 🔄 In progress (not yet ✅ — 7 of 8 UXM
-  tasks remain). Next: `unified-exit-message/` UXM-3 (migrate IC v1/v2 closes).
-- [2026-09-14] UXM-3 (`docs/plan/telegram-message-unification/unified-exit-message/`) —
-  `IronCondorV1`/`IronCondorV2._send_close_notification` migrated off the hand-rolled
-  `✅ *IC closed — …*` f-string onto `format_exit_message(ExitMessage(...))`. Per-leg
-  entry/exit price now comes from the pre-close `positions` list (threaded through as a new
-  4th param on both methods) via `avg_sell_price`/`avg_cost`; per-leg P&L computed locally
-  from `_SHORT_ROLES` sign convention; DTE via the existing `_parse_expiry` pattern; the
-  cycle/inception/win-rate footer via `reconstruct_cycles`/`cycle_stats` (UXM-1) +
-  `get_strategy_realized_pnl`. Instrument labels via `format_leg_label` against a
-  freshly-loaded `InstrumentLookup` (falls back to the raw key on failure, matching the
-  existing roll-target pattern in these files); local `_CLOSE_ROLE_LABELS` dict covers the
-  two hedge roles `formatting.py`'s shared `LEG_ROLE_LABELS` doesn't (out of this story's
-  file scope to extend). `ExitMessage` construction and `format_exit_message()` now sit in
-  their own try/except (code-review fix — a validation/format crash there must not
-  propagate through `apply_action`), separate from the `send_notification` try/except. SHA
-  22359bf. Tests: 108/108 green (`test_ic_nifty_v1.py` + `test_ic_nifty_v2_signals.py`,
-  incl. new held-days and notify-failure-non-fatal coverage), `tests/unit/strategy/`
-  709/709, full suite otherwise green (4 pre-existing unrelated failures: 3
-  escaping-guard baseline drift from `eod_summary.py` line shifts, 1 NSE-2025-calendar
-  message-text mismatch — neither touched by this task). Review: code-reviewer, clean after
-  the try/except fix. Next: `unified-exit-message/` UXM-4 (migrate CSP + recorder
+- [2026-09-14] UXM-8 (`docs/plan/telegram-message-unification/unified-exit-message/`) — sub-story docs close: `CONTEXT.md` / `src/notifications/CLAUDE.md` / `DECISIONS.md` reflect the shared exit
+  renderer, `cycle_stats`, and the brief redesign; epic `README.md` Stories-table row flipped to ✅ Done (closing SHA `84e786b`, UXM-7's commit). No code change. Epic folder not archived — archives
+  whole at ORD-4 (`overlay-recovery-digest/`). Next: ORD-1.
+- [2026-09-13] UXM-1 (`docs/plan/telegram-message-unification/unified-exit-message/`) — gross-short-premium `short_decay_pct` (+ `short_credit_per_unit` / `short_buyback_per_unit`) added to `Cycle`;
+  short leg identified by entry-trade `action == SELL`, not `leg_role` naming — stable across IC/CSP/CC/Collar, `None` for a pure-long PP. New pure `cycle_stats(trades) -> CycleStats` helper
+  (win_rate, avg_win/loss, best/worst, avg_hold_days, avg_decay_pct). `resolve_target` / `LegGroup` (renamed from `_Group`) moved from `scripts/dev/cycle_pnl_report.py` into `src/paper/cycle_pnl.py`;
+  CLI output unchanged. SHA 51d546c (feat), 49c9a55 (docs-close). Tests: 20/20 green (`tests/unit/paper/test_cycle_pnl.py`), full suite 3091/3091. Review: code-reviewer + greeks-analyst, both clean.
+  Next: `unified-exit-message/` UXM-2 (shared `exit_message.py` renderer).
+- [2026-09-14] UXM-2 (`docs/plan/telegram-message-unification/unified-exit-message/`) — new `src/notifications/exit_message.py`: `ExitKind(str, Enum)`, frozen `ExitMessage`, `format_exit_message()`;
+  `CloseLegRow` + `build_close_leg_table()` added to `formatting.py`. Renderer + tests only, no callers wired yet. Cycle-line collapses into the this-exit line on a full close, omits on a partial
+  close, drops the credit/buyback/decay segment for a pure-long cycle (PP); win-rate row gated at `closed_count >= 5`. `ExitMessage.__post_init__` enforces the cycle-field-group invariants (added post
+  code-review — a latent `TypeError` crash if `cycle_decay_pct` were set without `cycle_short_credit`/`cycle_short_buyback`). SHA e9d830d. Tests: 13/13 green
+  (`tests/unit/notifications/test_exit_message.py`), full suite 3104/3104. Review: code-reviewer, clean after the `__post_init__` fix (2 minor float-vs-Decimal WARNINGs on `CloseLegRow`/`LegRow`
+  deferred — matches existing display-row precedent). Epic `README.md` `unified-exit-message/` row set to 🔄 In progress (not yet ✅ — 7 of 8 UXM tasks remain). Next: `unified-exit-message/` UXM-3
+  (migrate IC v1/v2 closes).
+- [2026-09-14] UXM-3 (`docs/plan/telegram-message-unification/unified-exit-message/`) — `IronCondorV1`/`IronCondorV2._send_close_notification` migrated off the hand-rolled `✅ *IC closed — …*` f-string
+  onto `format_exit_message(ExitMessage(...))`. Per-leg entry/exit price now comes from the pre-close `positions` list (threaded through as a new 4th param on both methods) via
+  `avg_sell_price`/`avg_cost`; per-leg P&L computed locally from `_SHORT_ROLES` sign convention; DTE via the existing `_parse_expiry` pattern; the cycle/inception/win-rate footer via
+  `reconstruct_cycles`/`cycle_stats` (UXM-1) + `get_strategy_realized_pnl`. Instrument labels via `format_leg_label` against a freshly-loaded `InstrumentLookup` (falls back to the raw key on failure,
+  matching the existing roll-target pattern in these files); local `_CLOSE_ROLE_LABELS` dict covers the two hedge roles `formatting.py`'s shared `LEG_ROLE_LABELS` doesn't (out of this story's file
+  scope to extend). `ExitMessage` construction and `format_exit_message()` now sit in their own try/except (code-review fix — a validation/format crash there must not propagate through
+  `apply_action`), separate from the `send_notification` try/except. SHA 22359bf. Tests: 108/108 green (`test_ic_nifty_v1.py` + `test_ic_nifty_v2_signals.py`, incl. new held-days and
+  notify-failure-non-fatal coverage), `tests/unit/strategy/` 709/709, full suite otherwise green (4 pre-existing unrelated failures: 3 escaping-guard baseline drift from `eod_summary.py` line shifts,
+  1 NSE-2025-calendar message-text mismatch — neither touched by this task). Review: code-reviewer, clean after the try/except fix. Next: `unified-exit-message/` UXM-4 (migrate CSP + recorder
   `--close`).
-- [2026-09-14] UXM-4 (`docs/plan/telegram-message-unification/unified-exit-message/`) —
-  `CSPNiftyV1`'s two close sites migrated onto `format_exit_message`: the CLOSE_AND_ROLL
-  `_reentry_notification` follow-up (`ExitKind.CLOSE`) and the CLOSE_AND_WAIT `⛔ waiting`
-  message (`ExitKind.WAITING` + `state_line="RE_ENTRY_PENDING — no new position opened."`).
-  `_close_leg` now returns the written `PaperTrade | None` (was `None`) so the close price
-  reaches the card; `_reentry_notification` gained a `close_trade` 3rd param. New shared
-  `_send_close_card` helper mirrors IC v1's footer-calc + triple try/except pattern
-  (`_send_close_card` build, `format_exit_message`, `send_notification` each logged
-  distinctly). `scripts/record/record_paper_trade.py --notify` now also fires on a
-  successful `--close` via new `_send_close_card_if_requested` (reads the just-closed cycle
-  off `reconstruct_cycles`/`cycle_stats`, headline via `strategy_label()`, falls back to the
-  raw strategy id on an unmapped one). SHA 21a8449. Tests: 66/66 green
-  (`test_csp_nifty_v1.py` + `test_record_paper_trade.py`); escaping-guard baseline bumped
-  for the entry-card call site's line shift (774→775) plus one new documented entry for the
-  exit-card call site (845). Review: code-reviewer, clean after 2 minor WARNING fixes
-  (narrowed a bare `except Exception` around `strategy_label()` to `except ValueError` +
-  logged it; added missing `-> None` test annotations). Next: `unified-exit-message/` UXM-5
-  (migrate CC/PP/Collar strategy-class closes).
-- [2026-09-14] UXM-5 (`docs/plan/telegram-message-unification/unified-exit-message/`) —
-  `CCOverlayV1` / `PPOverlayV1` / `CollarOverlayV1`'s `_send_close_notification` migrated onto
-  `format_exit_message`, mirroring UXM-3/UXM-4's footer pattern. Since all three share
-  `strategy_name=STRATEGY_OVERLAY`, `cycle_stats`/`reconstruct_cycles` are pre-filtered by each
-  strategy's own `leg_role`(s) (`SHORT_CALL_ROLES={"overlay_cc"}`,
-  `LONG_PUT_ROLES={"overlay_pp"}`, `{SHORT_CALL_ROLE, LONG_PUT_ROLE}` for Collar) before
-  reconstruction, so CC/PP/Collar cycles never blend; `inception_pnl` and `overlay_total_pnl`
-  both resolve to `get_strategy_realized_pnl(store, STRATEGY_OVERLAY)` (same number in both
-  footer rows — intentional per the epic's "store number" decision, flagged but accepted by
-  greeks-analyst as spec-consistent, not a bug). PP: `MONETIZE_PP` → `ExitKind.CRASH_MONETIZE` +
-  `state_line`; `ROLL_PP` → `ExitKind.ROLL`, no state_line. Per-leg delta/DTE dropped from the
-  close card (deliberate simplification — delta is not load-bearing post-close). SHA 7e19e78.
-  Tests: 106/106 green across the three strategy test files + escaping-guard; escaping-guard
-  baseline updated for line shifts (`collar_overlay_v1.py` reentry-failure entries 607→608,
-  609→610) and three new documented heuristic-limitation entries (`cc_overlay_v1.py:447`,
-  `pp_overlay_v1.py:470`, `collar_overlay_v1.py:863`). Full suite: 3 pre-existing unrelated
-  failures confirmed independent of this task (`tests/unit/notifications/test_escaping_guard.py`
-  baseline drift on `scripts/eod_summary.py:198/200` and `scripts/record/record_paper_trade.py:
-  845/846` — reproduced identically with this task's changes fully reverted; neither file is
-  touched by UXM-5). Review: code-reviewer, clean after 4 unused-import WARNING fixes
-  (`format_money`/`mdcode` left over from the removed hand-rolled f-strings); greeks-analyst
-  clean (P&L signs verified correct for all three, no cross-strategy cycle blending). Next:
-  `unified-exit-message/` UXM-6 (migrate `auto_close.py` daemon paths).
-- [2026-09-14] UXM-6 (`docs/plan/telegram-message-unification/unified-exit-message/`) —
-  `auto_close.py`'s `_send_close_notification` (Collar/CC/PP daemon paths) migrated onto
-  `format_exit_message`, mirroring UXM-5's strategy-class pattern. `dte`/`held_days` — never
-  tracked by the old hand-rolled messages — now computed in `auto_close_overlay` from
-  `chain.expiry`/`pos.entry_date` via `market_today()` and threaded through (Collar uses the
-  earliest entry date across both legs), flagged by greeks-analyst as a WARNING against a
-  hardcoded-0 first draft and fixed before commit. Cycle/`cycle_stats` footer filtered per
-  overlay type against `src/paper/cycle_pnl.py`'s `_OVERLAY_GROUPS` leg-role tuples. Per-leg
-  delta dropped from the CRASH_MONETIZE line (consistent with UXM-5, not load-bearing
-  post-close per greeks-analyst). SHA 3f812a8. Tests: 715/715 green
-  (`tests/unit/strategy/`). Review: code-reviewer — 1 CRITICAL (missing G5 intent comment on
-  the new footer-calc `except Exception`) fixed before commit; remaining WARNINGs (line-length
-  false positives against the repo's actual 100-char limit, and a defensive
-  `Decimal(str(leg["pnl"]))` round-trip on the `Any`-typed legs dict) deferred as non-blocking.
-  Next: `unified-exit-message/` UXM-7 (`pre_market_brief.py` redesign).
-- [2026-09-13] OEM-5 (`docs/plan/telegram-message-unification/overlay-entry-message/`) —
-  sub-story docs close. `CONTEXT.md` / `src/notifications/CLAUDE.md` / `DECISIONS.md` updated
-  to reflect the sign-aware net line (OEM-1) and the Collar re-entry + three-track bootstrap
-  cards (OEM-2/OEM-4, OEM-3 merged into OEM-4). Epic `README.md` `overlay-entry-message/` row
-  flipped to ✅ Done, closing SHA 3982c0e. Epic folder not archived — archives whole at UXM-8.
-  Review: none (docs only). Next: `unified-exit-message/` (UXM-1).
-- [2026-09-13] OEM-3 (`docs/plan/telegram-message-unification/overlay-entry-message/`) —
-  merged into OEM-4, no code change. Graph inspection of `CCOverlayV1.apply_action`,
-  `PPOverlayV1.apply_action`, and `ReEntryMixin._check_reentry` found neither class performs
-  an in-tick automated re-entry the way `CollarOverlayV1._reenter_collar` does (OEM-2) —
-  `apply_action` only closes and calls `_check_reentry`, which writes an ELIGIBLE/BLOCKED
-  `paper_exit_events` row and tells the operator to run a script manually; no position is
-  reopened there. The only place a CC/PP re-entry is actually recorded is `auto_cc_bootstrap`
-  / `auto_pp_bootstrap` in `paper_3track_overlay_entry.py` — OEM-4's target. `tasks.md` and
-  `stories.md` updated to fold OEM-3's card requirement into OEM-4. Review: none (docs only).
-  Epic `README.md` row stays 🔄 In progress. Next: OEM-4 (bootstrap message onto shared
-  renderer, now covering CC/PP/Collar entry cards).
-- [2026-09-13] OEM-2 (`docs/plan/telegram-message-unification/overlay-entry-message/`) —
-  `CollarOverlayV1._reenter_collar` now sends a `✅ *Collar Entry*` card via the shared
-  `format_entry_message` renderer after a successful automated two-leg re-entry, non-fatal on
-  notifier failure. `select_and_build_collar_entry` (`src/strategy/collar_entry.py`) widened to
-  also return the chain-fetched spot + each leg's delta (no second chain fetch). Two new tests
-  (`test_reentry_sends_collar_entry_card`, `test_reentry_notify_failure_is_non_fatal`).
-  `code-reviewer` + `greeks-analyst` clean after one round of fixes (try/except widened to cover
-  message construction; deltas threaded through instead of `None`). SHA `24946d7`. Epic
-  `README.md` row stays 🔄 In progress (OEM-3/4/5 remain). Next: OEM-3 (CC + PP re-entry entry
-  cards) — see OEM-3 entry above: merged into OEM-4.
-- [2026-09-13] OEM-1 (`docs/plan/telegram-message-unification/overlay-entry-message/`) —
-  `entry_message.py::_credit_line` is sign-aware: negative `net_credit` renders `💰 *Net
-  debit:*` (absolute value); positive/zero byte-identical. Two new tests
-  (`test_net_debit_line_when_net_credit_negative`, `test_net_credit_line_unchanged_for_zero`).
-  `code-reviewer` clean (0 CRITICAL/ERROR/WARNING). SHA `2832717`. Epic `README.md` row flipped
-  to 🔄 In progress. Next: OEM-2 (`CollarOverlayV1` re-entry entry card).
-- [2026-09-13] UEM-3 (`docs/plan/telegram-message-unification/unified-entry-message/`) — docs
-  close for `unified-entry-message/` (UEM-1..3). Updated `CONTEXT.md`'s `src/notifications/`
-  bullet (`ic_entry_message.py` → `entry_message.py`, shared renderer note), added the UEM-2
-  card note to `src/notifications/CLAUDE.md`'s `entry_message.py` entry, added a
-  `DECISIONS.md` §P&L & Reporting line (renderer rename + relaxed `ivr`), flipped the epic
-  `README.md` Stories-table row to ✅ (`889d860`), and this Session Log line. No code change.
-  Epic folder not archived — archives whole at UXM-8. Next: OEM-2
-  (`overlay-entry-message/`).
-- [2026-09-12] UEM-1 (`docs/plan/telegram-message-unification/unified-entry-message/`) — generalized
-  `src/notifications/ic_entry_message.py` → `entry_message.py` (`EntryMessage` + `format_entry_message`,
-  `headline_label` field replaces the `strategy_name` v1/v2 marker, `ivr`/`mode`/`expiry_type` made
-  optional, `dte`/`spot`/`net_credit`/`expiry` stay required); migrated both IC call sites
-  (`paper_ic_entry.py`, `paper_ic_entry_v2.py`); renamed `test_ic_entry_message.py` →
-  `test_entry_message.py` (8 existing assertions kept, 2 new for optional-IVR behavior). IC output
-  byte-identical, confirmed by `code-reviewer`. Antigravity-implemented (`08fd78c`); real `code-reviewer`
-  run flagged 1 ERROR (stale `ic_entry_message.py` reference in `src/notifications/CLAUDE.md`, fixed by
-  Claude in the same commit) and 3 cosmetic WARNINGs (deferred). 119/119 notifications tests green.
-- [2026-09-13] UEM-2 (`docs/plan/telegram-message-unification/unified-entry-message/`) — added
-  `--notify` to `scripts/record/record_paper_trade.py`: on a successful CSP/CC SELL open (not
-  `--close`), derives strike/expiry/option-type from `instrument_key` (`parse_strike_from_key`/
-  `parse_expiry_from_key`), fetches Nifty spot, builds an `EntryMessage`/`format_entry_message`
-  card and sends it non-fatally via `build_notifier()`/`TelegramNotifier`. 4 new tests
-  (`test_record_paper_trade.py`); added a `test_escaping_guard.py` baseline entry (the guard's
-  single-function heuristic can't see through `_build_entry_card` → `format_entry_message`'s
-  internal escaping). `code-reviewer` flagged 2 WARNINGs (Decimal→float boundary at the spot
-  value, both call site and test mock), fixed in the same commit. SHA `889d860`.
+- [2026-09-14] UXM-4 (`docs/plan/telegram-message-unification/unified-exit-message/`) — `CSPNiftyV1`'s two close sites migrated onto `format_exit_message`: the CLOSE_AND_ROLL `_reentry_notification`
+  follow-up (`ExitKind.CLOSE`) and the CLOSE_AND_WAIT `⛔ waiting` message (`ExitKind.WAITING` + `state_line="RE_ENTRY_PENDING — no new position opened."`). `_close_leg` now returns the written
+  `PaperTrade | None` (was `None`) so the close price reaches the card; `_reentry_notification` gained a `close_trade` 3rd param. New shared `_send_close_card` helper mirrors IC v1's footer-calc +
+  triple try/except pattern (`_send_close_card` build, `format_exit_message`, `send_notification` each logged distinctly). `scripts/record/record_paper_trade.py --notify` now also fires on a
+  successful `--close` via new `_send_close_card_if_requested` (reads the just-closed cycle off `reconstruct_cycles`/`cycle_stats`, headline via `strategy_label()`, falls back to the raw strategy id
+  on an unmapped one). SHA 21a8449. Tests: 66/66 green (`test_csp_nifty_v1.py` + `test_record_paper_trade.py`); escaping-guard baseline bumped for the entry-card call site's line shift (774→775) plus
+  one new documented entry for the exit-card call site (845). Review: code-reviewer, clean after 2 minor WARNING fixes (narrowed a bare `except Exception` around `strategy_label()` to `except
+  ValueError` + logged it; added missing `-> None` test annotations). Next: `unified-exit-message/` UXM-5 (migrate CC/PP/Collar strategy-class closes).
+- [2026-09-14] UXM-5 (`docs/plan/telegram-message-unification/unified-exit-message/`) — `CCOverlayV1` / `PPOverlayV1` / `CollarOverlayV1`'s `_send_close_notification` migrated onto
+  `format_exit_message`, mirroring UXM-3/UXM-4's footer pattern. Since all three share `strategy_name=STRATEGY_OVERLAY`, `cycle_stats`/`reconstruct_cycles` are pre-filtered by each strategy's own
+  `leg_role`(s) (`SHORT_CALL_ROLES={"overlay_cc"}`, `LONG_PUT_ROLES={"overlay_pp"}`, `{SHORT_CALL_ROLE, LONG_PUT_ROLE}` for Collar) before reconstruction, so CC/PP/Collar cycles never blend;
+  `inception_pnl` and `overlay_total_pnl` both resolve to `get_strategy_realized_pnl(store, STRATEGY_OVERLAY)` (same number in both footer rows — intentional per the epic's "store number" decision,
+  flagged but accepted by greeks-analyst as spec-consistent, not a bug). PP: `MONETIZE_PP` → `ExitKind.CRASH_MONETIZE` + `state_line`; `ROLL_PP` → `ExitKind.ROLL`, no state_line. Per-leg delta/DTE
+  dropped from the close card (deliberate simplification — delta is not load-bearing post-close). SHA 7e19e78. Tests: 106/106 green across the three strategy test files + escaping-guard;
+  escaping-guard baseline updated for line shifts (`collar_overlay_v1.py` reentry-failure entries 607→608, 609→610) and three new documented heuristic-limitation entries (`cc_overlay_v1.py:447`,
+  `pp_overlay_v1.py:470`, `collar_overlay_v1.py:863`). Full suite: 3 pre-existing unrelated failures confirmed independent of this task (`tests/unit/notifications/test_escaping_guard.py` baseline
+  drift on `scripts/eod_summary.py:198/200` and `scripts/record/record_paper_trade.py: 845/846` — reproduced identically with this task's changes fully reverted; neither file is touched by UXM-5).
+  Review: code-reviewer, clean after 4 unused-import WARNING fixes (`format_money`/`mdcode` left over from the removed hand-rolled f-strings); greeks-analyst clean (P&L signs verified correct for all
+  three, no cross-strategy cycle blending). Next: `unified-exit-message/` UXM-6 (migrate `auto_close.py` daemon paths).
+- [2026-09-14] UXM-6 (`docs/plan/telegram-message-unification/unified-exit-message/`) — `auto_close.py`'s `_send_close_notification` (Collar/CC/PP daemon paths) migrated onto `format_exit_message`,
+  mirroring UXM-5's strategy-class pattern. `dte`/`held_days` — never tracked by the old hand-rolled messages — now computed in `auto_close_overlay` from `chain.expiry`/`pos.entry_date` via
+  `market_today()` and threaded through (Collar uses the earliest entry date across both legs), flagged by greeks-analyst as a WARNING against a hardcoded-0 first draft and fixed before commit.
+  Cycle/`cycle_stats` footer filtered per overlay type against `src/paper/cycle_pnl.py`'s `_OVERLAY_GROUPS` leg-role tuples. Per-leg delta dropped from the CRASH_MONETIZE line (consistent with UXM-5,
+  not load-bearing post-close per greeks-analyst). SHA 3f812a8. Tests: 715/715 green (`tests/unit/strategy/`). Review: code-reviewer — 1 CRITICAL (missing G5 intent comment on the new footer-calc
+  `except Exception`) fixed before commit; remaining WARNINGs (line-length false positives against the repo's actual 100-char limit, and a defensive `Decimal(str(leg["pnl"]))` round-trip on the
+  `Any`-typed legs dict) deferred as non-blocking. Next: `unified-exit-message/` UXM-7 (`pre_market_brief.py` redesign).
+- [2026-09-13] OEM-5 (`docs/plan/telegram-message-unification/overlay-entry-message/`) — sub-story docs close. `CONTEXT.md` / `src/notifications/CLAUDE.md` / `DECISIONS.md` updated to reflect the
+  sign-aware net line (OEM-1) and the Collar re-entry + three-track bootstrap cards (OEM-2/OEM-4, OEM-3 merged into OEM-4). Epic `README.md` `overlay-entry-message/` row flipped to ✅ Done, closing SHA
+  3982c0e. Epic folder not archived — archives whole at UXM-8. Review: none (docs only). Next: `unified-exit-message/` (UXM-1).
+- [2026-09-13] OEM-3 (`docs/plan/telegram-message-unification/overlay-entry-message/`) — merged into OEM-4, no code change. Graph inspection of `CCOverlayV1.apply_action`, `PPOverlayV1.apply_action`,
+  and `ReEntryMixin._check_reentry` found neither class performs an in-tick automated re-entry the way `CollarOverlayV1._reenter_collar` does (OEM-2) — `apply_action` only closes and calls
+  `_check_reentry`, which writes an ELIGIBLE/BLOCKED `paper_exit_events` row and tells the operator to run a script manually; no position is reopened there. The only place a CC/PP re-entry is actually
+  recorded is `auto_cc_bootstrap` / `auto_pp_bootstrap` in `paper_3track_overlay_entry.py` — OEM-4's target. `tasks.md` and `stories.md` updated to fold OEM-3's card requirement into OEM-4. Review:
+  none (docs only). Epic `README.md` row stays 🔄 In progress. Next: OEM-4 (bootstrap message onto shared renderer, now covering CC/PP/Collar entry cards).
+- [2026-09-13] OEM-2 (`docs/plan/telegram-message-unification/overlay-entry-message/`) — `CollarOverlayV1._reenter_collar` now sends a `✅ *Collar Entry*` card via the shared `format_entry_message`
+  renderer after a successful automated two-leg re-entry, non-fatal on notifier failure. `select_and_build_collar_entry` (`src/strategy/collar_entry.py`) widened to also return the chain-fetched
+  spot + each leg's delta (no second chain fetch). Two new tests (`test_reentry_sends_collar_entry_card`, `test_reentry_notify_failure_is_non_fatal`). `code-reviewer` + `greeks-analyst` clean after
+  one round of fixes (try/except widened to cover message construction; deltas threaded through instead of `None`). SHA `24946d7`. Epic `README.md` row stays 🔄 In progress (OEM-3/4/5 remain). Next:
+  OEM-3 (CC + PP re-entry entry cards) — see OEM-3 entry above: merged into OEM-4.
+- [2026-09-13] OEM-1 (`docs/plan/telegram-message-unification/overlay-entry-message/`) — `entry_message.py::_credit_line` is sign-aware: negative `net_credit` renders `💰 *Net debit:*` (absolute
+  value); positive/zero byte-identical. Two new tests (`test_net_debit_line_when_net_credit_negative`, `test_net_credit_line_unchanged_for_zero`). `code-reviewer` clean (0 CRITICAL/ERROR/WARNING). SHA
+  `2832717`. Epic `README.md` row flipped to 🔄 In progress. Next: OEM-2 (`CollarOverlayV1` re-entry entry card).
+- [2026-09-13] UEM-3 (`docs/plan/telegram-message-unification/unified-entry-message/`) — docs close for `unified-entry-message/` (UEM-1..3). Updated `CONTEXT.md`'s `src/notifications/` bullet
+  (`ic_entry_message.py` → `entry_message.py`, shared renderer note), added the UEM-2 card note to `src/notifications/CLAUDE.md`'s `entry_message.py` entry, added a `DECISIONS.md` §P&L & Reporting
+  line (renderer rename + relaxed `ivr`), flipped the epic `README.md` Stories-table row to ✅ (`889d860`), and this Session Log line. No code change. Epic folder not archived — archives whole at
+  UXM-8. Next: OEM-2 (`overlay-entry-message/`).
+- [2026-09-12] UEM-1 (`docs/plan/telegram-message-unification/unified-entry-message/`) — generalized `src/notifications/ic_entry_message.py` → `entry_message.py` (`EntryMessage` +
+  `format_entry_message`, `headline_label` field replaces the `strategy_name` v1/v2 marker, `ivr`/`mode`/`expiry_type` made optional, `dte`/`spot`/`net_credit`/`expiry` stay required); migrated both
+  IC call sites (`paper_ic_entry.py`, `paper_ic_entry_v2.py`); renamed `test_ic_entry_message.py` → `test_entry_message.py` (8 existing assertions kept, 2 new for optional-IVR behavior). IC output
+  byte-identical, confirmed by `code-reviewer`. Antigravity-implemented (`08fd78c`); real `code-reviewer` run flagged 1 ERROR (stale `ic_entry_message.py` reference in `src/notifications/CLAUDE.md`,
+  fixed by Claude in the same commit) and 3 cosmetic WARNINGs (deferred). 119/119 notifications tests green.
+- [2026-09-13] UEM-2 (`docs/plan/telegram-message-unification/unified-entry-message/`) — added `--notify` to `scripts/record/record_paper_trade.py`: on a successful CSP/CC SELL open (not `--close`),
+  derives strike/expiry/option-type from `instrument_key` (`parse_strike_from_key`/ `parse_expiry_from_key`), fetches Nifty spot, builds an `EntryMessage`/`format_entry_message` card and sends it
+  non-fatally via `build_notifier()`/`TelegramNotifier`. 4 new tests (`test_record_paper_trade.py`); added a `test_escaping_guard.py` baseline entry (the guard's single-function heuristic can't see
+  through `_build_entry_card` → `format_entry_message`'s internal escaping). `code-reviewer` flagged 2 WARNINGs (Decimal→float boundary at the spot value, both call site and test mock), fixed in the
+  same commit. SHA `889d860`.
 - [2026-09-12] SEC-3 (`docs/plan/signals-entrypoint-consolidation/`) — merged `scripts/record_signal_outcome.py`
-  + `scripts/signal_report.py` into `scripts/signal_eod.py` (one 16:00 cron, one `guard_trading_day`,
-  `--auto`/`--report-only` flags; a record-phase exception no longer blocks the report phase). Old scripts +
-  tests retired. Antigravity-implemented (`928cb22` merge, `b297734` retire, `6b6177b` follow-up fix). Real
-  `code-reviewer` run on the first pass flagged 2 CRITICAL (missing REVIEW.md G5 intent comments on the two
-  `except Exception` catches) and 2 ERROR (escaping-guard baseline entries left as placeholder `"temp"` reasons;
-  two ported tests didn't mock `guard_trading_day` and silently relied on the real holiday calendar) — all
-  resolved in the follow-up commit, which also restored a `send_test_telegram.py:65` baseline entry
-  collaterally dropped during the retire commit. Targeted test set (`tests/unit/scripts/`, `tests/unit/signals/`,
-  `tests/unit/notifications/test_escaping_guard.py`) green — 527 passed.
-- [2026-09-12] SEC-4 (`docs/plan/signals-entrypoint-consolidation/`) — extracted `morning_signal.run()`'s
-  pipeline body into `src/signals/pipeline.py::run_morning_signal_pipeline` (`85b4744`); `scripts/morning_signal.py`
-  is now orchestration + Telegram only. `code-reviewer`: 0 CRITICAL/ERROR, 2 WARNING deferred (log-order shift,
-  logger-name mismatch) — no data-correctness impact. Fixed a stale escaping-guard baseline line-number entry
-  the extraction moved. Targeted set (`tests/unit/scripts/`, `tests/unit/signals/`, `tests/unit/strategy/`,
-  `tests/unit/notifications/`) green — 1342 passed.
-- [2026-09-12] SEC-5 (`docs/plan/signals-entrypoint-consolidation/`) — reviewed
-  `scripts/signal_paper_entry.py` keep-or-delete against the `morning_signal` tail-call's track
-  record; deferred (`290ba3a`). The SPT-6 tail-call only landed at 19:13 on 2026-09-11, after
-  that day's 09:30 cron had already run without it — zero live production runs, so neither the
-  story's "failed and a re-entry fixed it" (keep) nor "reliable" (delete) criterion is met.
-  Kept the script (already uses `guard_trading_day` + `is_actionable` per SEC-1/SEC-2);
-  documented the deferral and rationale in its module docstring. `code-reviewer`: 0
-  CRITICAL/ERROR/WARNING (docstring-only diff). Revisit once the tail-call has an actual track
-  record.
-- [2026-09-12] SEC-6 (`docs/plan/signals-entrypoint-consolidation/`) — docs close: updated
-  `CONTEXT.md`'s `src/signals/` entrypoint list + crontab to the merged two-cron state,
-  `DECISIONS.md` §P&L & Reporting with the `signal_eod` merge note, collapsed
-  `docs/plan/README.md`'s story row to the archived pointer, deleted this file's backlog
-  pointer. Also found and fixed a live gap: the Mac host crontab still ran the two scripts
-  SEC-3 retired (`record_signal_outcome`, `signal_report`), which no longer exist — tonight's
-  16:00/16:35 runs would have failed with `ModuleNotFoundError`. Animesh applied the corrected
-  single 16:00 `scripts.signal_eod` line manually; verified via `crontab -l`. Story archived to
-  `docs/archive/plan/signals-entrypoint-consolidation/`.
-- [2026-09-12] Fixed 3 flaky `tests/unit/paper/test_overlay_entry.py` failures (`481f326`) —
-  `_write_vix_fixture`'s `close` column was hardcoded to `rows` (252) elements while
-  `pd.date_range(end=date.today(), periods=rows, freq="B")` returns fewer dates when
-  `date.today()` falls on a non-business day (weekend runs only), raising `ValueError: All
-  arrays must be of the same length`. Fixed by matching `close` to `len(dates)`. `code-reviewer`:
-  0 CRITICAL/ERROR/WARNING.
-- [2026-09-12] Finished an incomplete `ruff` lint sweep found stashed from a prior session
-  (`2d7890d`) — reran `ruff check --fix` + `ruff format` across scratch/, scripts/,
-  src/portfolio/, src/strategy/, tests/unit/ (55 files) and manually resolved the 12 remaining
-  lint errors ruff couldn't autofix: 5 unused locals/vars, 4 ambiguous `l` renames to `leg`
-  (`test_apply_trade_positions.py`), a missing `zip(..., strict=True)`, and a blind
-  `assertRaises(Exception)` narrowed to `FrozenInstanceError`. Full suite green (2649 passed; 3
-  pre-existing unrelated failures in `test_overlay_entry.py`, an off-by-one in a VIX fixture
-  helper). `code-reviewer`: 0 CRITICAL/ERROR/WARNING. Separately, `tools/llm-council`'s own
-  uncommitted WIP (5 files, OpenRouter model-id updates + a `max_tokens` cap fixing 402
-  `openrouter_key_limit` errors) was committed inside that submodule's own repo (`dbce7fe`) and
-  the parent pointer bumped (`3a1bb5d`) — kept out of the lint-sweep commit per repo convention
-  that a submodule's inner tree is a separate decision. Graph re-indexed (7370 nodes / 30025
-  edges).
+  + `scripts/signal_report.py` into `scripts/signal_eod.py` (one 16:00 cron, one `guard_trading_day`, `--auto`/`--report-only` flags; a record-phase exception no longer blocks the report phase). Old
+    scripts + tests retired. Antigravity-implemented (`928cb22` merge, `b297734` retire, `6b6177b` follow-up fix). Real `code-reviewer` run on the first pass flagged 2 CRITICAL (missing REVIEW.md G5
+    intent comments on the two `except Exception` catches) and 2 ERROR (escaping-guard baseline entries left as placeholder `"temp"` reasons; two ported tests didn't mock `guard_trading_day` and
+    silently relied on the real holiday calendar) — all resolved in the follow-up commit, which also restored a `send_test_telegram.py:65` baseline entry collaterally dropped during the retire commit.
+    Targeted test set (`tests/unit/scripts/`, `tests/unit/signals/`, `tests/unit/notifications/test_escaping_guard.py`) green — 527 passed.
+- [2026-09-12] SEC-4 (`docs/plan/signals-entrypoint-consolidation/`) — extracted `morning_signal.run()`'s pipeline body into `src/signals/pipeline.py::run_morning_signal_pipeline` (`85b4744`);
+  `scripts/morning_signal.py` is now orchestration + Telegram only. `code-reviewer`: 0 CRITICAL/ERROR, 2 WARNING deferred (log-order shift, logger-name mismatch) — no data-correctness impact. Fixed a
+  stale escaping-guard baseline line-number entry the extraction moved. Targeted set (`tests/unit/scripts/`, `tests/unit/signals/`, `tests/unit/strategy/`, `tests/unit/notifications/`) green — 1342
+  passed.
+- [2026-09-12] SEC-5 (`docs/plan/signals-entrypoint-consolidation/`) — reviewed `scripts/signal_paper_entry.py` keep-or-delete against the `morning_signal` tail-call's track record; deferred
+  (`290ba3a`). The SPT-6 tail-call only landed at 19:13 on 2026-09-11, after that day's 09:30 cron had already run without it — zero live production runs, so neither the story's "failed and a re-entry
+  fixed it" (keep) nor "reliable" (delete) criterion is met. Kept the script (already uses `guard_trading_day` + `is_actionable` per SEC-1/SEC-2); documented the deferral and rationale in its module
+  docstring. `code-reviewer`: 0 CRITICAL/ERROR/WARNING (docstring-only diff). Revisit once the tail-call has an actual track record.
+- [2026-09-12] SEC-6 (`docs/plan/signals-entrypoint-consolidation/`) — docs close: updated `CONTEXT.md`'s `src/signals/` entrypoint list + crontab to the merged two-cron state, `DECISIONS.md` §P&L &
+  Reporting with the `signal_eod` merge note, collapsed `docs/plan/README.md`'s story row to the archived pointer, deleted this file's backlog pointer. Also found and fixed a live gap: the Mac host
+  crontab still ran the two scripts SEC-3 retired (`record_signal_outcome`, `signal_report`), which no longer exist — tonight's 16:00/16:35 runs would have failed with `ModuleNotFoundError`. Animesh
+  applied the corrected single 16:00 `scripts.signal_eod` line manually; verified via `crontab -l`. Story archived to `docs/archive/plan/signals-entrypoint-consolidation/`.
+- [2026-09-12] Fixed 3 flaky `tests/unit/paper/test_overlay_entry.py` failures (`481f326`) — `_write_vix_fixture`'s `close` column was hardcoded to `rows` (252) elements while
+  `pd.date_range(end=date.today(), periods=rows, freq="B")` returns fewer dates when `date.today()` falls on a non-business day (weekend runs only), raising `ValueError: All arrays must be of the same
+  length`. Fixed by matching `close` to `len(dates)`. `code-reviewer`: 0 CRITICAL/ERROR/WARNING.
+- [2026-09-12] Finished an incomplete `ruff` lint sweep found stashed from a prior session (`2d7890d`) — reran `ruff check --fix` + `ruff format` across scratch/, scripts/, src/portfolio/,
+  src/strategy/, tests/unit/ (55 files) and manually resolved the 12 remaining lint errors ruff couldn't autofix: 5 unused locals/vars, 4 ambiguous `l` renames to `leg`
+  (`test_apply_trade_positions.py`), a missing `zip(..., strict=True)`, and a blind `assertRaises(Exception)` narrowed to `FrozenInstanceError`. Full suite green (2649 passed; 3 pre-existing unrelated
+  failures in `test_overlay_entry.py`, an off-by-one in a VIX fixture helper). `code-reviewer`: 0 CRITICAL/ERROR/WARNING. Separately, `tools/llm-council`'s own uncommitted WIP (5 files, OpenRouter
+  model-id updates + a `max_tokens` cap fixing 402 `openrouter_key_limit` errors) was committed inside that submodule's own repo (`dbce7fe`) and the parent pointer bumped (`3a1bb5d`) — kept out of the
+  lint-sweep commit per repo convention that a submodule's inner tree is a separate decision. Graph re-indexed (7370 nodes / 30025 edges).
 - [2026-09-12] `docs/plan/signals-entrypoint-consolidation` **SEC-1** closed (`1ef2974`) — Added `market_calendar.guard_trading_day` and `is_market_session_now` helpers. Adopted `guard_trading_day` at
   the four signal script entrypoints, replacing duplicate inline logic. Adopted `is_market_session_now` inside `StrategyMonitor._tick` for its market-hours window. Unit tests updated and passing.
 - [2026-09-11] `docs/plan/signals-paper-track` **SPT-8** closed (docs-only) — story done, archived to `docs/archive/plan/signals-paper-track/`. Updated `CONTEXT.md` (`src/strategy/` bullet +
@@ -514,12 +375,12 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 - [2026-09-09] signals S5.5b — NSE-holiday early-exit guard added to `scripts/morning_signal.py` (`run()`) and `scripts/signal_eod.py` (`main()`): `if not is_trading_day(market_today()):
   logger.info(...); return`, mirroring `scripts/pipeline/upstox_chain_snapshot.py`. No new tests (matches existing cron pattern); `test_escaping_guard.py` baseline line numbers bumped (morning_signal
   215→218, signal_report 313→314) for the shifted `.send()` call sites. Full suite 3354 green. code-reviewer: 0 CRITICAL/ERROR, 1 WARNING (double `market_today()` call — fixed). — SHA `5466b9d`
-- [2026-09-09] signals S5.5d — `scripts/signal_eod.py` now pushes the full 5-section performance report to Telegram on every run (was `print()`-only). Local `_format_report_message` wraps the body
-  in a MarkdownV2 fenced block with fence-safe escaping (backslash + backtick only — `escape_markdown` renders backslashes literally inside a fence); non-fatal `_notify` mirrors
+- [2026-09-09] signals S5.5d — `scripts/signal_eod.py` now pushes the full 5-section performance report to Telegram on every run (was `print()`-only). Local `_format_report_message` wraps the body in
+  a MarkdownV2 fenced block with fence-safe escaping (backslash + backtick only — `escape_markdown` renders backslashes literally inside a fence); non-fatal `_notify` mirrors
   `record_signal_outcome._notify`, sent after `print()` and downstream of the empty-window early return. 4 tests + escaping-guard baseline entry. code-reviewer: 0 CRITICAL/ERROR, 3 WARNING (1 fixed, 2
   pre-existing/not in scope). — SHA `51d3e59`
-- [2026-09-09] signals S5.5a — `signal_eod.py` now posts the daily outcome to Telegram on its 16:00 run (S5.5c vertical layout): executed / not-taken (would-be P&L derived in the formatter,
-  no `SignalOutcome` change) / NO_TRADE / close-only fallback. Local `_format_outcome_notification` owns MarkdownV2 escaping; `_notify` send is non-fatal (guards `build_notifier() is None` + swallows
+- [2026-09-09] signals S5.5a — `signal_eod.py` now posts the daily outcome to Telegram on its 16:00 run (S5.5c vertical layout): executed / not-taken (would-be P&L derived in the formatter, no
+  `SignalOutcome` change) / NO_TRADE / close-only fallback. Local `_format_outcome_notification` owns MarkdownV2 escaping; `_notify` send is non-fatal (guards `build_notifier() is None` + swallows
   formatter/send errors post-write). 4 render tests + escaping-guard baseline entry. code-reviewer: 0 CRITICAL/ERROR, 2 WARNING both fixed. — SHA `ce59529`
 - [2026-09-09] signals S5.5c — reformatted `morning_signal.py` 09:15 Telegram message to the agreed vertical layout (CONSENSUS / NO CONSENSUS / PIPELINE FAILED); `_format_signal_notification` now owns
   its MarkdownV2 escaping (caller sends without re-wrapping), entry band = mean of agreeing models' quoted bands. 3 formatter render tests + escaping-guard baseline entry.
@@ -540,9 +401,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 - [2026-09-08] signals S5.4 — `scripts/signal_eod.py` on-demand performance report: aggregates `get_all_outcomes` over a `--from`/`--to`/`--phase` window into OVERALL (win rate, realised EV,
   deterministic md5 coin-flip baseline), per-model direction accuracy (09:10 snapshot spot as open proxy), confidence calibration, NO_TRADE move check, phase breakdown. No unit tests (per S5.4 spec).
   — SHA: <pending>
-- [2026-09-08] signals S5.3 — `scripts/signal_eod.py` 03:00 PM outcome recorder: reads the day's `DailySignal`, captures entry/exit premium (manual flags or `--auto` weekly-expiry BOD
-  lookup + live LTP), writes one `SignalOutcome` row; NO_TRADE / non-executed signals still logged for direction accuracy. `phase` from `SIGNAL_PHASE` env / key-set. No unit tests (per S5.3 spec). —
-  a387349
+- [2026-09-08] signals S5.3 — `scripts/signal_eod.py` 03:00 PM outcome recorder: reads the day's `DailySignal`, captures entry/exit premium (manual flags or `--auto` weekly-expiry BOD lookup + live
+  LTP), writes one `SignalOutcome` row; NO_TRADE / non-executed signals still logged for direction accuracy. `phase` from `SIGNAL_PHASE` env / key-set. No unit tests (per S5.3 spec). — a387349
 - [2026-09-08] signals S5.2 — `scripts/morning_signal.py` 09:15 AM cron: pure wiring over `assemble_market_snapshot` → `build_providers` → `asyncio.gather` fan-out (return_exceptions) →
   `SignalAggregator.aggregate` → `SignalStore` writes (init_db/record_snapshot/response/signal via to_thread) → guarded `build_notifier` send + end-of-run structured JSON log. No unit tests
   (integration-only). SHA: e299a6b
@@ -662,9 +522,9 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
 
 ### 2026-09-14
 - **NSE 2026 holiday YAML corrected** (`c300769`). `src/market_calendar/data/nse_2026.yaml` had wrong dates (Ganesh Chaturthi listed 09-17 instead of 09-14, plus several other mismatches vs. NSE's
-  published calendar) — `guard_trading_day()`'s fail-open lookup found 09-14 absent from the holiday set and let `morning_signal` fire a consensus signal on today's actual market holiday. Rebuilt
-  the full list from `nseindia.com/resources/exchange-communication-holidays`; replaced `test_independence_day_is_holiday` (asserted a Saturday, already a non-trading day, was in the set — an
-  artifact of the old wrong data) with `test_ganesh_chaturthi_is_holiday`. Root cause: annual-only manual refresh with no staleness alert — worth a follow-up if this recurs.
+  published calendar) — `guard_trading_day()`'s fail-open lookup found 09-14 absent from the holiday set and let `morning_signal` fire a consensus signal on today's actual market holiday. Rebuilt the
+  full list from `nseindia.com/resources/exchange-communication-holidays`; replaced `test_independence_day_is_holiday` (asserted a Saturday, already a non-trading day, was in the set — an artifact of
+  the old wrong data) with `test_ganesh_chaturthi_is_holiday`. Root cause: annual-only manual refresh with no staleness alert — worth a follow-up if this recurs.
 
 ### 2026-09-10
 - **SPT-2a closed as a no-op** (docs-only). Antigravity handoff surfaced that `get_expiry_candidates(preference=["monthly"])` already enforces a `dte >= 14` floor, so `resolve_monthly_option` never
@@ -1017,5 +877,5 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
 - [2026-09-12] SEC-2 Phase A shipped (`0202291`) — added `DailySignal.is_actionable` and replaced inline NO_TRADE checks across entrypoint scripts and signal_track_v1.
 - [2026-09-14] Fixed `scripts/eod_summary.py` `_STRATEGY_META` — daily `ValueError`/aborted EOD Telegram send since 2026-09-02 (`logs/eod_summary.log`). Root cause: S1r (2026-07-29) consolidated
   CC/PP/Collar legs under one strategy_name `paper_nifty_overlay` (`STRATEGY_OVERLAY`, `src/paper/constants.py:37`), but `_STRATEGY_META` still mapped the three stale pre-migration names
-  (`paper_collar_v1`/`paper_covered_call_v1`/`paper_protective_put_v1`) and lacked the new one. Replaced the three stale keys with `"paper_nifty_overlay": ("Overlay", "Overlay")` — can't split
-  by leg_role here (unlike `src/reporting/eod_pt_summary.py`) since `eod_summary.py` only sees strategy-level NAV rows.
+  (`paper_collar_v1`/`paper_covered_call_v1`/`paper_protective_put_v1`) and lacked the new one. Replaced the three stale keys with `"paper_nifty_overlay": ("Overlay", "Overlay")` — can't split by
+  leg_role here (unlike `src/reporting/eod_pt_summary.py`) since `eod_summary.py` only sees strategy-level NAV rows.
