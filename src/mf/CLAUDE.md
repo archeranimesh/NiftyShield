@@ -26,9 +26,11 @@ Official source: `https://www.amfiindia.com/spages/NAVAll.txt`
 - **Parsing gate:** `parts[0].strip().isdigit()` — skips category headers, the column header line, blank lines, and malformed rows. No regex needed.
 - AMFI publishes after market close (7–9 PM IST). The 3:45 PM cron fetches T-1 NAV — expected, correct.
 
-`nav_fetcher.py` injectable: accepts a `NavFetcherFn = Callable[[set[str]], dict[str, Decimal]]`. Tests pass a lambda; production gets the real AMFI fetcher. Missing AMFI codes logged as WARNING, not raised.
+`nav_fetcher.py` injectable: accepts a `NavFetcherFn = Callable[[set[str]], dict[str, Decimal]]`. Tests pass a lambda; production gets the real AMFI fetcher. Missing AMFI codes logged as WARNING, not
+raised.
 
-Per REVIEW.md G5: any broad `except Exception`/bare `except` used to isolate AMFI-fetch or NAV-parsing failures must carry an inline comment stating it is an intentional isolation point — a bare broad catch without that comment is a `CRITICAL` finding.
+Per REVIEW.md G5: any broad `except Exception`/bare `except` used to isolate AMFI-fetch or NAV-parsing failures must carry an inline comment stating it is an intentional isolation point — a bare broad
+catch without that comment is a `CRITICAL` finding.
 
 ---
 

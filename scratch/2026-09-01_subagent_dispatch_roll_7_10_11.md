@@ -1,13 +1,9 @@
 # Subagent dispatch — telegram-markdown-migration ROLL-7 / ROLL-10 / ROLL-11
 
-Prepared 2026-09-01 (session that shipped ROLL-6, SHA `2471f01`). Purpose: hand three
-independent `strategy-rollout/` tasks to subagents / fresh sessions without them colliding.
+Prepared 2026-09-01 (session that shipped ROLL-6, SHA `2471f01`). Purpose: hand three independent `strategy-rollout/` tasks to subagents / fresh sessions without them colliding.
 
-Each task = one epic session = one code commit + one docs-close commit, per
-`docs/plan/telegram-markdown-migration/prompt.md` (the router) and its Step-4 "one task per
-session, stop" rule. A subagent doing one of these runs the full protocol itself, including
-its own `@test-runner` (spawn it — do not run `pytest` inline) and, where flagged,
-`@code-reviewer`.
+Each task = one epic session = one code commit + one docs-close commit, per `docs/plan/telegram-markdown-migration/prompt.md` (the router) and its Step-4 "one task per session, stop" rule. A subagent
+doing one of these runs the full protocol itself, including its own `@test-runner` (spawn it — do not run `pytest` inline) and, where flagged, `@code-reviewer`.
 
 ---
 
@@ -21,54 +17,36 @@ its own `@test-runner` (spawn it — do not run `pytest` inline) and, where flag
 | **ROLL-10** | Claude | nothing | `scripts/dev/paper_track_snapshot.py`, `src/paper/track_snapshot.py`, `tests/unit/scripts/test_paper_track_snapshot.py` (new) | Review: none¹ · **greeks-analyst may fire²** |
 | **ROLL-11** | Claude | nothing | `scripts/healthcheck.py`, `tests/unit/test_healthcheck.py` | Review: none¹ |
 
-¹ `tasks.md` marks all three `Review: none`. None carries a "Financial-logic commit note" in
-its `stories.md` spec (ROLL-9 does; these don't). Running `@code-reviewer` anyway is prudent —
-all three refactor production logic, not just message strings — but it is **not** the mandatory
-Opus gate. Judgment call for the implementing session.
+¹ `tasks.md` marks all three `Review: none`. None carries a "Financial-logic commit note" in its `stories.md` spec (ROLL-9 does; these don't). Running `@code-reviewer` anyway is prudent — all three
+refactor production logic, not just message strings — but it is **not** the mandatory Opus gate. Judgment call for the implementing session.
 
-² ROLL-10 edits `src/paper/track_snapshot.py`. CLAUDE.md AutoTrigger: "Any change to
-`src/paper/` … → greeks-analyst". The change is a plain `consecutive_days: int` field, not a
-Greek — but a strict reading triggers the agent. Spawn it; it will clear fast.
+² ROLL-10 edits `src/paper/track_snapshot.py`. CLAUDE.md AutoTrigger: "Any change to `src/paper/` … → greeks-analyst". The change is a plain `consecutive_days: int` field, not a Greek — but a strict
+reading triggers the agent. Spawn it; it will clear fast.
 
 **Not in this batch:**
 - ROLL-8, ROLL-12 — need ROLL-7's label tables. Dispatch only after ROLL-7's SHA lands.
-- ROLL-9, ROLL-13 — real `@code-reviewer` (Opus) gate + financial P&L rendering. Heavier;
-  give each its own focused session.
-- ROLL-15 + ROLL-16 — sequential pair, both rewrite the large `paper_3track_snapshot.py`;
-  ROLL-16 also real-sequences after ROLL-10.
-- ROLL-17 — **design incomplete** (6 open decisions). Needs a `message-format-workshop.md`
-  session with Animesh before any code.
+- ROLL-9, ROLL-13 — real `@code-reviewer` (Opus) gate + financial P&L rendering. Heavier; give each its own focused session.
+- ROLL-15 + ROLL-16 — sequential pair, both rewrite the large `paper_3track_snapshot.py`; ROLL-16 also real-sequences after ROLL-10.
+- ROLL-17 — **design incomplete** (6 open decisions). Needs a `message-format-workshop.md` session with Animesh before any code.
 - ROLL-5 — docs-close synthesis; blocked until every other ROLL box is ticked.
 
 ### Stale text to ignore in `stories.md`
 
-ROLL-10 and ROLL-11 specs say *"backbone/ (MD-1..MD-5) status: NOT shipped"* and *"reference
-script inlines its own copy of `escape_markdown()`"*. **Both are stale.** As of 2026-08-25:
+ROLL-10 and ROLL-11 specs say *"backbone/ (MD-1..MD-5) status: NOT shipped"* and *"reference script inlines its own copy of `escape_markdown()`"*. **Both are stale.** As of 2026-08-25:
 - `escape_markdown()` / `mdcode()` are real in `src/notifications/markdown.py` — import them.
-- `src/notifications/formatting.py` exists with `format_money` / `format_greek` / `pnl_emoji` /
-  the table builders. So the "colocate-then-promote" judgment resolves to **promote**: new
-  helpers (`STRATEGY_LABELS`, `LEG_ROLE_LABELS`, `CheckResult` + its message builder) land in
-  `src/notifications/formatting.py`, not colocated in the script.
-- ROLL-6 shipped `StrategyPnLRow` / `format_summary_money` / `build_strategy_table` there too;
-  ROLL-7's fuller-form `STRATEGY_LABELS` is a *separate* dict from ROLL-6's table-column
-  `_STRATEGY_META` (spec §1 says so) — do not merge them, but flag the future
-  `id -> {short, long}` consolidation the ROLL-7 spec already raises.
+- `src/notifications/formatting.py` exists with `format_money` / `format_greek` / `pnl_emoji` / the table builders. So the "colocate-then-promote" judgment resolves to **promote**: new helpers
+  (`STRATEGY_LABELS`, `LEG_ROLE_LABELS`, `CheckResult` + its message builder) land in `src/notifications/formatting.py`, not colocated in the script.
+- ROLL-6 shipped `StrategyPnLRow` / `format_summary_money` / `build_strategy_table` there too; ROLL-7's fuller-form `STRATEGY_LABELS` is a *separate* dict from ROLL-6's table-column `_STRATEGY_META`
+  (spec §1 says so) — do not merge them, but flag the future `id -> {short, long}` consolidation the ROLL-7 spec already raises.
 
 ### Each task has real production-logic scope (not a pure format port)
 
-- **ROLL-7** — refactor the 3 gates in `ReEntryMixin._check_reentry` (`src/strategy/reentry_mixin.py`,
-  `blocked_reason` built at lines ~120-160) to each yield `(short_reason: str, detail: str | None)`
-  instead of one prose string; the 2 structural-failure strings ("IVR history insufficient",
-  "open position check failed") get the same shape. Do **not** string-split the existing prose.
-- **ROLL-10** — plumb `consecutive_days` as its own field on `TrackSnapshot` (computed by
-  `ProxyDeltaMonitor.update_and_check`, currently folded into a string in
-  `generate_track_snapshot` ~L349 and discarded). Ship the `proxy_delta_alert` string verbatim
-  in the `Rule Breach:` line for now (don't parse it back apart).
-- **ROLL-11** — breaking change: `run_checks()` returns `list[CheckResult]` (new frozen
-  dataclass: `label`, `severity: Literal["ok","warn","critical"]`, `status_word`,
-  `detail: str | None`) not `list[str]`. Existing tests `test_run_checks_all_pass`,
-  `test_run_checks_missing_daily_snapshot`, `test_main_success_flow`, `test_main_failure_alerts`,
-  `test_main_non_trading_day` all need updating.
+- **ROLL-7** — refactor the 3 gates in `ReEntryMixin._check_reentry` (`src/strategy/reentry_mixin.py`, `blocked_reason` built at lines ~120-160) to each yield `(short_reason: str, detail: str | None)`
+  instead of one prose string; the 2 structural-failure strings ("IVR history insufficient", "open position check failed") get the same shape. Do **not** string-split the existing prose.
+- **ROLL-10** — plumb `consecutive_days` as its own field on `TrackSnapshot` (computed by `ProxyDeltaMonitor.update_and_check`, currently folded into a string in `generate_track_snapshot` ~L349 and
+  discarded). Ship the `proxy_delta_alert` string verbatim in the `Rule Breach:` line for now (don't parse it back apart).
+- **ROLL-11** — breaking change: `run_checks()` returns `list[CheckResult]` (new frozen dataclass: `label`, `severity: Literal["ok","warn","critical"]`, `status_word`, `detail: str | None`) not
+  `list[str]`. Existing tests `test_run_checks_all_pass`, `test_run_checks_missing_daily_snapshot`, `test_main_success_flow`, `test_main_failure_alerts`, `test_main_non_trading_day` all need updating.
 
 ---
 
@@ -76,36 +54,27 @@ script inlines its own copy of `escape_markdown()`"*. **Both are stale.** As of 
 
 Every ROLL-* task edits these four shared files on the way to its commit:
 
-1. `tests/unit/notifications/test_escaping_guard.py` — each removes (or converts) its own
-   `_BASELINE_UNESCAPED` entry. The guard's `test_no_new_unescaped_send_call_sites` /
+1. `tests/unit/notifications/test_escaping_guard.py` — each removes (or converts) its own `_BASELINE_UNESCAPED` entry. The guard's `test_no_new_unescaped_send_call_sites` /
    `test_baseline_entries_are_still_unescaped` fail until it does — cannot be deferred.
    - ROLL-7 entry: `("src/strategy/reentry_mixin.py", 210)`
    - ROLL-10 entry: `("scripts/dev/paper_track_snapshot.py", 167)`
-   - ROLL-11 entry: `("scripts/healthcheck.py", 254)`
-   (These are *different dict keys*, so a 3-way git merge auto-resolves — but only if commits
-   are rebased, not made concurrently on `main`.)
-2. `docs/plan/telegram-markdown-migration/strategy-rollout/tasks.md` — tick box + SHA + the
-   `**Open: …**` line.
+   - ROLL-11 entry: `("scripts/healthcheck.py", 254)` (These are *different dict keys*, so a 3-way git merge auto-resolves — but only if commits are rebased, not made concurrently on `main`.)
+2. `docs/plan/telegram-markdown-migration/strategy-rollout/tasks.md` — tick box + SHA + the `**Open: …**` line.
 3. `docs/plan/README.md` — the `strategy-rollout/ next: ROLL-N` line.
 4. `TODOS.md` — session-log entry.
 
-Plus `src/notifications/formatting.py`: ROLL-7 adds label dicts there; ROLL-10 and ROLL-11
-also add helpers there. Three sessions appending to the same module = churn.
+Plus `src/notifications/formatting.py`: ROLL-7 adds label dicts there; ROLL-10 and ROLL-11 also add helpers there. Three sessions appending to the same module = churn.
 
-**Recommendation: run them serially.** Dispatch ROLL-7 → wait for its two SHAs → dispatch
-ROLL-11 → wait → dispatch ROLL-10. Each starts from an up-to-date `main`, no merge needed.
+**Recommendation: run them serially.** Dispatch ROLL-7 → wait for its two SHAs → dispatch ROLL-11 → wait → dispatch ROLL-10. Each starts from an up-to-date `main`, no merge needed.
 
-If you insist on parallel: give each subagent an explicit task ID up front (the router's
-ROLL-7..16 coordination note requires this), have each rebase onto `main` before its final
-commit, and expect to hand-resolve items 2-4 above (small, single-line each).
+If you insist on parallel: give each subagent an explicit task ID up front (the router's ROLL-7..16 coordination note requires this), have each rebase onto `main` before its final commit, and expect
+to hand-resolve items 2-4 above (small, single-line each).
 
 ---
 
 ## 3. Dispatch prompts (paste as the first message of a fresh session, one per session)
 
-Each assumes the session auto-loads `CLAUDE.md`. The prompt overrides the router's
-"first unchecked box" search with an explicit task claim — legitimate per the router's
-ROLL-7..16 coordination note.
+Each assumes the session auto-loads `CLAUDE.md`. The prompt overrides the router's "first unchecked box" search with an explicit task claim — legitimate per the router's ROLL-7..16 coordination note.
 
 ### 3a — ROLL-7
 
@@ -202,11 +171,7 @@ Key points:
 
 ## 4. After all three land
 
-- Verify each: `git log --oneline` shows 6 commits (3 feat + 3 docs), each ROLL box ticked
-  with a real SHA, `python -m pytest tests/unit/ --tb=no -q` green.
-- `docs/plan/README.md` "next" pointer should read ROLL-8 (or ROLL-9 if you also want to skip
-  the Antigravity-owned ROLL-8).
-- ROLL-8 and ROLL-12 are now unblocked (ROLL-7's label tables exist) — both `Owner: Antigravity`,
-  so they go via the `handoff-antigravity` skill, not a Claude subagent.
-- Re-run `mcp__codebase-memory-mcp__index_repository` once at the end (all three touched
-  `src/`).
+- Verify each: `git log --oneline` shows 6 commits (3 feat + 3 docs), each ROLL box ticked with a real SHA, `python -m pytest tests/unit/ --tb=no -q` green.
+- `docs/plan/README.md` "next" pointer should read ROLL-8 (or ROLL-9 if you also want to skip the Antigravity-owned ROLL-8).
+- ROLL-8 and ROLL-12 are now unblocked (ROLL-7's label tables exist) — both `Owner: Antigravity`, so they go via the `handoff-antigravity` skill, not a Claude subagent.
+- Re-run `mcp__codebase-memory-mcp__index_repository` once at the end (all three touched `src/`).

@@ -1,7 +1,6 @@
 # Backtest Methodology Domain
 
-You are advising on the backtest engine for a Nifty 50 monthly options selling strategy
-(NiftyShield). Your recommendation must work within these hard constraints.
+You are advising on the backtest engine for a Nifty 50 monthly options selling strategy (NiftyShield). Your recommendation must work within these hard constraints.
 
 ## Stack
 
@@ -12,13 +11,11 @@ You are advising on the backtest engine for a Nifty 50 monthly options selling s
 
 ## Data Available
 
-- NSE F&O Bhavcopy: free, EOD, 2016–present. Fields: symbol, expiry, strike, option_type,
-  open, high, low, close, volume, OI, settle_price. No historical bid/ask. No historical Greeks.
+- NSE F&O Bhavcopy: free, EOD, 2016–present. Fields: symbol, expiry, strike, option_type, open, high, low, close, volume, OI, settle_price. No historical bid/ask. No historical Greeks.
 - Nifty Futures settle_price: in the same daily Bhavcopy CSV (FUTIDX rows).
 - Nifty 50 spot OHLC: Upstox historical candles (free, Analytics Token).
 - India VIX daily OHLC: Upstox historical candles (free).
-- All paid data sources evaluated and rejected: TrueData (shallow history), DhanHQ (5-day
-  intraday depth only, not 5 years as documented).
+- All paid data sources evaluated and rejected: TrueData (shallow history), DhanHQ (5-day intraday depth only, not 5 years as documented).
 
 ## Settled Decisions — Do Not Re-Litigate
 

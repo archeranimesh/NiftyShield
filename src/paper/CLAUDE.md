@@ -6,9 +6,8 @@
 
 ## Module Purpose
 
-Records and marks-to-market paper (simulated) trades for strategy validation.
-Paper trades live in `portfolio.sqlite` but in **separate tables** (`paper_trades`,
-`paper_nav_snapshots`, `paper_leg_snapshots`) — they never touch the live `trades` table.
+Records and marks-to-market paper (simulated) trades for strategy validation. Paper trades live in `portfolio.sqlite` but in **separate tables** (`paper_trades`, `paper_nav_snapshots`,
+`paper_leg_snapshots`) — they never touch the live `trades` table.
 
 ---
 
@@ -16,31 +15,25 @@ Paper trades live in `portfolio.sqlite` but in **separate tables** (`paper_trade
 
 ### `paper_` prefix — CRITICAL
 
-Every `strategy_name` stored in `paper_trades` **must start with `paper_`**.
-This is enforced at model construction via a Pydantic validator on `PaperTrade`.
-The prefix is the sole runtime guard against cross-contamination of live and paper
-ledgers in shared SQLite queries.
+Every `strategy_name` stored in `paper_trades` **must start with `paper_`**. This is enforced at model construction via a Pydantic validator on `PaperTrade`. The prefix is the sole runtime guard
+against cross-contamination of live and paper ledgers in shared SQLite queries.
 
-Valid: `paper_csp_nifty_v1`, `paper_ic_nifty_v1`
-Invalid: `csp_nifty_v1`, `finideas_ilts`
+Valid: `paper_csp_nifty_v1`, `paper_ic_nifty_v1` Invalid: `csp_nifty_v1`, `finideas_ilts`
 
 ### No broker calls
 
-`PaperTracker` consumes the `BrokerClient` protocol (via constructor injection) for
-LTP lookups only. It never places orders, modifies positions, or calls any execution
-endpoint. Pass `MockBrokerClient` in all tests.
+`PaperTracker` consumes the `BrokerClient` protocol (via constructor injection) for LTP lookups only. It never places orders, modifies positions, or calls any execution endpoint. Pass
+`MockBrokerClient` in all tests.
 
 ### Decimal invariant
 
-All monetary fields (`price`, `ltp`, `avg_cost`, `realized_pnl`, `unrealized_pnl`)
-are `Decimal` in models and stored as **TEXT** in SQLite. Read back with
-`Decimal(row["col"])`. No floats in the money path.
+All monetary fields (`price`, `ltp`, `avg_cost`, `realized_pnl`, `unrealized_pnl`) are `Decimal` in models and stored as **TEXT** in SQLite. Read back with `Decimal(row["col"])`. No floats in the
+money path.
 
 ### Idempotency
 
-`PaperStore.record_trade` uses `UNIQUE(strategy_name, leg_role, trade_date, action)`
-with `ON CONFLICT DO NOTHING` — same as the live `trades` table. Re-running
-`record_paper_trade.py` with the same args is always safe.
+`PaperStore.record_trade` uses `UNIQUE(strategy_name, leg_role, trade_date, action)` with `ON CONFLICT DO NOTHING` — same as the live `trades` table. Re-running `record_paper_trade.py` with the same
+args is always safe.
 
 ---
 
@@ -58,13 +51,10 @@ All tables are in the shared `data/portfolio/portfolio.sqlite` DB.
 
 ## PaperLegSnapshot
 
-Frozen dataclass added in Phase A. Fields: `strategy_name`, `leg_role`, `snapshot_date`,
-`unrealized_pnl`, `realized_pnl`, `total_pnl`, `ltp` (optional).
+Frozen dataclass added in Phase A. Fields: `strategy_name`, `leg_role`, `snapshot_date`, `unrealized_pnl`, `realized_pnl`, `total_pnl`, `ltp` (optional).
 
-**`total_pnl` invariant (enforced at write time):** `record_leg_snapshot` checks
-`total_pnl == unrealized_pnl + realized_pnl` and raises `ValueError` on mismatch (never
-literal `assert` — REVIEW.md G6). Never construct a `PaperLegSnapshot` with inconsistent
-components — the store will reject it.
+**`total_pnl` invariant (enforced at write time):** `record_leg_snapshot` checks `total_pnl == unrealized_pnl + realized_pnl` and raises `ValueError` on mismatch (never literal `assert` — REVIEW.md
+G6). Never construct a `PaperLegSnapshot` with inconsistent components — the store will reject it.
 
 ---
 

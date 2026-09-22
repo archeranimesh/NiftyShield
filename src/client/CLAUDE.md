@@ -1,9 +1,7 @@
 # src/client — Module Context
 
-> Auto-loaded when working inside `src/client/`. Read this before touching any file here.
-> Invariants and caller contracts only — the implementations table, the sub-protocol method
-> split, and the `MockBrokerClient` setup API live in **`NOTES.md`** (same directory, not
-> auto-loaded).
+> Auto-loaded when working inside `src/client/`. Read this before touching any file here. Invariants and caller contracts only — the implementations table, the sub-protocol method split, and the
+> `MockBrokerClient` setup API live in **`NOTES.md`** (same directory, not auto-loaded).
 
 ---
 
@@ -11,7 +9,8 @@
 
 All modules outside `src/client/` **must** depend only on `src.client.protocol.BrokerClient` (or a sub-protocol). They receive a client via constructor injection.
 
-`factory.py` is the **only** file in `src/` that imports `UpstoxLiveClient` or `MockBrokerClient` directly. If you find yourself writing `from src.client.upstox_live import UpstoxLiveClient` outside `factory.py`, stop — you're breaking the DI contract.
+`factory.py` is the **only** file in `src/` that imports `UpstoxLiveClient` or `MockBrokerClient` directly. If you find yourself writing `from src.client.upstox_live import UpstoxLiveClient` outside
+`factory.py`, stop — you're breaking the DI contract.
 
 ```python
 # ✅ Correct — any module consuming a client
@@ -21,7 +20,8 @@ def __init__(self, client: BrokerClient) -> None: ...
 from src.client.upstox_live import UpstoxLiveClient
 ```
 
-`create_client(env)` in `factory.py` selects the implementation: `"prod"` → `UpstoxLiveClient(UPSTOX_ANALYTICS_TOKEN)`, `"sandbox"` → `UpstoxLiveClient(UPSTOX_SANDBOX_TOKEN)`, `"test"` → `MockBrokerClient`. Which implementation to reach for when: `NOTES.md`.
+`create_client(env)` in `factory.py` selects the implementation: `"prod"` → `UpstoxLiveClient(UPSTOX_ANALYTICS_TOKEN)`, `"sandbox"` → `UpstoxLiveClient(UPSTOX_SANDBOX_TOKEN)`, `"test"` →
+`MockBrokerClient`. Which implementation to reach for when: `NOTES.md`.
 
 ---
 
@@ -42,7 +42,8 @@ Blocked methods raise `NotImplementedError` with an explanatory message via `_ra
 
 ## Sub-Protocols (ISP)
 
-Three narrow sub-protocols in `protocol.py` — `MarketDataProvider`, `OrderExecutor`, `PortfolioReader`. Depend on the narrowest one that covers your use. `BrokerClient` is flat (not inheriting from them) so its full method list is readable in one place; structural typing means any class satisfying all 11 `BrokerClient` methods satisfies all three. Per-protocol method lists: `NOTES.md`.
+Three narrow sub-protocols in `protocol.py` — `MarketDataProvider`, `OrderExecutor`, `PortfolioReader`. Depend on the narrowest one that covers your use. `BrokerClient` is flat (not inheriting from
+them) so its full method list is readable in one place; structural typing means any class satisfying all 11 `BrokerClient` methods satisfies all three. Per-protocol method lists: `NOTES.md`.
 
 ---
 

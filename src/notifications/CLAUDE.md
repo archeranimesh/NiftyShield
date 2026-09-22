@@ -1,8 +1,7 @@
 # src/notifications — Module Context
 
-> Auto-loaded when working inside `src/notifications/`. Read this before touching any file here.
-> Invariants and caller contracts only — history, worked examples, and the full per-formatter
-> enumeration live in **`NOTES.md`** (same directory, not auto-loaded).
+> Auto-loaded when working inside `src/notifications/`. Read this before touching any file here. Invariants and caller contracts only — history, worked examples, and the full per-formatter enumeration
+> live in **`NOTES.md`** (same directory, not auto-loaded).
 
 ---
 
@@ -12,7 +11,8 @@ The notifier **must never abort the cron job**. This is the core design constrai
 
 - `send()` catches all `Exception` broadly, logs `WARNING`, returns `False`. It never re-raises.
 - The cron (`daily_snapshot.py`) wraps the `send()` call without a try/except — it relies entirely on `send()`'s own catch. Do not change `send()` to raise.
-- Per REVIEW.md G5: this broad catch must carry an inline comment stating it is an intentional isolation point (e.g. `except Exception:  # Intentional: notifier must never abort the caller`) — a bare broad catch without that comment is a `CRITICAL` finding even here.
+- Per REVIEW.md G5: this broad catch must carry an inline comment stating it is an intentional isolation point (e.g. `except Exception: # Intentional: notifier must never abort the caller`) — a bare
+  broad catch without that comment is a `CRITICAL` finding even here.
 
 ---
 
@@ -24,25 +24,22 @@ if notifier:
     await notifier.send(message)
 ```
 
-`build_notifier()` checks for `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in the environment. If either is absent, returns `None`. Callers must guard with `if notifier:` — never assume it's configured.
+`build_notifier()` checks for `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in the environment. If either is absent, returns `None`. Callers must guard with `if notifier:` — never assume it's
+configured.
 
-`TELEGRAM_MESSAGE_BUDGET` (default `10`) caps the total messages a single notifier instance will send per process lifetime. Increment before the HTTP call, so network timeouts still burn a slot (prevents rapid retry loops). Raise the budget via env var for long-lived processes like `intraday_tracker.py`; set to `0` to silence all notifications.
+`TELEGRAM_MESSAGE_BUDGET` (default `10`) caps the total messages a single notifier instance will send per process lifetime. Increment before the HTTP call, so network timeouts still burn a slot
+(prevents rapid retry loops). Raise the budget via env var for long-lived processes like `intraday_tracker.py`; set to `0` to silence all notifications.
 
 ---
 
 ## Message Format
 
 - **Transport:** Raw `aiohttp` POST to the Telegram Bot API `sendMessage` endpoint.
-- **`parse_mode`:** `MarkdownV2`. `TelegramNotifier.send()` (`src/notifications/telegram.py`)
-  and `TelegramGateway.send_notification` / `send_approval_request`
+- **`parse_mode`:** `MarkdownV2`. `TelegramNotifier.send()` (`src/notifications/telegram.py`) and `TelegramGateway.send_notification` / `send_approval_request`
   (`src/notifications/telegram_gateway.py`) all send `parse_mode: MarkdownV2`.
-- **`send()` does NOT auto-escape.** Every caller that interpolates a dynamic value, or writes
-  static template prose containing MarkdownV2-reserved punctuation, is responsible for escaping
-  it itself — see "Escaping Helpers (mandatory)" below. This is a deliberate design choice (not
-  an oversight): auto-escaping inside `send()` would double-escape callers who already wrap a
-  value in `mdcode()`.
-- **No wrapping.** `send()` posts `text` exactly as authored — it does not wrap the body in
-  `<pre>`, a code fence, or anything else. A caller that wants a monospace block emits its own
+- **`send()` does NOT auto-escape.** Every caller that interpolates a dynamic value, or writes static template prose containing MarkdownV2-reserved punctuation, is responsible for escaping it itself —
+  see "Escaping Helpers (mandatory)" below. This is a deliberate design choice (not an oversight): auto-escaping inside `send()` would double-escape callers who already wrap a value in `mdcode()`.
+- **No wrapping.** `send()` posts `text` exactly as authored — it does not wrap the body in `<pre>`, a code fence, or anything else. A caller that wants a monospace block emits its own
   ```` ``` ```` fence. (Migration history: `NOTES.md`.)
 - **Value formatting:** how a money figure, Greek, strike, percentage, expiry, or fenced table is
   rendered is not this module's call to make ad hoc — see **`FORMATTING.md`** (project root) for

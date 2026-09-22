@@ -1,17 +1,14 @@
 # src/portfolio — Module Context
 
-> Auto-loaded when working inside `src/portfolio/`. Read this before touching any file here.
-> Invariants and caller contracts only — wiring lists, model/registry enumerations, and
-> rationale live in **`NOTES.md`** (same directory, not auto-loaded).
+> Auto-loaded when working inside `src/portfolio/`. Read this before touching any file here. Invariants and caller contracts only — wiring lists, model/registry enumerations, and rationale live in
+> **`NOTES.md`** (same directory, not auto-loaded).
 
 ---
 
 ## Note: `overlay_coverage.py` is a different domain than the rest of this directory
 
-Everything else below (`Leg`/`Trade`/`Strategy`, `PortfolioTracker`, `apply_trade_positions()`)
-belongs to the **live** finideas/finrakshak portfolio system. `overlay_coverage.py` is
-**paper-trading** code. Do not assume the Decimal/Leg/Trade conventions below apply to it —
-see `src/paper/CLAUDE.md` instead, and `NOTES.md` for why it sits in this directory.
+Everything else below (`Leg`/`Trade`/`Strategy`, `PortfolioTracker`, `apply_trade_positions()`) belongs to the **live** finideas/finrakshak portfolio system. `overlay_coverage.py` is **paper-trading**
+code. Do not assume the Decimal/Leg/Trade conventions below apply to it — see `src/paper/CLAUDE.md` instead, and `NOTES.md` for why it sits in this directory.
 
 ---
 
@@ -23,7 +20,8 @@ see `src/paper/CLAUDE.md` instead, and `NOTES.md` for why it sits in this direct
 - They coexist permanently: `Leg` defines shape; `Trade` drives numbers. Both are required.
 
 ### Decimal Invariant
-All monetary fields (`entry_price`, `ltp`, `close`, `underlying_price`, `price`) are **`Decimal`** in Pydantic models and stored as **TEXT** in SQLite. Never store as float. Read back with `Decimal(row["col"])`. Float LTPs from the Upstox API are converted at the boundary via `Decimal(str(float_val))`.
+All monetary fields (`entry_price`, `ltp`, `close`, `underlying_price`, `price`) are **`Decimal`** in Pydantic models and stored as **TEXT** in SQLite. Never store as float. Read back with
+`Decimal(row["col"])`. Float LTPs from the Upstox API are converted at the boundary via `Decimal(str(float_val))`.
 
 ---
 
@@ -39,11 +37,11 @@ apply_trade_positions(strategy: Strategy, positions: dict[str, tuple[int, Decima
 - Drops legs whose net qty is zero (closed positions)
 - Returns a new `Strategy` — never mutates the original
 
-Callers do **not** need to apply it manually for tracker paths — the overlay is internalized.
-Full call-site list: `NOTES.md`.
+Callers do **not** need to apply it manually for tracker paths — the overlay is internalized. Full call-site list: `NOTES.md`.
 
 ### Trade-only legs and `ensure_leg()`
-When `record_daily_snapshot` encounters a leg with `id is None` (e.g. LIQUIDBEES appended by overlay), it calls `store.ensure_leg(strategy_name, leg)` to upsert and obtain a DB id. Idempotent — safe to call multiple times.
+When `record_daily_snapshot` encounters a leg with `id is None` (e.g. LIQUIDBEES appended by overlay), it calls `store.ensure_leg(strategy_name, leg)` to upsert and obtain a DB id. Idempotent — safe
+to call multiple times.
 
 ---
 
@@ -70,7 +68,5 @@ python -m scripts.record_trade --strategy finideas_ilts ...
 
 ## Models and Strategy Registry
 
-`models.py` holds `Leg`, `Strategy`, `DailySnapshot`, `Trade`, `TradeAction`, `PortfolioSummary`;
-`Trade` is `frozen=True` with `qty > 0` / `price > 0` validators, and P&L methods accept
-`float | Decimal` but always return `Decimal`. Registry (`strategies/`) and the per-model field
-lists: `NOTES.md`.
+`models.py` holds `Leg`, `Strategy`, `DailySnapshot`, `Trade`, `TradeAction`, `PortfolioSummary`; `Trade` is `frozen=True` with `qty > 0` / `price > 0` validators, and P&L methods accept `float |
+Decimal` but always return `Decimal`. Registry (`strategies/`) and the per-model field lists: `NOTES.md`.

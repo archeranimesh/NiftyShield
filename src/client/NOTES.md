@@ -1,8 +1,7 @@
 # src/client — Reference Notes
 
-> **Not auto-loaded.** Reference detail relocated out of `CLAUDE.md` (FIX-2,
-> `docs/archive/plan/token-efficiency/fixed-overhead/`) so the auto-injected file carries only
-> invariants and caller contracts.
+> **Not auto-loaded.** Reference detail relocated out of `CLAUDE.md` (FIX-2, `docs/archive/plan/token-efficiency/fixed-overhead/`) so the auto-injected file carries only invariants and caller
+> contracts.
 
 ---
 
@@ -25,9 +24,8 @@ Three narrow sub-protocols in `protocol.py`:
 - `OrderExecutor` — `place_order`, `modify_order`, `cancel_order` (execution layer)
 - `PortfolioReader` — `get_positions`, `get_holdings`, `get_margins`
 
-`BrokerClient` is flat (not inheriting from sub-protocols) so its full method list is readable
-in one place. Python structural typing — any class satisfying all 10 `BrokerClient` methods
-automatically satisfies all three sub-protocols.
+`BrokerClient` is flat (not inheriting from sub-protocols) so its full method list is readable in one place. Python structural typing — any class satisfying all 10 `BrokerClient` methods automatically
+satisfies all three sub-protocols.
 
 ---
 
@@ -48,5 +46,4 @@ Missing fixtures log `WARNING` and return `None`/`[]`/`{}` — never raises.
 
 ## `upstox_market.py` — Legacy Module
 
-Sync `requests` client built before the `BrokerClient` abstraction. Violates the DI rule.
-Currently wrapped inside `UpstoxLiveClient` — no other consumer should import it.
+Sync `requests` client built before the `BrokerClient` abstraction. Violates the DI rule. Currently wrapped inside `UpstoxLiveClient` — no other consumer should import it.

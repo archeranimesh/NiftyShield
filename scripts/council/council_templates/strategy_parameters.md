@@ -4,11 +4,9 @@ You are advising on parameter choices for a Nifty 50 options selling strategy (N
 
 ## Strategy
 
-- **Instrument:** Nifty 50 index options (not NiftyBees options — switched 2026-04-25 due to
-  insufficient liquidity: OI < 1,000 on monthlies, bid/ask > 5% of mid).
+- **Instrument:** Nifty 50 index options (not NiftyBees options — switched 2026-04-25 due to insufficient liquidity: OI < 1,000 on monthlies, bid/ask > 5% of mid).
 - **Type:** Monthly Cash Secured Put (CSP). Sell 1 lot (50 units) per cycle.
-- **Phase:** Paper trading only (Phase 0). No live capital deployed. Minimum 6 full monthly
-  expiry cycles before live deployment gate.
+- **Phase:** Paper trading only (Phase 0). No live capital deployed. Minimum 6 full monthly expiry cycles before live deployment gate.
 
 ## Capital & Collateral
 
@@ -28,13 +26,11 @@ You are advising on parameter choices for a Nifty 50 options selling strategy (N
 
 ## Existing Live Strategies (NOT in scope)
 
-FinRakshak + ILTS run on Zerodha via Finideas (external manager). These are tracked
-but not backtested or modified by NiftyShield. Evaluated separately in Phase 4 (2028+).
+FinRakshak + ILTS run on Zerodha via Finideas (external manager). These are tracked but not backtested or modified by NiftyShield. Evaluated separately in Phase 4 (2028+).
 
 ## Broker Costs (when live — Upstox)
 
-₹20/order brokerage, STT 0.1% sell-side on premium, exchange charge 0.0345% on premium,
-GST 18% on brokerage + exchange, SEBI ₹10/crore premium, stamp duty 0.003% buy-side.
+₹20/order brokerage, STT 0.1% sell-side on premium, exchange charge 0.0345% on premium, GST 18% on brokerage + exchange, SEBI ₹10/crore premium, stamp duty 0.003% buy-side.
 
 ## Protection Overlay (NiftyShield Integrated v1)
 
