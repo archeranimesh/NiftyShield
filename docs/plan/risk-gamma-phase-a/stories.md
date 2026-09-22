@@ -1,17 +1,13 @@
 # risk-gamma-phase-a — Story Specs
 
-> One task per session. Find the first unchecked item in `tasks.md`. That is your only task.
-> Full implementation rules in `CLAUDE.md` and `REVIEW.md`.
-> After each task: tick `tasks.md`, append the completion tail
-> `| Owner: <Claude|Antigravity|Animesh> | Model: <model-id|n/a> | SHA: <sha>`, add one line to
-> `TODOS.md`. See `docs/plan/README.md` §Conventions.
+> One task per session. Find the first unchecked item in `tasks.md`. That is your only task. Full implementation rules in `CLAUDE.md` and `REVIEW.md`. After each task: tick `tasks.md`, append the
+> completion tail `| Owner: <Claude|Antigravity|Animesh> | Model: <model-id|n/a> | SHA: <sha>`, add one line to `TODOS.md`. See `docs/plan/README.md` §Conventions.
 
 ---
 
 ## Task A — Wire `src/risk/` delta gate into `record_paper_trade.py`  ✅ DONE (b9c00146)
 
-**What exists:** `src/risk/` is fully implemented and tested (20 unit tests green).
-`PortfolioDeltaTracker` + `check_entry_allowed` are not yet called from any entry script.
+**What exists:** `src/risk/` is fully implemented and tested (20 unit tests green). `PortfolioDeltaTracker` + `check_entry_allowed` are not yet called from any entry script.
 
 **Files changed:**
 - `scripts/record_paper_trade.py` — delta gate check on BUY actions only
@@ -20,9 +16,7 @@
 **Implementation:**
 
 1. After Nifty spot is fetched, load all open `PaperPosition` objects across all strategies.
-2. Instantiate `PortfolioDeltaTracker()` with default thresholds.
-   Call `aggregate_delta(positions, nifty_spot, LOT_SIZE)`.
-   (`LOT_SIZE` in `src/paper/constants.py`.)
+2. Instantiate `PortfolioDeltaTracker()` with default thresholds. Call `aggregate_delta(positions, nifty_spot, LOT_SIZE)`. (`LOT_SIZE` in `src/paper/constants.py`.)
 3. `is_protective = True` when `action == "BUY"` and `"PE"` in the resolved instrument key.
 4. `trade_delta_lots = Decimal("0")` — gate uses pre-trade state only.
 5. `check_entry_allowed(portfolio_delta, Decimal("0"), is_protective)`:
@@ -37,8 +31,7 @@
 
 ## Task B1 — `src/gamma/` package: models + GammaStore  ✅ DONE (d8c2e69)
 
-**Spec:** `docs/strategies/near_expiry_buy_v1.md` §11 — DDL for `gamma_chain_snapshots` and `gamma_watchlist`.
-Scaffolding only: package + data models + DB store. No script logic. No chain fetching.
+**Spec:** `docs/strategies/near_expiry_buy_v1.md` §11 — DDL for `gamma_chain_snapshots` and `gamma_watchlist`. Scaffolding only: package + data models + DB store. No script logic. No chain fetching.
 
 **Files created:**
 - `src/gamma/__init__.py`, `src/gamma/models.py`, `src/gamma/store.py`
@@ -77,11 +70,9 @@ Scaffolding only: package + data models + DB store. No script logic. No chain fe
 
 **What to implement:**
 
-1. `_fetch_chain(client: BrokerClient, expiry_date: date) -> OptionChain | None`
-   Returns `None` on empty/market-closed response; logs WARNING, does not raise.
+1. `_fetch_chain(client: BrokerClient, expiry_date: date) -> OptionChain | None` Returns `None` on empty/market-closed response; logs WARNING, does not raise.
 
-2. `_compute_snapshots(chain, expiry_date, today, snapshot_time, store, conn) -> list[GammaChainSnapshot]`
-   Iterates all strikes within ±10% of spot. Computes:
+2. `_compute_snapshots(chain, expiry_date, today, snapshot_time, store, conn) -> list[GammaChainSnapshot]` Iterates all strikes within ±10% of spot. Computes:
    - `gamma_gearing = gamma × nifty_spot² / ask_price`
      Guard: if `ask_price is None` or `ask_price <= Decimal("0.50")` → `gamma_gearing = None`,
      log `WARNING: ask_price too low for gearing computation (strike=X, ask=Y)`.
@@ -91,8 +82,7 @@ Scaffolding only: package + data models + DB store. No script logic. No chain fe
    - `bid_ask_spread = best_ask − best_bid` (both non-None; else `None`)
    - `dte_calendar = (expiry_date − today).days`
 
-3. `_fetch_and_snapshot(client, expiries, today, snapshot_time, store, conn, dry_run) -> list[GammaChainSnapshot]`
-   Calls `_fetch_chain` for each expiry, calls `_compute_snapshots`, collects results.
+3. `_fetch_and_snapshot(client, expiries, today, snapshot_time, store, conn, dry_run) -> list[GammaChainSnapshot]` Calls `_fetch_chain` for each expiry, calls `_compute_snapshots`, collects results.
    `dry_run=True`: logs but does NOT call any store method (persistence is B2.3's job).
 
 **Tests (mock BrokerClient and GammaStore, no network, no SQLite):**
@@ -113,12 +103,9 @@ Scaffolding only: package + data models + DB store. No script logic. No chain fe
 
 **What to implement:**
 
-1. After `_compute_snapshots` returns the list, iterate and call
-   `store.insert_chain_snapshot(conn, snap)` for each (unless `dry_run=True`).
-2. Log at INFO: `"Snapshot: {N} rows written for expiry {expiry_date}"` after each batch.
-   `"dry-run: skipping {N} snapshot writes"` on dry run.
-3. Wrap entire fetch+persist loop in `try/except Exception` per expiry — failure on one
-   expiry does not abort the other. Log ERROR and continue.
+1. After `_compute_snapshots` returns the list, iterate and call `store.insert_chain_snapshot(conn, snap)` for each (unless `dry_run=True`).
+2. Log at INFO: `"Snapshot: {N} rows written for expiry {expiry_date}"` after each batch. `"dry-run: skipping {N} snapshot writes"` on dry run.
+3. Wrap entire fetch+persist loop in `try/except Exception` per expiry — failure on one expiry does not abort the other. Log ERROR and continue.
 
 **Tests:**
 - `test_persistence_called_per_snapshot`: assert `insert_chain_snapshot` called once per snapshot (3 strikes × 2 option types = 6 calls).
@@ -137,8 +124,7 @@ Scaffolding only: package + data models + DB store. No script logic. No chain fe
 
 **What to implement:**
 
-`_update_watchlist(today_snaps, current_week_expiry, today, store, conn, dry_run) -> dict`
-Returns `{"added": int, "retained": int, "removed": int, "elevated": int}`.
+`_update_watchlist(today_snaps, current_week_expiry, today, store, conn, dry_run) -> dict` Returns `{"added": int, "retained": int, "removed": int, "elevated": int}`.
 
 **Inclusion criteria (all five — §5b):**
 ```
@@ -163,8 +149,7 @@ distance_pct > Decimal("0.05") for 2 consecutive days  → removal_reason = "spo
 oi_change_1d < Decimal("-0.20") for 2 consecutive days  → removal_reason = "oi_unwinding"
 expiry_date < today                                      → removal_reason = "expired"
 ```
-If yesterday's snapshot is missing for consecutive checks: do not remove.
-`dry_run=True`: compute stats dict, log what would happen, call no store methods.
+If yesterday's snapshot is missing for consecutive checks: do not remove. `dry_run=True`: compute stats dict, log what would happen, call no store methods.
 
 **Tests:**
 - `test_watchlist_add_qualifying_strike`: all 5 criteria pass → `upsert_watchlist` called, `added = 1`.
@@ -190,21 +175,20 @@ If yesterday's snapshot is missing for consecutive checks: do not remove.
 
 1. `_run_calibration(today_snaps, today, store, conn, dry_run) -> None`
 
-   Per unique `(strike, option_type)` in `today_snaps`:
+Per unique `(strike, option_type)` in `today_snaps`:
    - `store.get_iv_history(conn, strike, option_type, limit_days=20)`.
    - `len(history) < 20`: log `WARNING: insufficient history for IV percentile (strike=X, opt=Y, days=N)` and skip.
    - Else: `strike_iv_pctile_20d = sum(1 for v in history if v <= today_iv) / len(history)`.
    - Update via `store.insert_chain_snapshot` (upsert overwrites `strike_iv_pctile_20d`).
 
-   DTE-bucket gearing percentile (`gamma_gearing_pctile_dte`):
+DTE-bucket gearing percentile (`gamma_gearing_pctile_dte`):
    - Per DTE value in `today_snaps`: `store.get_gearing_by_dte(conn, target_dte, limit_days=60)`.
    - `len < 20`: log warning, skip bucket.
    - Else: compute percentile, update affected rows via upsert.
    - `dry_run=True`: compute but do not write.
 
-2. Telegram: after all stages, `build_notifier()` and send:
-   `"Gamma watch: {captured} strikes captured, {watchlist} on watchlist, {elevated} elevated, {added} added, {removed} removed"`
-   Non-fatal: `try/except`, log WARNING on failure. Skip entirely on `dry_run=True`.
+2. Telegram: after all stages, `build_notifier()` and send: `"Gamma watch: {captured} strikes captured, {watchlist} on watchlist, {elevated} elevated, {added} added, {removed} removed"` Non-fatal:
+   `try/except`, log WARNING on failure. Skip entirely on `dry_run=True`.
 
 **Tests:**
 - `test_calibration_skipped_insufficient_history`: 15 values → `insert_chain_snapshot` NOT called, warning logged.

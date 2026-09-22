@@ -1,45 +1,45 @@
-# risk-gamma-phase-a — Session Orientation
+# risk-gamma-phase-a — prompt
 
-> **What this story covers:** Two parallel tracks shipped in one phase:
-> (A) wiring `src/risk/` delta gate into `record_paper_trade.py`, and
-> (B) the Near-Expiry Gamma Buy strategy scaffolding + `gamma_daily_watch.py` script.
->
-> Track A is complete. Track B is in progress at B2.2.
+> Two parallel tracks shipped in one phase: (A) wiring `src/risk/` delta gate into `record_paper_trade.py`, and (B) the Near-Expiry Gamma Buy strategy scaffolding + `gamma_daily_watch.py` script.
 
----
+Read `CONTEXT.md` and state `CONTEXT.md ✓` before anything else. Then read `tasks.md`, find the first unchecked `- [ ]`, and do **only** that task. Read that task's full spec in `stories.md` (same
+task id) before writing any code. One task per session. Complete it fully. Stop.
 
-## Context
+## Why this story exists
 
-- `src/risk/` — fully implemented: `PortfolioDeltaTracker`, `check_entry_allowed`, 20 unit tests green.
-- `src/gamma/` — scaffolding complete: `GammaChainSnapshot`, `GammaWatchlistEntry`, `GammaStore`, `gamma_daily_watch.py` skeleton (CLI + expiry resolution).
-- Full strategy spec for the gamma buy strategy: `docs/strategies/near_expiry_buy_v1.md`.
+Paper trading needed a portfolio delta gate on new entries (Track A) and a scaffold for the Near-Expiry Gamma Buy strategy (Track B) — a daily scan that snapshots the option chain near each week's
+expiry, maintains a watchlist of high-gamma strikes, and alerts on qualifying setups. Track A shipped first and unblocks safe paper-trade entry; Track B builds out `src/gamma/` and
+`scripts/gamma_daily_watch.py` in small, testable increments so each sub-task lands as one reviewable commit.
 
----
+## Scope guard
 
-## Session start protocol
+In bounds: `src/risk/` wiring into `scripts/record_paper_trade.py` (Track A, done); `src/gamma/` models + `GammaStore`; `scripts/gamma_daily_watch.py` chain fetch, snapshot persistence, watchlist
+maintenance, percentile calibration, and the Telegram summary (Track B). Out of bounds: `gamma_scan.py` (a separate story — see the note at the foot of `stories.md`) and any change to `src/risk/`
+internals themselves. This story changes `src/` behaviour; it is not docs/tooling only.
 
-> Antigravity: find the first unchecked `- [ ]` line in `tasks.md`. That is your only task.
-> Do not look at any other unchecked item. One task. Complete it fully. Stop.
+## Session-start load hints
 
-1. Read this file + `CONTEXT.md` + `src/gamma/CLAUDE.md` (if present).
-2. Check `tasks.md` — first unchecked item only.
-3. For each task: read story spec in `stories.md` before writing any code.
-4. After task: tick `tasks.md`, append the completion tail
-   `| Owner: <Claude|Antigravity|Animesh> | Model: <model-id|n/a> | SHA: <sha>`, add one line
-   to `TODOS.md`. See `docs/plan/README.md` §Conventions.
-
----
+- `src/gamma/CLAUDE.md` (if present) before touching `src/gamma/`.
+- `docs/strategies/near_expiry_buy_v1.md` — full strategy spec, especially §5b (watchlist add/elevate/remove criteria) and §11 (DDL for `gamma_chain_snapshots` and `gamma_watchlist`) for any
+  `GammaStore` work.
+- Greeks/delta fields are involved (gamma gearing, chain snapshots) — `greeks-analyst` review is expected on B2.2 and B2.4 per `CLAUDE.md` AutoTrigger rules.
 
 ## Task overview
 
-| Task | Status | SHA |
-|------|--------|-----|
-| A — Wire delta gate into `record_paper_trade.py` | ✅ Done | b9c00146 |
-| B1 — `src/gamma/` models + GammaStore | ✅ Done | d8c2e69 |
-| B2.1 — Script scaffold: CLI + expiry resolution | ✅ Done | b68bb3d |
-| B2.2 — Chain fetch + field computation | ⬜ Next | — |
-| B2.3 — Snapshot persistence | ⬜ | — |
-| B2.4 — Watchlist maintenance | ⬜ | — |
-| B2.5 — Percentile calibration + Telegram summary | ⬜ | — |
+- **A** — Wire `src/risk/` delta gate into `record_paper_trade.py`. Done.
+- **B1** — `src/gamma/` package: models + `GammaStore`. Done.
+- **B2.1** — `gamma_daily_watch.py` scaffold: CLI flags + expiry resolution. Done.
+- **B2.2** — Chain fetch + field computation. Open.
+- **B2.3** — Snapshot persistence. Open.
+- **B2.4** — Watchlist maintenance. Open.
+- **B2.5** — Percentile calibration + Telegram summary. Open.
 
-**Next task:** B2.2 — chain fetch + field computation in `scripts/gamma_daily_watch.py`.
+## Definition of done
+
+`gamma_daily_watch.py` runs end to end: fetches the option chain for the current and next week's expiry, computes gamma-gearing/distance/OI-change/spread/DTE fields, persists snapshots, maintains the
+watchlist per §5b add/elevate/remove rules, calibrates IV and gearing percentiles, and sends a non-fatal Telegram summary. All stages covered by unit tests with no network and no real SQLite.
+
+## Perspectives not covered
+
+Live-market validation of the gamma-gearing threshold (`>= 3.0`) and the percentile calibration window (20/60 days) against real NSE option chain behaviour — this story only covers the scaffolding and
+unit-test correctness, not strategy backtesting or live P&L attribution.
