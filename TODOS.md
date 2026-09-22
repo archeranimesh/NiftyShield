@@ -88,6 +88,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 
 ## Session Log
 - [2026-09-22] MVP M1.1 — `src/mvp/models.py`: Provider, Category, Pick, MVPTranche, MVPSnapshot frozen Pydantic models + 7 tests — `90fa0af`.
+- [2026-09-22] MVP M1.2 — `src/mvp/store.py`: `MVPStore` init_db + provider/category CRUD + 14 tests — `14700c3`.
 - [2026-09-22] `doc-format-migration/` `enforcement/` DFM-10 done (`fd50a62`) — `scripts/dev/new_plan_folder.py` (`--story`/`--epic`/`--into` CLI) scaffolds a conforming folder from
   `docs/plan/_TEMPLATE/`, stripping guidance comments and substituting slug/title placeholders; refuses an existing target or a `--into` epic that doesn't exist; `.claude/skills/new-story/SKILL.md`
   thin wrapper; `docs/plan/README.md` §Conventions now points at `/new-story` and states the format is enforced, not advisory. This closed `enforcement/` (DFM-6..10 all done) and the whole
