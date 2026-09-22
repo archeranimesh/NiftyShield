@@ -283,9 +283,8 @@ fill-to-≤200 style — hand-wrapping at a narrow width now fails the commit, n
 scripts.dev.reflow_md <path>`, then re-stage (this is the "converts on next substantive touch" rule, now gated). Root `.md` is not yet under `md-reflow` — that waits for
 `doc-format-migration/repo-wide-reflow/`. `.py` stays at ruff's `line-length = 100` (ruff already excludes `docs/`). `scripts/dev/reflow_md.py` is the reusable engine that does the fill: `python -m
 scripts.dev.reflow_md <path>` rewrites in place, `--check` reports. It only re-wraps whitespace — a `git diff --word-diff` of a reflow shows zero word changes — and leaves fenced code, tables,
-headings and nested list/quote structure verbatim. The two RDO-17.5 / RDO-17.6 POC folders — `root-doc-organization/` and `telegram-markdown-migration/` — were swept to fill-to-≤200 in full at
-RDO-17.7 (2026-08-29) and are the reference exemplars. RDO-17.8 then decided the rule for every other legacy `docs/plan/` folder — batch-convert all of them, executed in the `doc-format-migration/`
-epic — so this is now migration in progress, not opportunistic-on-touch.
+headings and nested list/quote structure verbatim. The whole tree is now fill-to-≤200 — every `docs/plan/` folder (`doc-format-migration/plan-folders/`) and every other in-bounds `.md` in the repo
+(`doc-format-migration/repo-wide-reflow/`) — and the `doc-format-migration/enforcement/` gate keeps it that way going forward.
 
 ### Structure audit
 
