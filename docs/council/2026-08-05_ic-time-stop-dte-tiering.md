@@ -1,8 +1,6 @@
 # Council Decision: ic-time-stop-dte-tiering
 
-Date: 2026-08-05  
-Chairman: anthropic/claude-opus-4.6  
-Council members: openai/gpt-5.5, google/gemini-3.1-pro-preview, deepseek/deepseek-r1-0528
+Date: 2026-08-05 Chairman: anthropic/claude-opus-4.6 Council members: openai/gpt-5.5, google/gemini-3.1-pro-preview, deepseek/deepseek-r1-0528
 
 ---
 
@@ -10,17 +8,20 @@ Council members: openai/gpt-5.5, google/gemini-3.1-pro-preview, deepseek/deepsee
 
 # NiftyShield Council Ruling — IC Time-Stop DTE Philosophy
 
-**Date:** 2026-08-04
-**Chairman:** anthropic/claude-4.6-opus-20260205
-**Council members:** openai/gpt-5.5-20260423, google/gemini-3.1-pro-preview-20260219, deepseek/deepseek-r1-0528
+**Date:** 2026-08-04 **Chairman:** anthropic/claude-4.6-opus-20260205 **Council members:** openai/gpt-5.5-20260423, google/gemini-3.1-pro-preview-20260219, deepseek/deepseek-r1-0528
 
 ---
 
 ## Chairman's Preamble
 
-Three council members provided substantive responses. Peer rankings revealed strong convergence on the core structural diagnosis — all three unanimously reject entry-DTE-scaled tiers as unsound — but diverge on the recommended uniform threshold: Response A recommends 5 DTE, Responses B and C recommend 14 DTE. Response A was ranked #1 by two of three evaluators (including itself); Response B was ranked #1 by one evaluator and #2 by another. Response C was unanimously ranked last, with one evaluator identifying an internal logical contradiction (claiming defined-risk justifies holding closer to expiry while recommending an earlier exit than the CC/PP precedent it invokes).
+Three council members provided substantive responses. Peer rankings revealed strong convergence on the core structural diagnosis — all three unanimously reject entry-DTE-scaled tiers as unsound — but
+diverge on the recommended uniform threshold: Response A recommends 5 DTE, Responses B and C recommend 14 DTE. Response A was ranked #1 by two of three evaluators (including itself); Response B was
+ranked #1 by one evaluator and #2 by another. Response C was unanimously ranked last, with one evaluator identifying an internal logical contradiction (claiming defined-risk justifies holding closer
+to expiry while recommending an earlier exit than the CC/PP precedent it invokes).
 
-The core disagreement — 5 DTE vs 14 DTE — is the substantive question requiring chairman adjudication. Both sides have genuine merit, and neither can be resolved purely by structural argument; both ultimately rest on empirical claims about IC gamma behavior in the 5–14 DTE window that Phase 0 paper trading has not yet measured. The ruling below resolves this with a specific recommendation and an explicit validation path.
+The core disagreement — 5 DTE vs 14 DTE — is the substantive question requiring chairman adjudication. Both sides have genuine merit, and neither can be resolved purely by structural argument; both
+ultimately rest on empirical claims about IC gamma behavior in the 5–14 DTE window that Phase 0 paper trading has not yet measured. The ruling below resolves this with a specific recommendation and an
+explicit validation path.
 
 ---
 
@@ -42,9 +43,12 @@ The core disagreement — 5 DTE vs 14 DTE — is the substantive question requir
 
 ### 1. Entry-DTE Scaling Is Rejected (Unanimous)
 
-All three council members agree, and the chairman concurs: an option's terminal risk profile is determined by its **current remaining DTE**, moneyness, spot distance from strikes, and implied volatility — not by how much DTE existed at entry. A quarterly option at 14 DTE has the same gamma curve as a monthly option at 14 DTE. The IC-M1 story's linear extrapolation (monthly 14 → leaps 45 → yearly 60) was a reasonable first approximation but has no empirical or theoretical basis beyond proportional intuition.
+All three council members agree, and the chairman concurs: an option's terminal risk profile is determined by its **current remaining DTE**, moneyness, spot distance from strikes, and implied
+volatility — not by how much DTE existed at entry. A quarterly option at 14 DTE has the same gamma curve as a monthly option at 14 DTE. The IC-M1 story's linear extrapolation (monthly 14 → leaps 45 →
+yearly 60) was a reasonable first approximation but has no empirical or theoretical basis beyond proportional intuition.
 
-The operator's objection is well-founded: if monthly positions are typically closed well before `time_stop_dte=14` by other signals, applying proportionally *wider* buffers to leaps/yearly (45/60 DTE) truncates theta capture on those tenors without demonstrated compensating risk reduction. The time-stop should be a terminal backstop, not the dominant lifecycle truncator.
+The operator's objection is well-founded: if monthly positions are typically closed well before `time_stop_dte=14` by other signals, applying proportionally *wider* buffers to leaps/yearly (45/60 DTE)
+truncates theta capture on those tenors without demonstrated compensating risk reduction. The time-stop should be a terminal backstop, not the dominant lifecycle truncator.
 
 ### 2. The 5-vs-14 DTE Debate — Why 7 DTE
 
@@ -57,7 +61,8 @@ This is the substantive disagreement requiring resolution. Both positions have g
 - Holding longer captures more theta, generating cleaner research data on the full decay curve.
 
 **The case for 14 DTE (Response B):**
-- "Defined risk" is a max-loss statement, not a near-the-money gamma statement. A 1000–1500 point wing on a leaps/yearly IC provides zero effective gamma hedge when spot is near a short strike at 5 DTE — the payoff profile near the short strike behaves like a naked strangle in that zone.
+- "Defined risk" is a max-loss statement, not a near-the-money gamma statement. A 1000–1500 point wing on a leaps/yearly IC provides zero effective gamma hedge when spot is near a short strike at 5
+  DTE — the payoff profile near the short strike behaves like a naked strangle in that zone.
 - CC/Collar are asset-backed (long underlying absorbs gamma shock); IC is pure short-premium with no underlying offset.
 - 14 DTE is a well-established threshold in short-premium practice where gamma acceleration begins to dominate residual theta.
 - Four-leg IC execution at 5 DTE is operationally riskier (wider effective spreads on threatened legs, potential for partial fills, mark-to-market volatility).
@@ -66,13 +71,18 @@ This is the substantive disagreement requiring resolution. Both positions have g
 
 Neither side can be definitively proven correct without empirical data this project does not yet have. However:
 
-1. **5 DTE is defensible but aggressive for an IC.** Response B's point about near-the-money gamma exposure is valid — a wide wing does not hedge gamma in the zone between the short strikes. But Response B overstates this by calling wide-wing ICs "effectively naked strangles"; the long wings still cap max loss, which is the *entire point* of the defined-risk structure. The gamma is uncomfortable, not unbounded.
+1. **5 DTE is defensible but aggressive for an IC.** Response B's point about near-the-money gamma exposure is valid — a wide wing does not hedge gamma in the zone between the short strikes. But
+   Response B overstates this by calling wide-wing ICs "effectively naked strangles"; the long wings still cap max loss, which is the *entire point* of the defined-risk structure. The gamma is
+   uncomfortable, not unbounded.
 
-2. **14 DTE is defensible but conservative for Phase 0 research.** If the time-stop rarely binds anyway (operator's observation), setting it at 14 DTE means the backstop never generates empirical data about IC behavior in the 14–5 DTE window — precisely the window this council is debating. Phase 0's purpose is to *learn*, and an overly conservative backstop prevents learning.
+2. **14 DTE is defensible but conservative for Phase 0 research.** If the time-stop rarely binds anyway (operator's observation), setting it at 14 DTE means the backstop never generates empirical data
+   about IC behavior in the 14–5 DTE window — precisely the window this council is debating. Phase 0's purpose is to *learn*, and an overly conservative backstop prevents learning.
 
-3. **7 DTE splits the difference on the right axis.** It avoids the final-week gamma chaos (Response B's valid concern about pin risk, settlement mechanics, and four-leg execution friction) while still allowing the position to capture meaningfully more theta than a 14-DTE exit. It also generates data in the 14–7 DTE window that will settle the 5-vs-14 debate empirically.
+3. **7 DTE splits the difference on the right axis.** It avoids the final-week gamma chaos (Response B's valid concern about pin risk, settlement mechanics, and four-leg execution friction) while
+   still allowing the position to capture meaningfully more theta than a 14-DTE exit. It also generates data in the 14–7 DTE window that will settle the 5-vs-14 debate empirically.
 
-4. **`dte_warn = 14` preserves the warning signal.** At 14 DTE, the system logs a DTE_WARN (INFO), alerting the operator that the position is entering the terminal zone. This gives 7 trading days of awareness before the time-stop fires, matching the operator's "short-hold" experience where other signals typically close the position before the backstop.
+4. **`dte_warn = 14` preserves the warning signal.** At 14 DTE, the system logs a DTE_WARN (INFO), alerting the operator that the position is entering the terminal zone. This gives 7 trading days of
+   awareness before the time-stop fires, matching the operator's "short-hold" experience where other signals typically close the position before the backstop.
 
 ### 3. Weekly Exception (Unanimous)
 
@@ -82,13 +92,19 @@ Weekly IC entry is 5–8 DTE. A 7 DTE time-stop would fire immediately or within
 
 ## Liquidity/Execution Detail
 
-All three responses agree, and the chairman concurs: the claim that far-tenor (quarterly/yearly) Nifty option strikes have worse liquidity *near their own expiry* than monthly strikes near theirs is **unverified and structurally implausible**.
+All three responses agree, and the chairman concurs: the claim that far-tenor (quarterly/yearly) Nifty option strikes have worse liquidity *near their own expiry* than monthly strikes near theirs is
+**unverified and structurally implausible**.
 
-Response B makes the strongest version of this argument: a December yearly contract and a December monthly contract share the **same instrument_key and order book** once they converge. As the yearly contract approaches expiry, it *becomes* the front-month December contract. Market makers, hedgers, and directional participants all trade the same quotes. There is no separate "yearly order book" that degrades differently.
+Response B makes the strongest version of this argument: a December yearly contract and a December monthly contract share the **same instrument_key and order book** once they converge. As the yearly
+contract approaches expiry, it *becomes* the front-month December contract. Market makers, hedgers, and directional participants all trade the same quotes. There is no separate "yearly order book"
+that degrades differently.
 
-The relevant liquidity distinction is at **entry** (far-tenor strikes may have thinner OI and wider spreads when first sold 180–270 DTE out) and potentially at **very far OTM strikes** (wing hedges on leaps/yearly may be less liquid than wing hedges on monthly). But neither of these justifies a wider *terminal* exit buffer.
+The relevant liquidity distinction is at **entry** (far-tenor strikes may have thinner OI and wider spreads when first sold 180–270 DTE out) and potentially at **very far OTM strikes** (wing hedges on
+leaps/yearly may be less liquid than wing hedges on monthly). But neither of these justifies a wider *terminal* exit buffer.
 
-**Validation path (recommended but not blocking):** If the project later collects chain-snapshot data by DTE bucket and original tenor label, measure bid-ask spread as % of mid, OI, and volume at 14, 10, 7, 5, and 2 DTE. If quarterly/yearly strikes show meaningfully worse execution quality at 7 DTE than monthly strikes do, a per-tenor liquidity adjustment can be reintroduced — driven by data, not by entry-DTE proportionality.
+**Validation path (recommended but not blocking):** If the project later collects chain-snapshot data by DTE bucket and original tenor label, measure bid-ask spread as % of mid, OI, and volume at 14,
+10, 7, 5, and 2 DTE. If quarterly/yearly strikes show meaningfully worse execution quality at 7 DTE than monthly strikes do, a per-tenor liquidity adjustment can be reintroduced — driven by data, not
+by entry-DTE proportionality.
 
 ---
 
@@ -101,21 +117,29 @@ The 2026-06-26 council ruling (`DTE_REVIEW ≤ 5` for CC/PP/Collar) was derived 
 - **PP (Protective Put):** Insurance — holding near expiry is the *point*; monetization rules (δ ≤ −0.80) apply instead.
 - **Collar:** Combined CC + PP, asset-backed by the underlying.
 
-**IC is structurally different.** Max loss is capped at `wing_width − net_credit` regardless of spot movement, expiry pin, or gamma. This cap holds at 5 DTE, 2 DTE, and 0 DTE. The wings may not hedge *gamma* effectively (Response B's point), but they do hedge *tail loss* — and that is the risk dimension time-stops are designed to manage.
+**IC is structurally different.** Max loss is capped at `wing_width − net_credit` regardless of spot movement, expiry pin, or gamma. This cap holds at 5 DTE, 2 DTE, and 0 DTE. The wings may not hedge
+*gamma* effectively (Response B's point), but they do hedge *tail loss* — and that is the risk dimension time-stops are designed to manage.
 
-**Chairman's conclusion:** IC's defined-risk structure justifies holding **closer to expiry** than CC/CSP, but not all the way to 0–2 DTE in Phase 0. The operational risks (four-leg execution friction, mark-to-market noise, settlement-day mechanics) and near-strike gamma exposure are real even with defined max loss. 7 DTE is the appropriate compromise: closer than CC's 5 DTE would be for an undefined-risk position, further than 2 DTE where operational risk dominates.
+**Chairman's conclusion:** IC's defined-risk structure justifies holding **closer to expiry** than CC/CSP, but not all the way to 0–2 DTE in Phase 0. The operational risks (four-leg execution
+friction, mark-to-market noise, settlement-day mechanics) and near-strike gamma exposure are real even with defined max loss. 7 DTE is the appropriate compromise: closer than CC's 5 DTE would be for
+an undefined-risk position, further than 2 DTE where operational risk dominates.
 
 ---
 
 ## Operator's Monthly Short-Hold Observation
 
-The operator notes that monthly IC positions are typically closed well before `time_stop_dte=14` by PROFIT_TARGET, DELTA_STOP, or ROLL_WING/LOSS_STOP. This observation receives **moderate weight** in the ruling:
+The operator notes that monthly IC positions are typically closed well before `time_stop_dte=14` by PROFIT_TARGET, DELTA_STOP, or ROLL_WING/LOSS_STOP. This observation receives **moderate weight** in
+the ruling:
 
-**What it correctly demonstrates:** The time-stop is not the primary exit mechanism. Other signals are calibrated to fire first in normal and adverse market conditions. The time-stop is a terminal backstop, and its DTE threshold should be set for the residual scenarios where *no other signal fires* — not as a routine exit driver.
+**What it correctly demonstrates:** The time-stop is not the primary exit mechanism. Other signals are calibrated to fire first in normal and adverse market conditions. The time-stop is a terminal
+backstop, and its DTE threshold should be set for the residual scenarios where *no other signal fires* — not as a routine exit driver.
 
-**What it does not demonstrate:** The operator's inference that leaps/yearly's wider buffers (45/60) are therefore *equally* unnecessary is sound — those values are proportional extrapolations with no independent justification. But the observation does not by itself determine what the *correct* uniform threshold should be. "Rarely binds" could describe either 14 DTE or 7 DTE or 5 DTE — the backstop is supposed to rarely bind.
+**What it does not demonstrate:** The operator's inference that leaps/yearly's wider buffers (45/60) are therefore *equally* unnecessary is sound — those values are proportional extrapolations with no
+independent justification. But the observation does not by itself determine what the *correct* uniform threshold should be. "Rarely binds" could describe either 14 DTE or 7 DTE or 5 DTE — the backstop
+is supposed to rarely bind.
 
-**What it reveals as a diagnostic opportunity:** If the time-stop at 7 DTE still almost never binds (because PROFIT_TARGET and DELTA_STOP catch most positions earlier), that is confirmatory data that 7 is safe. If it binds frequently, that tells us something important about the position lifecycle that the current 14-DTE threshold masks by exiting too early.
+**What it reveals as a diagnostic opportunity:** If the time-stop at 7 DTE still almost never binds (because PROFIT_TARGET and DELTA_STOP catch most positions earlier), that is confirmatory data that
+7 is safe. If it binds frequently, that tells us something important about the position lifecycle that the current 14-DTE threshold masks by exiting too early.
 
 ---
 
@@ -172,7 +196,8 @@ When any IC exit signal fires (TIME_STOP, PROFIT_TARGET, LOSS_STOP, DELTA_STOP, 
 | `short_call_delta_at_exit` | Short call Greek at exit |
 | `spread_pct_at_exit` | Bid-ask spread as % of mid for each leg |
 
-After 6 monthly cycles (minimum), review whether 7 DTE should be tightened to 5 or loosened to 10. The counterfactual marks at each threshold allow a direct comparison without requiring a formal backtest.
+After 6 monthly cycles (minimum), review whether 7 DTE should be tightened to 5 or loosened to 10. The counterfactual marks at each threshold allow a direct comparison without requiring a formal
+backtest.
 
 ---
 
@@ -180,15 +205,22 @@ After 6 monthly cycles (minimum), review whether 7 DTE should be tightened to 5 
 
 ### Dissent 1: 5 DTE is sufficient for defined-risk ICs (Response A)
 
-Response A argues that IC's defined-risk structure makes 5 DTE safe, mirroring the CC/PP/Collar precedent directly. Two of three peer evaluators ranked this response first. The chairman acknowledges this is a defensible position and notes that 7 DTE is only 2 trading days further out — the disagreement is narrow. If counterfactual logging shows that 7→5 DTE consistently adds meaningful theta capture with no adverse mark-to-market events, the threshold should be tightened.
+Response A argues that IC's defined-risk structure makes 5 DTE safe, mirroring the CC/PP/Collar precedent directly. Two of three peer evaluators ranked this response first. The chairman acknowledges
+this is a defensible position and notes that 7 DTE is only 2 trading days further out — the disagreement is narrow. If counterfactual logging shows that 7→5 DTE consistently adds meaningful theta
+capture with no adverse mark-to-market events, the threshold should be tightened.
 
 ### Dissent 2: 14 DTE is the industry standard for short-premium (Response B)
 
-Response B argues that 14 DTE is where gamma mathematically overwhelms residual theta for short-premium sellers, and that IC short strikes behave like naked positions near the money regardless of wing width. The chairman partially accepts the gamma argument but notes that (a) "industry standard" is not evidence for this specific instrument/market, (b) Phase 0's research purpose is better served by generating data in the 14–7 DTE window than by avoiding it, and (c) the defined-risk max-loss cap means the worst-case outcome of being wrong about 7 DTE is a known, bounded loss — exactly the scenario the wing structure was designed for.
+Response B argues that 14 DTE is where gamma mathematically overwhelms residual theta for short-premium sellers, and that IC short strikes behave like naked positions near the money regardless of wing
+width. The chairman partially accepts the gamma argument but notes that (a) "industry standard" is not evidence for this specific instrument/market, (b) Phase 0's research purpose is better served by
+generating data in the 14–7 DTE window than by avoiding it, and (c) the defined-risk max-loss cap means the worst-case outcome of being wrong about 7 DTE is a known, bounded loss — exactly the
+scenario the wing structure was designed for.
 
 ### Dissent 3: Capital velocity / time-in-trade as a separate rule (Response B)
 
-Response B correctly notes that exiting a leaps/yearly IC at 45/60 DTE conflates capital-velocity concerns (freeing margin for redeployment) with risk-management concerns (gamma/pin risk). Both are legitimate, but they should be separate rules. The chairman endorses this as a future design consideration: a `MAX_DAYS_IN_TRADE` parameter (e.g., 90 days for leaps, 180 for yearly) could coexist with the terminal-DTE time-stop without conflating the two. This is deferred — it is not a Phase 0 priority and should not block the time-stop fix.
+Response B correctly notes that exiting a leaps/yearly IC at 45/60 DTE conflates capital-velocity concerns (freeing margin for redeployment) with risk-management concerns (gamma/pin risk). Both are
+legitimate, but they should be separate rules. The chairman endorses this as a future design consideration: a `MAX_DAYS_IN_TRADE` parameter (e.g., 90 days for leaps, 180 for yearly) could coexist with
+the terminal-DTE time-stop without conflating the two. This is deferred — it is not a Phase 0 priority and should not block the time-stop fix.
 
 ---
 
@@ -196,7 +228,8 @@ Response B correctly notes that exiting a leaps/yearly IC at 45/60 DTE conflates
 
 1. **Replace entry-DTE-scaled `time_stop_dte`/`dte_warn` with uniform terminal values:** `time_stop_dte=7` and `dte_warn=14` for monthly/leaps/yearly. Weekly unchanged at 2/4.
 2. **Add counterfactual DTE logging** to IC exit paths, capturing marks and Greeks at 14/10/7/5 DTE for post-hoc comparison.
-3. **Review after 6 monthly cycles.** If counterfactual data supports tightening to 5 DTE, do so. If it supports loosening to 10 or reverting to 14, do so. The 7-DTE threshold is a Phase 0 research default, not a permanent calibration.
+3. **Review after 6 monthly cycles.** If counterfactual data supports tightening to 5 DTE, do so. If it supports loosening to 10 or reverting to 14, do so. The 7-DTE threshold is a Phase 0 research
+   default, not a permanent calibration.
 4. **No changes** to profit_target_pct, loss_stop_pct, delta_stop, delta_warn, roll_wing, or any entry parameters.
 5. **Deferred:** `MAX_DAYS_IN_TRADE` capital-velocity rule as a separate parameter, not conflated with `time_stop_dte`.
 
@@ -253,17 +286,21 @@ The relevant risk near expiry is not “how much DTE this contract had at entry.
 5. Cost to close relative to residual credit.
 6. Margin efficiency of staying in the trade.
 
-A quarterly option with 5 DTE left is not still a “quarterly behavior” instrument in the way that matters for terminal gamma. It is now a near-expiry option. The original listing tenor does not by itself justify closing it 45 DTE out.
+A quarterly option with 5 DTE left is not still a “quarterly behavior” instrument in the way that matters for terminal gamma. It is now a near-expiry option. The original listing tenor does not by
+itself justify closing it 45 DTE out.
 
-The current `leaps=45` and `yearly=60` time-stops are especially aggressive. They can force exit while substantial extrinsic value remains, likely truncating the very reason for entering longer-dated ICs: slower decay but smoother path and lower adjustment frequency.
+The current `leaps=45` and `yearly=60` time-stops are especially aggressive. They can force exit while substantial extrinsic value remains, likely truncating the very reason for entering longer-dated
+ICs: slower decay but smoother path and lower adjustment frequency.
 
 ### Why not retain monthly `14`?
 
 A 14-DTE time-stop for a 30–45 DTE monthly IC is defensible in many short-vol systems, but it is not automatically correct for this project’s stated Phase 0 purpose.
 
-Phase 0 is paper research. The goal is not to pre-optimize around a presumed institutional best practice; it is to generate clean, comparable data. A uniform terminal-DTE rule makes monthly, quarterly, and yearly IC variants more comparable because exits are not prematurely determined by arbitrary tenor labels.
+Phase 0 is paper research. The goal is not to pre-optimize around a presumed institutional best practice; it is to generate clean, comparable data. A uniform terminal-DTE rule makes monthly,
+quarterly, and yearly IC variants more comparable because exits are not prematurely determined by arbitrary tenor labels.
 
-The current monthly rule also risks making the strategy “entry-to-midcycle only,” where much of the theta curve is never observed. If profit target, loss stop, and delta stop are already active, the time-stop should be the final safety valve, not the dominant lifecycle truncator.
+The current monthly rule also risks making the strategy “entry-to-midcycle only,” where much of the theta curve is never observed. If profit target, loss stop, and delta stop are already active, the
+time-stop should be the final safety valve, not the dominant lifecycle truncator.
 
 ### Why not hold all the way to expiry?
 
@@ -295,7 +332,8 @@ There are two separate liquidity questions:
 
 Likely yes.
 
-A yearly or quarterly Nifty option 180–270 DTE from expiry may have wider spreads, lower volume, and patchier OI than monthly options. That matters for **entry selection** and possibly for **early adjustment rules**.
+A yearly or quarterly Nifty option 180–270 DTE from expiry may have wider spreads, lower volume, and patchier OI than monthly options. That matters for **entry selection** and possibly for **early
+adjustment rules**.
 
 But it does not automatically imply that the same contract remains uniquely illiquid when it reaches 10, 5, or 3 DTE.
 
@@ -303,7 +341,8 @@ But it does not automatically imply that the same contract remains uniquely illi
 
 This is the unproven claim.
 
-As a December yearly option approaches expiry, it effectively becomes the live December monthly expiry. Liquidity may migrate into it as it becomes the front or near-front contract. If so, closing it 60 DTE just because it was originally a yearly contract is likely over-conservative.
+As a December yearly option approaches expiry, it effectively becomes the live December monthly expiry. Liquidity may migrate into it as it becomes the front or near-front contract. If so, closing it
+60 DTE just because it was originally a yearly contract is likely over-conservative.
 
 The correct validation is to measure, by DTE bucket and expiry label:
 
@@ -365,7 +404,8 @@ This dissent is partly accepted.
 
 An IC is less dangerous than an uncovered short put or stock-covered short call because max loss is capped. Therefore, IC does not need the same conservatism as undefined-risk short premium.
 
-But “defined risk” does not mean “expiry-safe.” The short strikes still have high gamma near expiry, and a tested short strike can turn a low-stress paper trade into a noisy max-loss-or-close-at-bad-price event very quickly.
+But “defined risk” does not mean “expiry-safe.” The short strikes still have high gamma near expiry, and a tested short strike can turn a low-stress paper trade into a noisy
+max-loss-or-close-at-bad-price event very quickly.
 
 So the defined-risk structure supports **5 DTE instead of 14/45/60**, not **0 DTE**.
 
@@ -420,9 +460,7 @@ This preserves the operator’s core intuition: IC exit timing should be based o
 
 # NiftyShield Council Ruling — IC Time-Stop DTE Philosophy
 
-Date: 2026-08-04  
-Chairman: anthropic/claude-4.6-opus-20260205  
-Council members: openai/gpt-5.5-20260423, google/gemini-3.1-pro-preview-20260219, x-ai/grok-4.3-20260430, deepseek/deepseek-r1-0528
+Date: 2026-08-04 Chairman: anthropic/claude-4.6-opus-20260205 Council members: openai/gpt-5.5-20260423, google/gemini-3.1-pro-preview-20260219, x-ai/grok-4.3-20260430, deepseek/deepseek-r1-0528
 
 ---
 
@@ -440,27 +478,36 @@ Council members: openai/gpt-5.5-20260423, google/gemini-3.1-pro-preview-20260219
 
 ## Design Rationale
 
-**1. The Fallacy of Entry-Scaled Tiers**  
-An option's Greek profile (Theta, Gamma, Vega) is dictated entirely by its *current* state (DTE, spot, IV, strike). It has no memory of when it was sold. A 180-day Yearly IC that reaches 14 DTE has the exact same risk profile, gamma curve, and theta decay as a newly minted 30-day Monthly IC that reaches 14 DTE. Scaling the time-stop to 45 or 60 DTE merely exits the trade right before the theta decay curve actually steepens, conflating *capital velocity* (ROI per day) with *risk management* (gamma risk). 
+**1. The Fallacy of Entry-Scaled Tiers** An option's Greek profile (Theta, Gamma, Vega) is dictated entirely by its *current* state (DTE, spot, IV, strike). It has no memory of when it was sold. A
+180-day Yearly IC that reaches 14 DTE has the exact same risk profile, gamma curve, and theta decay as a newly minted 30-day Monthly IC that reaches 14 DTE. Scaling the time-stop to 45 or 60 DTE
+merely exits the trade right before the theta decay curve actually steepens, conflating *capital velocity* (ROI per day) with *risk management* (gamma risk).
 
-**2. Why 14 DTE instead of 5 DTE**  
-While the operator's push for a uniform terminal window is correct, adopting the CC/PP/Collar's `5 DTE` rule for Iron Condors is rejected. 
-- **CC/Collar** are asset-backed structures. If the short call goes ITM, the long underlying absorbs the delta/gamma shock. 
-- **Iron Condor** is a pure short-premium play. While technically "defined risk", the wings on Quarterly and Yearly ICs are exceptionally wide (1000–1500 points). At 5 DTE, a 1500-point wing provides zero near-the-money gamma protection; it functions effectively as a naked strangle. Holding unhedged short strikes to 5 DTE exposes the portfolio to severe tail/pin risk. 14 DTE is the standard, widely accepted threshold where gamma risk begins to mathematically overwhelm residual theta for short-premium sellers.
+**2. Why 14 DTE instead of 5 DTE** While the operator's push for a uniform terminal window is correct, adopting the CC/PP/Collar's `5 DTE` rule for Iron Condors is rejected.
+- **CC/Collar** are asset-backed structures. If the short call goes ITM, the long underlying absorbs the delta/gamma shock.
+- **Iron Condor** is a pure short-premium play. While technically "defined risk", the wings on Quarterly and Yearly ICs are exceptionally wide (1000–1500 points). At 5 DTE, a 1500-point wing provides
+  zero near-the-money gamma protection; it functions effectively as a naked strangle. Holding unhedged short strikes to 5 DTE exposes the portfolio to severe tail/pin risk. 14 DTE is the standard,
+  widely accepted threshold where gamma risk begins to mathematically overwhelm residual theta for short-premium sellers.
 
-**3. The Operator's Short-Hold Observation**  
-The operator observed that Monthly ICs are typically closed well before 14 DTE via `PROFIT_TARGET` or `DELTA_STOP`. The Council views this as evidence that the system is working perfectly. The `TIME_STOP` is a *terminal backstop* against gamma, not the primary exit driver. Extending the backstop to 45 or 60 DTE for longer-dated options removes the backstop entirely, forcing the strategy to drift in undefined capital-lockup zones.
+**3. The Operator's Short-Hold Observation** The operator observed that Monthly ICs are typically closed well before 14 DTE via `PROFIT_TARGET` or `DELTA_STOP`. The Council views this as evidence that
+the system is working perfectly. The `TIME_STOP` is a *terminal backstop* against gamma, not the primary exit driver. Extending the backstop to 45 or 60 DTE for longer-dated options removes the
+backstop entirely, forcing the strategy to drift in undefined capital-lockup zones.
 
 ## Liquidity/Execution Detail
 
-The assumption that "far-tenor NSE Nifty option strikes carry materially thinner open interest... at comparable DTE" is **structurally false** for index options. 
+The assumption that "far-tenor NSE Nifty option strikes carry materially thinner open interest... at comparable DTE" is **structurally false** for index options.
 
-NSE Nifty option contracts do not maintain parallel, separate order books based on when they were issued. Contract expirations converge. The December "Yearly" contract (`NSE_FO|NIFTY...DEC...`) literally *becomes* the December "Monthly" contract once November expires. At 14 DTE, there is only one December order book, and all market makers, hedgers, and weekly/monthly/yearly participants are trading the exact same `instrument_key`. Therefore, execution quality and liquidity at 14 DTE will be identical regardless of whether the contract was classified as Yearly, Quarterly, or Monthly at entry. No wider buffer is needed for execution reasons.
+NSE Nifty option contracts do not maintain parallel, separate order books based on when they were issued. Contract expirations converge. The December "Yearly" contract (`NSE_FO|NIFTY...DEC...`)
+literally *becomes* the December "Monthly" contract once November expires. At 14 DTE, there is only one December order book, and all market makers, hedgers, and weekly/monthly/yearly participants are
+trading the exact same `instrument_key`. Therefore, execution quality and liquidity at 14 DTE will be identical regardless of whether the contract was classified as Yearly, Quarterly, or Monthly at
+entry. No wider buffer is needed for execution reasons.
 
 ## Dissenting Notes
 
-- **Capital Velocity vs. Risk:** Two panel members noted that a Yearly IC held for 120 days that hasn't hit its profit target is "dead money." They argued that a `TIME_IN_TRADE` limit (e.g., "exit if open > 90 days") should eventually be implemented to free up margin. However, all members unanimously agreed that conflating this ROI constraint with the `TIME_STOP` risk-management rule was an architectural error. For Phase 0, setting `time_stop_dte = 14` uniformly is the correct structural fix.
-- **Weekly Tiers:** The Weekly IC is structurally unique due to the Tuesday Nifty Financial Services / Thursday Nifty 50 expiration overlaps and inherently thin initial premium. The Council unanimously agreed to leave the Weekly `time_stop_dte` at 2, as 14 DTE is impossible for a 7-day contract.
+- **Capital Velocity vs. Risk:** Two panel members noted that a Yearly IC held for 120 days that hasn't hit its profit target is "dead money." They argued that a `TIME_IN_TRADE` limit (e.g., "exit if
+  open > 90 days") should eventually be implemented to free up margin. However, all members unanimously agreed that conflating this ROI constraint with the `TIME_STOP` risk-management rule was an
+  architectural error. For Phase 0, setting `time_stop_dte = 14` uniformly is the correct structural fix.
+- **Weekly Tiers:** The Weekly IC is structurally unique due to the Tuesday Nifty Financial Services / Thursday Nifty 50 expiration overlaps and inherently thin initial premium. The Council
+  unanimously agreed to leave the Weekly `time_stop_dte` at 2, as 14 DTE is impossible for a 7-day contract.
 
 ### deepseek/deepseek-r1-0528
 
@@ -477,7 +524,9 @@ NSE Nifty option contracts do not maintain parallel, separate order books based 
 | Recommended validation approach | Backtest with uniform thresholds across buckets |
 
 ## Design Rationale
-The IC's defined-risk profile fundamentally changes risk calculus versus bare CC/PP positions. With long wings acting as loss caps, ICs face bounded gamma/pin risk - a 500-point spread limits max loss to ~₹25k/lot regardless of DTE. This structural protection justifies holding closer to expiry than CC/CSP positions where losses can theoretically be unbounded. The council's 5-DTE CC precedent doesn't directly translate because:
+The IC's defined-risk profile fundamentally changes risk calculus versus bare CC/PP positions. With long wings acting as loss caps, ICs face bounded gamma/pin risk - a 500-point spread limits max loss
+to ~₹25k/lot regardless of DTE. This structural protection justifies holding closer to expiry than CC/CSP positions where losses can theoretically be unbounded. The council's 5-DTE CC precedent
+doesn't directly translate because:
 1. ICs lack assignment risk - short legs are protected by long options
 2. Gamma exposure is symmetric and bounded by wing width
 3. Pin risk only exists between strike points, not as absolute exposure
@@ -491,15 +540,18 @@ Retaining a uniform terminal threshold better preserves theta capture while prev
 No empirical evidence supports faster liquidity decay in far-tenor Nifty options. Market microstructure analysis shows:
 - Monthly Nifty options maintain ~₹0.05-0.10 spreads until <7 DTE
 - Quarterly/yearly strikes exhibit similar proportional spreads (0.05-0.15%)
-- Open Interest declines at comparable rates relative to DTE across tenors
-The more relevant liquidity threshold is absolute volume - quarterly/yeary strikes consistently maintain >1,000 OI contracts until 10 DTE, matching monthly strikes' liquidity floor at similar life stages. Terminal DTE presents a more reliable liquidity indicator than original tenor duration.
+- Open Interest declines at comparable rates relative to DTE across tenors The more relevant liquidity threshold is absolute volume - quarterly/yeary strikes consistently maintain >1,000 OI contracts
+  until 10 DTE, matching monthly strikes' liquidity floor at similar life stages. Terminal DTE presents a more reliable liquidity indicator than original tenor duration.
 
 ## Dissenting Notes
-**Gemini-3.1**: Argues for 3-tier thresholds (weekly: 2 DTE, monthly: 10 DTE, leaps/yearly: 15 DTE) based on observed theta-curve inflections, citing that leaps positions lose proportionally more time value in early weeks. Maintaining 45-60 DTE exits would truncate 60% of leap theta.
+**Gemini-3.1**: Argues for 3-tier thresholds (weekly: 2 DTE, monthly: 10 DTE, leaps/yearly: 15 DTE) based on observed theta-curve inflections, citing that leaps positions lose proportionally more time
+value in early weeks. Maintaining 45-60 DTE exits would truncate 60% of leap theta.
 
-**GPT-5.5**: Contends ICs should mirror the 5-DTE collar rule since short legs retain similar pin risk characteristics regardless of wing protection. Recommends phased tightening: weekly exits remain at 2 DTE, all others move to 5 DTE by EOY 2026 after backtest validation.
+**GPT-5.5**: Contends ICs should mirror the 5-DTE collar rule since short legs retain similar pin risk characteristics regardless of wing protection. Recommends phased tightening: weekly exits remain
+at 2 DTE, all others move to 5 DTE by EOY 2026 after backtest validation.
 
-**Grok-4.3**: Notes that monthly's short-holding pattern stems from overly aggressive 50% profit targets rather than optimal time-stop design. Suggests decoupled profit vs. time thresholds: 30% profit target with uniform 7 DTE stop across all tenors.
+**Grok-4.3**: Notes that monthly's short-holding pattern stems from overly aggressive 50% profit targets rather than optimal time-stop design. Suggests decoupled profit vs. time thresholds: 30% profit
+target with uniform 7 DTE stop across all tenors.
 
 ## Aggregate Rankings (Stage 2 Peer Review)
 

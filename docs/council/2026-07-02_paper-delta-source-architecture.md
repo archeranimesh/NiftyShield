@@ -1,8 +1,6 @@
 # Council Decision: paper-delta-source-architecture
 
-Date: 2026-07-02  
-Chairman: openai/gpt-4.1-2025-04-14  
-Council members: openai/gpt-4.1-2025-04-14, google/gemini-3.1-pro-preview-20260219, x-ai/grok-4.3-20260430, deepseek/deepseek-r1-0528
+Date: 2026-07-02 Chairman: openai/gpt-4.1-2025-04-14 Council members: openai/gpt-4.1-2025-04-14, google/gemini-3.1-pro-preview-20260219, x-ai/grok-4.3-20260430, deepseek/deepseek-r1-0528
 
 ---
 
@@ -16,19 +14,19 @@ Certainly. Here is the **Chairman’s Synthesis and Final Ruling** for the Paper
 
 ## Executive Summary
 
-**Boundary:**  
-The correct architecture is for the *caller* (entry script or orchestrator) to fetch/resolves actual per-leg option deltas, building a mapping (`instrument_key` → `delta`), and passing it into `PortfolioDeltaTracker.aggregate_delta`. The risk module (`src/risk/delta_tracker.py`) remains a pure, zero-I/O, synchronous data aggregator, as originally intended.  
-**(Option “b”: resolve deltas outside risk, do not introduce I/O or async into core risk code.)**
+**Boundary:** The correct architecture is for the *caller* (entry script or orchestrator) to fetch/resolves actual per-leg option deltas, building a mapping (`instrument_key` → `delta`), and passing
+it into `PortfolioDeltaTracker.aggregate_delta`. The risk module (`src/risk/delta_tracker.py`) remains a pure, zero-I/O, synchronous data aggregator, as originally intended. **(Option “b”: resolve
+deltas outside risk, do not introduce I/O or async into core risk code.)**
 
-**Fallbacks:**  
-- **If per-leg delta is missing for an open option:**  
+**Fallbacks:**
+- **If per-leg delta is missing for an open option:**
   - *Recommended:* Log a prominent WARNING (including full position context) and fall back to the old `net_qty / lot_size` approximation.
   - *For paper phase (current state):* Do **not** block—allow entry but with heavy logging for auditability and future refinability.
   - *For live-money (future):* Consider strict "fail-closed" (block entry/cap breach) if unresolved, but only after extensive production validation.
-- **If snapshot is stale/missing or fetch fails entirely:**  
+- **If snapshot is stale/missing or fetch fails entirely:**
   - *Recommended:* Log a WARNING for staleness and fall back to the approximation, unless failure persists for multiple runs—in which case escalate to cap block (fail-closed) until data is available.
 
-**Testing:**  
+**Testing:**
 - Core risk tests remain pure-dataclass and dict tests; chain-resolution logic (extracting deltas from chain snapshots) is tested separately at the caller/test harness layer.
 
 ---
@@ -49,32 +47,35 @@ The correct architecture is for the *caller* (entry script or orchestrator) to f
 
 ## Architectural Rationale
 
-1. **Preserves the established invariant that `src/risk/` is pure, side-effect-free, synchronous, and testable without I/O mocking.** This is crucial both for developer experience and long-term structural stability.
+1. **Preserves the established invariant that `src/risk/` is pure, side-effect-free, synchronous, and testable without I/O mocking.** This is crucial both for developer experience and long-term
+   structural stability.
 2. **Async and I/O boundaries are respected:** Async fetches and possibly blocking calls (chain grabs) stay in periphery scripts, never in risk-core.
-3. **Composability and clarity:** Option-chain deltas are only needed for options, and the caller already fetches the chain for other gate checks (liquidity, expiry, IVR), so the cost is negligible. Supplying the map is simple and explicit.
+3. **Composability and clarity:** Option-chain deltas are only needed for options, and the caller already fetches the chain for other gate checks (liquidity, expiry, IVR), so the cost is negligible.
+   Supplying the map is simple and explicit.
 4. **Testing simplicity:** As tests for `PortfolioDeltaTracker` currently require no mocks, the pure-data surface is kept clean; delta-to-instrument_key mapping is tested at the periphery.
-5. **Operational safety:** Any uncertainty in delta resolution must never be invisible. All approximations or data failures are *always* logged — the operator can see and correct root causes, and paper/live code does not diverge unexpectedly.
+5. **Operational safety:** Any uncertainty in delta resolution must never be invisible. All approximations or data failures are *always* logged — the operator can see and correct root causes, and
+   paper/live code does not diverge unexpectedly.
 
 ---
 
 ## Fallback Policy — Per Failure Mode
 
-**1. instrument_key not found in chain:**  
-- **Paper/trial/research phase:**  
+**1. instrument_key not found in chain:**
+- **Paper/trial/research phase:**
   - Log a WARNING (**never silent**; log includes strategy/leg/instrument_key/net_qty/caller context).
   - Fall back to legacy ±1.0 per lot (approximate, but now always explicit and trackable).
   - Do **not** block entry. (Paper is intended for historic comparability and practical research.)
-- **Live-money/prod:**  
+- **Live-money/prod:**
   - If possible, escalate to fail-closed (cap breach, block entry), but only once confident the chain mapping is robust and operational stability is proven.
 
-**2. Chain snapshot is stale:**  
+**2. Chain snapshot is stale:**
 - Log a WARNING stating how stale (e.g., days/minutes).
 - Fall back to approximation where needed.
 - If staleness exceeds a configurable threshold (e.g., 2–5 trading days), escalate to ERROR and consider blocking entry.
 
-**3. Chain fetch fails:**  
-- Log an ERROR.  
-- Fall back to approximation for all positions.  
+**3. Chain fetch fails:**
+- Log an ERROR.
+- Fall back to approximation for all positions.
 - If more than one consecutive fetch fails, escalate to cap breach (i.e., treat as if unknown risk: block entry).
 
 **NOTE:** These contracts must be surfaced in operator logs/monitoring tools to ensure no silent risk-blind trading occurs. All WARNINGs/ERRORs are actionable.
@@ -83,8 +84,10 @@ The correct architecture is for the *caller* (entry script or orchestrator) to f
 
 ## Dissenting and Special Notes
 
-- There was nontrivial debate on whether "fail-closed" (block entirely on any unresolved/missing delta) was too conservative for paper trading (consensus: yes), and the wisdom of falling back to approximation for live trading (consensus: no—should be a hard block if risk is unmeasurable for live portfolio constraints, per council's drawdown rules).
-- Multiple panelists (esp. Response B, D) pointed out that the naive ±1.0 fallback can itself be dangerous if, for example, a short call is missed and its risk is artificially netted out. However, for "paper/trial", the need to avoid disruption trumps the mild risk of over/underreporting; explicit logging is a compromise.
+- There was nontrivial debate on whether "fail-closed" (block entirely on any unresolved/missing delta) was too conservative for paper trading (consensus: yes), and the wisdom of falling back to
+  approximation for live trading (consensus: no—should be a hard block if risk is unmeasurable for live portfolio constraints, per council's drawdown rules).
+- Multiple panelists (esp. Response B, D) pointed out that the naive ±1.0 fallback can itself be dangerous if, for example, a short call is missed and its risk is artificially netted out. However, for
+  "paper/trial", the need to avoid disruption trumps the mild risk of over/underreporting; explicit logging is a compromise.
 - All agree that for expired/dead/closed positions, a clean mapping of known zeroes or explicit expiry checks should be used, if possible, to prevent unnecessary warning spam.
 
 ---
@@ -142,8 +145,7 @@ The correct architecture is for the *caller* (entry script or orchestrator) to f
 - Implementers should strictly follow this layered, logged fallback policy until real-world operational reliability information justifies tightening failure mode contracts.
 - Council review is required before moving the system to strict "fail-closed" live-cap-breach on missing chain data in live-mode.
 
-**Chairman:** anthropic/claude-4.6-opus-20260205  
-Representing: openai/gpt-5.5, google/gemini-3.1-pro, x-ai/grok-4.3, deepseek/deepseek-r1
+**Chairman:** anthropic/claude-4.6-opus-20260205 Representing: openai/gpt-5.5, google/gemini-3.1-pro, x-ai/grok-4.3, deepseek/deepseek-r1
 
 ---
 
@@ -161,9 +163,7 @@ Representing: openai/gpt-5.5, google/gemini-3.1-pro, x-ai/grok-4.3, deepseek/dee
 
 ### openai/gpt-4.1-2025-04-14
 
-CONTEXT.md ✓  
-DECISION DOMAIN CONSTRAINTS ✓  
-BUG-002, B002.3-4, full council protocol loaded.
+CONTEXT.md ✓ DECISION DOMAIN CONSTRAINTS ✓ BUG-002, B002.3-4, full council protocol loaded.
 
 ---
 
@@ -185,14 +185,19 @@ BUG-002, B002.3-4, full council protocol loaded.
 
 **Why boundary (b)?**
 - **Preserves `src/risk/` as a pure, side-effect-free, sync package**; its public API remains easy to test, reason about, and use without I/O or network, matching all current design constraints.
-- **Async/sync boundary discipline:** As per the project's root `CLAUDE.md` and Decision Domain: all live-data I/O (async or blocking) resides in the periphery (entry scripts, orchestrators, paper store accessors). No module in `src/risk/` should ever acquire a disk/network/async dependency.
-- **Compatibility with test suite:** Maintains existing tests as zero-mocking, fully deterministic. "No network in unit tests" is a hard constraint; (a) would require inconvenient mocking/patching in every test; (c) would drag I/O into `PaperStore`, affecting every construction and test use.
-- **Composability:** Many callers already hold a chain snapshot or broker client as part of their gating logic (e.g., for liquidity, IVR, expiry, or strike-screening); delta acquisition fits naturally here, needing no new fetches.
-- **Accurate measurement and explicit logging:** All code paths where the true strike-delta is unknown are now explicit, audit-logged, and can be improved incrementally in the entry logic, without ever requiring a refactor of risk-core.
+- **Async/sync boundary discipline:** As per the project's root `CLAUDE.md` and Decision Domain: all live-data I/O (async or blocking) resides in the periphery (entry scripts, orchestrators, paper
+  store accessors). No module in `src/risk/` should ever acquire a disk/network/async dependency.
+- **Compatibility with test suite:** Maintains existing tests as zero-mocking, fully deterministic. "No network in unit tests" is a hard constraint; (a) would require inconvenient mocking/patching in
+  every test; (c) would drag I/O into `PaperStore`, affecting every construction and test use.
+- **Composability:** Many callers already hold a chain snapshot or broker client as part of their gating logic (e.g., for liquidity, IVR, expiry, or strike-screening); delta acquisition fits naturally
+  here, needing no new fetches.
+- **Accurate measurement and explicit logging:** All code paths where the true strike-delta is unknown are now explicit, audit-logged, and can be improved incrementally in the entry logic, without
+  ever requiring a refactor of risk-core.
 
 **Why not (a)/(c)?**
 - (a) Adds untestable complexity and async/sync edge cases, violating existing design and test rules.
-- (c) Would require every `PaperPosition` initialization to have access to the *correct* point-in-time chain, writing a dependency into the persistence layer and breaking the separation of concerns between trade records, instrument resolution, and risk reading.
+- (c) Would require every `PaperPosition` initialization to have access to the *correct* point-in-time chain, writing a dependency into the persistence layer and breaking the separation of concerns
+  between trade records, instrument resolution, and risk reading.
 
 ---
 
@@ -201,7 +206,8 @@ BUG-002, B002.3-4, full council protocol loaded.
 ### (1) `instrument_key` not in chain
 
 **Policy:** Fall back to existing ±1.0 per lot approximation (i.e., full future/spot-like delta for each lot), **but log a WARNING**.
-- *Justification*: Blocking on partial chain coverage would make risk caps hypersensitive to transient/rare errors in the chain; most risks from mis-approximation are caught by the warning/bounded exposure.
+- *Justification*: Blocking on partial chain coverage would make risk caps hypersensitive to transient/rare errors in the chain; most risks from mis-approximation are caught by the warning/bounded
+  exposure.
 - *Audit/logging*: Message should include strategy, leg_role, instrument_key, net_qty, attempted expiry/date, and caller context.
 
 ### (2) Stale chain snapshot (e.g., snapshot is >2 trading days older than Nifty spot/ledger date)
@@ -212,24 +218,30 @@ BUG-002, B002.3-4, full council protocol loaded.
 
 ### (3) Chain fetch failure (API/network error, all chain data missing)
 
-**Policy:** Log an **ERROR** indicating the fetch failure, and fall back to ±1.0 per lot approximation for all positions.  
-- *Escalation path*: If two or more fetch attempts fail in a row (e.g., two consecutive entry attempts), escalate from WARNING to blocking entry (fail-closed), since persistent absence of real chain data is indistinguishable from systemic market or data source failure.
-- *Justification*: Defaulting to approximation on transient errors prevents over-sensitivity while still warning the operator; long duration or repeated failure is a sign of a de facto system or market outage, and the cap should block to avoid "trading blind".
+**Policy:** Log an **ERROR** indicating the fetch failure, and fall back to ±1.0 per lot approximation for all positions.
+- *Escalation path*: If two or more fetch attempts fail in a row (e.g., two consecutive entry attempts), escalate from WARNING to blocking entry (fail-closed), since persistent absence of real chain
+  data is indistinguishable from systemic market or data source failure.
+- *Justification*: Defaulting to approximation on transient errors prevents over-sensitivity while still warning the operator; long duration or repeated failure is a sign of a de facto system or
+  market outage, and the cap should block to avoid "trading blind".
 
 ---
 
 ## Test Boundary Impact
 
 - **No change to `tests/unit/risk/test_delta_tracker.py`**: This test suite continues to operate on dataclass fixtures and dicts, no network or I/O mocking.
-- **Caller-side chain delta logic** (e.g., parsing a `ChainReader` DataFrame and mapping instrument_keys) can and should be tested in the caller script's own test files, with pre-canned DataFrames or dicts.
+- **Caller-side chain delta logic** (e.g., parsing a `ChainReader` DataFrame and mapping instrument_keys) can and should be tested in the caller script's own test files, with pre-canned DataFrames or
+  dicts.
 - **Fallback/audit logging**: Must be covered by unit tests (by simulating missing keys, stale chains, and failed fetches in the caller's resolution stage).
 
 ---
 
 ## Dissenting Notes
 
-- **Panel consensus**: Portfolio-level live risk caps on delta are mission-critical (see `2026-05-02_multi-strategy-portfolio-risk-allocation.md`). However, in **pure paper-trading**, a strict fail-closed policy could be considered less necessary — but council unanimously rules for parity in implementation with live-money rules, to prevent paper/live logic divergence and simplify transition/historic risk auditing.
-- **One dissent** (Grok-4): Argued that in exploratory paper-only runs (e.g., research, idea incubation), a "fail soft" (always approximate, only log) posture is less brittle. Chairman overruled on the grounds that every delta gate may eventually control real-money entries.
+- **Panel consensus**: Portfolio-level live risk caps on delta are mission-critical (see `2026-05-02_multi-strategy-portfolio-risk-allocation.md`). However, in **pure paper-trading**, a strict
+  fail-closed policy could be considered less necessary — but council unanimously rules for parity in implementation with live-money rules, to prevent paper/live logic divergence and simplify
+  transition/historic risk auditing.
+- **One dissent** (Grok-4): Argued that in exploratory paper-only runs (e.g., research, idea incubation), a "fail soft" (always approximate, only log) posture is less brittle. Chairman overruled on
+  the grounds that every delta gate may eventually control real-money entries.
 - **All agree**: All fallbacks must be **prominently logged/audited**, and never silent — the path is fully surfaced to the operator and the record.
 
 ---
@@ -248,15 +260,14 @@ BUG-002, B002.3-4, full council protocol loaded.
   ```
   - If `position_deltas` is given and contains the key, use `position_deltas[pos.instrument_key]`.
   - If not, fall back to ±1.0 per lot (with logging) or (for NiftyBees) to ETF formula.
-- **Caller contract:** At every risk check, caller(s) (e.g., strategy entry scripts) must fetch the freshest-possible chain, map deltas for every open paper position's `instrument_key`, and pass that map in. Any positions not mapped must be handled as fallbacks by the aggregation function.
+- **Caller contract:** At every risk check, caller(s) (e.g., strategy entry scripts) must fetch the freshest-possible chain, map deltas for every open paper position's `instrument_key`, and pass that
+  map in. Any positions not mapped must be handled as fallbacks by the aggregation function.
 - **Logging:** Standard Python logging; all WARNINGs/ERRORs must include actionable context for diagnosis.
 - **Config (optional):** Make the max staleness threshold configurable per environment (with a reasonable default, e.g., 2 trading days) for future flexibility.
 
 ---
 
-**Ruling End.**  
-**Chairman: anthropic/claude-4.6-opus-20260205**  
-Council: openai/gpt-5.5-20260423, google/gemini-3.1-pro-preview-20260219, x-ai/grok-4-07-09, deepseek/deepseek-r1-0528
+**Ruling End.** **Chairman: anthropic/claude-4.6-opus-20260205** Council: openai/gpt-5.5-20260423, google/gemini-3.1-pro-preview-20260219, x-ai/grok-4-07-09, deepseek/deepseek-r1-0528
 
 ### google/gemini-3.1-pro-preview-20260219
 
@@ -280,44 +291,51 @@ Here is the council ruling regarding the architecture and fallback policies for 
 
 ## Architecture Rationale
 
-**Architecture (b) is the clear winner because it rigorously enforces the project's async and pure-domain boundaries.** 
+**Architecture (b) is the clear winner because it rigorously enforces the project's async and pure-domain boundaries.**
 
-The defining rule of the `src/risk/` module is that it is a pure, zero-I/O mathematical evaluator. Injecting a `BrokerClient` or `ChainReader` into `PortfolioDeltaTracker` (Architecture A) pollutes the module with network dependencies, violates the "no blocking calls in the hot path" async mandate, and wrecks the existing test suite by requiring sweeping `MockBrokerClient` integration. 
+The defining rule of the `src/risk/` module is that it is a pure, zero-I/O mathematical evaluator. Injecting a `BrokerClient` or `ChainReader` into `PortfolioDeltaTracker` (Architecture A) pollutes
+the module with network dependencies, violates the "no blocking calls in the hot path" async mandate, and wrecks the existing test suite by requiring sweeping `MockBrokerClient` integration.
 
 By having the caller supply a `position_deltas` mapping:
-1. **Separation of Concerns:** The entry scripts (which already fetch the chain to check strike liquidity, IVR, and delta-guards) own the I/O layer. They extract the deltas, build the map, and hand it to the pure risk calculator. 
-2. **Backwards Compatibility:** NiftyBees and naked futures do not require chain data. `_position_delta` handles them exactly as it does today. The `position_deltas` map is consulted *only* when `option_type` is `"PE"` or `"CE"`. 
+1. **Separation of Concerns:** The entry scripts (which already fetch the chain to check strike liquidity, IVR, and delta-guards) own the I/O layer. They extract the deltas, build the map, and hand it
+   to the pure risk calculator.
+2. **Backwards Compatibility:** NiftyBees and naked futures do not require chain data. `_position_delta` handles them exactly as it does today. The `position_deltas` map is consulted *only* when
+   `option_type` is `"PE"` or `"CE"`.
 3. **Purity:** `test_delta_tracker.py` tests logic, not I/O, using simple primitive dict fixtures.
 
 ## Fallback Policy Detail
 
-Because this is a **live-money risk gate governing capital-at-risk**, the guiding principle is that *uncertainty must constrain risk, never expand it*. 
+Because this is a **live-money risk gate governing capital-at-risk**, the guiding principle is that *uncertainty must constrain risk, never expand it*.
 
-**1. Chain fetch failure (Caller handles):**
-If the API fails to fetch the chain, the caller cannot construct the map. The script must abort the entry sequence. You cannot enter a delta-governed strategy if the risk oracle is offline. 
+**1. Chain fetch failure (Caller handles):** If the API fails to fetch the chain, the caller cannot construct the map. The script must abort the entry sequence. You cannot enter a delta-governed
+strategy if the risk oracle is offline.
 
-**2. Stale chain snapshot (Caller handles):**
-Because an outdated snapshot can mask massive vulnerability (e.g., gamma risk right after an unrecorded market drop), the caller must enforce recency. For live calls, the delta TS must be within ~5 minutes. For EOD scripts, it must match the trading date. If stale, the caller treats it as a fetch failure and aborts.
+**2. Stale chain snapshot (Caller handles):** Because an outdated snapshot can mask massive vulnerability (e.g., gamma risk right after an unrecorded market drop), the caller must enforce recency. For
+live calls, the delta TS must be within ~5 minutes. For EOD scripts, it must match the trading date. If stale, the caller treats it as a fetch failure and aborts.
 
-**3. instrument_key not in chain (Risk gate handles):**
-If a fresh chain is provided but an open option leg is missing from the map (e.g., a highly illiquid or delisted strike), `aggregate_delta` must **Fail Closed**. It should:
+**3. instrument_key not in chain (Risk gate handles):** If a fresh chain is provided but an open option leg is missing from the map (e.g., a highly illiquid or delisted strike), `aggregate_delta` must
+**Fail Closed**. It should:
 * Log an `ERROR` stating `"Unresolved delta for {key}."`
 * Explicitly force `cap_breached = True` and `warning_breached = True`.
 * Continue summing the rest (for logging context) and return the `PortfolioDelta`.
 
-*Why not Fail Open to the old ±1.0 approximation?*
-If we fall back to ±1.0 for a missing leg, we re-introduce BUG-002 unpredictably. More dangerously, if it is a missing *short call* (delta ~ -0.1), the ±1.0 fallback would assign it `-1.0`. This massive negative number would artificially *reduce* the aggregated portfolio delta, potentially masking a genuine net-long breach and allowing an unsafe bullish entry. We cannot use false data to offset real risk.
+*Why not Fail Open to the old ±1.0 approximation?* If we fall back to ±1.0 for a missing leg, we re-introduce BUG-002 unpredictably. More dangerously, if it is a missing *short call* (delta ~ -0.1),
+the ±1.0 fallback would assign it `-1.0`. This massive negative number would artificially *reduce* the aggregated portfolio delta, potentially masking a genuine net-long breach and allowing an unsafe
+bullish entry. We cannot use false data to offset real risk.
 
-*Why not Fail Open to Zero?*
-If a missing short put (actual delta +0.8) is scored as `0.0`, the system masks critical directional risk. 
+*Why not Fail Open to Zero?* If a missing short put (actual delta +0.8) is scored as `0.0`, the system masks critical directional risk.
 
 Failing closed correctly prioritizes capital preservation: one unmappable instrument freezes the addition of *new* risk until the portfolio rolls off the anomaly or manual intervention occurs.
 
 ## Dissenting Notes
 
-**RiskManager Persona:** "I support failing closed, but caution that it can be highly disruptive in a paper-trading system that holds 30+ staggered wings. If Upstox temporarily drops a deep OTM 0.05-delta leg from the API, the whole portfolio freezes. The implementation should ensure `position_deltas` provides 0.0 for explicitly expired/dead legs if detectable, so they don't trigger the panic."
+**RiskManager Persona:** "I support failing closed, but caution that it can be highly disruptive in a paper-trading system that holds 30+ staggered wings. If Upstox temporarily drops a deep OTM
+0.05-delta leg from the API, the whole portfolio freezes. The implementation should ensure `position_deltas` provides 0.0 for explicitly expired/dead legs if detectable, so they don't trigger the
+panic."
 
-**OptionsStrategist Persona:** "Agreed on the mechanics. A technical refinement: to prevent the 'virtual breach' from corrupting the historical database, the returned `PortfolioDelta` object should probably persist the exact calculated numerical sum of the *known* legs, while setting the boolean `cap_breached` flag. This allows `paper_proxy_delta_log` and debugging to see what the visible book looked like when the gate slammed shut."
+**OptionsStrategist Persona:** "Agreed on the mechanics. A technical refinement: to prevent the 'virtual breach' from corrupting the historical database, the returned `PortfolioDelta` object should
+probably persist the exact calculated numerical sum of the *known* legs, while setting the boolean `cap_breached` flag. This allows `paper_proxy_delta_log` and debugging to see what the visible book
+looked like when the gate slammed shut."
 
 ### x-ai/grok-4.3-20260430
 
@@ -337,23 +355,30 @@ Failing closed correctly prioritizes capital preservation: one unmappable instru
 
 ## Architecture Rationale
 
-The explicit, preserved invariant for `src/risk/` (zero-I/O, pure, synchronous, no filesystem or network) was reinforced during B002.3 precisely to keep `PortfolioDeltaTracker` and its 24 call sites simple and its tests free of mocks. Adding `ChainReader`/`GammaStore`/live client into `_position_delta` would violate that boundary and force every existing risk test to become I/O-aware.
+The explicit, preserved invariant for `src/risk/` (zero-I/O, pure, synchronous, no filesystem or network) was reinforced during B002.3 precisely to keep `PortfolioDeltaTracker` and its 24 call sites
+simple and its tests free of mocks. Adding `ChainReader`/`GammaStore`/live client into `_position_delta` would violate that boundary and force every existing risk test to become I/O-aware.
 
-Option (b) is the only choice that respects both the zero-I/O contract and the async discipline rule. The caller layer (`ic_entry_gates.py` / `paper_ic_entry.py`) already performs option-chain fetches for liquidity/delta gates and IVR checks; supplying the resulting per-instrument delta map is a natural extension with zero extra round-trips. `PaperStore` is not appropriate because deltas are time-varying (unlike the static `option_type` resolved from BOD JSON).
+Option (b) is the only choice that respects both the zero-I/O contract and the async discipline rule. The caller layer (`ic_entry_gates.py` / `paper_ic_entry.py`) already performs option-chain fetches
+for liquidity/delta gates and IVR checks; supplying the resulting per-instrument delta map is a natural extension with zero extra round-trips. `PaperStore` is not appropriate because deltas are
+time-varying (unlike the static `option_type` resolved from BOD JSON).
 
 ## Fallback Policy Detail
 
-- **instrument_key not in chain snapshot** (most common case): non-fatal WARNING logged + fall back to the current `net_qty / lot_size` approximation. A silent zero or a hard block would either mask risk or create spurious rejections on a transient data gap. The explicit WARNING prevents the exact failure mode of BUG-002 from reappearing unnoticed.
+- **instrument_key not in chain snapshot** (most common case): non-fatal WARNING logged + fall back to the current `net_qty / lot_size` approximation. A silent zero or a hard block would either mask
+  risk or create spurious rejections on a transient data gap. The explicit WARNING prevents the exact failure mode of BUG-002 from reappearing unnoticed.
 
-- **stale chain snapshot** (> N trading days, analogous to BUG-004): WARNING + fall back to approximation (same as above). Hard-blocking on every transient freshness issue would be too aggressive for a system whose primary purpose is currently paper trading; the risk of false-positive blocks would exceed the risk of using a slightly stale delta.
+- **stale chain snapshot** (> N trading days, analogous to BUG-004): WARNING + fall back to approximation (same as above). Hard-blocking on every transient freshness issue would be too aggressive for
+  a system whose primary purpose is currently paper trading; the risk of false-positive blocks would exceed the risk of using a slightly stale delta.
 
-- **chain fetch failure at gate time** (network/API error): **fail closed** — treat as cap breach and block new entries. This is the only mode that directly impacts capital protection; a transient fetch failure must not silently allow an oversized position. The existing `check_entry_allowed` path already distinguishes warning vs. cap, so the same mechanism can surface the failure.
+- **chain fetch failure at gate time** (network/API error): **fail closed** — treat as cap breach and block new entries. This is the only mode that directly impacts capital protection; a transient
+  fetch failure must not silently allow an oversized position. The existing `check_entry_allowed` path already distinguishes warning vs. cap, so the same mechanism can surface the failure.
 
 This policy set is conservative for the live-money risk gate while remaining pragmatic for the paper-trading reality documented in the council risk-allocation memo.
 
 ## Dissenting Notes
 
-One panel member argued for fail-closed on all three modes (to maintain strict capital discipline even in paper mode). The majority view prevailed that the risk of excessive blocking during paper validation outweighs the benefit, provided the WARNING path is never silent. No other substantive disagreements.
+One panel member argued for fail-closed on all three modes (to maintain strict capital discipline even in paper mode). The majority view prevailed that the risk of excessive blocking during paper
+validation outweighs the benefit, provided the WARNING path is never silent. No other substantive disagreements.
 
 ### deepseek/deepseek-r1-0528
 
@@ -383,31 +408,27 @@ Introducing chain I/O into `delta_tracker.py` (option a) would violate core arch
 
 Per failure mode:
 
-1. **Instrument_key not in chain** (e.g., expired contract):  
-   → **Policy**: Contribute `0` delta + set `has_unknown_delta=True`  
-   → **Justification**: Missing strike indicates severe data inconsistency. Conservative 0-delta assignment prevents hidden risk but triggers breach via `has_unknown_delta`. Matches ₹6L drawdown kill threshold.
+1. **Instrument_key not in chain** (e.g., expired contract): → **Policy**: Contribute `0` delta + set `has_unknown_delta=True` → **Justification**: Missing strike indicates severe data inconsistency.
+   Conservative 0-delta assignment prevents hidden risk but triggers breach via `has_unknown_delta`. Matches ₹6L drawdown kill threshold.
 
-2. **Stale chain snapshot** (>5 min for intraday; >1 day for EOD):  
-   → **Policy**: Set `cap_breached=True` regardless of computed delta  
-   → **Justification**: Greeks decay rapidly near expiry. Stale data underrepresents gamma risk → violates stress-loss cap. Directly tied to "Valley of Death" scenario.
+2. **Stale chain snapshot** (>5 min for intraday; >1 day for EOD): → **Policy**: Set `cap_breached=True` regardless of computed delta → **Justification**: Greeks decay rapidly near expiry. Stale data
+   underrepresents gamma risk → violates stress-loss cap. Directly tied to "Valley of Death" scenario.
 
-3. **Chain fetch failure** (network/API error):  
-   → **Policy**: Block entry + set `cap_breached=True`  
-   → **Justification**: Unmeasured risk during volatility events could exceed ₹4L stress-loss cap. Capital preservation trumps opportunity cost.
+3. **Chain fetch failure** (network/API error): → **Policy**: Block entry + set `cap_breached=True` → **Justification**: Unmeasured risk during volatility events could exceed ₹4L stress-loss cap.
+   Capital preservation trumps opportunity cost.
 
-**Breach unification**: All failures set `PortfolioDelta.cap_breached=True` and `has_unknown_delta=True`. Gate function `check_entry_allowed` blocks new entries if either:  
-- `cap_breached=True` (delta/stress exceeds cap)  
-- `has_unknown_delta=True` (risk unquantifiable)  
+**Breach unification**: All failures set `PortfolioDelta.cap_breached=True` and `has_unknown_delta=True`. Gate function `check_entry_allowed` blocks new entries if either:
+- `cap_breached=True` (delta/stress exceeds cap)
+- `has_unknown_delta=True` (risk unquantifiable)
 
 ## Dissenting Notes
 
-**Gemini-3.1-pro-preview**: Argues fail-closed is too conservative for paper trading, suggesting:  
-- Fallback to BOD JSON's `option_type` + fixed delta (0.5 for calls/-0.5 for puts) with 50% haircut  
-- Rationale: Better than nothing; avoids total blockage during minor glitches  
-**Rebuttal**: Fixed deltas misprice gamma risk → violates ₹3L stress-loss cap. Paper trading must mirror live risk discipline per MISSION.md §3.  
+**Gemini-3.1-pro-preview**: Argues fail-closed is too conservative for paper trading, suggesting:
+- Fallback to BOD JSON's `option_type` + fixed delta (0.5 for calls/-0.5 for puts) with 50% haircut
+- Rationale: Better than nothing; avoids total blockage during minor glitches **Rebuttal**: Fixed deltas misprice gamma risk → violates ₹3L stress-loss cap. Paper trading must mirror live risk
+  discipline per MISSION.md §3.
 
-**Grok-4**: Proposes delayed retry (async polling) for transient failures.  
-**Rebuttal**: Entry gates are synchronous decisions → retries belong in caller, not risk module.  
+**Grok-4**: Proposes delayed retry (async polling) for transient failures. **Rebuttal**: Entry gates are synchronous decisions → retries belong in caller, not risk module.
 
 --- 
 

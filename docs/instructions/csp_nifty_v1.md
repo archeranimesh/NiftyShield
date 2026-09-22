@@ -1,21 +1,16 @@
 # Cash-Secured Put — Nifty 50 v1 — Operator Guide
 
-> Source of truth for strategy spec: `docs/strategies/csp_nifty_v1.md`
-> This guide covers the operational workflow only: what to run, when, and in what order.
+> Source of truth for strategy spec: `docs/strategies/csp_nifty_v1.md` This guide covers the operational workflow only: what to run, when, and in what order.
 
 ---
 
 ## Purpose
 
-A single-leg short put on Nifty 50 index options, collateralised by the pledged NiftyBees ETF
-holding. The strategy sells monthly puts at 0.20–0.35 delta and manages them to expiry (or rolls
-at DTE ≤ 5 if needed). Premium collected is the sole return source.
+A single-leg short put on Nifty 50 index options, collateralised by the pledged NiftyBees ETF holding. The strategy sells monthly puts at 0.20–0.35 delta and manages them to expiry (or rolls at DTE ≤
+5 if needed). Premium collected is the sole return source.
 
-**Strategy namespace:** `paper_csp_nifty_v1`  
-**Leg role:** `short_put`  
-**Lot size:** 75 (verify against NSE circular before each cycle)  
-**Underlying:** `NSE_INDEX|Nifty 50`  
-**Collateral:** NiftyBees ETF (`NSE_EQ|INF204KB14I2`) — already pledged
+**Strategy namespace:** `paper_csp_nifty_v1` **Leg role:** `short_put` **Lot size:** 75 (verify against NSE circular before each cycle) **Underlying:** `NSE_INDEX|Nifty 50` **Collateral:** NiftyBees
+ETF (`NSE_EQ|INF204KB14I2`) — already pledged
 
 ---
 
@@ -35,16 +30,14 @@ At DTE ≤ 5 (or stop-loss hit)
           └── record_paper_trade.py (SELL)  ← open replacement leg
 ```
 
-There is no automated roll script for CSP. Rolling is two sequential `record_paper_trade.py`
-calls — close the old leg, open the new one.
+There is no automated roll script for CSP. Rolling is two sequential `record_paper_trade.py` calls — close the old leg, open the new one.
 
 ---
 
 ## Step 1 — Find the Strike
 
-Run **before entry and before every roll**. Fetches the live Upstox option chain, filters puts
-in the 0.20–0.35 delta band, prints a ranked table, and (with `--dry-run`) emits a
-ready-to-paste `record_paper_trade.py` command for each candidate.
+Run **before entry and before every roll**. Fetches the live Upstox option chain, filters puts in the 0.20–0.35 delta band, prints a ranked table, and (with `--dry-run`) emits a ready-to-paste
+`record_paper_trade.py` command for each candidate.
 
 ```bash
 # Full table + ready-to-paste commands (auto-selects monthly expiry):
@@ -62,14 +55,11 @@ python scripts/find_strike_by_delta.py \
     --option-type PE
 ```
 
-**Reading the table:** Columns are `EXPIRY | LABEL | SIDE | STRIKE | DELTA | IV% | LTP | MID | BID | ASK | OI | KEY`.
-LABEL shows the expiry type (monthly/quarterly/yearly). Rows are ranked: round-100 strikes first,
-then tighter spread, then highest OI — across all candidate expiries merged into one pool.
-The dry-run commands use mid-price `(bid+ask)/2` when both sides are non-zero; falls back to LTP.
-Copy the command for your chosen row and run it directly — key and mid-price are embedded.
+**Reading the table:** Columns are `EXPIRY | LABEL | SIDE | STRIKE | DELTA | IV% | LTP | MID | BID | ASK | OI | KEY`. LABEL shows the expiry type (monthly/quarterly/yearly). Rows are ranked: round-100
+strikes first, then tighter spread, then highest OI — across all candidate expiries merged into one pool. The dry-run commands use mid-price `(bid+ask)/2` when both sides are non-zero; falls back to
+LTP. Copy the command for your chosen row and run it directly — key and mid-price are embedded.
 
-**Entry timing:** Run between 10:00–11:00 AM IST after the opening noise settles. Re-run if
-more than 15 minutes elapse before you record — mid-price drifts.
+**Entry timing:** Run between 10:00–11:00 AM IST after the opening noise settles. Re-run if more than 15 minutes elapse before you record — mid-price drifts.
 
 ---
 
@@ -123,9 +113,7 @@ python scripts/record_paper_trade.py \
 
 ## Step 3 — Daily Snapshot (cron)
 
-Runs **every trading day at 15:35 IST**. Fetches live LTP for all open paper positions,
-computes unrealised P&L, writes a `PaperNavSnapshot`. Safe to run multiple times — idempotent
-upsert.
+Runs **every trading day at 15:35 IST**. Fetches live LTP for all open paper positions, computes unrealised P&L, writes a `PaperNavSnapshot`. Safe to run multiple times — idempotent upsert.
 
 ```bash
 # Inspect P&L (dry-run default — no DB write):
@@ -151,8 +139,7 @@ python scripts/paper_snapshot.py
 
 ## Step 4 — Roll the Position (manual)
 
-No automated roll script exists for CSP. Roll at **DTE ≤ 5** (or earlier on a stop-loss).
-Rolling is two `record_paper_trade.py` calls executed back-to-back.
+No automated roll script exists for CSP. Roll at **DTE ≤ 5** (or earlier on a stop-loss). Rolling is two `record_paper_trade.py` calls executed back-to-back.
 
 ### 4a — Close the expiring leg
 
@@ -190,8 +177,7 @@ python scripts/record_paper_trade.py \
     --no-dry-run
 ```
 
-**Atomicity note:** There is no DB-level transaction guaranteeing close+open succeed together.
-If the open fails after the close is written, the strategy has no open position. Re-run Step 2
+**Atomicity note:** There is no DB-level transaction guaranteeing close+open succeed together. If the open fails after the close is written, the strategy has no open position. Re-run Step 2
 immediately to restore. Check with:
 
 ```bash
@@ -214,8 +200,7 @@ Per strategy spec (`docs/strategies/csp_nifty_v1.md`):
 
 - **Intra-cycle stop:** Close if unrealised loss reaches 2× premium collected on entry.
 - **Delta breach:** If short put delta crosses −0.50 (deep ITM), evaluate closing regardless of DTE.
-- **VIX spike:** If India VIX jumps > 25% in a single session, run the snapshot dry-run, assess
-  delta, and decide whether to hold or close before EOD.
+- **VIX spike:** If India VIX jumps > 25% in a single session, run the snapshot dry-run, assess delta, and decide whether to hold or close before EOD.
 
 Record any stop-loss close with `--notes "stop-loss: <reason>"` for later attribution analysis.
 
@@ -247,8 +232,7 @@ Required in `.env`:
 UPSTOX_ANALYTICS_TOKEN=<long-lived analytics token>  # all market-data fetches
 ```
 
-BOD instruments file must be current (needed for auto-expiry and `--underlying/--strike` lookup
-mode): `data/instruments/NSE.json.gz`
+BOD instruments file must be current (needed for auto-expiry and `--underlying/--strike` lookup mode): `data/instruments/NSE.json.gz`
 
 ---
 

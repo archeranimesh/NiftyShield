@@ -1,8 +1,6 @@
 # Council Decision: overlay-pnl-reporting-track-independence
 
-Date: 2026-08-10  
-Chairman: anthropic/claude-opus-4.6  
-Council members: openai/gpt-5.6-sol, google/gemini-3.1-pro-preview, x-ai/grok-4.3, deepseek/deepseek-r1-0528
+Date: 2026-08-10 Chairman: anthropic/claude-opus-4.6 Council members: openai/gpt-5.6-sol, google/gemini-3.1-pro-preview, x-ai/grok-4.3, deepseek/deepseek-r1-0528
 
 ---
 
@@ -12,7 +10,8 @@ Council members: openai/gpt-5.6-sol, google/gemini-3.1-pro-preview, x-ai/grok-4.
 
 **Decision: Position B, implemented as a schema-preserving refactor ("B-lite").**
 
-The council is unanimous: Position A (re-attribution) is rejected. Position B (decouple the pipeline to match the entry layer) is adopted, with the practical constraint that the existing SQLite schema requires no DDL changes — only the values written into `strategy_name` change.
+The council is unanimous: Position A (re-attribution) is rejected. Position B (decouple the pipeline to match the entry layer) is adopted, with the practical constraint that the existing SQLite schema
+requires no DDL changes — only the values written into `strategy_name` change.
 
 ---
 
@@ -22,42 +21,52 @@ The council is unanimous: Position A (re-attribution) is rejected. Position B (d
 
 **No.** All four council members agree without exception.
 
-S2r was a deliberate operator decision (DECISIONS.md 2026-07-29 round 5) to make overlay entry/roll track-independent. Re-coupling at the reporting layer does not solve the problem — it relocates the same ambiguity S2r was written to eliminate. Position A has no defensible attribution rule:
+S2r was a deliberate operator decision (DECISIONS.md 2026-07-29 round 5) to make overlay entry/roll track-independent. Re-coupling at the reporting layer does not solve the problem — it relocates the
+same ambiguity S2r was written to eliminate. Position A has no defensible attribution rule:
 
 - Showing the overlay under all three tracks triple-counts one economic position.
 - Assigning it to one "primary" track is arbitrary and misleading.
 - Creating a synthetic aggregate row changes the report shape anyway, effectively converging on Position B while retaining Position A's conceptual confusion.
 
-The existing `compute_overlay_coverage()` (S3r) already demonstrates the correct pattern: shared overlays may be *compared with* a base track at read time without being *persisted as belonging to* that track. Reporting must follow the same principle.
+The existing `compute_overlay_coverage()` (S3r) already demonstrates the correct pattern: shared overlays may be *compared with* a base track at read time without being *persisted as belonging to*
+that track. Reporting must follow the same principle.
 
 ### 2. Can the rework be done incrementally, or is backfill necessary?
 
 **Both — they are separable concerns.**
 
-- **Live path (immediate):** New overlay P&L rows are written under `STRATEGY_OVERLAY`. This requires no schema change — the existing `(strategy_name, overlay_type, snapshot_date)` primary key already supports it. Deploy this first to stop the bleeding (every day since S2r has produced silent false-zero rows).
+- **Live path (immediate):** New overlay P&L rows are written under `STRATEGY_OVERLAY`. This requires no schema change — the existing `(strategy_name, overlay_type, snapshot_date)` primary key already
+  supports it. Deploy this first to stop the bleeding (every day since S2r has produced silent false-zero rows).
 
-- **Historical repair (one-off, transaction-safe):** Pre-S2r rows were correctly filed under base-track `strategy_name` values at the time they were written. A backfill script following the project's established pattern (`backfill_nav_total_pnl.py`, `migrate_paper_trades_state.py`) should:
+- **Historical repair (one-off, transaction-safe):** Pre-S2r rows were correctly filed under base-track `strategy_name` values at the time they were written. A backfill script following the project's
+  established pattern (`backfill_nav_total_pnl.py`, `migrate_paper_trades_state.py`) should:
   1. Back up the SQLite database.
   2. Derive the actual cutover date from the trade ledger (first overlay trade written under `STRATEGY_OVERLAY`), not from a hardcoded commit date.
-  3. Check for primary-key collisions before any UPDATE — if multiple legacy track rows share the same `(overlay_type, snapshot_date)`, they cannot be blindly collapsed into one `STRATEGY_OVERLAY` row. The council specifically flags this as a real risk that a naive `UPDATE strategy_name = 'paper_nifty_overlay'` would hit.
+  3. Check for primary-key collisions before any UPDATE — if multiple legacy track rows share the same `(overlay_type, snapshot_date)`, they cannot be blindly collapsed into one `STRATEGY_OVERLAY`
+     row. The council specifically flags this as a real risk that a naive `UPDATE strategy_name = 'paper_nifty_overlay'` would hit.
   4. Where reconstruction is ambiguous, preserve the legacy rows and document the canonical-series start date. An explicit discontinuity is safer than fabricated continuity.
   5. Produce counts (inserted, skipped, ambiguous, unchanged) for audit.
 
-**Do not dual-write** the same economic P&L under both legacy track names and `STRATEGY_OVERLAY`. Dual-writing creates duplicate economic observations, ambiguous downstream aggregation, and a second cleanup migration later.
+**Do not dual-write** the same economic P&L under both legacy track names and `STRATEGY_OVERLAY`. Dual-writing creates duplicate economic observations, ambiguous downstream aggregation, and a second
+cleanup migration later.
 
 ### 3. Is there a viable third option?
 
 **No useful one beyond what B-lite already provides.**
 
-A "join to whichever track is active" approach fails because multiple tracks may be active simultaneously — it would recreate an implicit primary-track concept that S2r removed. Adding a nullable `track_namespace` column adds schema complexity without demonstrated benefit since the existing `strategy_name` column already distinguishes the overlay book.
+A "join to whichever track is active" approach fails because multiple tracks may be active simultaneously — it would recreate an implicit primary-track concept that S2r removed. Adding a nullable
+`track_namespace` column adds schema complexity without demonstrated benefit since the existing `strategy_name` column already distinguishes the overlay book.
 
-The genuinely useful "third option" is already embedded in B-lite: persist overlay P&L canonically under `STRATEGY_OVERLAY`, and produce track-relative or NiftyBees-relative *views* at read time only — clearly labeled as comparisons, never written back into canonical snapshot tables.
+The genuinely useful "third option" is already embedded in B-lite: persist overlay P&L canonically under `STRATEGY_OVERLAY`, and produce track-relative or NiftyBees-relative *views* at read time only
+— clearly labeled as comparisons, never written back into canonical snapshot tables.
 
 ### 4. Does the single-operator audience justify simpler design?
 
 **Yes — and that simplicity favors Position B, not Position A.**
 
-The operator's daily question is: *"How much did my protection (CC/PP/Collar) recover against my NiftyBees baseline?"* One unified overlay book compared against one NiftyBees benchmark answers this directly. Per-track overlay breakdowns add cognitive load without trading insight — the overlays are genuinely track-independent by construction since S2r. The digest becomes shorter, clearer, and impossible to misread.
+The operator's daily question is: *"How much did my protection (CC/PP/Collar) recover against my NiftyBees baseline?"* One unified overlay book compared against one NiftyBees benchmark answers this
+directly. Per-track overlay breakdowns add cognitive load without trading insight — the overlays are genuinely track-independent by construction since S2r. The digest becomes shorter, clearer, and
+impossible to misread.
 
 ---
 
@@ -65,9 +74,11 @@ The operator's daily question is: *"How much did my protection (CC/PP/Collar) re
 
 ### Phase 1 — Correctness Fix (Immediate)
 
-1. **`_compute_overlay_pnl_snapshots()`** (`paper_3track_snapshot.py`): Query overlay positions from `STRATEGY_OVERLAY`, not from the base-track `strategy_name` loop variable. This is the root cause of BUG-028's silent zero.
+1. **`_compute_overlay_pnl_snapshots()`** (`paper_3track_snapshot.py`): Query overlay positions from `STRATEGY_OVERLAY`, not from the base-track `strategy_name` loop variable. This is the root cause
+   of BUG-028's silent zero.
 
-2. **`generate_track_snapshot()`** (`track_snapshot.py`): Remove or isolate any overlay-leg discovery from the base-track snapshot path. Base-track snapshots report base-leg P&L only. Overlay P&L is computed once per account-level overlay book, not once per base track.
+2. **`generate_track_snapshot()`** (`track_snapshot.py`): Remove or isolate any overlay-leg discovery from the base-track snapshot path. Base-track snapshots report base-leg P&L only. Overlay P&L is
+   computed once per account-level overlay book, not once per base track.
 
 3. **`_build_recovery_digest()`**: Reframe as "NiftyBees benchmark vs standalone overlay book." Join the NiftyBees row and overlay rows by `snapshot_date`. No "active track" selection needed.
 
@@ -125,7 +136,8 @@ The implementation must enforce these properties:
 
 ---
 
-*Council confidence: high. All four members selected Position B. The primary variance was in migration safety (where Response A's caution about collision checking and non-silent zeros was recognized as the most rigorous treatment). This ruling adopts A's invariants and migration discipline within B's structural direction.*
+*Council confidence: high. All four members selected Position B. The primary variance was in migration safety (where Response A's caution about collision checking and non-silent zeros was recognized
+as the most rigorous treatment). This ruling adopts A's invariants and migration discipline within B's structural direction.*
 
 ---
 
@@ -135,14 +147,15 @@ The implementation must enforce these properties:
 
 CONTEXT.md ✓
 
-**Scope:** architecture ruling for BUG-028 only; no implementation proposed here.  
-**Plan:** determine the canonical ownership model, separate persistence from display projections, and define a safe historical transition.
+**Scope:** architecture ruling for BUG-028 only; no implementation proposed here. **Plan:** determine the canonical ownership model, separate persistence from display projections, and define a safe
+historical transition.
 
 # Council ruling: adopt Position B, but as a schema-preserving “B-lite”
 
 `STRATEGY_OVERLAY = "paper_nifty_overlay"` must be the canonical owner of overlay trades, leg snapshots, overlay P&L snapshots, and overlay reporting.
 
-Do **not** attribute the same overlay book back to Spot, Futures, or Proxy for persistence. That would recreate the ambiguity S2r deliberately removed and would invite either triple-counting or an arbitrary “primary track” convention.
+Do **not** attribute the same overlay book back to Spot, Futures, or Proxy for persistence. That would recreate the ambiguity S2r deliberately removed and would invite either triple-counting or an
+arbitrary “primary track” convention.
 
 However, Position B does **not** require dropping the existing `strategy_name` column or redesigning the entire table. The current key:
 
@@ -169,7 +182,8 @@ Position A has no defensible attribution rule:
 
 A reporting layer may create comparisons between independent books, but it must not silently turn a comparison into ownership.
 
-The existing `compute_overlay_coverage()` model demonstrates the correct distinction: shared overlays may be compared with each base track at read time without being persisted as belonging to that track.
+The existing `compute_overlay_coverage()` model demonstrates the correct distinction: shared overlays may be compared with each base track at read time without being persisted as belonging to that
+track.
 
 # Recommended module boundary
 
@@ -288,7 +302,8 @@ The system does not currently need a generalized N-strategy allocation engine. T
 - one NiftyBees benchmark,
 - read-time comparisons among them.
 
-Keep `strategy_name` in the table even if canonical overlay rows currently all use the same value. It preserves provenance, avoids a schema migration, and leaves room for future separate overlay books without committing to a generalized allocation framework today.
+Keep `strategy_name` in the table even if canonical overlay rows currently all use the same value. It preserves provenance, avoids a schema migration, and leaves room for future separate overlay books
+without committing to a generalized allocation framework today.
 
 # Migration and rollout recommendation
 
@@ -344,7 +359,8 @@ The implementation should enforce these invariants:
 
 ## Final decision
 
-**Choose Position B’s ownership model, implemented as a schema-preserving B-lite refactor.** Keep `paper_overlay_pnl_snapshots.strategy_name`, write canonical rows under `STRATEGY_OVERLAY`, separate overlay computation from `generate_track_snapshot()`, and treat any base-track association as a read-time comparison only.
+**Choose Position B’s ownership model, implemented as a schema-preserving B-lite refactor.** Keep `paper_overlay_pnl_snapshots.strategy_name`, write canonical rows under `STRATEGY_OVERLAY`, separate
+overlay computation from `generate_track_snapshot()`, and treat any base-track association as a read-time comparison only.
 
 Do not re-couple reporting to tracks, do not dual-write duplicate economic rows, and do not perform an unconditional historical relabel.
 
@@ -352,28 +368,35 @@ Do not re-couple reporting to tracks, do not dual-write duplicate economic rows,
 
 **DECISION: Position B (Decouple the pipeline)**
 
-The reporting pipeline must be decoupled to match the entry layer's architecture. Overlays are physically and logically traded as a single unified pool (`STRATEGY_OVERLAY`). The reporting layer must reflect this reality rather than hallucinating per-track relationships that execution explicitly dismantled in S2r. 
+The reporting pipeline must be decoupled to match the entry layer's architecture. Overlays are physically and logically traded as a single unified pool (`STRATEGY_OVERLAY`). The reporting layer must
+reflect this reality rather than hallucinating per-track relationships that execution explicitly dismantled in S2r.
 
 Here is the council's direct response to your questions and the implementation mandate:
 
 ### 1. Architectural Soundness of Re-coupling (Position A)
-Re-coupling at the reporting layer is an architectural anti-pattern and should be rejected. If you attempt Position A, you are forced to either triple-count the P&L (breaking the portfolio-level P&L invariants) or arbitrarily assign the shared overlay to one specific base track (which makes the report misleading). S2r decoupled overlays because they provide generalized portfolio protection. Reporting them as a single, independent strategy book is the only mathematically sound approach.
+Re-coupling at the reporting layer is an architectural anti-pattern and should be rejected. If you attempt Position A, you are forced to either triple-count the P&L (breaking the portfolio-level P&L
+invariants) or arbitrarily assign the shared overlay to one specific base track (which makes the report misleading). S2r decoupled overlays because they provide generalized portfolio protection.
+Reporting them as a single, independent strategy book is the only mathematically sound approach.
 
 ### 2. Migration Path vs. Incremental Delivery
-Do a clean backfill. This codebase has an established pattern of using one-off migration scripts to correct data invariants (e.g., `backfill_nav_total_pnl.py`, `migrate_paper_trades_state.py`). 
-Writing a query-time branch to handle a schema discontinuity (i.e., `if date < S2r_date: use base_track else: use STRATEGY_OVERLAY`) will permanently pollute `track_snapshot.py` and `paper_3track_snapshot.py`. Instead, write a quick `scripts/dev/migrate_overlay_attribution.py` to UPDATE the `strategy_name` of all pre-2026-08-04 overlay rows in `paper_overlay_pnl_snapshots` (and `paper_leg_snapshots` if applicable) to `STRATEGY_OVERLAY`.
+Do a clean backfill. This codebase has an established pattern of using one-off migration scripts to correct data invariants (e.g., `backfill_nav_total_pnl.py`, `migrate_paper_trades_state.py`).
+Writing a query-time branch to handle a schema discontinuity (i.e., `if date < S2r_date: use base_track else: use STRATEGY_OVERLAY`) will permanently pollute `track_snapshot.py` and
+`paper_3track_snapshot.py`. Instead, write a quick `scripts/dev/migrate_overlay_attribution.py` to UPDATE the `strategy_name` of all pre-2026-08-04 overlay rows in `paper_overlay_pnl_snapshots` (and
+`paper_leg_snapshots` if applicable) to `STRATEGY_OVERLAY`.
 
 ### 3. Is there a viable third option (Read-time Join)?
-No, because read-time joins presuppose that viewing the overlay "through the lens of a specific track" provides analytical value. The operator already confirmed (during S9) that CC/PP/Collar run as live parallel overlays specifically against NiftyBees, and the `OverlayCoverage` metric (S3r) already uses the track-independent `STRATEGY_OVERLAY` namespace. Trying to artificially map the P&L back to Futures or Proxy via a join just adds query complexity without delivering actual trading insight. 
+No, because read-time joins presuppose that viewing the overlay "through the lens of a specific track" provides analytical value. The operator already confirmed (during S9) that CC/PP/Collar run as
+live parallel overlays specifically against NiftyBees, and the `OverlayCoverage` metric (S3r) already uses the track-independent `STRATEGY_OVERLAY` namespace. Trying to artificially map the P&L back
+to Futures or Proxy via a join just adds query complexity without delivering actual trading insight.
 
 ### 4. Audience and Simplicity
-The single human operator audience strongly argues for Position B. The operator's primary question at EOD is: *"How much did my protection (CC/PP/Collar) recover against my baseline (NiftyBees)?"* 
-Stripping out the legacy per-track breakdown makes the Telegram digest shorter, clearer, and faster to read. 
+The single human operator audience strongly argues for Position B. The operator's primary question at EOD is: *"How much did my protection (CC/PP/Collar) recover against my baseline (NiftyBees)?"*
+Stripping out the legacy per-track breakdown makes the Telegram digest shorter, clearer, and faster to read.
 
 ### Implementation Mandate
-1. **Reporting Queries:** Modify `_compute_overlay_pnl_snapshots()` to pull base positions explicitly from `STRATEGY_OVERLAY` rather than inheriting the loop's `strategy_name`. 
+1. **Reporting Queries:** Modify `_compute_overlay_pnl_snapshots()` to pull base positions explicitly from `STRATEGY_OVERLAY` rather than inheriting the loop's `strategy_name`.
 2. **Digest Framing:** Update `_build_recovery_digest()` to frame the report as "NiftyBees vs Unified Overlays". Remove all legacy track-iteration logic related to overlays.
-3. **Migration:** Write a one-off script to migrate historical data so `paper_overlay_pnl_snapshots` is uniformly keyed to `STRATEGY_OVERLAY` from inception to present. 
+3. **Migration:** Write a one-off script to migrate historical data so `paper_overlay_pnl_snapshots` is uniformly keyed to `STRATEGY_OVERLAY` from inception to present.
 4. **Data Model:** No schema changes (DDL) are required. The table already has a `strategy_name` column; we are simply standardizing the string value it holds for overlays.
 
 ### x-ai/grok-4.3
@@ -382,28 +405,33 @@ Stripping out the legacy per-track breakdown makes the Telegram digest shorter, 
 
 ### Answers to the four questions
 
-1. **Re-coupling via reporting is architecturally unsound.**  
-   S2r was an explicit operator decision (DECISIONS.md 2026-07-29 round 5) to make overlay entry/roll track-independent. Re-introducing the coupling only in the reporting layer (Position A) simply moves the mismatch from the write path to the read path. It creates exactly the attribution ambiguity the council already rejected at entry time (which track “owns” a leg that was deliberately written without a track?). This is the definition of technical debt that will surface again the moment anyone tries to add a fourth track, a new overlay type, or automated position sizing.
+1. **Re-coupling via reporting is architecturally unsound.** S2r was an explicit operator decision (DECISIONS.md 2026-07-29 round 5) to make overlay entry/roll track-independent. Re-introducing the
+   coupling only in the reporting layer (Position A) simply moves the mismatch from the write path to the read path. It creates exactly the attribution ambiguity the council already rejected at entry
+   time (which track “owns” a leg that was deliberately written without a track?). This is the definition of technical debt that will surface again the moment anyone tries to add a fourth track, a new
+   overlay type, or automated position sizing.
 
-2. **Incremental dual-write is feasible for the live path; a one-time backfill is still required for history.**  
-   - New rows written after the fix can go under `STRATEGY_OVERLAY` (or a new `overlay_type` column) with no schema change beyond a nullable `track_namespace` column that is left NULL for the independent overlay book.  
-   - Pre-S2r rows (2026-08-04 and earlier) were correctly filed under a track’s `strategy_name`. A small migration script (`scripts/dev/migrate_overlay_pnl_to_independent.py`) can either:  
+2. **Incremental dual-write is feasible for the live path; a one-time backfill is still required for history.**
+   - New rows written after the fix can go under `STRATEGY_OVERLAY` (or a new `overlay_type` column) with no schema change beyond a nullable `track_namespace` column that is left NULL for the
+     independent overlay book.
+   - Pre-S2r rows (2026-08-04 and earlier) were correctly filed under a track’s `strategy_name`. A small migration script (`scripts/dev/migrate_overlay_pnl_to_independent.py`) can either:
      – backfill a synthetic `overlay_type` + set `strategy_name = STRATEGY_OVERLAY` for those rows, or  
      – leave them as-is and document a “legacy” query path that the digest falls back to for dates ≤ S2r cutover.  
-   Because the daily digest is consumed by a single human, the discontinuity is acceptable if clearly dated in the Telegram message (“Pre-2026-07-29 rows shown under original track; post-S2r rows shown under independent overlay book”). No hard migration of the entire table is required.
+Because the daily digest is consumed by a single human, the discontinuity is acceptable if clearly dated in the Telegram message (“Pre-2026-07-29 rows shown under original track; post-S2r rows shown
+under independent overlay book”). No hard migration of the entire table is required.
 
-3. **A read-time join (the “third option”) adds complexity without benefit.**  
-   It would require either (a) keeping the old keyed rows and joining at query time, or (b) a new mapping table. Both approaches re-create the attribution problem at runtime and make the `paper_overlay_pnl_snapshots` table harder to reason about. Aligning the write model and the read model (Position B) is cleaner.
+3. **A read-time join (the “third option”) adds complexity without benefit.** It would require either (a) keeping the old keyed rows and joining at query time, or (b) a new mapping table. Both
+   approaches re-create the attribution problem at runtime and make the `paper_overlay_pnl_snapshots` table harder to reason about. Aligning the write model and the read model (Position B) is cleaner.
 
-4. **Single-operator audience argues for Position B, not against it.**  
-   The daily digest is the primary monitoring surface. When the data model and the report match, the operator sees one consistent story (“NiftyBees vs the independent overlay book”). Any re-attribution logic (Position A) will eventually produce surprising numbers that the operator has to mentally discount. Consistency reduces cognitive load for the human who actually reads the output every day.
+4. **Single-operator audience argues for Position B, not against it.** The daily digest is the primary monitoring surface. When the data model and the report match, the operator sees one consistent
+   story (“NiftyBees vs the independent overlay book”). Any re-attribution logic (Position A) will eventually produce surprising numbers that the operator has to mentally discount. Consistency reduces
+   cognitive load for the human who actually reads the output every day.
 
 ### Concrete next steps (data-architecture view)
 
-- Add an optional `track_namespace` column (nullable) to `paper_overlay_pnl_snapshots` and the corresponding `OverlayPnLSnapshot` dataclass.  
-- Change `_compute_overlay_pnl_snapshots` and `_build_recovery_digest` to read from `STRATEGY_OVERLAY` (and fall back to the legacy track-scoped rows only for dates before the S2r cutover).  
-- Update `PaperStore.record_overlay_pnl_snapshot` / `get_overlay_pnl_snapshots` to accept an optional `track_namespace` filter (default `None` → independent overlay book).  
-- One migration script + a note in DECISIONS.md dated today.  
+- Add an optional `track_namespace` column (nullable) to `paper_overlay_pnl_snapshots` and the corresponding `OverlayPnLSnapshot` dataclass.
+- Change `_compute_overlay_pnl_snapshots` and `_build_recovery_digest` to read from `STRATEGY_OVERLAY` (and fall back to the legacy track-scoped rows only for dates before the S2r cutover).
+- Update `PaperStore.record_overlay_pnl_snapshot` / `get_overlay_pnl_snapshots` to accept an optional `track_namespace` filter (default `None` → independent overlay book).
+- One migration script + a note in DECISIONS.md dated today.
 - No change to `generate_track_snapshot` itself—overlay P&L is no longer its concern.
 
 This keeps the storage layer simple (one strategy_name for the overlay book) while preserving historical queryability. It is the smallest change that respects the S2r architectural boundary.
@@ -427,18 +455,16 @@ I'll analyze the BUG-028 overlay reporting issue and provide council recommendat
 - 👎 Needs migration strategy for pre-S2r data discontinuity
 
 ### Council Recommendations
-1. **Architectural Alignment**  
-Position B is architecturally superior. S2r deliberately decoupled overlays from tracks for operational flexibility. Reintroducing coupling in reporting would create a "schizophrenic" system where entry/management is decoupled but reporting is coupled. This violates the principle of single source of truth.
+1. **Architectural Alignment** Position B is architecturally superior. S2r deliberately decoupled overlays from tracks for operational flexibility. Reintroducing coupling in reporting would create a
+   "schizophrenic" system where entry/management is decoupled but reporting is coupled. This violates the principle of single source of truth.
 
-2. **Incremental Implementation**  
-The pipeline rework can be implemented incrementally:
+2. **Incremental Implementation** The pipeline rework can be implemented incrementally:
 - Phase 1: Update `paper_overlay_pnl_snapshots` schema to use `STRATEGY_OVERLAY` exclusively
 - Phase 2: Modify `generate_track_snapshot()` to ignore overlay legs (already done post-S2r)
 - Phase 3: Rebuild `_compute_overlay_pnl_snapshots()` to source exclusively from `STRATEGY_OVERLAY`
 - Phase 4: Refactor `_build_recovery_digest()` to use the new independent overlay stream
 
-3. **Migration Strategy**  
-Handle the schema discontinuity with:
+3. **Migration Strategy** Handle the schema discontinuity with:
 ```python
 # In paper_3track_snapshot.py
 def _migrate_leg_snapshot(snapshot):
@@ -448,8 +474,7 @@ def _migrate_leg_snapshot(snapshot):
 ```
 Run this transformation during database initialization. Pre-S2r data retains its original strategy_name but gets reinterpreted in the new context.
 
-4. **Operator Experience**  
-The daily digest should evolve to show:
+4. **Operator Experience** The daily digest should evolve to show:
 ```
 🛡️ NiftyShield Protection Performance
 -------------------------------------
@@ -460,7 +485,8 @@ Net Protected: +0.4% (+₹2,400)
 This maintains simplicity while honoring the architectural reality.
 
 ### Verdict
-**Adopt Position B (decoupled pipeline)** with the migration strategy above. This preserves architectural integrity while delivering a coherent operator experience. The extra development effort is justified by:
+**Adopt Position B (decoupled pipeline)** with the migration strategy above. This preserves architectural integrity while delivering a coherent operator experience. The extra development effort is
+justified by:
 1. Eliminating persistent data inconsistencies
 2. Honoring the S2r design intent
 3. Creating a foundation for future strategy expansion

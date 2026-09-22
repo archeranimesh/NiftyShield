@@ -1,7 +1,6 @@
 # NiftyShield — Architecture (C4 Container, Level 2)
 
-> Answers "what calls what?" without reading `CONTEXT_TREE.md`.
-> Rendered natively by GitHub Markdown (Mermaid).
+> Answers "what calls what?" without reading `CONTEXT_TREE.md`. Rendered natively by GitHub Markdown (Mermaid).
 
 ```mermaid
 graph TD
@@ -256,7 +255,8 @@ graph TD
 
 ## Key invariants
 
-- **`src/client/factory.py`** is the sole composition root. Every module that needs a broker call receives a `BrokerClient` instance injected via constructor — never imports `UpstoxLiveClient` directly.
+- **`src/client/factory.py`** is the sole composition root. Every module that needs a broker call receives a `BrokerClient` instance injected via constructor — never imports `UpstoxLiveClient`
+  directly.
 - **`src/db.py`** is the single SQLite connection manager. All modules share one `portfolio.sqlite` file; table isolation is by name prefix (`paper_*`, `nuvama_*`, `dhan_*`).
 - **`src/models/`** contains all cross-module Pydantic/dataclass types (`Leg`, `Trade`, `PortfolioSummary`, `MFHolding`). Modules import from here; they do not define their own shared types.
 - **Monetary fields** are always `Decimal`, stored as `TEXT` in SQLite. Floats from external APIs are coerced at the boundary via `Decimal(str(value))`.

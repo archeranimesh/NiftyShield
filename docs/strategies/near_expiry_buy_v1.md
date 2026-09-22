@@ -14,36 +14,25 @@
 | Council pending         | 2 open questions — see §14. Both must resolve before Phase 3 live deployment.                      |
 | Data dependency         | Dhan Data API (₹499/month) for L2 depth — see §4                                                  |
 
-> **Research hypothesis:** At 0–1 DTE, the dominant mechanism for a 5–20× premium explosion
-> is Gamma convexity, not Vega. Spot approaches a strike, delta jumps from ~0.03 to ~0.45,
-> and premium follows non-linearly. The setup is visible days in advance: OI builds at a
-> strike, spot drifts toward it, gamma_gearing rises as DTE collapses. This strategy
-> identifies those setups early via daily monitoring, then enters on DTE 0–1 when the
-> intraday convexity trigger fires.
+> **Research hypothesis:** At 0–1 DTE, the dominant mechanism for a 5–20× premium explosion is Gamma convexity, not Vega. Spot approaches a strike, delta jumps from ~0.03 to ~0.45, and premium follows
+> non-linearly. The setup is visible days in advance: OI builds at a strike, spot drifts toward it, gamma_gearing rises as DTE collapses. This strategy identifies those setups early via daily
+> monitoring, then enters on DTE 0–1 when the intraday convexity trigger fires.
 
-> **Phase classification:** Phase 0 — data collection + paper trading. Goal is NOT to prove
-> positive EV. Goal is to measure signal frequency, fillability, realised R-multiple
-> distribution, and calibrate thresholds for Phase 3 deployment. No conclusions before
-> 52 observed signals.
+> **Phase classification:** Phase 0 — data collection + paper trading. Goal is NOT to prove positive EV. Goal is to measure signal frequency, fillability, realised R-multiple distribution, and
+> calibrate thresholds for Phase 3 deployment. No conclusions before 52 observed signals.
 
-> **Relationship to CSP / IC:** Complementary buying overlay. Does not modify CSP/IC logic.
-> Do not enter if a concurrent CSP or IC position is open at the same strike in the same
-> direction.
+> **Relationship to CSP / IC:** Complementary buying overlay. Does not modify CSP/IC logic. Do not enter if a concurrent CSP or IC position is open at the same strike in the same direction.
 
 ---
 
 ## §1 — Purpose
 
-The CSP and IC strategies are theta-decay sellers. The near-expiry gamma buy is structurally
-opposite: it profits from rapid, non-linear premium expansion as spot accelerates toward a
-strike near expiry.
+The CSP and IC strategies are theta-decay sellers. The near-expiry gamma buy is structurally opposite: it profits from rapid, non-linear premium expansion as spot accelerates toward a strike near
+expiry.
 
-The edge — if it exists — is not random. A strike that has been accumulating OI over 3–4
-days while spot slowly drifts toward it carries fundamentally different gamma dynamics than
-a cold strike that suddenly enters the range on expiry morning. The daily monitoring phase
-exists to distinguish these two cases. Expiry-day entries on pre-qualified watchlist strikes
-are the primary trade type. Cold strikes that pass all filters on DTE 0–1 are logged and
-eligible but treated as secondary.
+The edge — if it exists — is not random. A strike that has been accumulating OI over 3–4 days while spot slowly drifts toward it carries fundamentally different gamma dynamics than a cold strike that
+suddenly enters the range on expiry morning. The daily monitoring phase exists to distinguish these two cases. Expiry-day entries on pre-qualified watchlist strikes are the primary trade type. Cold
+strikes that pass all filters on DTE 0–1 are logged and eligible but treated as secondary.
 
 ---
 
@@ -71,23 +60,17 @@ PHASE B — Intraday entry scan (DTE 0–1 only, 5-min cadence)
 
 **Phase A serves three distinct purposes:**
 
-1. **Percentile calibration data.** `strike_iv_percentile_20d` in Layer 3 requires 20 days
-   of per-strike IV history. The gamma_gearing 75th-percentile threshold (Layer 2) requires
-   DTE-bucket distributions. Without Phase A running first, these fields are NULL and the
-   quality filter degrades to Condition B only.
+1. **Percentile calibration data.** `strike_iv_percentile_20d` in Layer 3 requires 20 days of per-strike IV history. The gamma_gearing 75th-percentile threshold (Layer 2) requires DTE-bucket
+   distributions. Without Phase A running first, these fields are NULL and the quality filter degrades to Condition B only.
 
-2. **Watchlist generation.** A strike that has been within 4% of spot for 3+ days with
-   rising OI and rising gamma_gearing is a pre-qualified candidate on expiry day. Phase B
-   prioritises these. Non-watchlist cold signals are still logged but lower confidence.
+2. **Watchlist generation.** A strike that has been within 4% of spot for 3+ days with rising OI and rising gamma_gearing is a pre-qualified candidate on expiry day. Phase B prioritises these.
+   Non-watchlist cold signals are still logged but lower confidence.
 
-3. **Baseline volume statistics.** `volume_zscore_5m` in Layer 4 requires a rolling mean
-   and std of 5-minute volume for each strike. Phase A's EOD volume data seeds these
-   baselines before the intraday scan runs.
+3. **Baseline volume statistics.** `volume_zscore_5m` in Layer 4 requires a rolling mean and std of 5-minute volume for each strike. Phase A's EOD volume data seeds these baselines before the intraday
+   scan runs.
 
-**Start Phase A immediately.** Phase B can begin running on the first DTE 0–1 day after
-Phase A has at least one full week of snapshots (needed for the watchlist to be non-empty).
-Phase A alone has value even before Phase B is implemented — every day of chain data is
-irreplaceable.
+**Start Phase A immediately.** Phase B can begin running on the first DTE 0–1 day after Phase A has at least one full week of snapshots (needed for the watchlist to be non-empty). Phase A alone has
+value even before Phase B is implemented — every day of chain data is irreplaceable.
 
 ---
 
@@ -97,24 +80,19 @@ irreplaceable.
 
 **Days:** Every trading day (Mon–Fri), including expiry day itself.
 
-**Time:** 15:20 IST (after most intraday noise has settled, 10 minutes before close).
-Also run at 10:30 IST for a morning baseline snapshot (optional but useful for
-distance-to-strike evolution tracking across the day).
+**Time:** 15:20 IST (after most intraday noise has settled, 10 minutes before close). Also run at 10:30 IST for a morning baseline snapshot (optional but useful for distance-to-strike evolution
+tracking across the day).
 
-**Expiry coverage:** Current-week expiry + next-week expiry. This builds multi-DTE gamma
-profiles: the current week evolves from ~5 DTE down to 0 DTE, while next week starts at
-~12 DTE and becomes next week's current. On expiry Thursday, capture both the expiring
-chain's final state and the new current-week chain's opening state.
+**Expiry coverage:** Current-week expiry + next-week expiry. This builds multi-DTE gamma profiles: the current week evolves from ~5 DTE down to 0 DTE, while next week starts at ~12 DTE and becomes
+next week's current. On expiry Thursday, capture both the expiring chain's final state and the new current-week chain's opening state.
 
-**Strike coverage:** All Nifty CE and PE strikes within ±10% of current spot. Approximately
-40–60 strikes per expiry at NSE's 50-point intervals.
+**Strike coverage:** All Nifty CE and PE strikes within ±10% of current spot. Approximately 40–60 strikes per expiry at NSE's 50-point intervals.
 
 ### Phase B — Intraday Entry Scan
 
 **Days:** Wednesday (DTE = 1) and Thursday (DTE = 0, expiry day) only.
 
-**Hours:** 09:25–15:00 IST. No new entries after 14:30 (insufficient time for meaningful
-exit before 15:00 time stop). Exit-check scans continue until 15:00.
+**Hours:** 09:25–15:00 IST. No new entries after 14:30 (insufficient time for meaningful exit before 15:00 time stop). Exit-check scans continue until 15:00.
 
 **Cadence:** Every 5 minutes.
 
@@ -132,18 +110,13 @@ exit before 15:00 time stop). Exit-check scans continue until 15:00.
 
 Subscribing serves two purposes simultaneously:
 
-1. **This strategy (Phase B):** L2 depth is the only reliable fill-quality signal for
-   near-expiry OTM options. A ₹3 ask with 20 lots available vs 3,000 lots available changes
-   the paper trade decision. Without it, fill simulation degrades to spread-percentage only
-   and `bid_qty`/`ask_qty` fields are NULL.
+1. **This strategy (Phase B):** L2 depth is the only reliable fill-quality signal for near-expiry OTM options. A ₹3 ask with 20 lots available vs 3,000 lots available changes the paper trade decision.
+   Without it, fill simulation degrades to spread-percentage only and `bid_qty`/`ask_qty` fields are NULL.
 
-2. **Phase 1 backtest pipeline (task 1.3 supplement):** The Dhan Data API subscription
-   includes historical expired options data (intraday resolution for subscribed date ranges).
-   This supplements NSE Bhavcopy EOD data for intraday exit simulation in the Phase 1
-   backtest. See `DECISIONS.md → Dhan Data API subscription (2026-05-15)`.
+2. **Phase 1 backtest pipeline (task 1.3 supplement):** The Dhan Data API subscription includes historical expired options data (intraday resolution for subscribed date ranges). This supplements NSE
+   Bhavcopy EOD data for intraday exit simulation in the Phase 1 backtest. See `DECISIONS.md → Dhan Data API subscription (2026-05-15)`.
 
-**Without Dhan Data API:** Phase A runs fully on Upstox. Phase B runs but marks depth
-fields NULL and uses spread ≤ 25% of mid as the liquidity proxy.
+**Without Dhan Data API:** Phase A runs fully on Upstox. Phase B runs but marks depth fields NULL and uses spread ≤ 25% of mid as the liquidity proxy.
 
 ### Derived fields (computed at capture/scan time)
 
@@ -184,8 +157,7 @@ Stored in `gamma_chain_snapshots` table (SQLite, Phase 0). See §11 for schema.
 
 ### 5b — Watchlist generation
 
-After writing today's snapshots, the script re-evaluates the watchlist for the current-week
-expiry. A strike is added to (or retained on) `gamma_watchlist` when **all** of:
+After writing today's snapshots, the script re-evaluates the watchlist for the current-week expiry. A strike is added to (or retained on) `gamma_watchlist` when **all** of:
 
 ```
 dte_calendar BETWEEN 2 AND 6          (in the 2–6 DTE window; not too early, not too late)
@@ -226,23 +198,19 @@ gamma_gearing_p75_dte0    — 75th percentile of all gamma_gearing values where
 gamma_gearing_p75_dte1    — same for dte_calendar = 1.
 ```
 
-Store these calibrated thresholds in a config row in `gamma_chain_snapshots` (or a
-separate `gamma_thresholds` table) so Phase B can read them at scan time without
-recomputing from the full dataset on every 5-minute run.
+Store these calibrated thresholds in a config row in `gamma_chain_snapshots` (or a separate `gamma_thresholds` table) so Phase B can read them at scan time without recomputing from the full dataset on
+every 5-minute run.
 
 ---
 
 ## §6 — Phase B: Signal Stack
 
-`gamma_scan.py` runs every 5 minutes on DTE 0–1. Each run evaluates every candidate strike
-against the four-layer signal stack. All evaluations are written to `gamma_signal_log`
-regardless of outcome — failed filters are as valuable as passed ones for calibration.
+`gamma_scan.py` runs every 5 minutes on DTE 0–1. Each run evaluates every candidate strike against the four-layer signal stack. All evaluations are written to `gamma_signal_log` regardless of outcome
+— failed filters are as valuable as passed ones for calibration.
 
-At the start of each scan, load the current watchlist from `gamma_watchlist` and tag each
-candidate with `watchlist_hit = (strike in watchlist)`. This flag is recorded in
-`gamma_signal_log` and logged in Telegram notifications but does NOT change the signal
-logic — watchlist and non-watchlist strikes are evaluated identically. The flag exists only
-for post-hoc analysis of whether watchlist pre-qualification correlates with better outcomes.
+At the start of each scan, load the current watchlist from `gamma_watchlist` and tag each candidate with `watchlist_hit = (strike in watchlist)`. This flag is recorded in `gamma_signal_log` and logged
+in Telegram notifications but does NOT change the signal logic — watchlist and non-watchlist strikes are evaluated identically. The flag exists only for post-hoc analysis of whether watchlist
+pre-qualification correlates with better outcomes.
 
 ### Layer 0 — Hard Filters
 
@@ -266,9 +234,7 @@ For PE buy: underlying_return_15m < 0 AND distance_pct shrinking vs 15 min ago
 distance_sigma ≤ 1.5  (strike within 1.5 intraday sigma of spot)
 ```
 
-`distance_sigma = distance_pct / underlying_realised_vol_15m`. The vol denominator is
-the rolling annualised std of 1-min returns over the prior 15 minutes, scaled to the
-remaining session length.
+`distance_sigma = distance_pct / underlying_realised_vol_15m`. The vol denominator is the rolling annualised std of 1-min returns over the prior 15 minutes, scaled to the remaining session length.
 
 ### Layer 2 — Convexity Trigger (Primary)
 
@@ -286,9 +252,8 @@ Stage 2 (Days 21–60):  gamma_gearing > gamma_gearing_p75_dte{N}  (from Phase A
 Stage 3 (Day 60+):     same as Stage 2, updated rolling 60-day window
 ```
 
-`speed_5m` cold start: if prior 5-min gamma snapshot is missing (first scan of the day),
-default to `speed_5m = 0`, which causes Layer 2 to fail. Do not enter on the first scan
-each morning regardless of gamma_gearing. Log as `speed_5m_unavailable = true`.
+`speed_5m` cold start: if prior 5-min gamma snapshot is missing (first scan of the day), default to `speed_5m = 0`, which causes Layer 2 to fail. Do not enter on the first scan each morning regardless
+of gamma_gearing. Log as `speed_5m_unavailable = true`.
 
 ### Layer 3 — Quality Filter
 
@@ -314,12 +279,10 @@ AND oi_velocity_15m > 0.15  (+15% OI growth in 15 minutes)
 AND option_price_rising = true  (current ask ≥ ask 5 minutes ago)
 ```
 
-**OI directionality:** OI velocity is only meaningful with price context. `option_price_rising`
-enforces directionality — rising call OI + falling call price = likely call writing (reject).
-Rising call OI + rising call price + Nifty up = demand (confirm).
+**OI directionality:** OI velocity is only meaningful with price context. `option_price_rising` enforces directionality — rising call OI + falling call price = likely call writing (reject). Rising
+call OI + rising call price + Nifty up = demand (confirm).
 
-**Lookback:** Use 15-min OI velocity, not 5-min (NSE OI batches every ~3 minutes near
-expiry, creating aliasing on short windows).
+**Lookback:** Use 15-min OI velocity, not 5-min (NSE OI batches every ~3 minutes near expiry, creating aliasing on short windows).
 
 ---
 
@@ -327,19 +290,15 @@ expiry, creating aliasing on short windows).
 
 **Trigger:** All four layers pass in the same 5-minute scan.
 
-**Instrument selection:** If multiple strikes pass all filters simultaneously, rank by
-`gamma_gearing` descending (weighted 70%) + `watchlist_hit = true` bonus (30% rank boost).
-Take the top-ranked strike. Log all qualifying candidates.
+**Instrument selection:** If multiple strikes pass all filters simultaneously, rank by `gamma_gearing` descending (weighted 70%) + `watchlist_hit = true` bonus (30% rank boost). Take the top-ranked
+strike. Log all qualifying candidates.
 
-**Order type:** Limit at `mid + ₹0.10` (mildly aggressive — adverse selection risk of
-strict mid-price limits in explosive moves).
+**Order type:** Limit at `mid + ₹0.10` (mildly aggressive — adverse selection risk of strict mid-price limits in explosive moves).
 
-**Fill assessment:** On the next 5-minute scan, if observed ask ≤ limit_price → filled.
-If not: mark `paper_trade_status = "signal_valid_unfilled"`. Do not chase past the 2-minute
-window (one scan cycle).
+**Fill assessment:** On the next 5-minute scan, if observed ask ≤ limit_price → filled. If not: mark `paper_trade_status = "signal_valid_unfilled"`. Do not chase past the 2-minute window (one scan
+cycle).
 
-**Paper P&L entry price:** Conservative — use ask at signal time, regardless of fill
-optimism. Never inflate paper P&L with theoretical fills.
+**Paper P&L entry price:** Conservative — use ask at signal time, regardless of fill optimism. Never inflate paper P&L with theoretical fills.
 
 **Record at entry:**
 
@@ -364,22 +323,18 @@ Three rules in priority order. First to fire exits the position.
 
 ### E1 — Profit Target
 
-Close when mark ≥ **5× entry ask** (5R theoretical). In paper P&L, use **bid** at exit
-scan, never mid. Target is 5R; accept 2–3R realised after bid-ask drag.
+Close when mark ≥ **5× entry ask** (5R theoretical). In paper P&L, use **bid** at exit scan, never mid. Target is 5R; accept 2–3R realised after bid-ask drag.
 
 ### E2 — Stop Loss
 
-Close when mark ≤ ₹0.25 (effective zero for sub-₹10 options) or when ask_qty = 0 for
-two consecutive scans (liquidity evaporation). Stop = 1R (full entry premium). Fixed.
+Close when mark ≤ ₹0.25 (effective zero for sub-₹10 options) or when ask_qty = 0 for two consecutive scans (liquidity evaporation). Stop = 1R (full entry premium). Fixed.
 
 ### E3 — Time Stop
 
 **DTE 0 (Thursday):** Close by 14:30 regardless of P&L.
 
-**DTE 1 (Wednesday):** Close by 15:00 Wednesday unless mark ≥ 1.5× entry ask. If in
-profit ≥ 1.5×, carry overnight — but gamma and theta both compress overnight, so the
-probability of a 5R exit on Thursday morning from a ₹3 premium is low. When in doubt,
-close Wednesday and look for a fresh signal Thursday.
+**DTE 1 (Wednesday):** Close by 15:00 Wednesday unless mark ≥ 1.5× entry ask. If in profit ≥ 1.5×, carry overnight — but gamma and theta both compress overnight, so the probability of a 5R exit on
+Thursday morning from a ₹3 premium is low. When in doubt, close Wednesday and look for a fresh signal Thursday.
 
 ### Exit accounting
 
@@ -402,8 +357,7 @@ No re-entry into same strike same day after stop-out
 No concurrent position in same direction as open CSP or IC short leg at same strike
 ```
 
-Capital allocation: option buying requires upfront premium only, no margin. Allocated
-capital for paper tracking = sum of (entry_ask × 75) across all open positions.
+Capital allocation: option buying requires upfront premium only, no margin. Allocated capital for paper tracking = sum of (entry_ask × 75) across all open positions.
 
 ---
 
@@ -420,9 +374,8 @@ gamma_call    — call buy position (max 1 open at a time)
 gamma_put     — put buy position  (max 1 open at a time)
 ```
 
-Since at most one call and one put are open simultaneously, and positions open/close within
-1–2 days, `UNIQUE(strategy_name, leg_role, trade_date, action)` is sufficient without
-encoding strike in the leg_role.
+Since at most one call and one put are open simultaneously, and positions open/close within 1–2 days, `UNIQUE(strategy_name, leg_role, trade_date, action)` is sufficient without encoding strike in the
+leg_role.
 
 ### record_paper_trade.py usage
 
@@ -733,18 +686,15 @@ OR gearing threshold capturing >80% of all scans (too loose — recalibrate imme
 
 ## §14 — Council Pending Questions
 
-Both parameters are bootstrapped in the current paper phase. Council input required before
-Phase 3 live deployment.
+Both parameters are bootstrapped in the current paper phase. Council input required before Phase 3 live deployment.
 
 ### Q1 — Weekly Nifty Premium Range (Layer 0)
 
 **Bootstrap:** ₹2–₹10 (from council's monthly 0–2 DTE calibration)
 
-**Tension:** The council calibrated ₹2–₹10 against monthly expiries. For Nifty 50 weekly
-options at 0–1 DTE, the same premium range skews toward near-ATM strikes (delta ≥ 0.30),
-which have good fills but lower explosive R:R. The ₹1–₹6 range targets more OTM strikes
-with higher theoretical multiples but worse execution drag as a % of premium. For weekly
-options where time value is already near-zero, the council's floor may be miscalibrated.
+**Tension:** The council calibrated ₹2–₹10 against monthly expiries. For Nifty 50 weekly options at 0–1 DTE, the same premium range skews toward near-ATM strikes (delta ≥ 0.30), which have good fills
+but lower explosive R:R. The ₹1–₹6 range targets more OTM strikes with higher theoretical multiples but worse execution drag as a % of premium. For weekly options where time value is already
+near-zero, the council's floor may be miscalibrated.
 
 **Council command:**
 ```bash
@@ -759,12 +709,9 @@ python scripts/ask_council.py \
 
 **Bootstrap:** `gamma_gearing > 5.0` (Stage 1 absolute floor)
 
-**Tension:** Council specifies ">75th percentile for DTE bucket" — correct in steady state
-but provides no bootstrap value. Three approaches: (A) fixed absolute (5.0 or 8.0), simple
-but regime-blind; (B) cross-sectional relative — top 25% of same-scan candidates, no
-history needed but adapts on every 5-min snapshot; (C) rolling DTE-bucket percentile from
-Phase A data after ≥ 20 days, then held for 60-day window. Behaviour differs materially
-across IV regimes.
+**Tension:** Council specifies ">75th percentile for DTE bucket" — correct in steady state but provides no bootstrap value. Three approaches: (A) fixed absolute (5.0 or 8.0), simple but regime-blind;
+(B) cross-sectional relative — top 25% of same-scan candidates, no history needed but adapts on every 5-min snapshot; (C) rolling DTE-bucket percentile from Phase A data after ≥ 20 days, then held for
+60-day window. Behaviour differs materially across IV regimes.
 
 **Council command:**
 ```bash
@@ -819,16 +766,12 @@ python scripts/ask_council.py \
 
 ### Open
 
-- Speed cold start (first scan of day): confirmed to default `speed_5m = 0` → Layer 2 fails.
-  Acceptable: first 5 minutes of each expiry day are excluded. Log as `speed_5m_unavailable`.
-- Wednesday overnight carry: for strikes where DTE 1 → DTE 0, should the watchlist elevation
-  flag be the deciding factor for carry vs close at 15:00 Wednesday?
-- Event-day Vega reactivation: `event_flag = 1` does not currently modify any filter. The
-  council says Vega becomes co-primary on event days — a separate event-day signal variant
-  may be needed, but deferred until base strategy has ≥ 20 signals.
-- Phase A morning snapshot (10:30): optional for now. Evaluate whether distance_pct
-  trajectory intraday (10:30 vs 15:20) meaningfully predicts watchlist outcomes before
-  committing to the second daily cron.
+- Speed cold start (first scan of day): confirmed to default `speed_5m = 0` → Layer 2 fails. Acceptable: first 5 minutes of each expiry day are excluded. Log as `speed_5m_unavailable`.
+- Wednesday overnight carry: for strikes where DTE 1 → DTE 0, should the watchlist elevation flag be the deciding factor for carry vs close at 15:00 Wednesday?
+- Event-day Vega reactivation: `event_flag = 1` does not currently modify any filter. The council says Vega becomes co-primary on event days — a separate event-day signal variant may be needed, but
+  deferred until base strategy has ≥ 20 signals.
+- Phase A morning snapshot (10:30): optional for now. Evaluate whether distance_pct trajectory intraday (10:30 vs 15:20) meaningfully predicts watchlist outcomes before committing to the second daily
+  cron.
 
 ### Changelog
 

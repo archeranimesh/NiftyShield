@@ -1,11 +1,9 @@
 # NiftyShield — Ideal Task Prompts
 
-Reference prompts that trigger the full workflow:
-`task_protocol.sh` → CONTEXT.md read → council check → plan gate → routing decision →
-implementation (test-runner + code-reviewer) → commit skill (SHA confirmed).
+Reference prompts that trigger the full workflow: `task_protocol.sh` → CONTEXT.md read → council check → plan gate → routing decision → implementation (test-runner + code-reviewer) → commit skill (SHA
+confirmed).
 
-**Rule:** Start with the action verb. Never prefix with "can you" — the `UserPromptSubmit`
-hook classifies on the first keyword and will skip injection if it matches a query pattern.
+**Rule:** Start with the action verb. Never prefix with "can you" — the `UserPromptSubmit` hook classifies on the first keyword and will skip injection if it matches a query pattern.
 
 ---
 
@@ -24,9 +22,8 @@ DoD: ≥4 offline tests (happy path + empty range + store round-trip + bad date 
 Route: Antigravity.
 ```
 
-**Triggers:** task verb → hook injection · `src/paper/` → greeks-analyst · 3 files → Antigravity
-routing · Phase reference → BACKTEST_PLAN.md load · UTC/Parquet → code-reviewer mandatory ·
-explicit DoD + SHA → commit skill proof step.
+**Triggers:** task verb → hook injection · `src/paper/` → greeks-analyst · 3 files → Antigravity routing · Phase reference → BACKTEST_PLAN.md load · UTC/Parquet → code-reviewer mandatory · explicit
+DoD + SHA → commit skill proof step.
 
 ---
 
@@ -42,9 +39,8 @@ DoD: failing test added first (red), then fix (green), existing 11 tests still p
 Route: Claude.
 ```
 
-**Triggers:** task verb → hook injection · `src/paper/` → greeks-analyst · 2 files + graph
-queries likely → Claude routing · Decimal/P&L invariant → code-reviewer mandatory ·
-"failing test first" → TDD discipline enforced by DoD, not by hope.
+**Triggers:** task verb → hook injection · `src/paper/` → greeks-analyst · 2 files + graph queries likely → Claude routing · Decimal/P&L invariant → code-reviewer mandatory · "failing test first" →
+TDD discipline enforced by DoD, not by hope.
 
 ---
 
@@ -63,10 +59,8 @@ DoD: ≥3 offline tests (breach triggers alert + no alert below threshold + Deci
 Route: Claude.
 ```
 
-**Triggers:** task verb → hook injection · `src/paper/` + delta/gamma fields → greeks-analyst ·
-council check — two defensible designs exist (threshold as config vs hardcoded) so Step 2b
-fires · Telegram (non-fatal contract) → notifications invariant enforced · 3 files but
-design ambiguity → Claude routing over Antigravity.
+**Triggers:** task verb → hook injection · `src/paper/` + delta/gamma fields → greeks-analyst · council check — two defensible designs exist (threshold as config vs hardcoded) so Step 2b fires ·
+Telegram (non-fatal contract) → notifications invariant enforced · 3 files but design ambiguity → Claude routing over Antigravity.
 
 ---
 

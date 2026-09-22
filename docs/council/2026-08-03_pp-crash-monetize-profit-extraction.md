@@ -1,8 +1,6 @@
 # Council Decision: pp-crash-monetize-profit-extraction
 
-Date: 2026-08-03  
-Chairman: openai/gpt-4.1  
-Council members: openai/gpt-4.1, deepseek/deepseek-r1-0528
+Date: 2026-08-03 Chairman: openai/gpt-4.1 Council members: openai/gpt-4.1, deepseek/deepseek-r1-0528
 
 ---
 
@@ -14,8 +12,9 @@ Certainly. Here is the Chairman's synthesised council verdict.
 
 ## Council Verdict — PP CRASH_MONETIZE: Binary Full-Close vs. Tiered/Partial Profit Extraction
 
-**Executive Summary:**  
-The council overwhelmingly recommends retaining the current **binary full-close** (`CRASH_MONETIZE`) exit for the Protective Put (PP) overlay at this stage. Both the empirical market data and deep-ITM execution realities argue for simplicity, safety, and auditability over theoretical, lightly-calibrated complexity. The rare multi-month decline cases merit monitoring, but do not yet justify operational risk or added code structure.
+**Executive Summary:** The council overwhelmingly recommends retaining the current **binary full-close** (`CRASH_MONETIZE`) exit for the Protective Put (PP) overlay at this stage. Both the empirical
+market data and deep-ITM execution realities argue for simplicity, safety, and auditability over theoretical, lightly-calibrated complexity. The rare multi-month decline cases merit monitoring, but do
+not yet justify operational risk or added code structure.
 
 Below, details are organized per the council template and council discourse.
 
@@ -37,19 +36,22 @@ Below, details are organized per the council template and council discourse.
 
 ### 1. Empirical Historical Frequency
 - Since 2000, only **two** single-month ≥20% Nifty drawdowns (2008, 2020) and only **one** real multi-month (“waterfall”) decline (2008) have occurred.
-- The empirical base is too small for statistical confidence in a tiered or partial exit regime.  
-- A single binary monetize (delta ≤ –0.80 or value ≥ 5× debit) will usually capture the windfall of a true crash, while monthly re-entries—combined with PP's 0.15-delta strike selection—already provide meaningful repeated insurance.
+- The empirical base is too small for statistical confidence in a tiered or partial exit regime.
+- A single binary monetize (delta ≤ –0.80 or value ≥ 5× debit) will usually capture the windfall of a true crash, while monthly re-entries—combined with PP's 0.15-delta strike selection—already
+  provide meaningful repeated insurance.
 
 ### 2. Structural Role of the PP Overlay  
-- The council aligns with operator intent (see DECISIONS.md):  
-  PP is an "insurance" overlay, not a trading satellite; its job is to provide material cover in rare, high-loss scenarios—not to optimize giveback in moderate, frequent drawdowns.
+- The council aligns with operator intent (see DECISIONS.md): PP is an "insurance" overlay, not a trading satellite; its job is to provide material cover in rare, high-loss scenarios—not to optimize
+  giveback in moderate, frequent drawdowns.
 - Complexity that cannot be empirically validated with sufficient data inherently increases risk of silent error and audit challenge.
 
 ### 3. Arguments for and Against Tiering  
-- **For tiering:** A two/tranche (e.g., half at –0.65Δ, half at –0.80Δ) might—on paper—reduce “post-crash, no-cover” windows, especially if IVR blocks re-entry for subsequent legs in a multi-month decline.
+- **For tiering:** A two/tranche (e.g., half at –0.65Δ, half at –0.80Δ) might—on paper—reduce “post-crash, no-cover” windows, especially if IVR blocks re-entry for subsequent legs in a multi-month
+  decline.
 - **Against tiering (Council Majority):**
   - Any such regime is speculative given only a single true instance (2008) to analyze for multi-leg decline shapes.
-  - Even in 2008, monthly re-entry covers most plausible cases—PP will generally be re-armed before the *next* crash leg, unless IVR locks you out. (PP3/PP4 design handles IVR block by logging rather than hard-blocking; this is considered sufficient at present.)
+  - Even in 2008, monthly re-entry covers most plausible cases—PP will generally be re-armed before the *next* crash leg, unless IVR locks you out. (PP3/PP4 design handles IVR block by logging rather
+    than hard-blocking; this is considered sufficient at present.)
   - Introducing tranches invites complexity and places greater load on execution mechanics and fill monitoring, while the realized gain from such adjustments is empirically minimal.
 
 ---
@@ -69,11 +71,13 @@ Below, details are organized per the council template and council discourse.
 ## Minority and Dissenting Notes
 
 ### Minority View
-- Some members recommend considering a 50/50 scale-out: sell half at delta –0.65, half at –0.80, or other simple tier. Argument: Even with N=1 multi-leg decline in history, the tail is what matters—and leaving the book fully unhedged is *definitely* suboptimal if pattern recurs.
+- Some members recommend considering a 50/50 scale-out: sell half at delta –0.65, half at –0.80, or other simple tier. Argument: Even with N=1 multi-leg decline in history, the tail is what
+  matters—and leaving the book fully unhedged is *definitely* suboptimal if pattern recurs.
     - Caveat: Only adopt if simulation can (a) model fills under true stressed-market mechanics, and (b) confirm that partials are fillable. If not, default to all-or-nothing.
 
 ### Data Disagreement
-- All agree 26 years (2 events) is far too little for robust regime design, but some feel the insurance logic justifies “erring on the side of some residual” even without strong data, while others point out that favoring complexity with no data is more dangerous in practice.
+- All agree 26 years (2 events) is far too little for robust regime design, but some feel the insurance logic justifies “erring on the side of some residual” even without strong data, while others
+  point out that favoring complexity with no data is more dangerous in practice.
 
 ### If Historical Simulation is Feasible
 - If/when chain-level historical simulation tools allow, both designs (binary and tiered) should be tested side-by-side under stress scenarios with realistically modeled fills.
@@ -83,25 +87,25 @@ Below, details are organized per the council template and council discourse.
 
 ## Practical Recommendation (Implementation Guidance)
 
-1. **Retain the binary full-close “CRASH_MONETIZE” exit trigger.**  
-   Simplicity, safety, and auditability trump speculative minor upside from complex profit-extraction logic, given the small N and real-world execution risk.
+1. **Retain the binary full-close “CRASH_MONETIZE” exit trigger.** Simplicity, safety, and auditability trump speculative minor upside from complex profit-extraction logic, given the small N and
+   real-world execution risk.
 
-2. **Monitor and revisit after Phase 0 paper trading and/or next market stress.**  
-   - After 12–24+ months of paper operation, or upon a new real crash, reassess actual fill experience (e.g., how likely/hard it is to exit at modeled prices) and any “give-back” risk from lost coverage.
+2. **Monitor and revisit after Phase 0 paper trading and/or next market stress.**
+   - After 12–24+ months of paper operation, or upon a new real crash, reassess actual fill experience (e.g., how likely/hard it is to exit at modeled prices) and any “give-back” risk from lost
+     coverage.
    - If a historical chain backtest can model high-VIX order flow credibly, simulate both approaches (binary and tiered) in parallel.
 
-3. **If/when moving to live capital, review execution-layer assumptions.**  
-   Confirm that live fills at high VIX match model; do not introduce logic that could leave the book unhedged due to partial-unfillable exits.
+3. **If/when moving to live capital, review execution-layer assumptions.** Confirm that live fills at high VIX match model; do not introduce logic that could leave the book unhedged due to
+   partial-unfillable exits.
 
 ---
 
 ## Closing Note
 
-The role of the PP overlay is rare-event payoff—not incremental P&L maximization. The current, transparent design best matches that mandate, given empirical data and live market mechanics.  
-**In sum:**  
-- **Keep it simple, safe, and auditable now**  
-- **Revisit in the light of more real (or simulated-real) events, especially regarding fill feasibility**  
-- **If in doubt—favor a binary exit for tail protection**  
+The role of the PP overlay is rare-event payoff—not incremental P&L maximization. The current, transparent design best matches that mandate, given empirical data and live market mechanics. **In sum:**
+- **Keep it simple, safe, and auditable now**
+- **Revisit in the light of more real (or simulated-real) events, especially regarding fill feasibility**
+- **If in doubt—favor a binary exit for tail protection**
 
 The council considers this approach robust, pragmatic, and well-matched to both operator strategy and practical Indian options execution realities at this time.
 
@@ -113,9 +117,9 @@ The council considers this approach robust, pragmatic, and well-matched to both 
 
 ### openai/gpt-4.1
 
-CONTEXT.md ✓  
-DECISIONS.md relevant sections loaded (PP2/PP3 background, operator decision records, empirical frequency, execution risk VIX regime, simulation assumptions).  
-Question confirmed: Council recommendation sought on whether to keep PP CRASH_MONETIZE as a binary full-close, or introduce tiered/partial capture (with explicit requirements to consider historical crash frequency, extended multi-month decline shape, and execution risk in deep-ITM puts).
+CONTEXT.md ✓ DECISIONS.md relevant sections loaded (PP2/PP3 background, operator decision records, empirical frequency, execution risk VIX regime, simulation assumptions). Question confirmed: Council
+recommendation sought on whether to keep PP CRASH_MONETIZE as a binary full-close, or introduce tiered/partial capture (with explicit requirements to consider historical crash frequency, extended
+multi-month decline shape, and execution risk in deep-ITM puts).
 
 ---
 
@@ -153,38 +157,47 @@ Question confirmed: Council recommendation sought on whether to keep PP CRASH_MO
 
 ## Execution Risk Detail
 
-- **Current binary full-close:**  
+- **Current binary full-close:**
   - Issues a single market SELL for the full protective put position the moment threshold is reached (delta or value).
-  - VIX-regime simulation (PaperFillSimulator) only accounts for up to ₹4 slippage; in a 2008/2020 event, real-world slippage or unfilled orders may vastly exceed this, and market depth vanishes for deep-ITM contracts.
+  - VIX-regime simulation (PaperFillSimulator) only accounts for up to ₹4 slippage; in a 2008/2020 event, real-world slippage or unfilled orders may vastly exceed this, and market depth vanishes for
+    deep-ITM contracts.
   - One clean close offers the best chance of filling an order before liquidity collapses further.
 
-- **Partial/trailing/multi-tranche exit:**  
-  - Any "close half at −0.65 delta, half at −0.80" or "leave remainder for a trailing stop" increases the probability that **the second(s) order(s) will not fill at all** (or will fill at extremely adverse pricing, or in sizes that don't match system logic).
-  - In a real crash, trading conditions are adversarial: orders may be skipped, gapped, or filled only at extreme bids. Modeling partial captures in backtest may simply mislead about what's operationally feasible.
+- **Partial/trailing/multi-tranche exit:**
+  - Any "close half at −0.65 delta, half at −0.80" or "leave remainder for a trailing stop" increases the probability that **the second(s) order(s) will not fill at all** (or will fill at extremely
+    adverse pricing, or in sizes that don't match system logic).
+  - In a real crash, trading conditions are adversarial: orders may be skipped, gapped, or filled only at extreme bids. Modeling partial captures in backtest may simply mislead about what's
+    operationally feasible.
   - Paper system may wrongly ascribe realized profits during these events (e.g., fills at current marked price) that **could not have been achieved live**, potentially overstating strategy robustness.
 
 ## Dissenting Notes
 
 ### Minority View (pro-tiering)
-- Some council members argue for **at least a two-tiered logic**, on the grounds that the (rare) events we care about most also cause the biggest deviation from expected results if not accounted for. Even a handful of examples can be powerfully instructive in rare-event insurance.
-- Real-world options-desk practice often involves **scaling out** of positions or holding partial residuals exactly for depth reasons: you’re sometimes more likely to fill a 1-lot than a 4-lot in a tail event.
-- **Recommendation from dissenting voices:** If tiering is adopted, start with a simple 50/50 split—close half at delta below −0.65, half at −0.80, but only if a fill can be confirmed on the first batch. Gracefully degrade to all-or-nothing if a partial fill cannot be simulated in backtest or observed in live trading (do not put unfulfillable logic into production).
+- Some council members argue for **at least a two-tiered logic**, on the grounds that the (rare) events we care about most also cause the biggest deviation from expected results if not accounted for.
+  Even a handful of examples can be powerfully instructive in rare-event insurance.
+- Real-world options-desk practice often involves **scaling out** of positions or holding partial residuals exactly for depth reasons: you’re sometimes more likely to fill a 1-lot than a 4-lot in a
+  tail event.
+- **Recommendation from dissenting voices:** If tiering is adopted, start with a simple 50/50 split—close half at delta below −0.65, half at −0.80, but only if a fill can be confirmed on the first
+  batch. Gracefully degrade to all-or-nothing if a partial fill cannot be simulated in backtest or observed in live trading (do not put unfulfillable logic into production).
 
 ### Data Sufficiency Disagreement
-- Some panelists believe the **sample is simply too small to reliably optimize** a multi-tier design, and it is better to revisit after more real-world "tail" occurrences (even if that's a multi-decade process).
-- Others, more risk-averse, point out that a pure rules-based approach shouldn’t be held hostage to N=2 data—if economics and market structure suggest value in retain/residual approaches, some node of flexibility should be built in even without robust local data support.
+- Some panelists believe the **sample is simply too small to reliably optimize** a multi-tier design, and it is better to revisit after more real-world "tail" occurrences (even if that's a
+  multi-decade process).
+- Others, more risk-averse, point out that a pure rules-based approach shouldn’t be held hostage to N=2 data—if economics and market structure suggest value in retain/residual approaches, some node of
+  flexibility should be built in even without robust local data support.
 
 ---
 
-**Final Recommendation**:  
-**KEEP the current binary full-close `CRASH_MONETIZE` design for PP in production until/unless either:**
+**Final Recommendation**: **KEEP the current binary full-close `CRASH_MONETIZE` design for PP in production until/unless either:**
 - (a) at least one additional real tail event (post-2020 vintage) occurs and can be backtested in options-chain simulation, and/or
 - (b) a full historical chain-based backtest reveals structurally significant "give-back" consistent over multiple events and multiple deltas.
 
-Any shift toward tiered or partial-capture logic **should only be undertaken after confirming—using real fill simulations at stressed VIX, and ideally even real money in a tail-event**—that partial/trailing logic does not expose the system to unfillable orders or misleading performance in the live or production environment. Simplicity now buys credibility and ease of audit later; complexity can be safely bolted on in the (rare) event new data justifies it.
+Any shift toward tiered or partial-capture logic **should only be undertaken after confirming—using real fill simulations at stressed VIX, and ideally even real money in a tail-event**—that
+partial/trailing logic does not expose the system to unfillable orders or misleading performance in the live or production environment. Simplicity now buys credibility and ease of audit later;
+complexity can be safely bolted on in the (rare) event new data justifies it.
 
-**If chain-level historical simulation is straightforward to add**: run both designs side-by-side in paper for several years and revisit based on real outcomes.  
-**Until then: Simpler, single full-close logic wins on both robustness and practical grounds.**
+**If chain-level historical simulation is straightforward to add**: run both designs side-by-side in paper for several years and revisit based on real outcomes. **Until then: Simpler, single
+full-close logic wins on both robustness and practical grounds.**
 
 ### deepseek/deepseek-r1-0528
 
@@ -200,15 +213,16 @@ After reviewing the empirical data, execution risk constraints, and the small sa
 | Recommended validation approach | **Stick with binary; revisit after Phase 0 paper results** |
 
 ### Design Rationale
-1. **Empirical Limitations**: Only two ≥20% monthly drawdowns (2008/2020) and one extended decline (2008) exist in 26 years. This is insufficient to reliably calibrate multiple exit tiers or tranche sizes. A tiered system would introduce complexity for marginal theoretical gains that may not materialize in future black swans.
+1. **Empirical Limitations**: Only two ≥20% monthly drawdowns (2008/2020) and one extended decline (2008) exist in 26 years. This is insufficient to reliably calibrate multiple exit tiers or tranche
+   sizes. A tiered system would introduce complexity for marginal theoretical gains that may not materialize in future black swans.
    
 2. **Execution Risk Dominates**: During true tail events (VIX>50), NSE deep-ITM put liquidity evaporates. A single full-close minimizes exposure to:
    - Slippage uncertainty (current ₹4 cap is likely optimistic)
    - Partial fills leaving residual exposure
-   - Operational failure points during market chaos
-   Tiered exits would compound this risk by requiring *multiple* precise executions amid deteriorating conditions.
+   - Operational failure points during market chaos Tiered exits would compound this risk by requiring *multiple* precise executions amid deteriorating conditions.
 
-3. **Regime Coverage**: PP's 0.15-delta entry already provides multi-month protection by construction. Monetizing early in a 2008-style decline sacrifices less than 15% of total protection value (since re-entry occurs at next monthly cycle per PP3/PP4). This is an acceptable tradeoff for execution certainty.
+3. **Regime Coverage**: PP's 0.15-delta entry already provides multi-month protection by construction. Monetizing early in a 2008-style decline sacrifices less than 15% of total protection value
+   (since re-entry occurs at next monthly cycle per PP3/PP4). This is an acceptable tradeoff for execution certainty.
 
 ### Execution Risk Detail
 - **Current System**: One fill per crash event. Worst-case slippage: ₹4/unit.
@@ -219,13 +233,11 @@ After reviewing the empirical data, execution risk constraints, and the small sa
 - **Net Effect**: Tiered exits could erode 20-40% of paper gains in real trading – negating their theoretical advantage.
 
 ### Dissenting Notes
-**Economist Perspective (Minority View):**  
-*"A 50% tranche at |δ|=0.65 could capture partial gains in frequent moderate declines (5-10%) without full liquidation. 2008 had 3 such declines before the -26% crash. We sacrifice this with binary."*  
-→ Rebuttal: PP's 0.15-delta entry makes moderate declines less profitable anyway. Execution risk outweighs.
+**Economist Perspective (Minority View):** *"A 50% tranche at |δ|=0.65 could capture partial gains in frequent moderate declines (5-10%) without full liquidation. 2008 had 3 such declines before the
+-26% crash. We sacrifice this with binary."* → Rebuttal: PP's 0.15-delta entry makes moderate declines less profitable anyway. Execution risk outweighs.
 
-**Quant Analyst Perspective:**  
-*"Backtesting with synthetic option chains could resolve small-sample concerns."*  
-→ Rebuttal: Historical volatility skew modeling is unreliable pre-2010. Not worth delaying Phase 0.
+**Quant Analyst Perspective:** *"Backtesting with synthetic option chains could resolve small-sample concerns."* → Rebuttal: Historical volatility skew modeling is unreliable pre-2010. Not worth
+delaying Phase 0.
 
 ---
 

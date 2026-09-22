@@ -1,10 +1,7 @@
 # Paper Trading — Full Flow Operator Guide
 
-> Covers the complete daily/monthly workflow across both strategies:
-> 3-Track Nifty Long Comparison and CSP Nifty (paper_csp_nifty_v1).
->
-> For strategy context see `docs/instructions/3track.md` and `docs/instructions/csp_nifty_v1.md`.
-> This guide is operations-only: what to run, when, and in what order.
+> Covers the complete daily/monthly workflow across both strategies: 3-Track Nifty Long Comparison and CSP Nifty (paper_csp_nifty_v1). For strategy context see `docs/instructions/3track.md` and
+> `docs/instructions/csp_nifty_v1.md`. This guide is operations-only: what to run, when, and in what order.
 
 ---
 
@@ -19,10 +16,8 @@ paper_3track_entry.py     →     record_paper_trade.py    →     paper_3track_
                                 (roll overlays near expiry)
 ```
 
-**Month start**: Open 3-track base legs + CSP short put.
-**Monthly ongoing**: Add / roll overlay legs (PP, CC, collar) via `record_paper_trade.py`.
-**Near expiry (DTE ≤ 5)**: Run `paper_3track_overlay_roll.py` to roll expiring overlays.
-**Every market day**: Run both snapshot scripts to mark-to-market.
+**Month start**: Open 3-track base legs + CSP short put. **Monthly ongoing**: Add / roll overlay legs (PP, CC, collar) via `record_paper_trade.py`. **Near expiry (DTE ≤ 5)**: Run
+`paper_3track_overlay_roll.py` to roll expiring overlays. **Every market day**: Run both snapshot scripts to mark-to-market.
 
 ---
 
@@ -32,9 +27,7 @@ paper_3track_entry.py     →     record_paper_trade.py    →     paper_3track_
 python3 scripts/paper_3track_entry.py
 ```
 
-**What this does**: Finds the best available Nifty instruments (spot, front-month futures,
-deep ITM CE proxy) for the current cycle and prints a ranked candidate table. No DB write
-until you confirm.
+**What this does**: Finds the best available Nifty instruments (spot, front-month futures, deep ITM CE proxy) for the current cycle and prints a ranked candidate table. No DB write until you confirm.
 
 **Default behaviour**: Preview mode — prints candidates, writes nothing.
 
@@ -56,10 +49,8 @@ python3 scripts/paper_3track_entry.py --confirm
 
 ### The `--index` option
 
-In preview mode, the script prints a **ranked table** of candidates for each track leg
-(futures contracts, proxy CE strikes, etc.). Row 0 is the top recommendation. If the
-top pick is unsuitable (e.g., liquidity thin, strike is at an awkward level), pass
-`--index 1` or `--index 2` to select the next candidate down.
+In preview mode, the script prints a **ranked table** of candidates for each track leg (futures contracts, proxy CE strikes, etc.). Row 0 is the top recommendation. If the top pick is unsuitable
+(e.g., liquidity thin, strike is at an awkward level), pass `--index 1` or `--index 2` to select the next candidate down.
 
 ```
 # Preview — see the ranked list first
@@ -73,8 +64,7 @@ python3 scripts/paper_3track_entry.py --confirm --index 1
 
 ## Step 2 — Open CSP Short Put Leg
 
-The CSP strategy (`paper_csp_nifty_v1`) has one leg: a short monthly put at ~22-delta.
-There is no auto-entry script for CSP — use `record_paper_trade.py` directly.
+The CSP strategy (`paper_csp_nifty_v1`) has one leg: a short monthly put at ~22-delta. There is no auto-entry script for CSP — use `record_paper_trade.py` directly.
 
 ```bash
 python3 scripts/record_paper_trade.py \
@@ -97,8 +87,7 @@ python3 scripts/record_paper_trade.py --no-dry-run \
   --option-type PE
 ```
 
-The script auto-selects the best expiry and strike from the live chain. The `--index N`
-flag selects the Nth candidate from the ranked strike list (default 0 = top pick).
+The script auto-selects the best expiry and strike from the live chain. The `--index N` flag selects the Nth candidate from the ranked strike list (default 0 = top pick).
 
 ### Closing a CSP leg at expiry / stop-loss
 
@@ -110,8 +99,7 @@ python3 scripts/record_paper_trade.py --no-dry-run \
   --close
 ```
 
-`--close` resolves the instrument key and fetches LTP automatically. No `--key` or
-`--price` needed when closing an existing position.
+`--close` resolves the instrument key and fetches LTP automatically. No `--key` or `--price` needed when closing an existing position.
 
 ### Key overrides for `record_paper_trade.py`
 
@@ -131,8 +119,7 @@ python3 scripts/record_paper_trade.py --no-dry-run \
 
 ## Step 3 — Add Overlay Legs (3-Track)
 
-Overlay legs (Protective Put, Covered Call, Collar) are added with `record_paper_trade.py`
-specifying the overlay strategy namespace.
+Overlay legs (Protective Put, Covered Call, Collar) are added with `record_paper_trade.py` specifying the overlay strategy namespace.
 
 ```bash
 # Example: add a Protective Put overlay on the spot track
@@ -171,8 +158,7 @@ python3 scripts/paper_3track_overlay_roll.py
 # Execute the roll (after reviewing dry-run output):
 python3 scripts/paper_3track_overlay_roll.py --no-dry-run --yes
 
-The roll is atomic: it closes the expiring leg and opens the next-cycle leg in a single
-transaction, with rollback on failure.
+The roll is atomic: it closes the expiring leg and opens the next-cycle leg in a single transaction, with rollback on failure.
 
 ### Overrides
 
@@ -244,8 +230,7 @@ python3 scripts/paper_snapshot.py --no-dry-run --strategy paper_csp_nifty_v1
 | `paper_3track_snapshot.py` | EOD mark-to-market (3-track) | ✓ dry-run | `--no-dry-run` |
 | `paper_snapshot.py` | EOD mark-to-market (CSP) | ✓ dry-run | `--no-dry-run` |
 
-**Rule of thumb**: always run without the write flag first to inspect output, then re-run
-with the write flag to commit.
+**Rule of thumb**: always run without the write flag first to inspect output, then re-run with the write flag to commit.
 
 ---
 
