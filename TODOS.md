@@ -120,6 +120,10 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-22] `doc-format-migration/` `plan-folders/` DFM-3 — restructured `broker-abstraction/`
+  (tier B, first of 4): consolidated 16 `stories/BA-N.md` files into one `stories.md`, canonical
+  task-line format, reflow. No shipped tasks, no digests needed. SHA: `525c0d2`. DFM-3 not
+  ticked — `full-repo-review/`, `historical-data-abstraction/`, `phase2-integrations/` remain.
 - [2026-09-22] `doc-format-migration/` `plan-folders/` DFM-2 closed — converted the remaining 12 tier-A folders (`backtest-eval-core/`, `chain-decay-analysis/`, `entry-event-filter/`,
   `full-repo-review-followups/`, `greeks-bs-fallback/`, `ic-payoff-charts/`, `mvp/`, `options_income/`, `risk-gamma-phase-a/`, `signals-eval-core/`, `technical-debt/`, `variance-gate/`) via 12
   parallel subagents, one commit each (SHAs: `7fcdba2`, `8b1c5df`, `b22052a`, `4dc1ed1`, `0a2838a`, `500c290`, `8455d50`, `ddf0964`, `1f0a6cd`, `6a9c87e`, `b1bf839`, `0b8d897`);
