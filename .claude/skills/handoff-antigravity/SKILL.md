@@ -1,17 +1,12 @@
 # NiftyShield — Antigravity Handoff Skill
 
-> Invoke at the end of planning phase, before handing implementation to Antigravity.
-> Trigger phrase: "prepare antigravity handoff", "write the antigravity prompt", "hand off to antigravity"
->
-> Goal: eliminate Antigravity's mandatory file-read tool calls at session start by injecting
-> the relevant content inline. Each file read Antigravity skips saves ~1,000–2,000 input tokens.
+> Invoke at the end of planning phase, before handing implementation to Antigravity. Trigger phrase: "prepare antigravity handoff", "write the antigravity prompt", "hand off to antigravity" Goal:
+> eliminate Antigravity's mandatory file-read tool calls at session start by injecting the relevant content inline. Each file read Antigravity skips saves ~1,000–2,000 input tokens.
 
 ---
 
-**Before reading further:** confirm the Step 3b routing call is firmly "Antigravity". This
-skill's body (~1.5K tokens) is only useful once that decision is settled — loading it and then
-reversing to "Claude implements" (task turns out judgement-heavy, or the full file is already
-in context) is pure waste.
+**Before reading further:** confirm the Step 3b routing call is firmly "Antigravity". This skill's body (~1.5K tokens) is only useful once that decision is settled — loading it and then reversing to
+"Claude implements" (task turns out judgement-heavy, or the full file is already in context) is pure waste.
 
 ---
 
@@ -19,21 +14,15 @@ in context) is pure waste.
 
 Read and extract (do not paste in full — extract only what's relevant to the task):
 
-**A. Active phase block** — from `BACKTEST_PLAN.md`, extract only the active phase section
-   (e.g. `§Phase 0.5`): its objective, DoD checklist, and any sequencing constraints.
-   Skip completed phases, future phases, and narrative context. Target: ≤ 30 lines.
+**A. Active phase block** — from `BACKTEST_PLAN.md`, extract only the active phase section (e.g. `§Phase 0.5`): its objective, DoD checklist, and any sequencing constraints. Skip completed phases,
+future phases, and narrative context. Target: ≤ 30 lines.
 
-**B. Module context block** — from `CONTEXT.md`, extract only the module entries relevant
-   to the task (e.g. `src/paper/` description + invariants). Skip unrelated modules.
-   Target: ≤ 20 lines.
+**B. Module context block** — from `CONTEXT.md`, extract only the module entries relevant to the task (e.g. `src/paper/` description + invariants). Skip unrelated modules. Target: ≤ 20 lines.
 
-**C. Graph pointers** — run `search_graph` or `get_code_snippet` for the key symbols
-   the task touches. Record the qualified names and their file locations so Antigravity
-   can query the graph directly without discovery overhead. Format as a list of
-   `search_graph("<SymbolName>")` calls Antigravity should run first.
+**C. Graph pointers** — run `search_graph` or `get_code_snippet` for the key symbols the task touches. Record the qualified names and their file locations so Antigravity can query the graph directly
+without discovery overhead. Format as a list of `search_graph("<SymbolName>")` calls Antigravity should run first.
 
-**D. ANTIGRAVITY.md rules summary** — the 6 non-negotiable constraints (extract verbatim,
-   no paraphrase):
+**D. ANTIGRAVITY.md rules summary** — the 6 non-negotiable constraints (extract verbatim, no paraphrase):
    - Decimal invariant (monetary fields → Decimal, TEXT in SQLite)
    - BrokerClient protocol (no concrete imports outside factory.py)
    - `__init__.py` required in every new package directory
@@ -41,11 +30,8 @@ Read and extract (do not paste in full — extract only what's relevant to the t
    - No `SELECT *` in any run_command query
    - State-mutating commands (git commit, DB writes) require UI approval
 
-**E. REVIEW.md hygiene rules** — extract the 10 general Python hygiene checks
-   (mutable defaults, late-binding closures, bare except, generator exhaustion,
-   dict mutation during iteration, `__eq__` without `__hash__`, None sentinel,
-   set iteration order, zip without strict=True, copy vs deepcopy).
-   Include in every handoff — Antigravity misses these without it.
+**E. REVIEW.md hygiene rules** — extract the 10 general Python hygiene checks (mutable defaults, late-binding closures, bare except, generator exhaustion, dict mutation during iteration, `__eq__`
+without `__hash__`, None sentinel, set iteration order, zip without strict=True, copy vs deepcopy). Include in every handoff — Antigravity misses these without it.
 
 ---
 
@@ -53,16 +39,14 @@ Read and extract (do not paste in full — extract only what's relevant to the t
 
 ### ⚠️ Claude authoring rule — context brief, not implementation spec
 
-The handoff prompt is a **context injection**, not a step-by-step recipe.
-Claude resolves design decisions and provides constraints. Antigravity derives
-the implementation plan from that context. If the prompt contains:
+The handoff prompt is a **context injection**, not a step-by-step recipe. Claude resolves design decisions and provides constraints. Antigravity derives the implementation plan from that context. If
+the prompt contains:
 - exact function signatures with full bodies
 - line-by-line implementation instructions
 - pre-written test cases with expected values
 
-…it is too detailed. Antigravity will skip planning and start coding immediately.
-Keep OBJECTIVE to one sentence. Keep PHASES to phase names + files only.
-Leave the "how" to Antigravity's planning step.
+…it is too detailed. Antigravity will skip planning and start coding immediately. Keep OBJECTIVE to one sentence. Keep PHASES to phase names + files only. Leave the "how" to Antigravity's planning
+step.
 
 ---
 
@@ -186,13 +170,11 @@ ambiguities_noted: [list any stop-condition items that arose, or "none"]
 
 ## Step 3 — Token budget check
 
-Before sending, count approximate tokens (rough guide: 1 token ≈ 4 chars).
-Target: handoff prompt ≤ 2,000 tokens total.
+Before sending, count approximate tokens (rough guide: 1 token ≈ 4 chars). Target: handoff prompt ≤ 2,000 tokens total.
 
 If over budget, trim in this order:
 1. CONTEXT_EXTRACT — cut to 10 lines, most critical invariants only
 2. GRAPH_POINTERS — keep only the 2–3 most load-bearing symbols
-3. REVIEW_RULES — keep only if the task touches non-trivial Python logic;
-   drop for pure doc or config tasks
+3. REVIEW_RULES — keep only if the task touches non-trivial Python logic; drop for pure doc or config tasks
 
 Never trim BOUNDARIES or DOD — these are the correctness gates.

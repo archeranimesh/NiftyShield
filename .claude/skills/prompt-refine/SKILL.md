@@ -1,10 +1,7 @@
 # NiftyShield — Prompt Refinement Skill
 
-> Invoke when a prompt feels vague before starting work.
-> Trigger phrase: "refine this prompt", "is this prompt good enough", "help me write a prompt for..."
->
-> Goal: catch underspecification early. One clarifying question now beats a wasted
-> implementation pass later. A failed phase can cost more tokens than an entire clean session.
+> Invoke when a prompt feels vague before starting work. Trigger phrase: "refine this prompt", "is this prompt good enough", "help me write a prompt for..." Goal: catch underspecification early. One
+> clarifying question now beats a wasted implementation pass later. A failed phase can cost more tokens than an entire clean session.
 
 ---
 
@@ -27,15 +24,13 @@ Check each dimension. Mark ✅ if present, ❌ if missing:
 
 ## Step 2 — If 2 or fewer ❌, proceed
 
-The prompt is good enough. State which dimensions are missing as assumptions, then start work.
-Do not ask a clarifying question for minor gaps — fill them from CONTEXT.md and proceed.
+The prompt is good enough. State which dimensions are missing as assumptions, then start work. Do not ask a clarifying question for minor gaps — fill them from CONTEXT.md and proceed.
 
 ---
 
 ## Step 3 — If 3 or more ❌, ask ONE question
 
-Identify the single most load-bearing missing dimension and ask about it only.
-Do not ask multiple questions. Pick the one that, if wrong, would require the most rework.
+Identify the single most load-bearing missing dimension and ask about it only. Do not ask multiple questions. Pick the one that, if wrong, would require the most rework.
 
 Priority order for which gap to ask about:
 1. **Named files** — wrong file = wrong implementation entirely
@@ -68,8 +63,7 @@ DoD: all tests pass (python -m pytest tests/unit/ --tb=no -q), CONTEXT.md update
 Confirm scope before starting. If >2 files change, wait for go-ahead.
 ```
 
-Omit sections that are genuinely not applicable (e.g. "Boundaries" for a pure docs task).
-Keep the total prompt under 200 tokens — dense and precise beats verbose.
+Omit sections that are genuinely not applicable (e.g. "Boundaries" for a pure docs task). Keep the total prompt under 200 tokens — dense and precise beats verbose.
 
 ---
 

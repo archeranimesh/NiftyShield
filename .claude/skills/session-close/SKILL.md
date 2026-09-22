@@ -1,23 +1,16 @@
 # NiftyShield — Session Close Skill
 
-> Invoke at the end of any work session to produce a protocol compliance and token efficiency report.
-> Trigger phrases: "session close", "close the session", "end of session report", "session summary"
->
-> Goal: honest self-audit. Not a trophy — a diagnostic. Steps skipped need accurate labels,
-> not post-hoc rationalization. The report is only useful if violations are called violations.
->
-> **Runs on a transcript, not "this conversation."** The invoking prompt supplies an
-> absolute path to a session's `.jsonl` transcript under `~/.claude/projects/…`. This skill
-> never inherits the session it audits — it is invoked as a fresh subagent (`general-purpose`,
-> never `fork`) so the audit's own cost stays a bounded extraction against a file, not a full
-> context clone. If no transcript path was given, ask for one; do not guess.
+> Invoke at the end of any work session to produce a protocol compliance and token efficiency report. Trigger phrases: "session close", "close the session", "end of session report", "session summary"
+> Goal: honest self-audit. Not a trophy — a diagnostic. Steps skipped need accurate labels, not post-hoc rationalization. The report is only useful if violations are called violations. **Runs on a
+> transcript, not "this conversation."** The invoking prompt supplies an absolute path to a session's `.jsonl` transcript under `~/.claude/projects/…`. This skill never inherits the session it audits
+> — it is invoked as a fresh subagent (`general-purpose`, never `fork`) so the audit's own cost stays a bounded extraction against a file, not a full context clone. If no transcript path was given,
+> ask for one; do not guess.
 
 ---
 
 ## Step 1 — Build the session's action log from the transcript
 
-Extract, don't reconstruct — read only what each check below needs, never the whole
-transcript. `T` = the transcript path.
+Extract, don't reconstruct — read only what each check below needs, never the whole transcript. `T` = the transcript path.
 
 ```bash
 # tool calls in invocation order: tool name + a short arg summary
@@ -30,13 +23,9 @@ jq -r 'select(.type=="assistant") | .message.content[]? | select(.type=="tool_us
 git -C <repo> log --oneline -5
 ```
 
-From the tool-call list, derive: which files were `Read` (especially `src/`/`scripts/`
-paths) and whether a graph tool (`search_graph`, `get_code_snippet`, `trace_path`,
-`search_code`) preceded each; which bash commands ran (`pytest`, `git commit`, `git add`,
-`SELECT`); which subagents were spawned (`@test-runner`, `@code-reviewer`,
-`@greeks-analyst`, `@roll-validator`); which skills were invoked (`commit`, `prompt-refine`,
-`handoff-antigravity`). This list is the sole source of truth for Steps 2–3 — do not fall
-back to inference about what "probably" happened.
+From the tool-call list, derive: which files were `Read` (especially `src/`/`scripts/` paths) and whether a graph tool (`search_graph`, `get_code_snippet`, `trace_path`, `search_code`) preceded each;
+which bash commands ran (`pytest`, `git commit`, `git add`, `SELECT`); which subagents were spawned (`@test-runner`, `@code-reviewer`, `@greeks-analyst`, `@roll-validator`); which skills were invoked
+(`commit`, `prompt-refine`, `handoff-antigravity`). This list is the sole source of truth for Steps 2–3 — do not fall back to inference about what "probably" happened.
 
 ---
 
@@ -77,22 +66,16 @@ For every step below, mark one of:
 
 **Mark VIOLATION when:**
 - A `src/` file was `Read` without a prior graph query for the same symbol
-- the full unit suite was run inline via bash instead of spawning `@test-runner` for the
-  once-per-task green run (a narrow scoped `pytest <dir>` mid-dev is fine)
+- the full unit suite was run inline via bash instead of spawning `@test-runner` for the once-per-task green run (a narrow scoped `pytest <dir>` mid-dev is fine)
 - Commit was made without spawning `@code-reviewer` on financial logic, or without persona adoption + `REVIEW.md` on non-financial logic
 - Step 3 was skipped — implementation started immediately after CONTEXT.md read with no plan stated
 - SHA was not confirmed after commit (commit skill Step 5c skipped)
 - CONTEXT.md was not updated after new files or modules were added
-- a `TODOS.md` `## Feature Backlog` / `## Open Bugs` item was left with multi-paragraph
-  detail or per-task progress instead of a pointer (title + path + next task + one-line why),
-  or bug priority/status was mirrored into `## Open Bugs` — see `docs/plan/README.md`
-  §Conventions
-- a completed `tasks.md` checkbox is missing its `| Owner: … | Model: … | Review: … | SHA: …`
-  tail (legacy `| Owner | Model | SHA` lines with no `Review:` are grandfathered — skip)
-- a story / bug finished this session (every `tasks.md` / `docs/bugs/task.md` box ticked,
-  `## Epic done when` fully checked) but was **not archived** in the same commit — folder
-  still under `docs/plan/` or `docs/bugs/`, line still in `TODOS.md`, README row not
-  collapsed to a pointer. See §Conventions *Completion → archive*.
+- a `TODOS.md` `## Feature Backlog` / `## Open Bugs` item was left with multi-paragraph detail or per-task progress instead of a pointer (title + path + next task + one-line why), or bug
+  priority/status was mirrored into `## Open Bugs` — see `docs/plan/README.md` §Conventions
+- a completed `tasks.md` checkbox is missing its `| Owner: … | Model: … | Review: … | SHA: …` tail (legacy `| Owner | Model | SHA` lines with no `Review:` are grandfathered — skip)
+- a story / bug finished this session (every `tasks.md` / `docs/bugs/task.md` box ticked, `## Epic done when` fully checked) but was **not archived** in the same commit — folder still under
+  `docs/plan/` or `docs/bugs/`, line still in `TODOS.md`, README row not collapsed to a pointer. See §Conventions *Completion → archive*.
 
 ---
 
@@ -100,8 +83,7 @@ For every step below, mark one of:
 
 ### 3a — Rule 0 violations (graph before Read)
 
-List every `Read` call on a `src/` or `scripts/` path this session. For each, state whether
-a graph query was attempted first. Count violations.
+List every `Read` call on a `src/` or `scripts/` path this session. For each, state whether a graph query was attempted first. Count violations.
 
 ```
 Rule 0 violations: N
@@ -109,8 +91,7 @@ Rule 0 violations: N
     → should have used: get_code_snippet("ClassName") or search_graph("function_name")
 ```
 
-Token cost reference: a full-file Read on a 100-line file ≈ 400 tokens, persisting all session.
-A targeted `get_code_snippet` for the same symbol ≈ 30–80 tokens. Delta per violation: ~320–370 tokens.
+Token cost reference: a full-file Read on a 100-line file ≈ 400 tokens, persisting all session. A targeted `get_code_snippet` for the same symbol ≈ 30–80 tokens. Delta per violation: ~320–370 tokens.
 
 ### 3b — Rule 1 violations (bash output discipline)
 
@@ -132,27 +113,22 @@ Agents spawned:   @test-runner [yes/no] | @code-reviewer [yes/no] | @greeks-anal
 Agents inlined:   pytest run inline [yes/no] | review inlined [yes/no]
 ```
 
-Note: inlining an agent does not save tokens — the diff or test output is still processed.
-It only forfeits the isolation guarantee and blocking gate semantics. No upside.
+Note: inlining an agent does not save tokens — the diff or test output is still processed. It only forfeits the isolation guarantee and blocking gate semantics. No upside.
 
 ### 3c-2 — Real per-bucket numbers (`token_audit.py`)
 
-Run the audit tool against the same transcript to replace estimates with real, per-bucket
-figures for this session's TOKEN EFFICIENCY block:
+Run the audit tool against the same transcript to replace estimates with real, per-bucket figures for this session's TOKEN EFFICIENCY block:
 
 ```bash
 python -m scripts.dev.token_audit "$T"
 ```
 
-Use its `subagent_internal` figure (attributable to each spawned subagent, including this
-close-out's own prior runs if any) and `assistant_text` as the real numbers backing 3a/3b/3d
-instead of the chars/4 heuristics those sections describe — quote the tool's numbers when
-available, fall back to the heuristic only for a transcript the tool cannot parse.
+Use its `subagent_internal` figure (attributable to each spawned subagent, including this close-out's own prior runs if any) and `assistant_text` as the real numbers backing 3a/3b/3d instead of the
+chars/4 heuristics those sections describe — quote the tool's numbers when available, fall back to the heuristic only for a transcript the tool cannot parse.
 
 ### 3d — Avoidable re-reads
 
-List any files that were Read more than once this session, or Read when their content was
-already present in context (e.g. CONTEXT.md re-read mid-session after Step 1).
+List any files that were Read more than once this session, or Read when their content was already present in context (e.g. CONTEXT.md re-read mid-session after Step 1).
 
 ```
 Avoidable re-reads: N
@@ -161,22 +137,16 @@ Avoidable re-reads: N
 
 ### 3e — Doc staleness (content gaps)
 
-Report-only. This covers the two staleness signals the doc-freshness hooks
-(`state_doc_freshness.sh` at SessionStart, `doc_update_gate.sh` on `git commit`) structurally
-cannot see — they proxy "docs behind code" by a src-commit count; they do not read content.
-Do **not** re-report per-file src-commit counts here (the SessionStart hook already does).
-Do **not** commit any doc fix — the operator decides.
+Report-only. This covers the two staleness signals the doc-freshness hooks (`state_doc_freshness.sh` at SessionStart, `doc_update_gate.sh` on `git commit`) structurally cannot see — they proxy "docs
+behind code" by a src-commit count; they do not read content. Do **not** re-report per-file src-commit counts here (the SessionStart hook already does). Do **not** commit any doc fix — the operator
+decides.
 
 Check, for this session only:
 
-- **(a) New module, no tree row.** For every `src/<module>/` directory created this session
-  (`git log --diff-filter=A --name-only` since the session's first commit, or a new dir under
-  `src/` in the working tree), confirm a matching row exists in `CONTEXT_TREE.md`. Flag each
-  missing one.
-- **(b) Story code touched, status not advanced.** For every `docs/plan/<story>/` whose
-  `src/` or `scripts/` code was edited this session, confirm the story's row in
-  `docs/plan/README.md` had its status column moved this session (or is already `✅ Done`).
-  Flag a story whose code moved but whose README status did not.
+- **(a) New module, no tree row.** For every `src/<module>/` directory created this session (`git log --diff-filter=A --name-only` since the session's first commit, or a new dir under `src/` in the
+  working tree), confirm a matching row exists in `CONTEXT_TREE.md`. Flag each missing one.
+- **(b) Story code touched, status not advanced.** For every `docs/plan/<story>/` whose `src/` or `scripts/` code was edited this session, confirm the story's row in `docs/plan/README.md` had its
+  status column moved this session (or is already `✅ Done`). Flag a story whose code moved but whose README status did not.
 
 ```
 Doc staleness: N
@@ -190,8 +160,7 @@ If both checks are clean, print `Doc staleness: 0`.
 
 ## Step 4 — Improvement suggestions
 
-Based only on violations and patterns actually observed this session, produce 2–4 suggestions.
-Do not generate generic advice if the session was clean.
+Based only on violations and patterns actually observed this session, produce 2–4 suggestions. Do not generate generic advice if the session was clean.
 
 Format each suggestion as:
 
@@ -209,34 +178,23 @@ If the session was clean: state "No suggestions — session followed protocol." 
 
 ## Step 4b — Rank into `suggestions.md` (repo root)
 
-Every suggestion from Step 4 is a candidate row in `suggestions.md` at the repo root — a
-running, cross-session tally of which inefficiency patterns actually recur, so the count is a
-"how many times would fixing this have helped" ranking, not a one-off printout that gets
-forgotten next session.
+Every suggestion from Step 4 is a candidate row in `suggestions.md` at the repo root — a running, cross-session tally of which inefficiency patterns actually recur, so the count is a "how many times
+would fixing this have helped" ranking, not a one-off printout that gets forgotten next session.
 
 1. Read `suggestions.md` if it exists (create it with the header below if not).
-2. For each Step 4 suggestion, decide whether it matches an **existing row's `Slug`** — same
-   root cause, not just similar wording (e.g. "ran pytest inline" and "skipped test-runner
-   agent" are the same slug, `pytest-inlined-not-test-runner`). Match on meaning, not string
-   equality; the slug column exists precisely so this judgment call only has to be made once
-   per pattern, then it's a deterministic key.
-3. **Match found:** increment `Count`, update `Last seen` to today's date, leave `Slug` and
-   `Suggestion` text untouched (do not rephrase an existing row just because this session's
-   wording differs slightly).
-4. **No match:** append a new row, `Count = 1`, `First seen = Last seen = today`, a new
-   kebab-case `Slug` that names the root cause (not the symptom).
+2. For each Step 4 suggestion, decide whether it matches an **existing row's `Slug`** — same root cause, not just similar wording (e.g. "ran pytest inline" and "skipped test-runner agent" are the same
+   slug, `pytest-inlined-not-test-runner`). Match on meaning, not string equality; the slug column exists precisely so this judgment call only has to be made once per pattern, then it's a
+   deterministic key.
+3. **Match found:** increment `Count`, update `Last seen` to today's date, leave `Slug` and `Suggestion` text untouched (do not rephrase an existing row just because this session's wording differs
+   slightly).
+4. **No match:** append a new row, `Count = 1`, `First seen = Last seen = today`, a new kebab-case `Slug` that names the root cause (not the symptom).
 5. Re-sort the table by `Count` descending, ties broken by most recent `Last seen`.
 6. Write the file back. Never hand-edit `Count` outside this procedure.
-7. **Drain a recurring slug (see "Escalation" below).** After the re-sort, walk every row
-   with `Count >= 5` that is not already carrying an `Escalated:` prefix. Each one escalates
-   out of the active table this session — either to a `DEBT-*` line in
-   `docs/plan/technical-debt/` or to the "Accepted / won't-fix" section — per the rules
-   below. The row is then deleted from the active count-sorted table. This is the only
-   sanctioned way a row leaves the table; it is part of the skill procedure, not a hand-edit.
-8. If an already-escalated slug recurs, re-add it at `Count = 1` with the
-   `Escalated: <DEBT-N | accepted>` prefix on its `Suggestion` cell and, in the Step 5
-   report, flag it as a second recurrence — it now needs a protocol/model discussion, not a
-   fresh `DEBT-*` line.
+7. **Drain a recurring slug (see "Escalation" below).** After the re-sort, walk every row with `Count >= 5` that is not already carrying an `Escalated:` prefix. Each one escalates out of the active
+   table this session — either to a `DEBT-*` line in `docs/plan/technical-debt/` or to the "Accepted / won't-fix" section — per the rules below. The row is then deleted from the active count-sorted
+   table. This is the only sanctioned way a row leaves the table; it is part of the skill procedure, not a hand-edit.
+8. If an already-escalated slug recurs, re-add it at `Count = 1` with the `Escalated: <DEBT-N | accepted>` prefix on its `Suggestion` cell and, in the Step 5 report, flag it as a second recurrence —
+   it now needs a protocol/model discussion, not a fresh `DEBT-*` line.
 
 **File format:**
 
@@ -265,36 +223,26 @@ If Step 4 produced no suggestions (clean session), do not touch `suggestions.md`
 ### Escalation — draining a `Count >= 5` slug
 
 
-**Threshold: 5.** A slug that has recurred across five sessions, each time logged and each
-time re-sorted to the top, has demonstrated the log alone will not fix it. Step 4b item 7
-retires it from the active table into one of two exits:
+**Threshold: 5.** A slug that has recurred across five sessions, each time logged and each time re-sorted to the top, has demonstrated the log alone will not fix it. Step 4b item 7 retires it from the
+active table into one of two exits:
 
-- **A remediation already exists** (a hook, a preflight check, a protocol edit — the
-  `token-efficiency` epic shipped one for every slug over threshold as of 2026-09-03):
-  append a `DEBT-*` line to **both** `docs/plan/technical-debt/tasks.md` and its `stories.md`,
-  marked **standalone-actionable** — the documented exception to that folder's "never a
-  standalone commit" rule, because these are proactive, not opportunistic. The line reads:
-  "verify the `<SWEEP-N / fix>` remediation is effective; if this slug still recurs in 3
-  sessions logged after the remediation landed, escalate to a protocol/model discussion."
-- **It is genuinely model judgement with no mechanical catch** (e.g.
-  `plan-gate-skipped-on-prescriptive-prompt`): move the row verbatim into the
-  **"Accepted / won't-fix"** section of `suggestions.md` with a one-line reason and today's
-  date.
+- **A remediation already exists** (a hook, a preflight check, a protocol edit — the `token-efficiency` epic shipped one for every slug over threshold as of 2026-09-03): append a `DEBT-*` line to
+  **both** `docs/plan/technical-debt/tasks.md` and its `stories.md`, marked **standalone-actionable** — the documented exception to that folder's "never a standalone commit" rule, because these are
+  proactive, not opportunistic. The line reads: "verify the `<SWEEP-N / fix>` remediation is effective; if this slug still recurs in 3 sessions logged after the remediation landed, escalate to a
+  protocol/model discussion."
+- **It is genuinely model judgement with no mechanical catch** (e.g. `plan-gate-skipped-on-prescriptive-prompt`): move the row verbatim into the **"Accepted / won't-fix"** section of `suggestions.md`
+  with a one-line reason and today's date.
 
-Either way the row is deleted from the active count-sorted table (Step 4b item 7). Record
-every escalation in the Step 5 report's SUGGESTIONS block.
+Either way the row is deleted from the active count-sorted table (Step 4b item 7). Record every escalation in the Step 5 report's SUGGESTIONS block.
 
 ---
 
 ## Step 4c — Append a row to `session_audit.jsonl` (repo root)
 
-Unlike `suggestions.md` (Step 4b), this row is written for **every** session-close run,
-including a clean one with zero Step 4 suggestions — it's a raw per-session audit trail, not
-a dedup table, and the on-demand `weekly-audit` skill needs a complete series to aggregate
-against.
+Unlike `suggestions.md` (Step 4b), this row is written for **every** session-close run, including a clean one with zero Step 4 suggestions — it's a raw per-session audit trail, not a dedup table, and
+the on-demand `weekly-audit` skill needs a complete series to aggregate against.
 
-Using the counts already computed in Steps 2–4 (no new analysis — this is a write, not a
-recheck), append one row:
+Using the counts already computed in Steps 2–4 (no new analysis — this is a write, not a recheck), append one row:
 
 ```bash
 python -m scripts.dev.session_audit_log append \
@@ -305,10 +253,8 @@ python -m scripts.dev.session_audit_log append \
   --suggestions-count N
 ```
 
-Field mapping: `graph-calls` and `raw-read-violations` come from 3a; `bash-output-violations`
-from 3b; `subagent-spawns` and `autotrigger-fires` from 3c / the Step 1 tool-call list;
-`skills-invoked` from the Step 1 tool-call list's `skill` entries; `suggestions-count` from
-Step 4's output count.
+Field mapping: `graph-calls` and `raw-read-violations` come from 3a; `bash-output-violations` from 3b; `subagent-spawns` and `autotrigger-fires` from 3c / the Step 1 tool-call list; `skills-invoked`
+from the Step 1 tool-call list's `skill` entries; `suggestions-count` from Step 4's output count.
 
 ---
 

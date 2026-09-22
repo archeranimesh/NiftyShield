@@ -1,7 +1,6 @@
 # NiftyShield Commit Executor
 
-Execute the full commit workflow. A written-out commit message is not a commit — this skill
-runs the git commands and confirms the SHA. The phase is not closed until the SHA appears.
+Execute the full commit workflow. A written-out commit message is not a commit — this skill runs the git commands and confirms the SHA. The phase is not closed until the SHA appears.
 
 ---
 
@@ -11,9 +10,8 @@ runs the git commands and confirms the SHA. The phase is not closed until the SH
 git -C /path/to/repo diff HEAD
 ```
 
-Scan for: Decimal violations, BrokerClient imports outside factory.py, missing type hints,
-blocking calls in async paths. If the diff touches financial logic (Greeks, P&L, Decimal
-fields), stop and invoke the `@code-reviewer` subagent before proceeding.
+Scan for: Decimal violations, BrokerClient imports outside factory.py, missing type hints, blocking calls in async paths. If the diff touches financial logic (Greeks, P&L, Decimal fields), stop and
+invoke the `@code-reviewer` subagent before proceeding.
 
 ### Step 1b — commit preflight
 
@@ -26,16 +24,12 @@ python -m scripts.dev.commit_preflight --expect <dir-or-file> [--expect <…>]
 
 Pass one `--expect` per directory/file the phase is allowed to touch. The preflight prints:
 
-- `✗` **blockers** (`ruff format --check` on staged `.py`, `md-line-length` on staged
-  `.md`) — it exits 1; fix these before committing, or the `pre-commit` hook aborts the
-  commit anyway.
-- `⚠` **warnings** (staged path outside `--expect`; a `next:` marker — prose forms
-  included — still naming a task this commit ticks; a `[x]` task line still on the `SHA:
-  <—>` placeholder) — advisory, exit 0; act on them or note why not.
+- `✗` **blockers** (`ruff format --check` on staged `.py`, `md-line-length` on staged `.md`) — it exits 1; fix these before committing, or the `pre-commit` hook aborts the commit anyway.
+- `⚠` **warnings** (staged path outside `--expect`; a `next:` marker — prose forms included — still naming a task this commit ticks; a `[x]` task line still on the `SHA: <—>` placeholder) — advisory,
+  exit 0; act on them or note why not.
 
-**SHA-placeholder policy:** when a phase ticks its own task box, set `SHA: <pending>` on
-that line now and backfill the real SHA in the **next** commit's docs touch — never make a
-dedicated swap-only commit just to record a SHA.
+**SHA-placeholder policy:** when a phase ticks its own task box, set `SHA: <pending>` on that line now and backfill the real SHA in the **next** commit's docs touch — never make a dedicated swap-only
+commit just to record a SHA.
 
 ---
 
@@ -63,8 +57,7 @@ What:
 Ref: <relevant constraint from CONTEXT.md → Current Constraints, or "none">
 ```
 
-**Types:** `feat` / `fix` / `refactor` / `test` / `chore` / `docs`
-**Scope:** folder name under `src/` or `scripts/` (e.g. `portfolio`, `client`, `mf`, `scripts`)
+**Types:** `feat` / `fix` / `refactor` / `test` / `chore` / `docs` **Scope:** folder name under `src/` or `scripts/` (e.g. `portfolio`, `client`, `mf`, `scripts`)
 
 Rules:
 - Subject line ≤ 60 chars, imperative mood, no trailing period
@@ -84,9 +77,8 @@ EOF
 )"
 ```
 
-Stage only the files for this phase. Never `git add -A` across phase boundaries. If you
-run `pre-commit` by hand first, scope it — `pre-commit run --files $(git diff --cached
---name-only)`, never `--all-files` (that reformats the whole tree into your diff).
+Stage only the files for this phase. Never `git add -A` across phase boundaries. If you run `pre-commit` by hand first, scope it — `pre-commit run --files $(git diff --cached --name-only)`, never
+`--all-files` (that reformats the whole tree into your diff).
 
 ---
 
@@ -96,8 +88,7 @@ run `pre-commit` by hand first, scope it — `pre-commit run --files $(git diff 
 git -C /path/to/repo log --oneline -1
 ```
 
-The SHA must appear in output. This is proof of completion. If this step is skipped,
-the phase is not closed.
+The SHA must appear in output. This is proof of completion. If this step is skipped, the phase is not closed.
 
 ---
 

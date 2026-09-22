@@ -1,24 +1,17 @@
 # NiftyShield — Root Markdown Organize Skill
 
-> Invoke to organize the repo's markdown: archive completed work, relocate one-off plans,
-> reflow prose to the house style, and reconcile the protocol docs against reality — so that
-> only current, cheaply-loadable context lives at root.
->
-> **Trigger phrases:** "organize the markdown", "optimize the docs", "clean up the markdown",
-> "do a markdown cleanup", "archive completed TODOs", "md-organize".
+> Invoke to organize the repo's markdown: archive completed work, relocate one-off plans, reflow prose to the house style, and reconcile the protocol docs against reality — so that only current,
+> cheaply-loadable context lives at root. **Trigger phrases:** "organize the markdown", "optimize the docs", "clean up the markdown", "do a markdown cleanup", "archive completed TODOs", "md-organize".
 
 ---
 
 ## What This Skill Does
 
-Keeps the project root to markdown that carries _live, session-relevant context_. Completed
-work, one-off plans, and reusable tool prompts get archived or moved — nothing useful is
-deleted, only relocated with a pointer stub where another doc links to it. It also enforces
-the line-style convention (prose filled to ≤200 chars per line) and keeps `CLAUDE.md` /
-`AGENTS.md` / `.agents/` / `.claude/skills/work/` in sync.
+Keeps the project root to markdown that carries _live, session-relevant context_. Completed work, one-off plans, and reusable tool prompts get archived or moved — nothing useful is deleted, only
+relocated with a pointer stub where another doc links to it. It also enforces the line-style convention (prose filled to ≤200 chars per line) and keeps `CLAUDE.md` / `AGENTS.md` / `.agents/` /
+`.claude/skills/work/` in sync.
 
-This is an on-demand maintenance pass, not a per-session step. Folders and root docs churn
-only ~monthly; run it when the drift has accumulated or when a large doc change just landed.
+This is an on-demand maintenance pass, not a per-session step. Folders and root docs churn only ~monthly; run it when the drift has accumulated or when a large doc change just landed.
 
 ---
 
@@ -60,18 +53,13 @@ Anything else at root is a candidate to move:
 
 ## Step 2 — Archive completed TODOs + session log
 
-`TODOS.md` is two pointer-only lists (`## Feature Backlog`, `## Open Bugs`) plus a
-`## Session Log`. Per `docs/plan/README.md` §Conventions:
+`TODOS.md` is two pointer-only lists (`## Feature Backlog`, `## Open Bugs`) plus a `## Session Log`. Per `docs/plan/README.md` §Conventions:
 
-- A fully-done story/bug has its `TODOS.md` line **deleted** (moved to
-  `docs/archive/TODOS_ARCHIVE.md`), its folder moved to `docs/archive/plan/<slug>/`, and its
-  `docs/plan/README.md` row collapsed to a pointer — all in the completion commit. If Step 5b
-  below finds a done-but-not-archived story, do that move here.
-- Session-log entries older than the current session move to
-  `docs/archive/TODOS_ARCHIVE.md` (append; keep newest-first within a date).
-- Backlog items must stay pointer-only: title, `docs/plan/<slug>/` or `docs/bugs/` path, next
-  unchecked task id, one line of why. Multi-paragraph detail or per-task progress in an item
-  is a hygiene violation — push it into the story's own `tasks.md`.
+- A fully-done story/bug has its `TODOS.md` line **deleted** (moved to `docs/archive/TODOS_ARCHIVE.md`), its folder moved to `docs/archive/plan/<slug>/`, and its `docs/plan/README.md` row collapsed to
+  a pointer — all in the completion commit. If Step 5b below finds a done-but-not-archived story, do that move here.
+- Session-log entries older than the current session move to `docs/archive/TODOS_ARCHIVE.md` (append; keep newest-first within a date).
+- Backlog items must stay pointer-only: title, `docs/plan/<slug>/` or `docs/bugs/` path, next unchecked task id, one line of why. Multi-paragraph detail or per-task progress in an item is a hygiene
+  violation — push it into the story's own `tasks.md`.
 
 Archive header, if `docs/archive/TODOS_ARCHIVE.md` does not exist:
 
@@ -88,43 +76,30 @@ Archive header, if `docs/archive/TODOS_ARCHIVE.md` does not exist:
 
 Targeted `Edit` only — never `Write` on `CONTEXT.md`.
 
-1. **Length + line-length check:**
-   `wc -l CONTEXT.md` (target ≤ 400) and
-   `awk '{print length}' CONTEXT.md | sort -rn | head -1` (must be ≤ 200).
-   If either is breached, re-slim: move regrown module prose into the matching
-   `CONTEXT_TREE.md` entry, cut the "What Exists" section back to one line per package.
+1. **Length + line-length check:** `wc -l CONTEXT.md` (target ≤ 400) and `awk '{print length}' CONTEXT.md | sort -rn | head -1` (must be ≤ 200). If either is breached, re-slim: move regrown module
+   prose into the matching `CONTEXT_TREE.md` entry, cut the "What Exists" section back to one line per package.
 2. **Date header** — `## Current State (as of YYYY-MM-DD)` → today.
-3. **"What Does NOT Exist Yet"** — verify each entry with `ls src/<module>/`; drop any module
-   that now exists.
-4. **Live Data / Test Coverage** — update only on direct evidence (seed ran, DB wiped, a
-   fresh `pytest` count).
+3. **"What Does NOT Exist Yet"** — verify each entry with `ls src/<module>/`; drop any module that now exists.
+4. **Live Data / Test Coverage** — update only on direct evidence (seed ran, DB wiped, a fresh `pytest` count).
 
 ---
 
 ## Step 4 — Roll DECISIONS.md + refresh its index
 
-`DECISIONS.md` root holds **still-enforced rules + the archive index only** (RDO-9 semantic
-split). Completed-work-log entries ("fixed X, why") live in
-`docs/archive/DECISIONS_worklog_2026.md`.
+`DECISIONS.md` root holds **still-enforced rules + the archive index only** (RDO-9 semantic split). Completed-work-log entries ("fixed X, why") live in `docs/archive/DECISIONS_worklog_2026.md`.
 
-1. Scan root `DECISIONS.md` for any entry that has become a pure historical record (the
-   change landed, nothing enforces it going forward) — move it to the worklog archive, same
-   header, newest-first within its section.
-2. Roll any archive entry older than ~6 months into the current-year archive file if a new
-   year has started; refresh the one-line topic index in root.
-3. `pre-commit run md-line-length --files DECISIONS.md` must stay green — wrap any surviving
-   rule entry to fill-to-≤200.
+1. Scan root `DECISIONS.md` for any entry that has become a pure historical record (the change landed, nothing enforces it going forward) — move it to the worklog archive, same header, newest-first
+   within its section.
+2. Roll any archive entry older than ~6 months into the current-year archive file if a new year has started; refresh the one-line topic index in root.
+3. `pre-commit run md-line-length --files DECISIONS.md` must stay green — wrap any surviving rule entry to fill-to-≤200.
 
 ---
 
 ## Step 5 — Update README.md
 
-**Project Structure block:** every real directory in `src/` and `scripts/` appears;
-planned-but-empty modules read `[empty — planned QN YYYY]`; no entries for dirs that don't
-exist.
+**Project Structure block:** every real directory in `src/` and `scripts/` appears; planned-but-empty modules read `[empty — planned QN YYYY]`; no entries for dirs that don't exist.
 
-**Roadmap checkboxes:** `[x]` for shipped, `[ ]` for planned, priority label in parens on the
-top open item.
+**Roadmap checkboxes:** `[x]` for shipped, `[ ]` for planned, priority label in parens on the top open item.
 
 ---
 
@@ -132,28 +107,22 @@ top open item.
 
 The convention (`docs/plan/README.md` §Conventions → "Markdown line style", RDO-5):
 
-- Prose fills each line to the last word boundary before 200 chars — do not break early at
-  a sentence or clause, and do not hand-wrap to a fixed narrow width. (The earlier
-  "semantic linefeeds" one-clause-per-line style is retired — RDO-17.7 §A.)
-- The hard **200-char ceiling** on every line kind (prose, table rows, fenced code) is the
-  only gated rule, enforced by the `md-line-length` pre-commit hook over root `.md` +
-  `docs/plan/**` + `docs/bugs/**`.
-- `<!-- lint-ignore-length -->` on the immediately-preceding line excuses one unbreakable
-  token (a long URL, a base64 blob).
+- Prose fills each line to the last word boundary before 200 chars — do not break early at a sentence or clause, and do not hand-wrap to a fixed narrow width. (The earlier "semantic linefeeds"
+  one-clause-per-line style is retired — RDO-17.7 §A.)
+- The hard **200-char ceiling** on every line kind (prose, table rows, fenced code) is the only gated rule, enforced by the `md-line-length` pre-commit hook over root `.md` + `docs/plan/**` +
+  `docs/bugs/**`.
+- `<!-- lint-ignore-length -->` on the immediately-preceding line excuses one unbreakable token (a long URL, a base64 blob).
 
 Run `pre-commit run md-line-length --all-files` and clear every reported line:
 
 - Prose → rewrap so each line fills to just under 200 chars.
-- Long table rows → shorten cells, or lift a long parenthetical into a sentence below the
-  table. Never drop a column or a fact.
+- Long table rows → shorten cells, or lift a long parenthetical into a sentence below the table. Never drop a column or a fact.
 - Fenced code → shorten, or mark with `<!-- lint-ignore-length -->`.
 
 `DECISIONS.md` is Step 4's responsibility, not this sweep's.
 
-**Secrets baseline:** a large reflow shifts line numbers, so `detect-secrets` will flag
-`.secrets.baseline` line-number drift on the next commit. Refresh it in the same commit:
-`detect-secrets scan --baseline .secrets.baseline` (see `chore(root): update secrets
-baseline` precedents in the log).
+**Secrets baseline:** a large reflow shifts line numbers, so `detect-secrets` will flag `.secrets.baseline` line-number drift on the next commit. Refresh it in the same commit: `detect-secrets scan
+--baseline .secrets.baseline` (see `chore(root): update secrets baseline` precedents in the log).
 
 ---
 
@@ -161,17 +130,13 @@ baseline` precedents in the log).
 
 Run: `python scripts/dev/hooks/check_story_structure.py --all`
 
-Every non-archived `docs/plan/*/` folder must be a story (`prompt.md` + `tasks.md`) or an
-epic (holds story sub-folders). Act on what it reports:
+Every non-archived `docs/plan/*/` folder must be a story (`prompt.md` + `tasks.md`) or an epic (holds story sub-folders). Act on what it reports:
 
 - **empty folder** — the story shipped and was archived; `rmdir` it.
-- **legacy `*_tasks.md`** — rename to bare `tasks.md` only when you are already touching that
-  story (do not mass-rename).
-- **missing files** — the folder is a stub; flesh it out from `docs/plan/_TEMPLATE/` or
-  remove it.
+- **legacy `*_tasks.md`** — rename to bare `tasks.md` only when you are already touching that story (do not mass-rename).
+- **missing files** — the folder is a stub; flesh it out from `docs/plan/_TEMPLATE/` or remove it.
 
-Then check for any story/bug with every `tasks.md` box ticked that was **not** archived — if
-found, do the *Completion → archive* move (folder → `docs/archive/plan/`, `TODOS.md` line →
+Then check for any story/bug with every `tasks.md` box ticked that was **not** archived — if found, do the *Completion → archive* move (folder → `docs/archive/plan/`, `TODOS.md` line →
 `TODOS_ARCHIVE.md`, README row → pointer). Full rules: `docs/plan/README.md` §Conventions.
 
 ---
@@ -180,36 +145,27 @@ found, do the *Completion → archive* move (folder → `docs/archive/plan/`, `T
 
 Run: `python scripts/dev/hooks/check_checkbox_consistency.py --all`
 
-Every task id carries exactly one checkbox (the working-list line); `## Epic done when`
-blocks are prose acceptance criteria with no `- [ ]` (RDO-15 convention a). Fix each reported
-file — strip a stray summary-block checkbox, reconcile a drifted id to the working-list
-state, or repoint a stale README `next:` marker. Full rule: `docs/plan/README.md`
-§"Checkbox consistency".
+Every task id carries exactly one checkbox (the working-list line); `## Epic done when` blocks are prose acceptance criteria with no `- [ ]` (RDO-15 convention a). Fix each reported file — strip a
+stray summary-block checkbox, reconcile a drifted id to the working-list state, or repoint a stale README `next:` marker. Full rule: `docs/plan/README.md` §"Checkbox consistency".
 
 ---
 
 ## Step 5d — Reconcile CLAUDE.md conditional-load pointers
 
-Every `also read <X>` / "load `<X>` when …" line in `CLAUDE.md` (Rule 0 decision tree, Step 1
-conditional-load list, Quick reference table, module `CLAUDE.md` table) must name a file that
-exists. `grep -oE '[A-Za-z_/.]+\.md' CLAUDE.md | sort -u | while read f; do [ -e "$f" ] ||
-echo "missing: $f"; done`. Fix a stale path, drop a pointer to a deleted doc, add a pointer
-for a new always-relevant one.
+Every `also read <X>` / "load `<X>` when …" line in `CLAUDE.md` (Rule 0 decision tree, Step 1 conditional-load list, Quick reference table, module `CLAUDE.md` table) must name a file that exists.
+`grep -oE '[A-Za-z_/.]+\.md' CLAUDE.md | sort -u | while read f; do [ -e "$f" ] || echo "missing: $f"; done`. Fix a stale path, drop a pointer to a deleted doc, add a pointer for a new always-relevant
+one.
 
 ---
 
 ## Step 5e — Verify the doc-freshness hooks (RDO-10)
 
-The two hooks carry **hard-coded** state-doc lists that must stay aligned with `CLAUDE.md`
-§Step 5a:
+The two hooks carry **hard-coded** state-doc lists that must stay aligned with `CLAUDE.md` §Step 5a:
 
 - `.claude/hooks/state_doc_freshness.sh` — per-doc staleness thresholds (SessionStart).
-- `.claude/hooks/doc_update_gate.sh` — the "`.py` commit with no state-doc change" reminder
-  (`PreToolUse` on `git commit`).
+- `.claude/hooks/doc_update_gate.sh` — the "`.py` commit with no state-doc change" reminder (`PreToolUse` on `git commit`).
 
-Diff each hook's doc list against `CLAUDE.md` §Step 5a. **Flag any drift — do not auto-edit
-the hooks.** Threshold tuning and the advisory→blocking decision are RDO-11's call, not this
-skill's.
+Diff each hook's doc list against `CLAUDE.md` §Step 5a. **Flag any drift — do not auto-edit the hooks.** Threshold tuning and the advisory→blocking decision are RDO-11's call, not this skill's.
 
 ---
 
@@ -236,17 +192,12 @@ Docs/config-only → skip `code-reviewer`. Run `pre-commit run --all-files` befo
 
 `CLAUDE.md` is canonical. Three copies must not drift from it:
 
-1. **`AGENTS.md`** — Antigravity's autoload protocol, a full standalone mirror. Re-apply each
-   `CLAUDE.md` edit to the matching passage. Preserve the intentional deltas: the
-   "Antigravity autoload / deltas" header block, every `Edit` → `multi_replace_file_content`
-   / `write_to_file` substitution, and the "emit the await-signal instead of spawning
-   `@agent`" wording. Confirm only those deltas differ:
-   `diff <(sed 's/[[:space:]]*$//' CLAUDE.md) <(sed 's/[[:space:]]*$//' AGENTS.md)`.
-2. **`.agents/skills/`** — a mirror of `.claude/skills/` that Antigravity autoloads. Keep the
-   skill set and body text in sync with `.claude/skills/`; all paths point at `.claude/`
-   (no `.Codex/` / "Codex" identity language — that scaffolding is dead, RDO-8).
-3. **`.claude/skills/work/SKILL.md`** — its Feature/Bug routing text duplicates `CLAUDE.md`
-   Step 1; keep the two aligned (RDO-12).
+1. **`AGENTS.md`** — Antigravity's autoload protocol, a full standalone mirror. Re-apply each `CLAUDE.md` edit to the matching passage. Preserve the intentional deltas: the "Antigravity autoload /
+   deltas" header block, every `Edit` → `multi_replace_file_content` / `write_to_file` substitution, and the "emit the await-signal instead of spawning `@agent`" wording. Confirm only those deltas
+   differ: `diff <(sed 's/[[:space:]]*$//' CLAUDE.md) <(sed 's/[[:space:]]*$//' AGENTS.md)`.
+2. **`.agents/skills/`** — a mirror of `.claude/skills/` that Antigravity autoloads. Keep the skill set and body text in sync with `.claude/skills/`; all paths point at `.claude/` (no `.Codex/` /
+   "Codex" identity language — that scaffolding is dead, RDO-8).
+3. **`.claude/skills/work/SKILL.md`** — its Feature/Bug routing text duplicates `CLAUDE.md` Step 1; keep the two aligned (RDO-12).
 
 Fold every mirror change into the same Step 6 commit.
 

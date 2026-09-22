@@ -1,7 +1,6 @@
 # NiftyShield Commit Executor
 
-Execute the full commit workflow. A written-out commit message is not a commit — this skill
-runs the git commands and confirms the SHA. The phase is not closed until the SHA appears.
+Execute the full commit workflow. A written-out commit message is not a commit — this skill runs the git commands and confirms the SHA. The phase is not closed until the SHA appears.
 
 ---
 
@@ -11,9 +10,8 @@ runs the git commands and confirms the SHA. The phase is not closed until the SH
 git -C /path/to/repo diff HEAD
 ```
 
-Scan for: Decimal violations, BrokerClient imports outside factory.py, missing type hints,
-blocking calls in async paths. If the diff touches financial logic (Greeks, P&L, Decimal
-fields), stop and invoke the `@code-reviewer` subagent before proceeding.
+Scan for: Decimal violations, BrokerClient imports outside factory.py, missing type hints, blocking calls in async paths. If the diff touches financial logic (Greeks, P&L, Decimal fields), stop and
+invoke the `@code-reviewer` subagent before proceeding.
 
 ---
 
@@ -41,8 +39,7 @@ What:
 Ref: <relevant constraint from CONTEXT.md → Current Constraints, or "none">
 ```
 
-**Types:** `feat` / `fix` / `refactor` / `test` / `chore` / `docs`
-**Scope:** folder name under `src/` or `scripts/` (e.g. `portfolio`, `client`, `mf`, `scripts`)
+**Types:** `feat` / `fix` / `refactor` / `test` / `chore` / `docs` **Scope:** folder name under `src/` or `scripts/` (e.g. `portfolio`, `client`, `mf`, `scripts`)
 
 Rules:
 - Subject line ≤ 60 chars, imperative mood, no trailing period
@@ -72,8 +69,7 @@ Stage only the files for this phase. Never `git add -A` across phase boundaries.
 git -C /path/to/repo log --oneline -1
 ```
 
-The SHA must appear in output. This is proof of completion. If this step is skipped,
-the phase is not closed.
+The SHA must appear in output. This is proof of completion. If this step is skipped, the phase is not closed.
 
 ---
 
