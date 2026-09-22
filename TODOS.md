@@ -85,6 +85,11 @@ rot them.
     (DHR-1..4 — remove Dhan holdings / P&L / the Dhan Options block from the snapshot; keep the Dhan
     login flow + client + tables wired). No `schema.md`. `/work` routes via the epic `prompt.md`.
     Requested by Animesh 2026-09-10.
+25. **Signal outcome profit range** — `docs/plan/signal-outcome-profit-range/` — next **SOP-1**
+    (`SignalOutcome` fields + `signal_outcomes` migration). Surface the profit high/low reached
+    since entry (existing `mfe_pct`/`mae_pct` in `paper_signal_marks`) in the daily SIGNAL OUTCOME
+    Telegram message, signal-track only, no backfill. Has `schema.md`. Requested by Animesh
+    2026-09-22.
 ## Open Bugs
 
 Confirmed defects in shipped code live in **[`docs/bugs/`](docs/bugs/)** — registry `bugs.md` (status `🔴 Open` → `🟡 Fix in progress` → `✅ Fixed`), tasks `docs/bugs/task.md`. `/work` → Bug branch reads

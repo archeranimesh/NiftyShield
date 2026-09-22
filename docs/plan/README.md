@@ -44,6 +44,10 @@ comparison snapshot; automated base-leg rolling; full unattended automation.
 
 ## Active Stories
 
+**`signal-outcome-profit-range/`** · ⬜ Not started · next: **SOP-1** (`SignalOutcome` fields + `signal_outcomes` migration) Show the profit high/low reached since entry (existing `mfe_pct`/`mae_pct`
+in `paper_signal_marks`) in the daily SIGNAL OUTCOME Telegram message for executed signal-track trades. Signal-track only, not IC/positional strategies; no backfill of historical rows. Has `schema.md`
+(2 new columns, no new table). Requested by Animesh 2026-09-22.
+
 **`eod-pt-summary/`** · ✅ Shipped/Archived 2026-09-07 (PT-1..PT-3) → `docs/archive/plan/eod-pt-summary/` Cross-strategy paper-trade EOD digest to Telegram. PT-1 (spec `d1ae760`) + PT-2
 (`src/reporting/eod_pt_summary.py`
 + `scripts/eod_pt_summary.py` + `43 15` cron, `77dc160`) + PT-3 (docs close, `dac18ea`). Runs alongside `scripts/eod_summary.py`, not a replacement (DECISIONS.md §P&L & Reporting, 2026-09-07).
