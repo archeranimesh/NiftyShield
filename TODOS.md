@@ -22,62 +22,32 @@ rot them.
 7. **Backtest Engine** — `docs/plan/backtest-engine/` (`phase1..4/`) — next **1.3a / 1.4** (parallel, `phase1/`). Four chained phases; each phase's GATE task blocks the next dir. Gated on
    `variance-gate`. `BACKTEST_PLAN_PHASE1.md` is the canonical spec; the phase dirs are thin status pointers.
 9. **backtest-eval-core** — `docs/plan/backtest-eval-core/` — next **B1.1**. Blocked until `backtest-engine` tasks 1.3 + 1.4 land.
-10. **signals-eval-core** — `docs/plan/signals-eval-core/` — next **SE1.1**.
-    Blocked until `backtest-eval-core` + `backtest-engine` 1.12.
-    Covers Track A (swing) + Track B (investment), SE1–SE8.
-11. **risk-gamma-phase-a** — `docs/plan/risk-gamma-phase-a/` — next **B2.2**
-    (chain fetch + field computation). Track A + B1 / B2.1 shipped.
-12. **greeks-parity-validation** —
-    `docs/plan/full-repo-review-followups/greeks-parity-validation/` — next **T1**.
-    P3, council-gated: do not implement directly — needs an `options-strategist` /
+10. **signals-eval-core** — `docs/plan/signals-eval-core/` — next **SE1.1**. Blocked until `backtest-eval-core` + `backtest-engine` 1.12. Covers Track A (swing) + Track B (investment), SE1–SE8.
+11. **risk-gamma-phase-a** — `docs/plan/risk-gamma-phase-a/` — next **B2.2** (chain fetch + field computation). Track A + B1 / B2.1 shipped.
+12. **greeks-parity-validation** — `docs/plan/full-repo-review-followups/greeks-parity-validation/` — next **T1**. P3, council-gated: do not implement directly — needs an `options-strategist` /
     `greeks-analyst` consult first (tolerance-band decision).
-13. **paper-pnl-golden-tests** —
-    `docs/plan/full-repo-review-followups/paper-pnl-golden-tests/` — next **T1**
-    (exact-value golden assertions for `_compute_leg_unrealized_pnl`). P3.
-14. **suppression-hygiene-triage** —
-    `docs/plan/full-repo-review-followups/suppression-hygiene-triage/` — next **T1**
-    (REVIEW.md carve-out for self-describing `# noqa` codes). P3.
-15. **Fix dead IC EOD report query** — `scripts/strategies/ic/paper_ic_snapshot.py`
-    (no story folder) — the "Intraday actions" query is dead code, found in the DT-3a audit.
-16. **Chain delta/decay analysis** — `docs/plan/chain-decay-analysis/` — next **CDA-1**.
-    Exploratory / read-only, independent.
-    Monthly bucket only (yearly excluded — see `greeks-bs-fallback` GF-1 findings).
-18. **Entry event filter R4** — `docs/plan/entry-event-filter/` — next **EF-1**.
-    Good-to-have, not compulsory; soft-warning only (logged, non-blocking, mirrors
-    `GateViolation`). `events.yaml` needs ad-hoc upkeep.
-    Revisit once entries run unattended on live capital (post `backtest-engine` Phase 2), and
-    reconsider hard-block then.
-19. **Broker abstraction** — `docs/plan/broker-abstraction/` — next **BA-0**
-    (probe scripts + decision matrix).
-    LOW priority; storage format frozen, only fetch + parse change.
-    BA-14 / BA-15 blocked until `src/execution/` (`phase2-integrations` OE-1) exists.
-    Do not start until the Phase 0.8 gate clears.
-20. **Historical data abstraction** — `docs/plan/historical-data-abstraction/` — next
-    **HD-0** (cost-bounded probe scripts). LOW priority.
-    `HistoricalCandleFetcher` protocol so VIX + OHLC fetching can switch brokers without
-    touching storage. HD-6 / HD-7 conditional on the HD-0 decision matrix.
-    Do not start until the Phase 0.8 gate clears.
-21. **Phase 2 — Research Pipelines & Integrations** — `docs/plan/phase2-integrations/` —
-    next **PV-1** (P&L visualization — not gated, can be pulled forward).
-    ZK-1 / OE-1 / PT-1 gated per the story file. 2027+.
-    Excludes the swing / investment signal pipelines — those are `signals`.
-21. **Technical Debt** — `docs/plan/technical-debt/` — DEBT-3 / 5 / 6a / 6b / 6c / 7.
-    Opportunistic, **not sequential** — each item fires only when its named file / module is
-    already being touched for another story's task. See `prompt.md` for the per-item trigger.
-22. **IC payoff charts on Telegram** — `docs/plan/ic-payoff-charts/` — next **PC-2**
-    (`src/strategy/payoff.py` — `ICPayoff` + `compute_ic_payoff`).
-    Epic: `chart-core/` (expiry payoff PNG + `sendPhoto` plumbing + wire into entry / EOD
-    audit / close, one chart per IC variation — no option model, ships now) → `chart-model-overlay/`
-    (T+0 curve + ±1σ/±2σ bands + POP — blocked on `greeks-bs-fallback/` GF-2 + GF-3).
-    Priority relative to items 13–21 is Animesh's call.
-24. **Portfolio snapshot slimdown** — `docs/plan/portfolio-snapshot-slimdown/` — next **FD-1**
-    (pre-delete audit). Epic, two sequenced sub-stories that both rework `_build_portfolio_summary` +
-    `_format_combined_summary`: `finideas-decommission/` (FD-1..7 — full removal of `finideas_ilts` +
-    `finrakshak`: the `src/portfolio/strategies/` provider layer, the options / hedge / ETF snapshot
-    terms, and every Finideas row in `strategies` / `legs` / `trades` / `daily_snapshots` via a
-    `scripts/dev/decommission_finideas.py` CLI — history option A, hard delete) → `dhan-holdings-removal/`
-    (DHR-1..4 — remove Dhan holdings / P&L / the Dhan Options block from the snapshot; keep the Dhan
-    login flow + client + tables wired). No `schema.md`. `/work` routes via the epic `prompt.md`.
+13. **paper-pnl-golden-tests** — `docs/plan/full-repo-review-followups/paper-pnl-golden-tests/` — next **T1** (exact-value golden assertions for `_compute_leg_unrealized_pnl`). P3.
+14. **suppression-hygiene-triage** — `docs/plan/full-repo-review-followups/suppression-hygiene-triage/` — next **T1** (REVIEW.md carve-out for self-describing `# noqa` codes). P3.
+15. **Fix dead IC EOD report query** — `scripts/strategies/ic/paper_ic_snapshot.py` (no story folder) — the "Intraday actions" query is dead code, found in the DT-3a audit.
+16. **Chain delta/decay analysis** — `docs/plan/chain-decay-analysis/` — next **CDA-1**. Exploratory / read-only, independent. Monthly bucket only (yearly excluded — see `greeks-bs-fallback` GF-1
+    findings).
+18. **Entry event filter R4** — `docs/plan/entry-event-filter/` — next **EF-1**. Good-to-have, not compulsory; soft-warning only (logged, non-blocking, mirrors `GateViolation`). `events.yaml` needs
+    ad-hoc upkeep. Revisit once entries run unattended on live capital (post `backtest-engine` Phase 2), and reconsider hard-block then.
+19. **Broker abstraction** — `docs/plan/broker-abstraction/` — next **BA-0** (probe scripts + decision matrix). LOW priority; storage format frozen, only fetch + parse change. BA-14 / BA-15 blocked
+    until `src/execution/` (`phase2-integrations` OE-1) exists. Do not start until the Phase 0.8 gate clears.
+20. **Historical data abstraction** — `docs/plan/historical-data-abstraction/` — next **HD-0** (cost-bounded probe scripts). LOW priority. `HistoricalCandleFetcher` protocol so VIX + OHLC fetching can
+    switch brokers without touching storage. HD-6 / HD-7 conditional on the HD-0 decision matrix. Do not start until the Phase 0.8 gate clears.
+21. **Phase 2 — Research Pipelines & Integrations** — `docs/plan/phase2-integrations/` — next **PV-1** (P&L visualization — not gated, can be pulled forward). ZK-1 / OE-1 / PT-1 gated per the story
+    file. 2027+. Excludes the swing / investment signal pipelines — those are `signals`.
+21. **Technical Debt** — `docs/plan/technical-debt/` — DEBT-3 / 5 / 6a / 6b / 6c / 7. Opportunistic, **not sequential** — each item fires only when its named file / module is already being touched for
+    another story's task. See `prompt.md` for the per-item trigger.
+22. **IC payoff charts on Telegram** — `docs/plan/ic-payoff-charts/` — next **PC-2** (`src/strategy/payoff.py` — `ICPayoff` + `compute_ic_payoff`). Epic: `chart-core/` (expiry payoff PNG + `sendPhoto`
+    plumbing + wire into entry / EOD audit / close, one chart per IC variation — no option model, ships now) → `chart-model-overlay/` (T+0 curve + ±1σ/±2σ bands + POP — blocked on
+    `greeks-bs-fallback/` GF-2 + GF-3). Priority relative to items 13–21 is Animesh's call.
+24. **Portfolio snapshot slimdown** — `docs/plan/portfolio-snapshot-slimdown/` — next **FD-1** (pre-delete audit). Epic, two sequenced sub-stories that both rework `_build_portfolio_summary` +
+    `_format_combined_summary`: `finideas-decommission/` (FD-1..7 — full removal of `finideas_ilts` + `finrakshak`: the `src/portfolio/strategies/` provider layer, the options / hedge / ETF snapshot
+    terms, and every Finideas row in `strategies` / `legs` / `trades` / `daily_snapshots` via a `scripts/dev/decommission_finideas.py` CLI — history option A, hard delete) → `dhan-holdings-removal/`
+    (DHR-1..4 — remove Dhan holdings / P&L / the Dhan Options block from the snapshot; keep the Dhan login flow + client + tables wired). No `schema.md`. `/work` routes via the epic `prompt.md`.
     Requested by Animesh 2026-09-10.
 ## Open Bugs
 
@@ -826,46 +796,26 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
 
 - **Root state-doc staleness — round 2 of workflow token-optimization.** Problem: root state docs (`CONTEXT.md`, `TODOS.md`, `DECISIONS.md`, `PLANNER.md`, `DB_REGISTRY.md`, …) rot because the only
   thing forcing an update is `CLAUDE.md` Step 5a — a checklist line, no enforcement, no signal. Three levers: surface / enforce / shrink.
-  - **[x] #1 — surface (done, SHA 758dd6b).** New repo hook `.claude/hooks/state_doc_freshness.sh`
-    wired as `SessionStart` in `.claude/settings.json`. Counts `src/`|`scripts/` commits since
-    each state doc last changed; prints a one-line flag for any doc over its threshold
-    (`CONTEXT.md`/`TODOS.md` 15, `CONTEXT_TREE.md`/`DB_REGISTRY.md`/`docs/plan/README.md` 35,
-    `DECISIONS.md`/`PLANNER.md`/`README.md` 40). Zero-maintenance — uses git last-touch, no
-    stamp lines in the docs. Informational, always `exit 0`. Tune thresholds after a week if
-    it's noisy (`DB_REGISTRY.md` currently trips at 36/35 despite a 2-day-old edit).
-  - **[x] #2 — enforce (done, SHA 7dae8e3).** New repo hook `.claude/hooks/doc_update_gate.sh`,
-    PreToolUse matcher `Bash`, detects `git commit`. If `git diff --cached --name-only` has
-    `^(src|scripts)/.*\.py$` but none of `TODOS.md`/`CONTEXT.md`/`DECISIONS.md`/
-    `docs/plan/README.md` → remind on stderr. **v1 `exit 0` (advisory)**; escape hatch
-    `[skip-docs]` in the commit message → silent; `--amend`/`--dry-run` and tests-only diffs
-    skipped. Flip to `exit 2` (blocking) only after a week of observing the false-positive
-    rate (pure refactors, multi-commit phases). Repo. Smoke-tested: reminder fires,
-    `[skip-docs]` suppresses, staged `TODOS.md` suppresses, tests-only diff silent.
-  - **[x] #3 — shrink (done, SHAs 089fb91 + 7bbfaff).**
-    (a) `089fb91` — `CONTEXT.md` test-count → `pytest -q | tail -1` pointer; `TODOS.md`
-    session log trimmed to the two still-active threads, the four completed SHA-referenced
-    entries (ROLL-4, nuvama, RDO-1, RDO-2) moved verbatim to `docs/archive/TODOS_ARCHIVE.md`.
-    (b) `7bbfaff` — **scope deviation, confirmed with Animesh:** `DECISIONS.md` has *no*
-    pre-2026 entries (earliest is 2026-04-01) and its 2026-04/05 entries are interleaved with
-    2026-06/07/08 ones inside shared thematic sections (`## Process`, `## Strategy & Research
-    Decisions`, …), so a date-cutoff archive isn't cleanly possible. Instead lifted the 5
-    fully-historical, self-contained sections with no still-enforced rule
-    (TradingView MCP Regime Probe, Backtest Data Source Decision, TrueData Historical Dump,
-    Live Strategy Monitoring, src/ Model Placement Rule) to
-    `docs/archive/DECISIONS_pre-2026-07.md` behind a one-line index; 336 KB → 330 KB,
-    2302 → 2203 lines. **Follow-up:** the real DECISIONS.md shrink needs a *semantic* split
-    (still-enforced rule vs completed-work log), not a date archive — filed as **RDO-9** in
+  - **[x] #1 — surface (done, SHA 758dd6b).** New repo hook `.claude/hooks/state_doc_freshness.sh` wired as `SessionStart` in `.claude/settings.json`. Counts `src/`|`scripts/` commits since each state
+    doc last changed; prints a one-line flag for any doc over its threshold (`CONTEXT.md`/`TODOS.md` 15, `CONTEXT_TREE.md`/`DB_REGISTRY.md`/`docs/plan/README.md` 35,
+    `DECISIONS.md`/`PLANNER.md`/`README.md` 40). Zero-maintenance — uses git last-touch, no stamp lines in the docs. Informational, always `exit 0`. Tune thresholds after a week if it's noisy
+    (`DB_REGISTRY.md` currently trips at 36/35 despite a 2-day-old edit).
+  - **[x] #2 — enforce (done, SHA 7dae8e3).** New repo hook `.claude/hooks/doc_update_gate.sh`, PreToolUse matcher `Bash`, detects `git commit`. If `git diff --cached --name-only` has
+    `^(src|scripts)/.*\.py$` but none of `TODOS.md`/`CONTEXT.md`/`DECISIONS.md`/ `docs/plan/README.md` → remind on stderr. **v1 `exit 0` (advisory)**; escape hatch `[skip-docs]` in the commit message
+    → silent; `--amend`/`--dry-run` and tests-only diffs skipped. Flip to `exit 2` (blocking) only after a week of observing the false-positive rate (pure refactors, multi-commit phases). Repo.
+    Smoke-tested: reminder fires, `[skip-docs]` suppresses, staged `TODOS.md` suppresses, tests-only diff silent.
+  - **[x] #3 — shrink (done, SHAs 089fb91 + 7bbfaff).** (a) `089fb91` — `CONTEXT.md` test-count → `pytest -q | tail -1` pointer; `TODOS.md` session log trimmed to the two still-active threads, the
+    four completed SHA-referenced entries (ROLL-4, nuvama, RDO-1, RDO-2) moved verbatim to `docs/archive/TODOS_ARCHIVE.md`. (b) `7bbfaff` — **scope deviation, confirmed with Animesh:** `DECISIONS.md`
+    has *no* pre-2026 entries (earliest is 2026-04-01) and its 2026-04/05 entries are interleaved with 2026-06/07/08 ones inside shared thematic sections (`## Process`, `## Strategy & Research
+    Decisions`, …), so a date-cutoff archive isn't cleanly possible. Instead lifted the 5 fully-historical, self-contained sections with no still-enforced rule (TradingView MCP Regime Probe, Backtest
+    Data Source Decision, TrueData Historical Dump, Live Strategy Monitoring, src/ Model Placement Rule) to `docs/archive/DECISIONS_pre-2026-07.md` behind a one-line index; 336 KB → 330 KB, 2302 →
+    2203 lines. **Follow-up:** the real DECISIONS.md shrink needs a *semantic* split (still-enforced rule vs completed-work log), not a date archive — filed as **RDO-9** in
     `docs/plan/root-doc-organization/tasks.md`.
-  - **[ ] #4 — deferred.** `/schedule` a weekly cloud routine running the `md-cleanup` skill.
-    Hold until #1–#3 have run 2 weeks — the SessionStart flag may make manual cadence enough.
-    Conflicts with `root-doc-organization` Phase 7's "no unattended doc writes" — resolution
-    tracked as **RDO-10**.
-  - **Pending work from this session filed into `docs/plan/root-doc-organization/`:** RDO-3
-    closed-partial (date-cutoff unworkable, 7bbfaff recorded); **RDO-9** (DECISIONS semantic
-    split), **RDO-10** (reconcile RDO-7 with the #1/#2 hooks + #4), **RDO-11** (graduate the
-    advisory hooks to blocking — review on/after 2026-09-03) added; `tasks.md` gained an
-    "Epic done when" checklist including an end-to-end loop-closure test. `plan.md` + README
-    refreshed.
+  - **[ ] #4 — deferred.** `/schedule` a weekly cloud routine running the `md-cleanup` skill. Hold until #1–#3 have run 2 weeks — the SessionStart flag may make manual cadence enough. Conflicts with
+    `root-doc-organization` Phase 7's "no unattended doc writes" — resolution tracked as **RDO-10**.
+  - **Pending work from this session filed into `docs/plan/root-doc-organization/`:** RDO-3 closed-partial (date-cutoff unworkable, 7bbfaff recorded); **RDO-9** (DECISIONS semantic split), **RDO-10**
+    (reconcile RDO-7 with the #1/#2 hooks + #4), **RDO-11** (graduate the advisory hooks to blocking — review on/after 2026-09-03) added; `tasks.md` gained an "Epic done when" checklist including an
+    end-to-end loop-closure test. `plan.md` + README refreshed.
 - **Workflow-suggestion triage → new `session-entry-point` story.** Triaging a batch of workflow-improvement suggestions into `root-doc-organization`. #1 — unified session entry point — spun into its
   own story `docs/plan/session-entry-point/` (SEP-1..4: manual `/work` skill, Feature/Bug routing, Feature branch offers the first 5 of `TODOS.md` "Priority-Ordered Open Work", Bug branch offers open
   `docs/bugs/` entries) + **RDO-12** pointer row in `root-doc-organization/tasks.md`. Decided: manual invocation only, no SessionStart hook. #2 — convention enforcement — filed as **RDO-13**:
@@ -886,43 +836,27 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
   reference → `md-cleanup` Step 7 (new: re-sync AGENTS.md when CLAUDE.md changes). Docs/hooks only, no `.py` touched — no code-reviewer, no test-runner.
 
 **Next-session validation** (validated 2026-08-27, session `92c04e16` — all 5 pass):
-  - [x] First action `Read CONTEXT.md` — succeeded, **no** `cbm-code-discovery-gate` block
-    (gate file `cbm-code-discovery-gate-$PPID` stayed absent until the first `src/*.py` read).
-  - [x] First task-shaped prompt → full `⚙️ TASK PROTOCOL` checklist injected; gate file
-    written. Second-fire one-liner not observable in a single-prompt session — hook branch
+  - [x] First action `Read CONTEXT.md` — succeeded, **no** `cbm-code-discovery-gate` block (gate file `cbm-code-discovery-gate-$PPID` stayed absent until the first `src/*.py` read).
+  - [x] First task-shaped prompt → full `⚙️ TASK PROTOCOL` checklist injected; gate file written. Second-fire one-liner not observable in a single-prompt session — hook branch
     (`task_protocol.sh:42-45`) reviewed and correct.
-  - [x] First `src/` `Read` → `guard_src_reads` fired once (gate `niftyshield-guard-$PPID`
-    created on first attempt); retry hit the one-liner branch. Exit-0 PreToolUse stdout isn't
-    surfaced to the assistant, so verification was via gate-file lifecycle + source review.
-  - [x] First `Read src/__init__.py` → hard `exit 2` `BLOCKED: … codebase-memory-mcp`; retry
-    (gate now written) allowed. Path-aware block fires once for real code, as intended.
-  - [x] `SessionStart` reminder is a single line ("Code discovery: graph tools first — …"),
-    not the old block. Confirmed against `cbm-session-reminder` source (single `echo`).
-  - On failure: hooks are `~/.claude/hooks/cbm-code-discovery-gate` +
-    `~/.claude/hooks/cbm-session-reminder` (global) and `.claude/hooks/guard_src_reads.sh` +
-    `.claude/hooks/task_protocol.sh` (repo). Gate files `/tmp/cbm-code-discovery-gate-$PPID`,
-    `/tmp/niftyshield-guard-$PPID`, `/tmp/niftyshield-task-protocol-$PPID` — `rm` to re-test
-    first-fire within one session.
+  - [x] First `src/` `Read` → `guard_src_reads` fired once (gate `niftyshield-guard-$PPID` created on first attempt); retry hit the one-liner branch. Exit-0 PreToolUse stdout isn't surfaced to the
+    assistant, so verification was via gate-file lifecycle + source review.
+  - [x] First `Read src/__init__.py` → hard `exit 2` `BLOCKED: … codebase-memory-mcp`; retry (gate now written) allowed. Path-aware block fires once for real code, as intended.
+  - [x] `SessionStart` reminder is a single line ("Code discovery: graph tools first — …"), not the old block. Confirmed against `cbm-session-reminder` source (single `echo`).
+  - On failure: hooks are `~/.claude/hooks/cbm-code-discovery-gate` + `~/.claude/hooks/cbm-session-reminder` (global) and `.claude/hooks/guard_src_reads.sh` + `.claude/hooks/task_protocol.sh` (repo).
+    Gate files `/tmp/cbm-code-discovery-gate-$PPID`, `/tmp/niftyshield-guard-$PPID`, `/tmp/niftyshield-task-protocol-$PPID` — `rm` to re-test first-fire within one session.
 
 **Task 5 (done 2026-08-27) — measurement + permission tooling:**
-  - [x] Ran `/fewer-permission-prompts` (50 recent transcripts). Only non-auto-allowed
-    read-only patterns worth listing were the four codebase-memory-mcp graph reads
-    (`get_code_snippet`, `search_graph`, `search_code`, `trace_path`) — all bash usage was
-    auto-allowed, mutating, or interpreter invocations. Added to `.claude/settings.json`
-    `permissions.allow`. Commit `dd0da61` `chore(claude): add read-only permission allowlist`.
-  - [x] Statusline: `~/.claude/statusline-command.sh` gained a `$%.2f` cost segment from
-    `.cost.total_cost_usd` and a `/Nk` used-tokens suffix on the ctx segment from
-    `.context_window.used_tokens` (both degrade to nothing when the field is absent — tested).
-    Global file, not in-repo; noted in the TODOS-update commit body.
-  - [x] `/context` snapshot (Animesh ran it manually, session `92c04e16`, ~9% used, 94.8k/1M):
-    fixed scaffolding now — system prompt 3k, system tools 18.6k, memory files 10k
-    (`CLAUDE.md` 8.3k + `~/.claude/CLAUDE.md` 1.6k + `MEMORY.md` 0.1k), skills 2.8k, custom
-    agents 0.24k. Messages grew 60.9k→65.3k across the session. A clean cross-session
-    before/after for the ~5k hook-reinjection saving isn't recoverable from one session — the
-    saving is in per-turn message growth, not a static category; the once-per-session gate
-    files (`task_protocol`, `guard_src_reads`, `cbm-code-discovery-gate`) were all confirmed
-    single-fire above, which is the mechanism that delivers it. `logs/context.log` not
-    written (`/context &> file` is client-side, redirect is inert; `logs/` is gitignored).
+  - [x] Ran `/fewer-permission-prompts` (50 recent transcripts). Only non-auto-allowed read-only patterns worth listing were the four codebase-memory-mcp graph reads (`get_code_snippet`,
+    `search_graph`, `search_code`, `trace_path`) — all bash usage was auto-allowed, mutating, or interpreter invocations. Added to `.claude/settings.json` `permissions.allow`. Commit `dd0da61`
+    `chore(claude): add read-only permission allowlist`.
+  - [x] Statusline: `~/.claude/statusline-command.sh` gained a `$%.2f` cost segment from `.cost.total_cost_usd` and a `/Nk` used-tokens suffix on the ctx segment from `.context_window.used_tokens`
+    (both degrade to nothing when the field is absent — tested). Global file, not in-repo; noted in the TODOS-update commit body.
+  - [x] `/context` snapshot (Animesh ran it manually, session `92c04e16`, ~9% used, 94.8k/1M): fixed scaffolding now — system prompt 3k, system tools 18.6k, memory files 10k (`CLAUDE.md` 8.3k +
+    `~/.claude/CLAUDE.md` 1.6k + `MEMORY.md` 0.1k), skills 2.8k, custom agents 0.24k. Messages grew 60.9k→65.3k across the session. A clean cross-session before/after for the ~5k hook-reinjection
+    saving isn't recoverable from one session — the saving is in per-turn message growth, not a static category; the once-per-session gate files (`task_protocol`, `guard_src_reads`,
+    `cbm-code-discovery-gate`) were all confirmed single-fire above, which is the mechanism that delivers it. `logs/context.log` not written (`/context &> file` is client-side, redirect is inert;
+    `logs/` is gitignored).
 - Earlier 2026-08-27 entries — **ROLL-4** (`30bac70`), **nuvama empty-book crash** (`3b9b57f`), **RDO-1**, **RDO-2** — moved verbatim to [docs/archive/TODOS_ARCHIVE.md](docs/archive/TODOS_ARCHIVE.md)
   (2026-08-27 section). `git log --oneline` carries the sequence, each commit's `Why:` line the intent.
 - [2026-09-03] migrated ROLL-8 WARN event alert format (d6b6476 → 9159524 non-fatal fix → 8f3a35a fallback escape → e8fb906 test fix)

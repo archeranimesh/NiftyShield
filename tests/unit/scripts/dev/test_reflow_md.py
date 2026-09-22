@@ -158,6 +158,25 @@ def test_numbered_list_marker_preserved():
     assert _words(src) == _words(out)
 
 
+def test_double_digit_marker_continuation_lines_are_merged():
+    """A '10. ' item's 4-space-aligned continuation must not be mistaken for a
+    nested indented code block — it should merge like any other continuation."""
+    src = (
+        "10. **signals-eval-core** — next SE1.1.\n"
+        "    Blocked until backtest-eval-core lands.\n"
+        "    Covers Track A and Track B.\n"
+    )
+
+    out = reflow_text(src)
+    lines = out.splitlines()
+
+    assert len(lines) == 1
+    assert lines[0].startswith("10. ")
+    assert "Blocked until" in lines[0]
+    assert "Covers Track A" in lines[0]
+    assert _words(src) == _words(out)
+
+
 def test_missing_trailing_newline_is_preserved():
     """Input without a trailing newline stays that way."""
     assert not reflow_text("one two three").endswith("\n")

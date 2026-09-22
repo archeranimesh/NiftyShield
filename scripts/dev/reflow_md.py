@@ -97,8 +97,15 @@ def _closes_fence(fence_match: re.Match[str] | None, open_token: str, line: str)
     return not line[fence_match.end() :].strip()
 
 
-def _is_structural(line: str) -> bool:
-    """True if ``line`` starts a block that must not be merged into prose."""
+def _is_structural(line: str, base_indent: str = "") -> bool:
+    """True if ``line`` starts a block that must not be merged into prose.
+
+    ``base_indent`` is the enclosing list item's marker-width hang prefix (empty
+    at top level). The 4-space indented-code-block rule is CommonMark-relative
+    to that baseline, not to column 0 — a numbered item's aligned continuation
+    line (e.g. ``"10. "`` -> 4-space hang) must not be mistaken for nested code
+    just because it happens to land on the same 4-space column.
+    """
     stripped = line.strip()
     if not stripped:
         return True
@@ -106,7 +113,8 @@ def _is_structural(line: str) -> bool:
         return True
     if stripped.startswith("|"):
         return True
-    if _INDENTED_CODE_RE.match(line):
+    remainder = line[len(base_indent) :] if line.startswith(base_indent) else line
+    if _INDENTED_CODE_RE.match(remainder):
         return True
     return False
 
@@ -127,7 +135,7 @@ def _reflow_list_item(lines: list[str], start: int, width: int) -> tuple[list[st
         line = lines[idx]
         if not line.strip():
             break
-        if _LIST_RE.match(line) or _FENCE_RE.match(line) or _is_structural(line):
+        if _LIST_RE.match(line) or _FENCE_RE.match(line) or _is_structural(line, hang):
             break
         body_parts.append(line.strip())
         idx += 1
