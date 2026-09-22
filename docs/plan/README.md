@@ -61,6 +61,10 @@ reached since entry (existing `mfe_pct`/`mae_pct` in `paper_signal_marks`) in th
 (Intraday)` block from the snapshot; keep the Dhan login flow + `src/dhan/` client + DB tables wired). After both, the snapshot reports MF + Nuvama bonds + Nuvama options only. No `schema.md`.
 Requested by Animesh 2026-09-10.
 
+**`backtest-engine/`** · 🔄 In progress · next: **1.3a / 1.4** (`phase1/`, parallel) Four chained phases (`phase1..4/`) building the Phase 0→1+ systematic options backtest/paper-trading pipeline off
+`BACKTEST_PLAN_PHASE1.md` (root, canonical spec) — CSP v1 variance-gate buildout, CSP-live/IC-paper expansion, post-gate strategy expansion, long-horizon capital allocation. Each phase gated on the
+previous phase's closing GATE task; `phase1` itself gated on the Phase 0.8 variance gate (`variance-gate/`, below).
+
 **`risk-gamma-phase-a/`** · 🔄 In progress · next: **B2.2** (chain fetch + field computation) Risk delta gate (done) + Near-Expiry Gamma Buy `gamma_daily_watch.py`.
 
 **`variance-gate/`** · ⬜ Not started · next: **VG0** (CSP v1 spec reconciliation) CSP v1 Phase 0.8 deployment gate — spec reconciliation + gate criteria A–D.

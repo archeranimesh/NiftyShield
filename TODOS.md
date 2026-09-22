@@ -120,45 +120,30 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
-- [2026-09-22] `doc-format-migration/` `plan-folders/` DFM-1 — enumerated and tiered all 19
-  non-archived `docs/plan/` folders (outside this epic + `_TEMPLATE/`) into the confirmed A/B/C/D
-  table in `plan-folders/stories.md`. 15 tier A (active), 3 tier B flagged for Animesh
-  (`broker-abstraction/`, `historical-data-abstraction/`, `phase2-integrations/` — unstarted,
-  0 shipped tasks, not in any active-work list; B is the closest fit but not a clean match), 1
-  tier D (`dev-foundation/` — already ✅ Shipped/Archived but its `code-health/` sub-story never
-  moved to `docs/archive/plan/`; filed a follow-up `git mv`, not a conversion target). SHA
+- [2026-09-22] `doc-format-migration/` `plan-folders/` DFM-1 — enumerated and tiered all 19 non-archived `docs/plan/` folders (outside this epic + `_TEMPLATE/`) into the confirmed A/B/C/D table in
+  `plan-folders/stories.md`. 15 tier A (active), 3 tier B flagged for Animesh (`broker-abstraction/`, `historical-data-abstraction/`, `phase2-integrations/` — unstarted, 0 shipped tasks, not in any
+  active-work list; B is the closest fit but not a clean match), 1 tier D (`dev-foundation/` — already ✅ Shipped/Archived but its `code-health/` sub-story never moved to `docs/archive/plan/`; filed a
+  follow-up `git mv`, not a conversion target). SHA `<pending>`.
+- [2026-09-22] `doc-format-migration/` `plan-folders/` DFM-2 — converted tier-A folder `backtest-engine/` to canonical epic shape: added root `prompt.md` (router) + `README.md` (both missing before);
+  `phase1..4/` sub-story shape was already canonical, no changes beyond reflow. `reflow_md.py` applied repo-wide across the folder; `check_story_structure.py --all` and `check_checkbox_consistency.py`
+  both clean for `backtest-engine/`. Added a status line to `docs/plan/README.md` §Active Stories (the folder had none before). Proof-of-approach pass — 13 remaining tier-A folders still open. SHA
   `<pending>`.
-- [2026-09-22] `root-doc-organization/` (`docs/archive/plan/root-doc-organization/`) — RDO-16 step 4
-  confirmed: this session's own SessionStart produced no `state_doc_freshness.sh` staleness
-  warning, and a manual re-run reproduced the clean result — the flag that fired last session
-  for `PLANNER.md`/`CONTEXT_TREE.md`/`README.md` cleared once those docs were refreshed. All
-  four loop-closure steps verified end to end; RDO-16 closes, completing every task box in the
-  story, so the story archived in the same commit per §Completion → archive. SHA `<pending>`.
-- [2026-09-22] `root-doc-organization/` RDO-16 (steps 1-3 of 4) — this session's own
-  `state_doc_freshness.sh` SessionStart flag (`PLANNER.md`/`CONTEXT_TREE.md`/`README.md` behind
-  code) was acted on: all three refreshed against current `src/`/`scripts/` state (signals
-  pipeline, paper-backbone completions, `.claude/skills/` + `hooks/` drift, stale May-June
-  roadmap items reconciled). RDO-16 stays open — step 4 (flag clears at next SessionStart) can
-  only be confirmed in a future session.
-- [2026-09-22] `root-doc-organization/` RDO-11 — measured the full observation window
-  (2026-08-27 → 2026-09-22): 84 of 116 code commits (72%) would have tripped
-  `doc_update_gate.sh`, `[skip-docs]` used zero times. Kept the gate tuned-advisory (flipping to
-  blocking would have blocked ~3 of 4 commits on an unused escape hatch); recorded in
-  `DECISIONS.md` §Developer Tooling. SHA `<pending>`.
-- [2026-09-22] `signal-outcome-profit-range/` SOP-3 (`docs/archive/plan/signal-outcome-profit-range/`)
-  — `_format_outcome_notification` renders a "📈 High / 📉 Low" line in the executed branch
-  only, using the existing `_E(...)` / `format_money(..., signed=True)` escaping pattern;
-  omitted (no blank-line artifact) when either field is `None`. SHA `a73b6b6`. Story complete
-  (SOP-1..3) — archived to `docs/archive/plan/signal-outcome-profit-range/`.
-- [2026-09-22] `signal-outcome-profit-range/` SOP-2 (`docs/plan/signal-outcome-profit-range/`) —
-  `run_record_phase` captures `trade_id` from the auto-detected live `paper_signal_entries` row
-  and computes `high_pnl_per_lot`/`low_pnl_per_lot` via new `_high_low_pnl_per_lot()` off the
-  last `paper_signal_marks` row's `mfe_pct`/`mae_pct`, scaled by `entry_premium * LOT_SIZE`.
-  Not-executed / no-live-entry / no-marks leave both `None`. SHA `180ccae`. Next: SOP-3.
-- [2026-09-22] `signal-outcome-profit-range/` SOP-1 (`docs/plan/signal-outcome-profit-range/`) —
-  added `high_pnl_per_lot`/`low_pnl_per_lot: Decimal | None` to `SignalOutcome`, idempotent
-  `signal_outcomes` ALTER TABLE migration, read/write in `SignalStore.record_outcome` /
-  `_outcome_from_row`. No backfill, existing rows read back as `None`. SHA `4096c07`. Next: SOP-2.
+- [2026-09-22] `root-doc-organization/` (`docs/archive/plan/root-doc-organization/`) — RDO-16 step 4 confirmed: this session's own SessionStart produced no `state_doc_freshness.sh` staleness warning,
+  and a manual re-run reproduced the clean result — the flag that fired last session for `PLANNER.md`/`CONTEXT_TREE.md`/`README.md` cleared once those docs were refreshed. All four loop-closure steps
+  verified end to end; RDO-16 closes, completing every task box in the story, so the story archived in the same commit per §Completion → archive. SHA `<pending>`.
+- [2026-09-22] `root-doc-organization/` RDO-16 (steps 1-3 of 4) — this session's own `state_doc_freshness.sh` SessionStart flag (`PLANNER.md`/`CONTEXT_TREE.md`/`README.md` behind code) was acted on:
+  all three refreshed against current `src/`/`scripts/` state (signals pipeline, paper-backbone completions, `.claude/skills/` + `hooks/` drift, stale May-June roadmap items reconciled). RDO-16 stays
+  open — step 4 (flag clears at next SessionStart) can only be confirmed in a future session.
+- [2026-09-22] `root-doc-organization/` RDO-11 — measured the full observation window (2026-08-27 → 2026-09-22): 84 of 116 code commits (72%) would have tripped `doc_update_gate.sh`, `[skip-docs]`
+  used zero times. Kept the gate tuned-advisory (flipping to blocking would have blocked ~3 of 4 commits on an unused escape hatch); recorded in `DECISIONS.md` §Developer Tooling. SHA `<pending>`.
+- [2026-09-22] `signal-outcome-profit-range/` SOP-3 (`docs/archive/plan/signal-outcome-profit-range/`) — `_format_outcome_notification` renders a "📈 High / 📉 Low" line in the executed branch only,
+  using the existing `_E(...)` / `format_money(..., signed=True)` escaping pattern; omitted (no blank-line artifact) when either field is `None`. SHA `a73b6b6`. Story complete (SOP-1..3) — archived to
+  `docs/archive/plan/signal-outcome-profit-range/`.
+- [2026-09-22] `signal-outcome-profit-range/` SOP-2 (`docs/plan/signal-outcome-profit-range/`) — `run_record_phase` captures `trade_id` from the auto-detected live `paper_signal_entries` row and
+  computes `high_pnl_per_lot`/`low_pnl_per_lot` via new `_high_low_pnl_per_lot()` off the last `paper_signal_marks` row's `mfe_pct`/`mae_pct`, scaled by `entry_premium * LOT_SIZE`. Not-executed /
+  no-live-entry / no-marks leave both `None`. SHA `180ccae`. Next: SOP-3.
+- [2026-09-22] `signal-outcome-profit-range/` SOP-1 (`docs/plan/signal-outcome-profit-range/`) — added `high_pnl_per_lot`/`low_pnl_per_lot: Decimal | None` to `SignalOutcome`, idempotent
+  `signal_outcomes` ALTER TABLE migration, read/write in `SignalStore.record_outcome` / `_outcome_from_row`. No backfill, existing rows read back as `None`. SHA `4096c07`. Next: SOP-2.
 - [2026-09-18] MVP design decisions (`docs/plan/mvp/`) — resolved the 9 open questions blocking M1 in `mvp_tasks.md` (whole-share tranche rounding + idle cash, 25bps cost per transaction, live-fetch
   benchmark_entry, N=6mo time stop, independent-per-pick portfolio mode, M-A lump-sum-first / M-B ladder phasing, no council call needed). Added `mvp_tranches` table + new `mvp_recommendations`
   columns to `mvp_schema.md`, rewrote M1.1's spec in `mvp_stories.md` for the full capital-deployment field set, and added a new M0 (equity+index bhavcopy ingest) task ahead of M6 since

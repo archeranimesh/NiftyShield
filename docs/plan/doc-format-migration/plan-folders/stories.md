@@ -40,27 +40,27 @@ Epics, `TODOS.md` §Feature Backlog. Several folders in the old provisional pass
 `telegram-markdown-migration/`, `eod-pt-summary/`, `ic-yearly-expiry-fix/`) have since been archived to `docs/archive/plan/` and are out of scope — dropped from this table. `ic-payoff-charts/` and
 `portfolio-snapshot-slimdown/` are new epics (2026-09-09, 2026-09-10) not seen in the earlier pass — added below. 19 folders remain in `docs/plan/` outside this epic and `_TEMPLATE/`.
 
-| Folder | Shape now | Finding | Tier | Work needed |
-|---|---|---|---|---|
-| `backtest-engine/` | epic, 4 phase subdirs OK | root missing `prompt.md`+`README.md` | A | add router; reflow 12 files. Backlog #7. |
-| `backtest-eval-core/` | flat, 4 files | none | A | reflow 4 files; verify tasks. Backlog #9 (blocked). |
-| `broker-abstraction/` | flat, `stories/BA-N.md` layout | missing `stories.md` | B\* | consolidate to `stories.md`; reflow 18 files. See note below. |
-| `chain-decay-analysis/` | flat, 3 files | none | A | task-line format + reflow 3 files. Backlog #16. |
-| `dev-foundation/` | epic, stray root `README.md`, 2/3 subs archived | root missing `prompt.md` | D | see note below — archive move, not a conversion. |
-| `entry-event-filter/` | flat, 2 files | missing `stories.md` | A | add `stories.md`; reflow 2 files. Backlog #18. |
-| `full-repo-review/` | flat, 3 files | none | B | Complete, superseded — structure + reflow 13 files, digests. |
-| `full-repo-review-followups/` | epic, 9 subs OK | root missing `prompt.md` | A | add router; reflow 28 files. Backlog #12/13/14. |
-| `greeks-bs-fallback/` | flat, 3 files | none | A | task-line format + reflow 3 files. Backlog #2. |
-| `historical-data-abstraction/` | flat, `stories/HD-N.md` layout | missing `stories.md` | B\* | consolidate to `stories.md`; reflow 13 files. See note below. |
-| `ic-payoff-charts/` | epic, 2 subs OK | none | A | already canonical — reflow 8 files; verify coverage. |
-| `mvp/` | flat, `mvp_*.md` names | legacy filenames | A | `git mv` to canonical names; reflow 1 file. Backlog #4. |
-| `options_income/` | flat, `options_income_*.md` | legacy filenames | A | `git mv`; `_strategy.md`->`plan.md`; reflow 4 files. Backlog #6. |
-| `phase2-integrations/` | flat, 3 files | none | B\* | reflow 3 files; verify task-line format. See note below. |
-| `portfolio-snapshot-slimdown/` | epic, 2 subs OK | none | A | already canonical + reflow-clean — verify coverage only. |
-| `risk-gamma-phase-a/` | flat, 3 files | none | A | task-line format + reflow 3 files. Backlog #11. |
-| `signals-eval-core/` | flat, 4 files | none | A | reflow 4 files; verify tasks. Backlog #10 (blocked). |
-| `technical-debt/` | flat, 3 files, 10 open/7 closed | none | A | opportunistic backlog, actively fed — reflow 3 files. |
-| `variance-gate/` | flat, `variance_gate_*.md` | legacy filenames | A | `git mv`; `_spec.md`->`spec.md`; reflow 4 files. Backlog #5. |
+| Folder | Shape now | Finding | Tier | Work needed | Status |
+|---|---|---|---|---|---|
+| `backtest-engine/` | epic, 4 phase subdirs OK | root missing `prompt.md`+`README.md` | A | add router; reflow 12 files. Backlog #7. | ✅ DFM-2 |
+| `backtest-eval-core/` | flat, 4 files | none | A | reflow 4 files; verify tasks. Backlog #9 (blocked). | ⬜ |
+| `broker-abstraction/` | flat, `stories/BA-N.md` layout | missing `stories.md` | B\* | consolidate to `stories.md`; reflow 18 files. See note below. | ⬜ |
+| `chain-decay-analysis/` | flat, 3 files | none | A | task-line format + reflow 3 files. Backlog #16. | ⬜ |
+| `dev-foundation/` | epic, stray root `README.md`, 2/3 subs archived | root missing `prompt.md` | D | see note below — archive move, not a conversion. | ⬜ |
+| `entry-event-filter/` | flat, 2 files | missing `stories.md` | A | add `stories.md`; reflow 2 files. Backlog #18. | ⬜ |
+| `full-repo-review/` | flat, 3 files | none | B | Complete, superseded — structure + reflow 13 files, digests. | ⬜ |
+| `full-repo-review-followups/` | epic, 9 subs OK | root missing `prompt.md` | A | add router; reflow 28 files. Backlog #12/13/14. | ⬜ |
+| `greeks-bs-fallback/` | flat, 3 files | none | A | task-line format + reflow 3 files. Backlog #2. | ⬜ |
+| `historical-data-abstraction/` | flat, `stories/HD-N.md` layout | missing `stories.md` | B\* | consolidate to `stories.md`; reflow 13 files. See note below. | ⬜ |
+| `ic-payoff-charts/` | epic, 2 subs OK | none | A | already canonical — reflow 8 files; verify coverage. | ⬜ |
+| `mvp/` | flat, `mvp_*.md` names | legacy filenames | A | `git mv` to canonical names; reflow 1 file. Backlog #4. | ⬜ |
+| `options_income/` | flat, `options_income_*.md` | legacy filenames | A | `git mv`; `_strategy.md`->`plan.md`; reflow 4 files. Backlog #6. | ⬜ |
+| `phase2-integrations/` | flat, 3 files | none | B\* | reflow 3 files; verify task-line format. See note below. | ⬜ |
+| `portfolio-snapshot-slimdown/` | epic, 2 subs OK | none | A | already canonical + reflow-clean — verify coverage only. | ⬜ |
+| `risk-gamma-phase-a/` | flat, 3 files | none | A | task-line format + reflow 3 files. Backlog #11. | ⬜ |
+| `signals-eval-core/` | flat, 4 files | none | A | reflow 4 files; verify tasks. Backlog #10 (blocked). | ⬜ |
+| `technical-debt/` | flat, 3 files, 10 open/7 closed | none | A | opportunistic backlog, actively fed — reflow 3 files. | ⬜ |
+| `variance-gate/` | flat, `variance_gate_*.md` | legacy filenames | A | `git mv`; `_spec.md`->`spec.md`; reflow 4 files. Backlog #5. | ⬜ |
 
 **No tier-D conversions needed** beyond `dev-foundation/`'s incomplete archive move — every other folder here is either active (A) or shipped-but-referenced (B); nothing else is 100% shipped and
 un-archived.
