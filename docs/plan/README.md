@@ -65,21 +65,8 @@ Requested by Animesh 2026-09-10.
 
 **`variance-gate/`** · ⬜ Not started · next: **VG0** (CSP v1 spec reconciliation) CSP v1 Phase 0.8 deployment gate — spec reconciliation + gate criteria A–D.
 
-**`root-doc-organization/`** · 🔄 In progress · next: **RDO-16** (loop-closure check — steps 1-3 of 4 observed 2026-09-22, awaiting next-session confirmation the flag clears; RDO-11 closed 2026-09-22,
-kept advisory) Token-efficiency cleanup of the ~22 root `.md` files + doc-maintenance automation. Docs + tooling only. RDO-1..17 + an acceptance-criteria list in `tasks.md`.
-RDO-1/2/4/5/6/7/8/9/10/12/13/14/15 + RDO-17.1..17.7 shipped, RDO-3 closed-partial; RDO-16, RDO-11 open; RDO-17.8 decided (pending close). RDO-17.8 (2026-08-29): legacy-folder rule decided —
-batch-convert all; execution moved to the new `doc-format-migration/` epic (above). RDO-17.7 (2026-08-29): swept `root-doc-organization/` + `telegram-markdown-migration/` (all 16 `.md`) to
-fill-to-≤200; added reusable `scripts/dev/reflow_md.py` + 10 tests. Whitespace-only — zero word changes. RDO-17.7 §B → **RDO-17.8** (legacy-folder conversion rule, Owner: Animesh). `526e431`. RDO-17.6
-(2026-08-29): full-converted `telegram-markdown-migration/` — the epic POC (after 17.5's flat-story POC). Root `README.md` → `_TEMPLATE/epic/` shape (Stories table w/ Status + Closing SHA);
-`prompt.md` → epic router; all 3 sub-stories' `tasks.md` → canonical one-liner task lines, forensic detail folded into `stories.md` As-built paragraphs. `cf46ff4`. RDO-17.5 (2026-08-29):
-full-converted `root-doc-organization/` to the canonical format — every task line a one-liner with the 5-field tail, `stories.md` covering every task, `prompt.md` realigned to `_TEMPLATE/story/`;
-folded in RDO-17.7 §A (retire semantic linefeeds for fill-to-≤200). RDO-17 (2026-08-29): standardized the `docs/plan/` story & epic folder format — flat single-story vs epic-with-sub-stories, required
-`stories.md`, conditional `schema.md`, `| Owner
-| Model | Review | SHA` task line, `/work` epic descent; `_TEMPLATE/` gets `story/` + `epic/` variants. 17.4 did a partial retrofit of the two validation folders; 17.5/17.6 supersede it with a full
-POC conversion (shipped task lines included) to calibrate converting the remaining ~25 legacy folders. RDO-6 (2026-08-29): `md-cleanup` → `md-organize` skill rewrite; `.agents/` mirror re-synced;
-`CLAUDE.md`/`AGENTS.md` long-line wrap + Step 5a task-line pointer; whole-repo `md-line-length` backlog (~700 lines / ~70 files) cleared, `--all-files` green. RDO-7 (2026-08-29): `session-close` gains
-a report-only `DOC STALENESS` content-gap check. RDO-10 (2026-08-28): reconciled RDO-7/Phase 7 with the two shipped doc-freshness hooks — RDO-7 narrowed to content gaps only, `md-organize` name
-settled, `#4` → future read-only Telegram digest, `state_doc_freshness.sh` thresholds tuned.
+**`root-doc-organization/`** · ✅ Archived 2026-09-22 → `docs/archive/plan/root-doc-organization/` Token-efficiency cleanup of the ~22 root `.md` files + doc-maintenance automation + `docs/plan/`
+story/epic format standardization (RDO-1..17.8, all shipped). RDO-17.8's legacy-folder execution continues in `doc-format-migration/` (above).
 
 **`session-entry-point/`** · ✅ Archived 2026-08-28 → `docs/archive/plan/session-entry-point/` Unified manual `/work` skill (SEP-1..4) — routes a task session to Feature or Bug, loads the right
 prompt + first unchecked task, hands to `CLAUDE.md` Step 2b.

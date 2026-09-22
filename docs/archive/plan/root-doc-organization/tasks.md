@@ -26,7 +26,7 @@ folders to that style in full; RDO-17.8 (`0be92a1`) recorded the legacy-folder d
 - [x] **RDO-13** — §Conventions made canonical + check_story_structure.py + _TEMPLATE/; TODOS.md cut to pointer-only | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 3c50826
 - [x] **RDO-14** — split TODOS.md into pointer-only Feature Backlog + Open Bugs; add the Completion→archive rule | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: e7cecab
 - [x] **RDO-15** — check_checkbox_consistency.py + the one-checkbox-per-id convention (done-when blocks → prose) | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 5e48451
-- [ ] **RDO-16** — loop-closure check — one real session confirms the doc-freshness mechanism works end to end | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <—>
+- [x] **RDO-16** — loop-closure check confirmed end to end — flag fired, was acted on, cleared at next SessionStart | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <pending>
 - [x] **RDO-17.1** — rewrite §Conventions (folder shapes, 3-file story set, 5-field task line); _TEMPLATE/ → story/ + epic/ | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 7b6d05f
 - [x] **RDO-17.2** — rework both structure hooks for the RDO-17.1 shapes + the 5-field tail check + hook unit tests | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: fe280bd
 - [x] **RDO-17.3** — /work epic-descent steps + epic router template; propagate | Review: into 3 skills + CLAUDE.md 5a | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 28d0d9c

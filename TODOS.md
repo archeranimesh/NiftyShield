@@ -18,10 +18,7 @@ rot them.
 1. **doc-format-migration** — `docs/plan/doc-format-migration/` — next **DFM-1** (`plan-folders/`: enumerate + tier every non-archived `docs/plan/` folder A/B/C/D). Epic: `plan-folders/`
    (batch-convert legacy folders) → `repo-wide-reflow/` (fill-to-≤200 every other `.md`) → `enforcement/` (repo-wide hooks + CI `--all` gate + `/new-story` scaffold). Answers RDO-17.8. Built on
    `reflow_md.py` (RDO-17.7).
-2. **root-doc-organization** — `docs/plan/root-doc-organization/` — next **RDO-16** (loop-closure check — one real session confirms the doc-freshness mechanism end to end). RDO-11 (≥ 2026-09-03) also
-   open. RDO-17.1..17.7 shipped; 17.8 decided (batch-convert all → the `doc-format-migration/` epic), pending close. 17.7 swept both POC folders + added `reflow_md.py`. Root `.md` token-efficiency
-   cleanup + doc-maintenance automation.
-3. **Greeks Black-Scholes fallback** — `docs/plan/greeks-bs-fallback/` — next **GF-1** (read-only audit scope).
+2. **Greeks Black-Scholes fallback** — `docs/plan/greeks-bs-fallback/` — next **GF-1** (read-only audit scope).
 4. **MVP: Multi-bagger Value Picks Tracker** — `docs/plan/mvp/` — next **M1.1**. Independent — blocks nothing.
 5. **Variance gate — CSP v1 deployment gate observation** — `docs/plan/variance-gate/` — next **VG0** (spec reconciliation; the remaining tasks are human checkpoints, not build tasks).
 6. **Options Income strategy** — `docs/plan/options_income/` — next **S0** (data audit).
@@ -123,6 +120,12 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-22] `root-doc-organization/` (`docs/archive/plan/root-doc-organization/`) — RDO-16 step 4
+  confirmed: this session's own SessionStart produced no `state_doc_freshness.sh` staleness
+  warning, and a manual re-run reproduced the clean result — the flag that fired last session
+  for `PLANNER.md`/`CONTEXT_TREE.md`/`README.md` cleared once those docs were refreshed. All
+  four loop-closure steps verified end to end; RDO-16 closes, completing every task box in the
+  story, so the story archived in the same commit per §Completion → archive. SHA `<pending>`.
 - [2026-09-22] `root-doc-organization/` RDO-16 (steps 1-3 of 4) — this session's own
   `state_doc_freshness.sh` SessionStart flag (`PLANNER.md`/`CONTEXT_TREE.md`/`README.md` behind
   code) was acted on: all three refreshed against current `src/`/`scripts/` state (signals

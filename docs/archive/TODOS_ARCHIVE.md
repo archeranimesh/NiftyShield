@@ -5,6 +5,12 @@
 
 ---
 
+## 2026-09-22 — `root-doc-organization` story archived
+
+Moved to `docs/archive/plan/root-doc-organization/`. Token-efficiency cleanup of the ~22 root `.md` files, doc-maintenance automation, and `docs/plan/` story/epic format standardization
+(RDO-1..17.8). Last task, RDO-16 (doc-freshness loop-closure check), confirmed end to end this session: the flag that fired last session for `PLANNER.md`/`CONTEXT_TREE.md`/`README.md` cleared
+at this session's SessionStart after those docs were refreshed. RDO-17.8's legacy-folder execution continues in `doc-format-migration/`. Owner: Claude on `claude-sonnet-5` throughout.
+
 ## 2026-09-22 — `signal-outcome-profit-range` story archived
 
 Moved to `docs/archive/plan/signal-outcome-profit-range/`. Shows the profit high/low reached

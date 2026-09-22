@@ -34,8 +34,9 @@ If any link breaks (flag never fires, threshold wrong, `md-organize` doesn't tou
 2. Flagged at SessionStart: confirmed — the flag fired before any tool call, exactly as designed.
 3. Acted on: all three docs refreshed this session (module-tree gaps in `CONTEXT_TREE.md` for `src/signals/`, `src/notifications/`, `src/paper/cycle_pnl.py`, `src/strategy/signal_*`, `scripts/dev/*`,
    `.claude/skills/`/`hooks/`; `PLANNER.md`'s stale May-June near-term queue reconciled against shipped work; `README.md`'s Project Structure tree + Skills table brought current).
-4. **Not yet observed** — whether the flag clears at the *next* SessionStart is, by definition, only checkable in a future session. RDO-16 stays open until that session confirms it (or files a gap if
-   it doesn't clear).
+4. **Confirmed (2026-09-22, next session).** This session's own SessionStart hook produced no `state_doc_freshness.sh` staleness warning — the flag that fired last session (PLANNER.md,
+   CONTEXT_TREE.md, README.md) is clear now that those docs were refreshed. Running `state_doc_freshness.sh` manually reproduced the same clean result. All four steps of the loop verified
+   end to end: stale → flagged → acted on → cleared. RDO-16 closes; this was the last open task box in the story, so the story archives in the same commit per §Completion → archive.
 
 **Commit:** `docs(plan): close RDO-16 — doc-freshness loop verified end to end`
 
