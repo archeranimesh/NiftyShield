@@ -30,6 +30,12 @@ bar `docs/archive/` + `_TEMPLATE/`, and get `pre-commit run --all-files md-reflo
 3. `pre-commit run --all-files md-reflow` green too — any repo-wide narrow file the widened scope now catches gets a `reflow_md` pass (should already be handled by `repo-wide-reflow/`).
 4. Tests: a path under `docs/archive/` is skipped; a path under `.claude/` is checked; the existing cap + ignore-marker tests still pass.
 
+**Shipped as `7107a56`, with one scope deviation from the spec above:** `pre-commit run --all-files` on the widened scope surfaced dozens of pre-existing >200-char lines in `docs/council/`
+(nested-list items and huge single lines that `reflow_md.py` doesn't wrap cleanly) that `repo-wide-reflow/` DFM-5 had already touched but left non-conforming. Per Animesh, `docs/council/` was added to
+the exclude regex alongside `docs/archive/` + `_TEMPLATE/` rather than fixed inline — follow-up filed in `TODOS.md` to harden `reflow_md.py`'s nested-list/table handling and re-include
+`docs/council/`. Separately, `docs/plan/dev-foundation/` was already in md-reflow's *pre-existing* scope but had never actually been run through `reflow_md.py` — that gap was fixed inline (mechanical,
+word-diff-clean) since the tool could handle it cleanly, unlike the council case.
+
 **Commit:** `chore(hooks): DFM-6 — md-line-length + md-reflow cover the whole tree`
 
 ---

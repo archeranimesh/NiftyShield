@@ -15,8 +15,8 @@ Forward spec work only — one `docs/plan/` story per line, pointer-only (title 
 starting the next story here; this list only decides *which story is next*. Bugs are **not** here — see `## Open Bugs`. Cross-references use folder names, never list positions, so renumbering can't
 rot them.
 
-1. **doc-format-migration** — `docs/plan/doc-format-migration/` — `plan-folders/` done, next story **`repo-wide-reflow/`** (fill-to-≤200 every other `.md`) → `enforcement/` (repo-wide hooks + CI
-   `--all` gate + `/new-story` scaffold). Answers RDO-17.8. Built on `reflow_md.py` (RDO-17.7).
+1. **doc-format-migration** — `docs/plan/doc-format-migration/` — `plan-folders/` + `repo-wide-reflow/` done, `enforcement/` in progress: DFM-6 shipped (`7107a56`), next **DFM-7** (gate modified
+   folders, not just new). Answers RDO-17.8. Built on `reflow_md.py` (RDO-17.7).
 2. **Greeks Black-Scholes fallback** — `docs/plan/greeks-bs-fallback/` — next **GF-1** (read-only audit scope).
 4. **MVP: Multi-bagger Value Picks Tracker** — `docs/plan/mvp/` — next **M1.1**. Independent — blocks nothing.
 5. **Variance gate — CSP v1 deployment gate observation** — `docs/plan/variance-gate/` — next **VG0** (spec reconciliation; the remaining tasks are human checkpoints, not build tasks).
@@ -119,6 +119,14 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-22] `doc-format-migration/` `enforcement/` DFM-6 done — widened `md-line-length` + `md-reflow` `files:` to the whole repo tree (was `docs/plan|bugs/` + root only), excluding
+  `docs/archive/`, `docs/plan/_TEMPLATE/`, and (new, see follow-up below) `docs/council/`. Fixed the true positives the wider net caught: `<!-- lint-ignore-length -->` markers on table/fenced-code
+  lines in `src/paper/CLAUDE.md`, `docs/strategies/*.md`, `scratch/2026-09-01_*.md` (two long `--question` bash literals split into adjacent-concatenated strings to avoid corrupting the runnable
+  command), and a `reflow_md.py` pass on `docs/plan/dev-foundation/` (already in scope pre-widening but never actually run). `pre-commit run --all-files` green on both hooks. SHA: `7107a56`. Next:
+  DFM-7.
+- **Follow-up filed:** `reflow_md.py` doesn't cleanly wrap `docs/council/*.md` (4-space-indented nested list items, some 800-1500 char single lines) — `repo-wide-reflow/` DFM-5 touched these files but
+  left them non-conforming. `docs/council/` is excluded from the DFM-6 widened scope pending a fix to `reflow_md.py`'s nested-list/table handling and re-inclusion. Not yet a numbered backlog item —
+  file one under `doc-format-migration/` or a standalone `reflow_md` fix when picked up.
 - [2026-09-22] `doc-format-migration/` `repo-wide-reflow/` DFM-5 closed — reflowed 77 in-bounds `.md` files repo-wide (root, `docs/` non-plan, `.claude/`+`.agents/`, `src`/`scripts`/`scratch` strays)
   to fill-to-≤200 in 4 per-directory commits, then updated `docs/plan/README.md` §"Markdown line style" to drop the POC-folder carve-out. `repo-wide-reflow/` story now fully done; epic `README.md`
   Stories row flipped to ✅. SHA: `15698be`. Next: `enforcement/` (blocked until both `plan-folders/` and `repo-wide-reflow/` are green — both now are).
