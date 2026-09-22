@@ -65,10 +65,9 @@ Epics, `TODOS.md` §Feature Backlog. Several folders in the old provisional pass
 **No tier-D conversions needed** beyond `dev-foundation/`'s incomplete archive move — every other folder here is either active (A) or shipped-but-referenced (B); nothing else is 100% shipped and
 un-archived.
 
-**Flagged for Animesh before DFM-2/DFM-3 start:** `broker-abstraction/`, `historical-data-abstraction/`, and `phase2-integrations/` are fully-unstarted specs (0 tasks shipped) that are absent from
-both `docs/plan/README.md` §Active Epics and `TODOS.md` §Feature Backlog — they read as parked/deprioritized work, not live stories, but they are not "shipped" so tier D (archive) does not fit either.
-They are tentatively filed as tier B (structure repair + reflow, one-line-digest depth) since 0 shipped tasks means there is nothing to digest — in practice this is closer to a light structure-repair
-pass with no digest content. Confirm before converting: keep as parked tier-B specs, or archive as abandoned?
+**Confirmed with Animesh, 2026-09-22:** `broker-abstraction/`, `historical-data-abstraction/`, and `phase2-integrations/` are converted, not archived — tier B stands. They are fully-unstarted specs (0
+tasks shipped) absent from both `docs/plan/README.md` §Active Epics and `TODOS.md` §Feature Backlog, so there is no shipped-task digest content; DFM-3 gives each a structure-repair pass (consolidate
+`stories/*-N.md` → one `stories.md` for the two with that legacy layout, canonical task-line format, reflow) with no per-task digests to write.
 
 ---
 
