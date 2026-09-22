@@ -1,7 +1,6 @@
 # CH-9a — Hypothesis Test Design
 
-> Spec for Antigravity (CH-9b). Implement exactly these strategies and assertions.
-> No additions, no departures. Read the source signatures with `get_code_snippet` before writing.
+> Spec for Antigravity (CH-9b). Implement exactly these strategies and assertions. No additions, no departures. Read the source signatures with `get_code_snippet` before writing.
 
 ---
 
@@ -144,8 +143,7 @@ def test_ivr_return_type(vix_today, series):
 - NiftyBees → delta = `net_qty * avg_cost / (nifty_spot * lot_size)`
 - Invariant: `total_delta_lots == options_delta_lots + niftybees_delta_lots` — always
 
-**Constructing `PaperPosition`:** use `get_code_snippet("PaperPosition")` before writing helpers.
-Do not write from memory.
+**Constructing `PaperPosition`:** use `get_code_snippet("PaperPosition")` before writing helpers. Do not write from memory.
 
 **File:** `tests/unit/risk/test_delta_hypothesis.py`
 
@@ -180,9 +178,8 @@ def test_aggregate_delta_additive_invariant(positions):
     assert result.total_delta_lots == result.options_delta_lots + result.niftybees_delta_lots
 ```
 
-*Note: `ce_position_strategy()` and `pe_position_strategy()` are `@composite` strategies
-that build `PaperPosition` objects with `"NSE_FO|...|CE"` and `"NSE_FO|...|PE"` instrument
-keys respectively. Read `PaperPosition` fields from the graph before implementing.*
+*Note: `ce_position_strategy()` and `pe_position_strategy()` are `@composite` strategies that build `PaperPosition` objects with `"NSE_FO|...|CE"` and `"NSE_FO|...|PE"` instrument keys respectively.
+Read `PaperPosition` fields from the graph before implementing.*
 
 ---
 
@@ -253,12 +250,10 @@ def test_aggregate_delta_nonpositive_lot_raises(lot_size):
 
 ## Target 3 — P&L arithmetic (`src/paper/tracker.py`)
 
-**Primary test targets are the pure helpers** `_compute_leg_unrealized_pnl` and
-`_compute_realized_pnl`. `PaperTracker.compute_pnl` is async and requires a live market
-client — do not try to call it directly in property tests.
+**Primary test targets are the pure helpers** `_compute_leg_unrealized_pnl` and `_compute_realized_pnl`. `PaperTracker.compute_pnl` is async and requires a live market client — do not try to call it
+directly in property tests.
 
-**Import these as module-level names** (they are not exported via `__init__.py` — import
-directly from `src.paper.tracker`).
+**Import these as module-level names** (they are not exported via `__init__.py` — import directly from `src.paper.tracker`).
 
 **Key invariants:**
 - Both helpers always return `Decimal` — never `float`
@@ -268,11 +263,9 @@ directly from `src.paper.tracker`).
 - Long, ltp > avg_cost → unrealized > 0; ltp < avg_cost → unrealized < 0
 - Short, ltp < avg_sell_price → unrealized > 0; ltp > avg_sell_price → unrealized < 0
 - `_compute_realized_pnl` with zero trades → `Decimal("0")`
-- `total = unrealized + realized` — this is the invariant asserted at the `compute_pnl` level;
-  property tests verify the components, not the async orchestrator
+- `total = unrealized + realized` — this is the invariant asserted at the `compute_pnl` level; property tests verify the components, not the async orchestrator
 
-**Constructing `PaperPosition`:** use `get_code_snippet("PaperPosition")` before writing helpers.
-Do not write from memory.
+**Constructing `PaperPosition`:** use `get_code_snippet("PaperPosition")` before writing helpers. Do not write from memory.
 
 **File:** `tests/unit/paper/test_pnl_hypothesis.py`
 
@@ -395,27 +388,19 @@ def test_realized_pnl_no_trades():
 
 ## Implementation notes for Antigravity (CH-9b)
 
-1. **Composite strategies.** Implement `ce_position_strategy()`, `pe_position_strategy()`,
-   `build_ce_position()`, `build_pe_position()`, and `build_paper_position()` as module-level
-   helpers in each test file. Run `get_code_snippet("PaperPosition")` to get current fields
-   before writing any helper — do not infer fields from memory.
+1. **Composite strategies.** Implement `ce_position_strategy()`, `pe_position_strategy()`, `build_ce_position()`, `build_pe_position()`, and `build_paper_position()` as module-level helpers in each
+   test file. Run `get_code_snippet("PaperPosition")` to get current fields before writing any helper — do not infer fields from memory.
 
-2. **`hypothesis` settings.** Use `@settings(max_examples=200)` for all tests in this suite.
-   Financial property tests benefit from larger example counts.
+2. **`hypothesis` settings.** Use `@settings(max_examples=200)` for all tests in this suite. Financial property tests benefit from larger example counts.
 
-3. **`st.decimals()` note.** `hypothesis.strategies.decimals()` can produce special values
-   (`Inf`, `NaN`, `sNaN`). Always pass `allow_nan=False, allow_infinity=False` unless a test
-   specifically targets those inputs.
+3. **`st.decimals()` note.** `hypothesis.strategies.decimals()` can produce special values (`Inf`, `NaN`, `sNaN`). Always pass `allow_nan=False, allow_infinity=False` unless a test specifically
+   targets those inputs.
 
-4. **No mocking of market data.** `_compute_leg_unrealized_pnl` and `_compute_realized_pnl`
-   are pure — call them directly. Do not instantiate `PaperTracker` in these tests.
+4. **No mocking of market data.** `_compute_leg_unrealized_pnl` and `_compute_realized_pnl` are pure — call them directly. Do not instantiate `PaperTracker` in these tests.
 
-5. **Imports.** Import `_compute_leg_unrealized_pnl` and `_compute_realized_pnl` directly:
-   `from src.paper.tracker import _compute_leg_unrealized_pnl, _compute_realized_pnl`
+5. **Imports.** Import `_compute_leg_unrealized_pnl` and `_compute_realized_pnl` directly: `from src.paper.tracker import _compute_leg_unrealized_pnl, _compute_realized_pnl`
 
-6. **PaperStore in-memory.** Use `PaperStore(":memory:")` for any test that needs a store
-   instance (H-PNL-7). Run `get_code_snippet("PaperStore.__init__")` to confirm the
-   constructor signature before use.
+6. **PaperStore in-memory.** Use `PaperStore(":memory:")` for any test that needs a store instance (H-PNL-7). Run `get_code_snippet("PaperStore.__init__")` to confirm the constructor signature before
+   use.
 
-7. **Test count target.** 6 IVR tests + 6 Delta tests + 7 PnL tests = 19 tests total across
-   3 files. All 19 must pass before CH-9b is closed.
+7. **Test count target.** 6 IVR tests + 6 Delta tests + 7 PnL tests = 19 tests total across 3 files. All 19 must pass before CH-9b is closed.

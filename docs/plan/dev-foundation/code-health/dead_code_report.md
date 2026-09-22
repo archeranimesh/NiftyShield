@@ -1,11 +1,8 @@
 # Dead Code Scan Report — CH-2
 
-> Generated: 2026-05-30
-> Command: `vulture src/ scripts/ --min-confidence 60`
-> Scope: all Python files under `src/` and `scripts/`
+> Generated: 2026-05-30 Command: `vulture src/ scripts/ --min-confidence 60` Scope: all Python files under `src/` and `scripts/`
 
-**Note:** vulture does not scan `tests/` — functions used only in tests appear as false positives.
-This is a known limitation; see the False Positives section.
+**Note:** vulture does not scan `tests/` — functions used only in tests appear as false positives. This is a known limitation; see the False Positives section.
 
 ---
 
@@ -36,8 +33,8 @@ These are clearly unused — assigned variables that are never read, or private 
 | `src/paper/overlay_selector.py` | 38 | variable `fallback_reason` | 60% | Assigned, never used in fallback path |
 | `src/paper/track_snapshot.py` | 51 | variable `proxy_delta_state` | 60% | Assigned, never passed anywhere |
 
-**Action:** These can be deleted in a single clean-up commit without behavioural risk.
-The unused variables likely originate from refactors where the variable was decoupled from its use site but the assignment was left behind.
+**Action:** These can be deleted in a single clean-up commit without behavioural risk. The unused variables likely originate from refactors where the variable was decoupled from its use site but the
+assignment was left behind.
 
 ---
 
@@ -114,8 +111,8 @@ Pydantic `model_config`, `@validator`, `@field_validator`, and `@model_validator
 
 ### 3c — Protocol/ABC implementations (structural subtyping)
 
-`BrokerClient` and related protocols use structural subtyping. Implementations satisfy the protocol without inheritance,
-so call sites type-check against the protocol, not the concrete class. Vulture sees the methods as unbound.
+`BrokerClient` and related protocols use structural subtyping. Implementations satisfy the protocol without inheritance, so call sites type-check against the protocol, not the concrete class. Vulture
+sees the methods as unbound.
 
 | File | Symbols |
 |---|---|
@@ -135,8 +132,8 @@ so call sites type-check against the protocol, not the concrete class. Vulture s
 
 ### 3f — SQLite `row_factory` attribute assignments
 
-`connection.row_factory = sqlite3.Row` is a Python attribute assignment on the connection object. Vulture flags the attribute name as unused
-because it sees no read of `row_factory` on a Python object it tracks.
+`connection.row_factory = sqlite3.Row` is a Python attribute assignment on the connection object. Vulture flags the attribute name as unused because it sees no read of `row_factory` on a Python object
+it tracks.
 
 | File | Line |
 |---|---|
@@ -171,8 +168,7 @@ because it sees no read of `row_factory` on a Python object it tracks.
 
 ## Whitelist Candidates
 
-If a `vulture_whitelist.py` is created at repo root, the following should be added to silence
-confirmed false positives on future runs:
+If a `vulture_whitelist.py` is created at repo root, the following should be added to silence confirmed false positives on future runs:
 
 ```python
 # vulture_whitelist.py
@@ -209,8 +205,7 @@ MockBrokerClient.simulate_error
 MockBrokerClient.reset
 ```
 
-**Do not create this file in CH-2.** Whitelist creation is a follow-up action after confirming
-the "Needs Investigation" items.
+**Do not create this file in CH-2.** Whitelist creation is a follow-up action after confirming the "Needs Investigation" items.
 
 ---
 
@@ -218,7 +213,7 @@ the "Needs Investigation" items.
 
 1. **Immediate (low risk):** Delete the 10 "Safe to Delete" items in a single commit.
 2. **Verify then delete:** Audit the 3 private helpers in §2a — confirm not called via `getattr` or dynamic dispatch. Then delete.
-3. **Store API audit (§2b):** Cross-check store methods against the script that owns them (`mf/tracker.py` owns `mf/store.py`, etc.).
-Methods with test coverage but no production caller are candidates for deletion if the script logic is genuinely complete.
+3. **Store API audit (§2b):** Cross-check store methods against the script that owns them (`mf/tracker.py` owns `mf/store.py`, etc.). Methods with test coverage but no production caller are candidates
+   for deletion if the script logic is genuinely complete.
 4. **Scaffolding (§2c):** Leave `GammaStore` and `ChainReader` intact — they are Phase 1 targets.
 5. **Whitelist:** Create `vulture_whitelist.py` after §2 audit is done, then add `vulture` to the `Makefile` `dead-code` target.

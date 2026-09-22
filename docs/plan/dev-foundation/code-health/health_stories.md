@@ -1,19 +1,15 @@
 # code-health — Story Specs
 
-> One task per session. Find the first unchecked item in `health_tasks.md`.
-> After each task: tick `health_tasks.md`, append `| SHA: <sha>`, add one line to `TODOS.md`.
+> One task per session. Find the first unchecked item in `health_tasks.md`. After each task: tick `health_tasks.md`, append `| SHA: <sha>`, add one line to `TODOS.md`.
 
 ---
 
 ## CH-1 — Duplicate code scan
 
-**Owner:** Claude
-**Files to create:**
+**Owner:** Claude **Files to create:**
 - `docs/plan/dev-foundation/code-health/duplication_report.md`
 
-**What to do:**
-Run `pylint --disable=all --enable=similarities --min-similarity-lines=6 src/` and capture
-output. Also run `jscpd src/ --min-lines 6 --reporters console` if jscpd is available.
+**What to do:** Run `pylint --disable=all --enable=similarities --min-similarity-lines=6 src/` and capture output. Also run `jscpd src/ --min-lines 6 --reporters console` if jscpd is available.
 
 Classify findings into three buckets in the report:
 1. **Extract to shared helper** — identical logic in 2+ modules (e.g., `Decimal(str(v))` coercion, Telegram formatting patterns)
@@ -36,20 +32,17 @@ Ref: dev-foundation/code-health CH-1
 
 ## CH-2 — Dead code scan
 
-**Owner:** Claude
-**Files to create:**
+**Owner:** Claude **Files to create:**
 - `docs/plan/dev-foundation/code-health/dead_code_report.md`
 
-**What to do:**
-Run `vulture src/ scripts/ --min-confidence 80` and capture output.
+**What to do:** Run `vulture src/ scripts/ --min-confidence 80` and capture output.
 
 Classify findings:
 1. **Safe to delete** — clearly unused, no external callers
 2. **Needs investigation** — may be called dynamically or by scripts not in scope
 3. **False positive** — used via protocol, `__all__`, or dynamic dispatch
 
-Add a whitelist section: `vulture` whitelists go in `vulture_whitelist.py` at repo root
-(standard vulture convention). Do not create it yet — just note candidates.
+Add a whitelist section: `vulture` whitelists go in `vulture_whitelist.py` at repo root (standard vulture convention). Do not create it yet — just note candidates.
 
 **Commit message:**
 ```
@@ -65,25 +58,19 @@ Ref: dev-foundation/code-health CH-2
 
 ## CH-3 — `GLOSSARY.md`
 
-**Owner:** Claude
-**Files to create:**
+**Owner:** Claude **Files to create:**
 - `GLOSSARY.md` — repo root
 
 **What to implement:**
 
-A single-source-of-truth for domain terms used across all docs and AI sessions. Covers
-both trading domain and project-specific conventions. Target ~40 entries.
+A single-source-of-truth for domain terms used across all docs and AI sessions. Covers both trading domain and project-specific conventions. Target ~40 entries.
 
 Categories to cover:
-- **Options trading:** CE/PE, ATM/OTM/ITM/DITM, DTE, IVR, IV, Delta, Gamma, Theta, Vega,
-  lot size (65 for NIFTY), underlying, expiry (weekly/monthly/quarterly/yearly)
-- **Strategies:** overlay, protective put (PP), covered call (CC), collar, iron condor,
-  strangle, short strangle, cash-secured put (CSP), delta-neutral
-- **Project-specific:** paper_ prefix convention, BUY-opened vs SELL-opened position,
-  track (A/B/C), roll (close old leg + open new leg atomically), overlay vs base leg,
-  leg_role, strategy_name (DB convention), BOD (beginning of day), instrument_key format
-- **Data conventions:** Decimal-as-TEXT, UTC storage/IST display, IVR threshold bands
-  (< 0.25 low-vol, 0.25–0.50 in-window, > 0.50 high-vol), lot size, LOT_SIZE=65
+- **Options trading:** CE/PE, ATM/OTM/ITM/DITM, DTE, IVR, IV, Delta, Gamma, Theta, Vega, lot size (65 for NIFTY), underlying, expiry (weekly/monthly/quarterly/yearly)
+- **Strategies:** overlay, protective put (PP), covered call (CC), collar, iron condor, strangle, short strangle, cash-secured put (CSP), delta-neutral
+- **Project-specific:** paper_ prefix convention, BUY-opened vs SELL-opened position, track (A/B/C), roll (close old leg + open new leg atomically), overlay vs base leg, leg_role, strategy_name (DB
+  convention), BOD (beginning of day), instrument_key format
+- **Data conventions:** Decimal-as-TEXT, UTC storage/IST display, IVR threshold bands (< 0.25 low-vol, 0.25–0.50 in-window, > 0.50 high-vol), lot size, LOT_SIZE=65
 
 Format:
 ```markdown
@@ -109,14 +96,12 @@ Ref: dev-foundation/code-health CH-3
 
 **Owner:** Antigravity
 
-**Before any code:** Run `search_code("__all__")` across `src/` to identify which
-`__init__.py` files already have it. Run `search_graph("__init__")` to get the list of
-all package init files. Do not use `Read` on individual files until you have the full list.
+**Before any code:** Run `search_code("__all__")` across `src/` to identify which `__init__.py` files already have it. Run `search_graph("__init__")` to get the list of all package init files. Do not
+use `Read` on individual files until you have the full list.
 
 **What to implement:**
 
-For each `src/<module>/__init__.py`, add an `__all__` list that explicitly names every
-public symbol re-exported from that package. A symbol is public if it does not start with `_`.
+For each `src/<module>/__init__.py`, add an `__all__` list that explicitly names every public symbol re-exported from that package. A symbol is public if it does not start with `_`.
 
 Rules:
 - Empty `__init__.py` (just a package marker comment) → add `__all__: list[str] = []`
@@ -139,14 +124,12 @@ Ref: dev-foundation/code-health CH-4
 
 ## CH-5 — Mermaid C4 architecture diagram
 
-**Owner:** Claude
-**Files to create:**
+**Owner:** Claude **Files to create:**
 - `docs/architecture.md`
 
 **What to implement:**
 
-A C4 Container diagram (level 2) showing all `src/` modules, their dependencies, and
-data stores. Rendered as a Mermaid `graph TD` block (GitHub renders natively).
+A C4 Container diagram (level 2) showing all `src/` modules, their dependencies, and data stores. Rendered as a Mermaid `graph TD` block (GitHub renders natively).
 
 Cover:
 - All modules in `src/` as boxes with one-line descriptions
@@ -172,9 +155,8 @@ Ref: dev-foundation/code-health CH-5
 
 **Owner:** Antigravity
 
-**Before any code:** Run `search_code("logging")` and `search_code("structlog")` across
-`src/` and `scripts/` to understand current logging state. Run `search_graph("setup_logging")`
-to confirm it does not exist yet.
+**Before any code:** Run `search_code("logging")` and `search_code("structlog")` across `src/` and `scripts/` to understand current logging state. Run `search_graph("setup_logging")` to confirm it
+does not exist yet.
 
 **What to implement:**
 
@@ -212,8 +194,7 @@ def setup_logging(*, json: bool = False, level: str = "INFO") -> None:
     )
 ```
 
-Wire `setup_logging()` into the top of each script in `scripts/` (after imports, before
-any logic). Use `json=True` when `UPSTOX_ENV == "prod"`.
+Wire `setup_logging()` into the top of each script in `scripts/` (after imports, before any logic). Use `json=True` when `UPSTOX_ENV == "prod"`.
 
 **Tests:** Two tests in `tests/unit/utils/test_logging.py`:
 1. `setup_logging(json=False)` runs without error
@@ -235,14 +216,12 @@ Ref: dev-foundation/code-health CH-6
 
 ## CH-7a — Define `Settings` model
 
-**Owner:** Claude
-**Files to create:**
+**Owner:** Claude **Files to create:**
 - `src/config.py`
 
 **What to implement:**
 
-Run `search_code("os.getenv")` and `search_code("os.environ")` across `src/` and `scripts/`
-to enumerate every env var used. Map them into a `pydantic-settings` `Settings` class.
+Run `search_code("os.getenv")` and `search_code("os.environ")` across `src/` and `scripts/` to enumerate every env var used. Map them into a `pydantic-settings` `Settings` class.
 
 ```python
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -299,8 +278,7 @@ Ref: dev-foundation/code-health CH-7a
 
 **Owner:** Antigravity
 
-**Before any code:** Run `search_code("os.getenv")` across `scripts/` and `src/` to get
-the full list. Do not read files blindly — use the grep output to target only affected files.
+**Before any code:** Run `search_code("os.getenv")` across `scripts/` and `src/` to get the full list. Do not read files blindly — use the grep output to target only affected files.
 
 **What to implement:**
 
@@ -333,8 +311,7 @@ Ref: dev-foundation/code-health CH-7b
 
 **What to implement:**
 
-A standalone script that validates system health and sends a Telegram alert if anything
-is wrong. Intended to run as a cron at 16:30 IST on trading days.
+A standalone script that validates system health and sends a Telegram alert if anything is wrong. Intended to run as a cron at 16:30 IST on trading days.
 
 Checks (in order):
 1. **Trading day guard** — `is_trading_day(today)` — exit 0 silently on holidays
@@ -353,8 +330,7 @@ Alert format (Telegram):
 ⚠️ VIX data: 3 days stale
 ```
 
-If all checks pass, no Telegram message is sent (silent success). Exit 0 on success, 1 on
-any failure.
+If all checks pass, no Telegram message is sent (silent success). Exit 0 on success, 1 on any failure.
 
 **Tests:** `tests/unit/test_healthcheck.py`:
 1. All checks pass — no alert sent, exit 0
@@ -383,10 +359,8 @@ Ref: dev-foundation/code-health CH-8
 
 **Owner:** Claude
 
-**What to produce:**
-A design document at `docs/plan/dev-foundation/code-health/hypothesis_design.md` specifying
-the exact `@given` strategies and assertions for each target function. Antigravity implements
-from this spec in CH-9b — no ambiguity allowed.
+**What to produce:** A design document at `docs/plan/dev-foundation/code-health/hypothesis_design.md` specifying the exact `@given` strategies and assertions for each target function. Antigravity
+implements from this spec in CH-9b — no ambiguity allowed.
 
 **Targets:**
 
@@ -418,17 +392,15 @@ Ref: dev-foundation/code-health CH-9a
 
 **Owner:** Antigravity
 
-**Before any code:** Read `docs/plan/dev-foundation/code-health/hypothesis_design.md`
-in full. Then run `get_code_snippet("compute_ivr")`, `get_code_snippet("aggregate_delta")`
-to get exact current signatures. Do not write test helpers from memory.
+**Before any code:** Read `docs/plan/dev-foundation/code-health/hypothesis_design.md` in full. Then run `get_code_snippet("compute_ivr")`, `get_code_snippet("aggregate_delta")` to get exact current
+signatures. Do not write test helpers from memory.
 
 **Files to create:**
 - `tests/unit/backtest/test_ivr_hypothesis.py`
 - `tests/unit/risk/test_delta_hypothesis.py`
 - `tests/unit/paper/test_pnl_hypothesis.py`
 
-Implement exactly the strategies and assertions specified in `hypothesis_design.md`.
-No additions. No departures from spec.
+Implement exactly the strategies and assertions specified in `hypothesis_design.md`. No additions. No departures from spec.
 
 **Commit message:**
 ```
@@ -448,23 +420,17 @@ Ref: dev-foundation/code-health CH-9b
 
 **Owner:** Antigravity
 
-**Context:**
-`healthcheck.py` warns when VIX data is > 2 days stale, but nothing writes fresh data.
-`ingest_vix_from_api` in `src/backtest/vix_ingest.py` is resumable — it auto-detects the
-gap from the last Parquet date — but it has no caller in the cron stack. `pre_market_brief.py`
-computes IVR purely from the local Parquet (no live fetch); if the Parquet is stale, the IVR
-percentile is stale too.
+**Context:** `healthcheck.py` warns when VIX data is > 2 days stale, but nothing writes fresh data. `ingest_vix_from_api` in `src/backtest/vix_ingest.py` is resumable — it auto-detects the gap from
+the last Parquet date — but it has no caller in the cron stack. `pre_market_brief.py` computes IVR purely from the local Parquet (no live fetch); if the Parquet is stale, the IVR percentile is stale
+too.
 
-**Root cause surfaced 2026-06-26:** `pre_market_brief.py` was `await`-ing `fetch_vix_latest`
-(a sync function), causing a silent `TypeError` → IVR always showed `N/A`. Fixed by removing
-the live fetch entirely and computing from Parquet. The fix exposed that the Parquet itself
-needs a daily update cron.
+**Root cause surfaced 2026-06-26:** `pre_market_brief.py` was `await`-ing `fetch_vix_latest` (a sync function), causing a silent `TypeError` → IVR always showed `N/A`. Fixed by removing the live fetch
+entirely and computing from Parquet. The fix exposed that the Parquet itself needs a daily update cron.
 
 **What to implement:**
 
 `scripts/pipeline/vix_daily_ingest.py` — thin EOD cron script:
-1. Calls `ingest_vix_from_api(from_date=<gap_start>, to_date=date.today(), out_dir=vix_data_dir)`.
-   Resumability is handled inside `ingest_vix_from_api` — no gap logic needed here.
+1. Calls `ingest_vix_from_api(from_date=<gap_start>, to_date=date.today(), out_dir=vix_data_dir)`. Resumability is handled inside `ingest_vix_from_api` — no gap logic needed here.
 2. Logs rows written via structlog (`_SCRIPT_NAME = "scripts.pipeline.vix_daily_ingest"`).
 3. Exits 0 on success (including 0 new rows — already up to date), 1 on `DataFetchError`.
 4. No Telegram notification — healthcheck will catch staleness if this cron fails.
@@ -496,8 +462,7 @@ Ref: dev-foundation/code-health CH-11
 
 ## CH-10 — Docs close
 
-**Owner:** Claude
-**Files to change:**
+**Owner:** Claude **Files to change:**
 - `CONTEXT.md` — add entries for `src/config.py`, `src/utils/logging.py`, `scripts/healthcheck.py`; update test count
 - `DECISIONS.md` — add: pydantic-settings singleton pattern, structlog choice, hypothesis on financial math
 - `TODOS.md` — mark code-health complete, session log, add healthcheck cron as follow-up action

@@ -1,24 +1,19 @@
 # CH-1 — Duplicate Code Scan Report
 
-**Generated:** 2026-05-30
-**Tool:** `pylint --disable=all --enable=similarities --min-similarity-lines=4 src/`
-**Overall rating:** 9.98/10
-**jscpd:** not available in environment — skipped
+**Generated:** 2026-05-30 **Tool:** `pylint --disable=all --enable=similarities --min-similarity-lines=4 src/` **Overall rating:** 9.98/10 **jscpd:** not available in environment — skipped
 
 ---
 
 ## Summary
 
-9 similarity clusters found across `src/`. All are minor. No cluster represents a large logic
-block that would justify a shared utility module now — most are SQL DDL, field-list
-declarations, or short HTTP boilerplate that is contextually bound.
+9 similarity clusters found across `src/`. All are minor. No cluster represents a large logic block that would justify a shared utility module now — most are SQL DDL, field-list declarations, or short
+HTTP boilerplate that is contextually bound.
 
 ---
 
 ## Bucket 1 — Extract to shared helper
 
-These are identical or near-identical logic blocks where extraction would reduce maintenance
-risk.
+These are identical or near-identical logic blocks where extraction would reduce maintenance risk.
 
 ### DUP-1: Dhan API HTTP fetch pattern (3 sites)
 
@@ -36,8 +31,7 @@ if isinstance(data, list):
     return data
 ```
 
-**Recommendation:** Extract `_dhan_get(url, headers) -> list | dict` into
-`src/dhan/_http.py`. Three callers; the pattern is mechanically identical. Low risk.
+**Recommendation:** Extract `_dhan_get(url, headers) -> list | dict` into `src/dhan/_http.py`. Three callers; the pattern is mechanically identical. Low risk.
 
 ---
 
@@ -56,9 +50,8 @@ with _connect(self.db_path) as conn:
     rows = conn.execute(query, params).fetchall()
 ```
 
-**Recommendation:** The `_connect` + query pattern is spread across many store methods
-already. These two sites share the exact date-range tail. Low priority — acceptable to defer
-until a store base class is introduced (if ever).
+**Recommendation:** The `_connect` + query pattern is spread across many store methods already. These two sites share the exact date-range tail. Low priority — acceptable to defer until a store base
+class is introduced (if ever).
 
 ---
 
@@ -78,15 +71,13 @@ if not row or not row["prev_date"]:
 rows = conn.execute(
 ```
 
-**Recommendation:** Both implement a "find previous snapshot date" query. Could share a
-`_get_prev_snapshot_date(conn, table, date) -> str | None` helper. Low priority for now.
+**Recommendation:** Both implement a "find previous snapshot date" query. Could share a `_get_prev_snapshot_date(conn, table, date) -> str | None` helper. Low priority for now.
 
 ---
 
 ## Bucket 2 — Acceptable duplication
 
-Structurally similar but contextually distinct — extracting would couple unrelated modules or
-obscure intent.
+Structurally similar but contextually distinct — extracting would couple unrelated modules or obscure intent.
 
 ### DUP-4: Pydantic model field list (Leg-like models)
 
@@ -106,10 +97,8 @@ price: Decimal = Field(..., gt=0)
 notes: str = ""
 ```
 
-**Assessment:** `PaperTrade` intentionally mirrors `Leg`/`Trade` in shape (it's a shadow
-record for paper positions) but lives in a separate module with a `paper_` prefix constraint
-and additional fields. A shared base class (`BaseLegFields`) would couple `src/models/` to
-`src/paper/` — wrong direction. **Leave as-is.**
+**Assessment:** `PaperTrade` intentionally mirrors `Leg`/`Trade` in shape (it's a shadow record for paper positions) but lives in a separate module with a `paper_` prefix constraint and additional
+fields. A shared base class (`BaseLegFields`) would couple `src/models/` to `src/paper/` — wrong direction. **Leave as-is.**
 
 ---
 
@@ -132,9 +121,8 @@ price          TEXT NOT NULL,
 notes          TEXT NOT NULL DEFAULT '',
 ```
 
-**Assessment:** Two separate tables (`paper_trades` and `trades`) with the same core schema.
-They share columns by design (paper mirrors live). SQL DDL cannot be factored further without
-a migration generator. **Acceptable.**
+**Assessment:** Two separate tables (`paper_trades` and `trades`) with the same core schema. They share columns by design (paper mirrors live). SQL DDL cannot be factored further without a migration
+generator. **Acceptable.**
 
 ---
 
@@ -144,15 +132,11 @@ a migration generator. **Acceptable.**
 - `src/portfolio/summary.py:162–205`
 - `src/portfolio/tracker.py:221–237`
 
-**Duplicated block (~12 lines):**
-The `LegPnL` construction loop and `StrategyPnL` return, plus the `compute_pnl` async method
-docstring lines match.
+**Duplicated block (~12 lines):** The `LegPnL` construction loop and `StrategyPnL` return, plus the `compute_pnl` async method docstring lines match.
 
-**Assessment:** `summary.py` contains a pure helper (`_build_portfolio_summary`) and
-`tracker.py` contains a live-fetch method (`compute_pnl`). The loop body is structurally
-similar but the surrounding context differs (pure function vs. async method with DB access).
-A shared helper is feasible but would need careful signature design to avoid coupling.
-**Defer to Phase 1 refactor when the two modules are reviewed together.**
+**Assessment:** `summary.py` contains a pure helper (`_build_portfolio_summary`) and `tracker.py` contains a live-fetch method (`compute_pnl`). The loop body is structurally similar but the
+surrounding context differs (pure function vs. async method with DB access). A shared helper is feasible but would need careful signature design to avoid coupling. **Defer to Phase 1 refactor when the
+two modules are reviewed together.**
 
 ---
 
@@ -162,19 +146,16 @@ A shared helper is feasible but would need careful signature design to avoid cou
 - `src/portfolio/strategies/finideas/finrakshak.py:28–35`
 - `src/portfolio/strategies/finideas/ilts.py:44–51`
 
-**Duplicated block (~7 lines):**
-Both define a `Leg(instrument_key="NSE_FO|37810", display_name="NIFTY DEC 23000 PE", ...)`.
+**Duplicated block (~7 lines):** Both define a `Leg(instrument_key="NSE_FO|37810", display_name="NIFTY DEC 23000 PE", ...)`.
 
-**Assessment:** These are two different strategy definitions that happen to share one
-overlapping leg (same instrument, same quantity). This is a real trade position recorded in
-two strategy files — it is correct, not accidental. **False positive / acceptable.**
+**Assessment:** These are two different strategy definitions that happen to share one overlapping leg (same instrument, same quantity). This is a real trade position recorded in two strategy files —
+it is correct, not accidental. **False positive / acceptable.**
 
 ---
 
 ## Bucket 3 — Already abstracted / false positives
 
-No findings in this category. All R0801 clusters represent genuine code sharing opportunities
-or acceptable structural parallelism.
+No findings in this category. All R0801 clusters represent genuine code sharing opportunities or acceptable structural parallelism.
 
 ---
 
@@ -190,6 +171,5 @@ or acceptable structural parallelism.
 | DUP-6 | Low | Revisit in Phase 1 `portfolio/` refactor |
 | DUP-7 | None | Same instrument in two distinct strategies — correct |
 
-The only item worth acting on before Phase 1 is **DUP-1**: the Dhan HTTP fetch pattern
-appears in `auth/`, `dhan/positions.py`, and `dhan/reader.py`. Extracting it to
-`src/dhan/_http.py` is a 3-file mechanical change with no design ambiguity.
+The only item worth acting on before Phase 1 is **DUP-1**: the Dhan HTTP fetch pattern appears in `auth/`, `dhan/positions.py`, and `dhan/reader.py`. Extracting it to `src/dhan/_http.py` is a 3-file
+mechanical change with no design ambiguity.

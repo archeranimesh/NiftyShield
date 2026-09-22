@@ -62,6 +62,7 @@ G6). Never construct a `PaperLegSnapshot` with inconsistent components — the s
 
 | Method | Signature | Behaviour |
 |---|---|---|
+<!-- lint-ignore-length -->
 | `record_leg_snapshot` | `(snap: PaperLegSnapshot) → None` | Upsert with `ON CONFLICT … DO UPDATE`. Raises `ValueError` on `total_pnl` invariant mismatch before writing (never literal `assert` — REVIEW.md G6). |
 | `get_leg_snapshot` | `(strategy, leg_role, snap_date) → PaperLegSnapshot \| None` | Exact date lookup. |
 | `get_prev_leg_snapshot` | `(strategy, leg_role, before_date) → PaperLegSnapshot \| None` | Latest snapshot strictly before `before_date` (for delta-from-yesterday). |

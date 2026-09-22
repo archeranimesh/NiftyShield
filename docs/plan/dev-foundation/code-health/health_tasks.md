@@ -1,9 +1,6 @@
 # code-health — Task Checklist
 
-> Find the first unchecked `- [ ]` line. That is your only task.
-> Tick the box and append `| SHA: <sha>` when done. Add one line to `TODOS.md`.
-> Full story spec: `health_stories.md`.
->
+> Find the first unchecked `- [ ]` line. That is your only task. Tick the box and append `| SHA: <sha>` when done. Add one line to `TODOS.md`. Full story spec: `health_stories.md`.
 > CH-1/2/3/5/7(define)/9(design) → Claude | CH-4/6/7(implement)/8/9(implement)/11 → Antigravity
 
 ---

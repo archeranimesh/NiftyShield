@@ -13,7 +13,9 @@ doing one of these runs the full protocol itself, including its own `@test-runne
 
 | Task | Owner | Blocked by | Files (disjoint from the other two) | Gate |
 |---|---|---|---|---|
+<!-- lint-ignore-length -->
 | **ROLL-7** | Claude | nothing (backbone + formatting-rules done) — **unblocks ROLL-8 & ROLL-12** | `src/strategy/reentry_mixin.py`, `src/notifications/formatting.py` (+`STRATEGY_LABELS`/`LEG_ROLE_LABELS`), `tests/unit/strategy/test_reentry_mixin.py` | Review: none¹ |
+<!-- lint-ignore-length -->
 | **ROLL-10** | Claude | nothing | `scripts/dev/paper_track_snapshot.py`, `src/paper/track_snapshot.py`, `tests/unit/scripts/test_paper_track_snapshot.py` (new) | Review: none¹ · **greeks-analyst may fire²** |
 | **ROLL-11** | Claude | nothing | `scripts/healthcheck.py`, `tests/unit/test_healthcheck.py` | Review: none¹ |
 

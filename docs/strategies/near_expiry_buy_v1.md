@@ -702,7 +702,9 @@ python scripts/ask_council.py \
     --topic negamma-weekly-premium-range \
     --template strategy_parameters \
     --context docs/strategies/near_expiry_buy_v1.md \
-    --question "For Nifty 50 weekly options at 0–1 DTE, what ask premium range optimises the tradeoff between gamma acceleration payoff potential and execution drag? The council's ₹2–₹10 was calibrated for monthly 0–2 DTE; weekly options at this DTE carry almost no time value, shifting the same premium range much closer to ATM. Should the range be ₹1–₹6 to target more OTM explosions, or does ₹2–₹10 hold for weeklies?"
+    --question "For Nifty 50 weekly options at 0–1 DTE, what ask premium range optimises the tradeoff between gamma acceleration payoff potential and execution drag? The council's ₹2–₹10 was"\
+" calibrated for monthly 0–2 DTE; weekly options at this DTE carry almost no time value, shifting the same premium range much closer to ATM. Should the range be ₹1–₹6 to target more OTM"\
+" explosions, or does ₹2–₹10 hold for weeklies?"
 ```
 
 ### Q2 — Gamma Gearing Bootstrap Threshold (Layer 2)
@@ -719,7 +721,9 @@ python scripts/ask_council.py \
     --topic negamma-gearing-threshold \
     --template strategy_parameters \
     --context docs/strategies/near_expiry_buy_v1.md \
-    --question "For the gamma_gearing Layer 2 filter in the near-expiry gamma buy strategy on Nifty 50 weekly 0–1 DTE: which calibration approach is correct — (A) fixed absolute threshold (gamma_gearing > 5.0 or 8.0), (B) cross-sectional top-25% relative to all candidates in the same 5-minute scan, or (C) rolling 75th-percentile by DTE bucket from 20+ days of Phase A chain data? Evaluate false-positive rates, regime sensitivity (low-VIX vs high-VIX periods), and operational complexity for NSE index options microstructure."
+    --question "For the gamma_gearing Layer 2 filter in the near-expiry gamma buy strategy on Nifty 50 weekly 0–1 DTE: which calibration approach is correct — (A) fixed absolute threshold"\
+" (gamma_gearing > 5.0 or 8.0), (B) cross-sectional top-25% relative to all candidates in the same 5-minute scan, or (C) rolling 75th-percentile by DTE bucket from 20+ days of Phase A chain"\
+" data? Evaluate false-positive rates, regime sensitivity (low-VIX vs high-VIX periods), and operational complexity for NSE index options microstructure."
 ```
 
 ---

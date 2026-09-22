@@ -1,8 +1,7 @@
 # dev-foundation — Engineering Excellence Epic
 
-> Root epic for developer tooling, CI pipeline, and code health.
-> All three stories are independent of production logic — no BrokerClient, no SQLite, no Upstox API.
-> Start with `dx-foundation` (prerequisite for CI). The other two can run in any order after that.
+> Root epic for developer tooling, CI pipeline, and code health. All three stories are independent of production logic — no BrokerClient, no SQLite, no Upstox API. Start with `dx-foundation`
+> (prerequisite for CI). The other two can run in any order after that.
 
 ---
 
@@ -16,8 +15,8 @@
 
 **`code-health/` covers:** Duplicate scan, dead code, GLOSSARY.md, __all__, Mermaid C4, structlog, pydantic-settings, healthcheck.py, hypothesis
 
-**CH-4 skip note:** Empty `__all__ = []` is worse than no `__all__` — it hides symbols and contradicts the codebase's explicit import pattern.
-Revisit only if the codebase shifts to re-exporting from package roots. See TODOS.md backlog for conditions.
+**CH-4 skip note:** Empty `__all__ = []` is worse than no `__all__` — it hides symbols and contradicts the codebase's explicit import pattern. Revisit only if the codebase shifts to re-exporting from
+package roots. See TODOS.md backlog for conditions.
 
 ---
 
@@ -39,16 +38,15 @@ Revisit only if the codebase shifts to re-exporting from package roots. See TODO
 
 The `dev-foundation` epic is the prerequisite for everything that follows. The next items in priority order:
 
-**1. Build queue #3 — scripts-restructure SR1** (`docs/plan/scripts-restructure/`)
-Scaffold only: create subdirectory `__init__.py` files under `scripts/` (`pipeline/`, `lookup/`, `record/`, `strategies/`, `seed/`, `council/`, `dev/`). ~30 min.
-Must run before paper-backbone so new daemon scripts land in the correct folder from day one. No file moves — SR2+ is post-market and lower urgency.
+**1. Build queue #3 — scripts-restructure SR1** (`docs/plan/scripts-restructure/`) Scaffold only: create subdirectory `__init__.py` files under `scripts/` (`pipeline/`, `lookup/`, `record/`,
+`strategies/`, `seed/`, `council/`, `dev/`). ~30 min. Must run before paper-backbone so new daemon scripts land in the correct folder from day one. No file moves — SR2+ is post-market and lower
+urgency.
 
-**2. Build queue #4 — paper-backbone: Strategy Monitor Daemon** (`docs/plan/paper-backbone/`)
-Prerequisite for paper-exit-signals (#5). Core deliverables: `PaperStrategy` protocol, `StrategyMonitor`, `PaperExecutor`,
-`RapidCouncil`, `TelegramGateway`, DB migrations, daemon scripts. Hard deadline: Jun–Jul 2026.
+**2. Build queue #4 — paper-backbone: Strategy Monitor Daemon** (`docs/plan/paper-backbone/`) Prerequisite for paper-exit-signals (#5). Core deliverables: `PaperStrategy` protocol, `StrategyMonitor`,
+`PaperExecutor`, `RapidCouncil`, `TelegramGateway`, DB migrations, daemon scripts. Hard deadline: Jun–Jul 2026.
 
-**3. Build queue #5 — paper-exit-signals: Automated Exit Detection + Closure** (`docs/plan/paper-exit-signals/`)
-Blocked by #4 PT-0. Council authority: `docs/archive/council/strategy/2026-05-28_paper-trade-exit-philosophy.md` — all 10 thresholds binding.
+**3. Build queue #5 — paper-exit-signals: Automated Exit Detection + Closure** (`docs/plan/paper-exit-signals/`) Blocked by #4 PT-0. Council authority:
+`docs/archive/council/strategy/2026-05-28_paper-trade-exit-philosophy.md` — all 10 thresholds binding.
 
 **Start point:** Run SR1 first (scaffold is 1 commit, zero risk), then begin paper-backbone PT-0.
 
@@ -61,8 +59,7 @@ dx-foundation  →  ci-pipeline
                   code-health    (parallel, independent)
 ```
 
-`ci-pipeline` depends on `dx-foundation` because CI calls `make ci`.
-`code-health` has no hard dependency but should run on a green CI baseline.
+`ci-pipeline` depends on `dx-foundation` because CI calls `make ci`. `code-health` has no hard dependency but should run on a green CI baseline.
 
 ---
 
@@ -106,9 +103,8 @@ dx-foundation  →  ci-pipeline
 
 ## Council
 
-No council required for any story in this epic. None of the decisions are load-bearing,
-costly to reverse, or span multiple disciplines simultaneously. All tooling choices have
-clear community consensus (ruff, mypy, GitHub Actions).
+No council required for any story in this epic. None of the decisions are load-bearing, costly to reverse, or span multiple disciplines simultaneously. All tooling choices have clear community
+consensus (ruff, mypy, GitHub Actions).
 
 ---
 

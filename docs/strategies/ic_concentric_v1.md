@@ -68,6 +68,7 @@ the monthly short put level means the weekly is now stacked on top of the monthl
 | Short call Δ     | ⚠️ OPEN: 8Δ or 10Δ                                                 |
 | Wing width       | ⚠️ OPEN: fixed points vs ATR-proportional — see Open Questions      |
 | Role             | Structural anchor. Slow-moving vega trade. Almost never adjusted.    |
+<!-- lint-ignore-length -->
 | Liquidity risk   | **High.** OI at far-OTM yearly strikes is thin. Log observed bid/ask spreads at every entry and exit. If spread > 10% of mid on any leg, log it — this data validates whether yearly IC is realistically executable. |
 
 ### Layer 2 — Quarterly IC

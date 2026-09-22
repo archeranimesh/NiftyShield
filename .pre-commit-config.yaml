@@ -32,18 +32,19 @@ repos:
         types: [python]
 
       - id: md-line-length
-        name: "markdown lines must be <=200 chars (root + docs/plan + docs/bugs)"
+        name: "markdown lines must be <=200 chars (whole tree, minus archive/_TEMPLATE/council)"
         language: system
         entry: python scripts/dev/hooks/check_md_line_length.py
-        files: '^([^/]+\.md|docs/(plan|bugs)/.*\.md)$'
+        files: '\.md$'
+        exclude: '^docs/archive/|/_TEMPLATE/|^docs/council/'
         pass_filenames: true
 
       - id: md-reflow
-        name: "docs/plan + docs/bugs markdown must be in fill-to-<=200 style (reflow_md)"
+        name: "markdown must be in fill-to-<=200 style (reflow_md), minus archive/_TEMPLATE/council"
         language: system
         entry: python scripts/dev/reflow_md.py --check
-        files: '^docs/(plan|bugs)/.*\.md$'
-        exclude: '/_TEMPLATE/'
+        files: '\.md$'
+        exclude: '^docs/archive/|/_TEMPLATE/|^docs/council/'
         pass_filenames: true
 
       - id: check-story-structure
