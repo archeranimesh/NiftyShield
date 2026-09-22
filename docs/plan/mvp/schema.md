@@ -1,7 +1,7 @@
 # MVP — Database Schema
 
-> Reflects the capital-deployment framing (2026-09-09 discussion, decisions resolved 2026-09-18) — see `mvp_tasks.md` "Design decisions" block. Each pick deploys a fixed ₹1,00,000 notional; **M-A**
-> ships a single lump-sum fill first, **M-B** adds the 4-tranche ladder against the `mvp_tranches` table already present here.
+> Reflects the capital-deployment framing (2026-09-09 discussion, decisions resolved 2026-09-18) — see `tasks.md` "Design decisions" block. Each pick deploys a fixed ₹1,00,000 notional; **M-A** ships
+> a single lump-sum fill first, **M-B** adds the 4-tranche ladder against the `mvp_tranches` table already present here.
 
 Five tables in `data/portfolio/portfolio.sqlite`.
 

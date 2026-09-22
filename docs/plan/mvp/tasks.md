@@ -1,15 +1,15 @@
 # MVP — Task Checklist
 
 > Antigravity: find the first unchecked `- [ ]` line. That is your only task for this session. Tick the box and append `| SHA: <sha>` when done. Add one line to `TODOS.md`. Full story spec for each
-> task: `docs/plan/mvp/mvp_stories.md`.
+> task: `docs/plan/mvp/stories.md`.
 
 ---
 
 ## ⚠️ Design decisions — resolved 2026-09-18, apply before starting M1
 
 > The story below predates the **capital-deployment** framing (2026-09-09 discussion). Each pick simulates a fixed notional (default ₹1,00,000) deployed in tranches, tracking average cost and rupee
-> P&L over a holding period — not just a price-vs-target watch. M1 (schema/models), M2 (tracker), and M4 (watch) need rewriting against the decisions here before implementation. `mvp_schema.md` gains
-> a `mvp_tranches` table and new `mvp_recommendations` columns (`capital_allotted`, `tranche_step_pct`, `deployed_capital`, `total_qty`, `avg_cost`, `realized_pnl`, `benchmark_entry`, `idle_cash`).
+> P&L over a holding period — not just a price-vs-target watch. M1 (schema/models), M2 (tracker), and M4 (watch) need rewriting against the decisions here before implementation. `schema.md` gains a
+> `mvp_tranches` table and new `mvp_recommendations` columns (`capital_allotted`, `tranche_step_pct`, `deployed_capital`, `total_qty`, `avg_cost`, `realized_pnl`, `benchmark_entry`, `idle_cash`).
 
 **Resolved (2026-09-09):**
 - **Tranche ladder** — fixed, measured from the recommendation price (not the running average). `tranche_step_pct` default **6**. Four 25% tranches fill at 0%, −6%, −12%, −18% → 100% deployed by −18%.
@@ -41,17 +41,17 @@
 
 ---
 
-- [ ] **M1.1** — `src/mvp/models.py`: Provider, Category, Pick, MVPSnapshot Pydantic models + tests
-- [ ] **M1.2** — `src/mvp/store.py`: init_db + provider/category CRUD + tests
-- [ ] **M1.3** — `src/mvp/store.py`: pick CRUD + snapshot methods + tests
-- [ ] **M2.1** — `src/mvp/tracker.py`: MVPEvent + check_prices pure logic + tests
-- [ ] **M2.2** — `src/mvp/tracker.py`: format_telegram_summary + tests
-- [ ] **M3.1** — `scripts/mvp.py`: provider + category subcommands
-- [ ] **M3.2** — `scripts/mvp.py`: add + update + close subcommands (with instrument resolution)
-- [ ] **M3.3** — `scripts/mvp.py`: list + summary subcommands
-- [ ] **M4.1** — `scripts/mvp_watch.py`: LTP fetch + snapshot recording + auto-close
-- [ ] **M4.2** — `scripts/mvp_watch.py`: Telegram per-alert + consolidated hourly summary
-- [ ] **M5** — Docs close: CONTEXT.md tree, DECISIONS.md entry, TODOS.md session log
+- [ ] **M1.1** — `src/mvp/models.py`: Provider, Category, Pick, MVPSnapshot Pydantic models + tests | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
+- [ ] **M1.2** — `src/mvp/store.py`: init_db + provider/category CRUD + tests | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
+- [ ] **M1.3** — `src/mvp/store.py`: pick CRUD + snapshot methods + tests | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
+- [ ] **M2.1** — `src/mvp/tracker.py`: MVPEvent + check_prices pure logic + tests | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
+- [ ] **M2.2** — `src/mvp/tracker.py`: format_telegram_summary + tests | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
+- [ ] **M3.1** — `scripts/mvp.py`: provider + category subcommands | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
+- [ ] **M3.2** — `scripts/mvp.py`: add + update + close subcommands (with instrument resolution) | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
+- [ ] **M3.3** — `scripts/mvp.py`: list + summary subcommands | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
+- [ ] **M4.1** — `scripts/mvp_watch.py`: LTP fetch + snapshot recording + auto-close | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
+- [ ] **M4.2** — `scripts/mvp_watch.py`: Telegram per-alert + consolidated hourly summary | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
+- [ ] **M5** — Docs close: CONTEXT.md tree, DECISIONS.md entry, TODOS.md session log | Owner: Claude | Model: n/a | Review: none | SHA: —
 - [ ] **M0** — Equity + NIFTY index bhavcopy ingest (prerequisite for M6 only — not M1–M5). `src/backtest/bhavcopy_ingest.py` is F&O-only today; add equity cash-market daily close + NIFTY 50 index
-  level ingest before M6's historical backfill can be implemented.
-- [ ] **M6** — see full spec below (Good-to-Have, blocked on M0)
+  level ingest before M6's historical backfill can be implemented. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
+- [ ] **M6** — see full spec below (Good-to-Have, blocked on M0) | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —

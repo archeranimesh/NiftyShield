@@ -1,9 +1,8 @@
 # MVP — Story Specs
 
-> One task per session. Find the first unchecked item in `mvp_tasks.md`. That is your only task. Full implementation rules in `CLAUDE.md` and `REVIEW.md`. After each task: tick `mvp_tasks.md`, append
-> `| SHA: <sha>`, add one line to `TODOS.md`. ⚠️ **Read the "Design decisions" block at the top of `mvp_tasks.md` first** — resolved 2026-09-18. Fixed ₹1L notional, 6% tranche ladder, −30%
-> deployed-drawdown hard stop. **M-A** (this pass) ships a single lump-sum fill (`qty = capital / price` at recommendation price); **M-B** (later) adds the staggered 4-tranche ladder on top of the
-> same schema.
+> One task per session. Find the first unchecked item in `tasks.md`. That is your only task. Full implementation rules in `CLAUDE.md` and `REVIEW.md`. After each task: tick `tasks.md`, append `| SHA:
+> <sha>`, add one line to `TODOS.md`. ⚠️ **Read the "Design decisions" block at the top of `tasks.md` first** — resolved 2026-09-18. Fixed ₹1L notional, 6% tranche ladder, −30% deployed-drawdown hard
+> stop. **M-A** (this pass) ships a single lump-sum fill (`qty = capital / price` at recommendation price); **M-B** (later) adds the staggered 4-tranche ladder on top of the same schema.
 
 ---
 
@@ -103,7 +102,7 @@ convention.
 All models `frozen=True`. Google-style docstrings on each class.
 
 **M-A scope note:** this task defines the full `Pick`/`MVPTranche` shape (including the 4-tranche fields) so the schema doesn't need a second migration for M-B, but M-A callers (M2/M3/M4 in this pass)
-only ever create a single `MVPTranche(tranche_index=0, trigger_pct=0)` per pick — the ladder logic (indices 1–3, −6/−12/−18% triggers) is M-B's job, appended to `mvp_tasks.md` once M-A ships.
+only ever create a single `MVPTranche(tranche_index=0, trigger_pct=0)` per pick — the ladder logic (indices 1–3, −6/−12/−18% triggers) is M-B's job, appended to `tasks.md` once M-A ships.
 
 **Tests (`tests/unit/mvp/test_mvp_models.py`):**
 - `Pick` with all fields populated → `status` is `PickStatus.PENDING` by default.
@@ -131,7 +130,7 @@ only ever create a single `MVPTranche(tranche_index=0, trigger_pct=0)` per pick 
 
 `MVPStore.__init__(self, db_path: str)` — stores path only, no connection held open. Uses `db_connection(db_path)` context manager from `src/db.py` for every operation.
 
-`init_db(self) → None` — creates all four tables if not exists (exact DDL from `docs/plan/mvp/mvp_schema.md`). Safe to call repeatedly.
+`init_db(self) → None` — creates all four tables if not exists (exact DDL from `docs/plan/mvp/schema.md`). Safe to call repeatedly.
 
 `add_provider(self, provider: Provider) → None` — INSERT OR IGNORE on `mvp_providers`. `get_provider(self, slug: str) → Provider | None` — by slug. `list_providers(self) → list[Provider]` — all rows,
 ordered by `display_name`.
