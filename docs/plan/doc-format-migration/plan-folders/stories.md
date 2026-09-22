@@ -55,7 +55,7 @@ Epics, `TODOS.md` §Feature Backlog. Several folders in the old provisional pass
 | `ic-payoff-charts/` | epic, 2 subs OK | none | A | already canonical — reflow 8 files; verify coverage. | ✅ 500c290 |
 | `mvp/` | flat, `mvp_*.md` names | legacy filenames | A | `git mv` to canonical names; reflow 1 file. Backlog #4. | ✅ 8455d50 |
 | `options_income/` | flat, `options_income_*.md` | legacy filenames | A | `git mv`; `_strategy.md`->`plan.md`; reflow 4 files. Backlog #6. | ✅ ddf0964 |
-| `phase2-integrations/` | flat, 3 files | none | B\* | reflow 3 files; verify task-line format. See note below. | ⬜ |
+| `phase2-integrations/` | flat, 3 files | none | B\* | reflow 3 files; verify task-line format. See note below. | ✅ 107f58b |
 | `portfolio-snapshot-slimdown/` | epic, 2 subs OK | none | A | already canonical + reflow-clean — verify coverage only. | ✅ no-op (already canonical) |
 | `risk-gamma-phase-a/` | flat, 3 files | none | A | task-line format + reflow 3 files. Backlog #11. | ✅ 1f0a6cd |
 | `signals-eval-core/` | flat, 4 files | none | A | reflow 4 files; verify tasks. Backlog #10 (blocked). | ✅ 6a9c87e |
