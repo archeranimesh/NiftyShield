@@ -237,3 +237,69 @@ def test_staged_added_folders_parses_git_output(plan_dir, monkeypatch):
 
     assert css._staged_added_folders() == [plan_dir / "new-story"]
     assert css.main(["--staged-added"]) == 1
+
+
+def test_staged_folders_picks_up_a_modified_not_added_file(plan_dir, monkeypatch):
+    """`--staged` (unlike `--staged-added`) sees a folder with only a modified file."""
+    _story(plan_dir / "touched")
+
+    class _Result:
+        stdout = "docs/plan/touched/prompt.md\n"
+
+    monkeypatch.setattr(css.subprocess, "run", lambda *a, **k: _Result())
+
+    assert css._staged_folders() == [plan_dir / "touched"]
+
+
+def test_staged_mode_allowlisted_folder_downgrades_to_warn(plan_dir, monkeypatch):
+    """A folder on `_LEGACY_ALLOWLIST` never fails `--staged`, even with a missing file."""
+    _story(plan_dir / "legacy-allowed", stories=None)
+    monkeypatch.setattr(css, "_LEGACY_ALLOWLIST", {"legacy-allowed"})
+    monkeypatch.setattr(
+        css.subprocess,
+        "run",
+        lambda *a, **k: type("R", (), {"stdout": "docs/plan/legacy-allowed/tasks.md\n"})(),
+    )
+
+    assert css.main(["--staged"]) == 0
+
+
+def test_staged_mode_non_allowlisted_missing_file_is_an_error(plan_dir, monkeypatch):
+    """A missing-stories.md warning becomes a `--staged` failure off the allowlist."""
+    _story(plan_dir / "non-allowed", stories=None)
+    monkeypatch.setattr(css, "_LEGACY_ALLOWLIST", set())
+    monkeypatch.setattr(
+        css.subprocess,
+        "run",
+        lambda *a, **k: type("R", (), {"stdout": "docs/plan/non-allowed/tasks.md\n"})(),
+    )
+
+    assert css.main(["--staged"]) == 1
+
+
+def test_staged_mode_non_allowlisted_non_strict_warning_still_passes(plan_dir, monkeypatch):
+    """A schema-backstop warning (not missing-file/legacy-name) does not fail `--staged`."""
+    folder = _story(plan_dir / "db-story")
+    (folder / "stories.md").write_text("Use `CREATE TABLE foo (...)`.\n", encoding="utf-8")
+    monkeypatch.setattr(css, "_LEGACY_ALLOWLIST", set())
+    monkeypatch.setattr(
+        css.subprocess,
+        "run",
+        lambda *a, **k: type("R", (), {"stdout": "docs/plan/db-story/stories.md\n"})(),
+    )
+
+    assert css.main(["--staged"]) == 0
+
+
+def test_staged_mode_non_allowlisted_hard_error_fails(plan_dir, monkeypatch):
+    """A non-.md-file hard error fails `--staged` off the allowlist (error tier, not strict-warn)."""
+    folder = _story(plan_dir / "with-junk", extra=["diagram.png"])
+    monkeypatch.setattr(css, "_LEGACY_ALLOWLIST", set())
+    monkeypatch.setattr(
+        css.subprocess,
+        "run",
+        lambda *a, **k: type("R", (), {"stdout": "docs/plan/with-junk/diagram.png\n"})(),
+    )
+
+    assert folder.exists()
+    assert css.main(["--staged"]) == 1

@@ -18,8 +18,13 @@ Findings carry a level:
 Modes:
     --all            audit every folder under docs/plan/ (used by the md-organize skill);
                      exits 1 only on ``error`` findings — warnings pass
-    --staged-added   check only folders newly added in the current commit (pre-commit);
-                     exits 1 on any finding (warnings included)
+    --staged         check folders added or modified in the current commit (pre-commit).
+                     A folder on ``_LEGACY_ALLOWLIST`` is fully grandfathered (all its
+                     findings print as warnings, exit 0). Off the allowlist: hard errors
+                     and ``strict`` warnings (missing required file, legacy filename) fail;
+                     other warnings (schema backstop, extra-.md checkboxes) still pass.
+    --staged-added   check only folders newly added in the current commit; exits 1 on any
+                     finding (warnings included). Kept for compatibility with older wiring.
     <paths...>       check the folders those paths belong to (manual / tests); any finding
                      exits 1
 """
@@ -34,6 +39,11 @@ from pathlib import Path
 
 REQUIRED_PROMPT = "prompt.md"
 EXCLUDED = {"_TEMPLATE"}
+
+# Folder slugs still permitted to be non-canonical under `--staged` mode. Shrink this as
+# `plan-folders/` closes out remaining gaps; see docs/plan/doc-format-migration/plan-folders/
+# for the per-folder conversion tier that put each entry here.
+_LEGACY_ALLOWLIST = {"dev-foundation"}
 
 REPO_ROOT = Path(__file__).resolve().parents[3]  # scripts/dev/hooks/ → repo root
 PLAN_DIR = REPO_ROOT / "docs" / "plan"
@@ -52,6 +62,7 @@ class Finding:
 
     level: str  # "error" | "warn"
     message: str
+    strict: bool = False  # a "warn" that --staged promotes to a failure off the allowlist
 
 
 def _rel(path: Path) -> str:
@@ -158,11 +169,16 @@ def _check_story(folder: Path) -> list[Finding]:
             Finding(
                 "warn",
                 f"{_rel(folder)}/: legacy '*_tasks.md' name — rename to tasks.md when next touched",
+                strict=True,
             )
         )
     if not _has_stories_file(folder):
         findings.append(
-            Finding("warn", f"{_rel(folder)}/: missing stories.md — see §Story-folder file set")
+            Finding(
+                "warn",
+                f"{_rel(folder)}/: missing stories.md — see §Story-folder file set",
+                strict=True,
+            )
         )
     findings.extend(_schema_backstop(folder))
     findings.extend(_extra_file_findings(folder))
@@ -176,7 +192,9 @@ def _check_epic(folder: Path) -> list[Finding]:
         if not (folder / name).is_file():
             findings.append(
                 Finding(
-                    "warn", f"{_rel(folder)}/: epic root missing {name} — see §Epic-folder file set"
+                    "warn",
+                    f"{_rel(folder)}/: epic root missing {name} — see §Epic-folder file set",
+                    strict=True,
                 )
             )
     # The epic root is bound by the D6 extra-files rule too (its only shared reference
@@ -249,15 +267,56 @@ def _staged_added_folders() -> list[Path]:
     return _folders_for_paths(result.stdout.splitlines())
 
 
+def _staged_folders() -> list[Path]:
+    """docs/plan/ folders with any staged change in this commit (added or modified)."""
+    result = subprocess.run(
+        ["git", "diff", "--cached", "--name-only"],
+        capture_output=True,
+        text=True,
+        cwd=REPO_ROOT,
+        check=True,
+    )
+    return _folders_for_paths(result.stdout.splitlines())
+
+
+def _print_and_count(folder: Path, findings: list[Finding]) -> bool:
+    """Print a folder's findings; return True if they should fail `--staged` mode."""
+    allowlisted = folder.name in _LEGACY_ALLOWLIST
+    fails = False
+    for finding in findings:
+        level = "warn" if allowlisted else finding.level
+        print(f"{level.upper()}: {finding.message}")
+        if allowlisted:
+            continue
+        if finding.level == "error" or finding.strict:
+            fails = True
+    return fails
+
+
 def main(argv: list[str]) -> int:
     """Run the structure check; return 1 on failure (see module docstring for modes)."""
     audit = "--all" in argv
+    staged = "--staged" in argv
     if audit:
         folders = _all_folders()
+    elif staged:
+        folders = _staged_folders()
     elif "--staged-added" in argv:
         folders = _staged_added_folders()
     else:
         folders = _folders_for_paths(argv)
+
+    if staged:
+        failed = False
+        total = 0
+        for folder in folders:
+            findings = check_folder(folder)
+            total += len(findings)
+            if _print_and_count(folder, findings):
+                failed = True
+        if total:
+            print(f"\n{total} story-folder issue(s). See docs/plan/README.md §Conventions.")
+        return 1 if failed else 0
 
     findings: list[Finding] = []
     for folder in folders:

@@ -48,9 +48,9 @@ repos:
         pass_filenames: true
 
       - id: check-story-structure
-        name: "newly added docs/plan story folders need prompt.md + tasks.md"
+        name: "added or modified docs/plan story folders must be canonical"
         language: system
-        entry: python scripts/dev/hooks/check_story_structure.py --staged-added
+        entry: python scripts/dev/hooks/check_story_structure.py --staged
         files: '^docs/plan/.*'
         pass_filenames: false
 
