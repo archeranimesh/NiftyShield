@@ -119,6 +119,11 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-22] `doc-format-migration/` `enforcement/` DFM-7 done — `check_story_structure.py` gained `--staged` mode (added *or* modified `docs/plan/` folders, via `git diff --cached --name-only` with
+  no `--diff-filter`), replacing `--staged-added` in `.pre-commit-config.yaml`. Added `_LEGACY_ALLOWLIST = {"dev-foundation"}` (its epic-root `prompt.md` and one sub-story's legacy `*_tasks.md` name
+  are a known tier-D gap per `plan-folders/stories.md`, not yet archived) — allowlisted folders' findings all print as warnings and never fail `--staged`. `Finding` gained a `strict: bool` field: off
+  the allowlist, a missing-required-file or legacy-filename warning now fails `--staged` (promoted to error-equivalent), while schema-backstop and extra-.md-checkbox warnings still pass.
+  `--staged-added` and `--all` behavior unchanged. SHA `8e711f1`.
 - [2026-09-22] `doc-format-migration/` `enforcement/` DFM-6 done — widened `md-line-length` + `md-reflow` `files:` to the whole repo tree (was `docs/plan|bugs/` + root only), excluding
   `docs/archive/`, `docs/plan/_TEMPLATE/`, and (new, see follow-up below) `docs/council/`. Fixed the true positives the wider net caught: `<!-- lint-ignore-length -->` markers on table/fenced-code
   lines in `src/paper/CLAUDE.md`, `docs/strategies/*.md`, `scratch/2026-09-01_*.md` (two long `--question` bash literals split into adjacent-concatenated strings to avoid corrupting the runnable
