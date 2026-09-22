@@ -1,15 +1,13 @@
 # Options Income Strategy — Spec v1.0
 
-> Canonical strategy document. All implementation must trace back to a rule here.
-> Two variants run independently. Do not mix logic between them.
+> Canonical strategy document. All implementation must trace back to a rule here. Two variants run independently. Do not mix logic between them.
 
 ---
 
 ## Overview
 
-Systematic premium collection on Nifty index options. Directional bias is bullish-only,
-enforced by trend filter. Strategy is not market-neutral — it profits from time decay in
-calm or rising markets and stops out when the market structure breaks.
+Systematic premium collection on Nifty index options. Directional bias is bullish-only, enforced by trend filter. Strategy is not market-neutral — it profits from time decay in calm or rising markets
+and stops out when the market structure breaks.
 
 ---
 
@@ -156,6 +154,5 @@ Phase 7: Reporting dashboard
 
 Phase N does not start until Phase N−1 passes its exit criteria.
 
-**Phase 0 exit criteria:** ≥ 80% data completeness for monthly expiry strikes, 2018–present.
-**Phase 3/4 exit criteria:** ≥ 100 trades simulated, metrics computed, no code errors.
-**Phase 5/6 exit criteria:** 3 consecutive live paper trades execute correctly end-to-end.
+**Phase 0 exit criteria:** ≥ 80% data completeness for monthly expiry strikes, 2018–present. **Phase 3/4 exit criteria:** ≥ 100 trades simulated, metrics computed, no code errors. **Phase 5/6 exit
+criteria:** 3 consecutive live paper trades execute correctly end-to-end.

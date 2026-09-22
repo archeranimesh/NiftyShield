@@ -1,38 +1,50 @@
-Read `CONTEXT.md` and state `CONTEXT.md ✓` before doing anything else. Then read `docs/plan/options_income/options_income_tasks.md`
-and find the first unchecked box — the first `- [ ]` line. That is your **only task** for this session. Do not look at any other unchecked item. One task. Complete it fully. Stop.
+# Options Income Strategy — prompt
 
-**Strategy spec:** `docs/plan/options_income/options_income_strategy.md` — canonical rules. All implementation must trace back to a rule there.
+> Systematic premium-collection strategy on Nifty index options: signal engine, strike selection, backtest V1/V2, paper trading, reporting.
 
-**Story spec:** Read the matching story in `docs/plan/options_income/options_income_stories.md` (same task ID) for the full implementation spec,
-"Before any code" graph queries, test list, and commit message. Follow it exactly.
+Read `CONTEXT.md` and state `CONTEXT.md ✓` before anything else. Then read `tasks.md`, find the first unchecked `- [ ]`, and do **only** that task. Read that task's full spec in `stories.md` (same
+task id) before writing any code. One task per session. Complete it fully. Stop.
 
-**Pre-implementation gate:** State in one sentence: which task you are implementing (ID + one-line description), which files will change,
-and which test file covers it. Do not write any code until this plan is stated.
+## Why this story exists
 
-**Graph-before-Read rule:** Never call `Read` on `src/` or `scripts/` without first trying the graph. Order:
-`git log --oneline -10 <file>` for intent → `search_graph` / `get_code_snippet` for symbols → `trace_path` for callers →
-`search_code` for grep → `bash sed -n 'N,Mp' <file>` for a specific block → `Read` only if all of the above are insufficient, and state why.
+Bullish-biased, trend-filtered premium collection on Nifty options — short 5-delta puts (monthly, naked) or 5/2-delta put spreads (quarterly) — gated by a 100-SMA trend filter, a neutral-zone block,
+an India VIX floor, and an event calendar. The strategy is a hard-stop, no-rolling design: delta breach or expiry proximity closes the position outright. This story takes it from spec to backtested,
+paper-traded, reported system across nine sequential tasks (S0–S8), each gated on the previous one's output (data audit → signal → strikes → positions → backtest → paper → reporting → docs close).
 
-**Before writing any test helper that constructs a domain model:** run `get_code_snippet('<ModelClassName>')` to get the exact current field list. Never write model constructors from memory.
+**Canonical strategy spec:** `plan.md` — every implementation task must trace back to a rule there. Do not add strategy logic that isn't in `plan.md`; if a gap is found, stop and raise it rather than
+inventing a rule.
 
-**Implementation:** Follow all rules in `CLAUDE.md` and `REVIEW.md`. Every public function needs one happy-path test and one edge/error test.
-No network calls in tests. Monetary fields always `Decimal`, stored as TEXT in SQLite — never float. Every new package dir needs `__init__.py`.
+## Scope guard
 
-**greeks-analyst gate (mandatory for S2, S3, S6):** After implementation, before code-reviewer, spawn the `greeks-analyst` agent against the changed files.
-Any CRITICAL finding must be resolved before proceeding.
+In bounds: `src/options_income/` (signal, strike selector, position manager, backtest V1/V2), `src/paper/options_income_runner.py`, `scripts/audit/options_data_audit.py`, `scripts/backtest/run_v1.py`
+/ `run_v2.py`, `scripts/reports/options_income_report.py`, and matching test packages under `tests/unit/`. This is new `src/` behaviour, not docs/tooling only. Out of bounds: any other strategy
+module, `BrokerClient` protocol changes beyond calling existing methods, and any change to rolling/adjustment logic — the spec is explicitly hard-stop, no rolling.
 
-**Test gate — blocking:** After implementation, run:
-`python -m pytest tests/unit/ --tb=no -q`
-All tests must be green. Fix failures before proceeding. Do not skip.
+## Session-start load hints
 
-**Commit:** Use format from `.claude/skills/commit/SKILL.md`. Execute the commit — do not draft it:
-```
-git add <files>
-git commit -m '<message>'
-git log --oneline -1
-```
+Read the matching module `CLAUDE.md` for `src/paper/` before S6. `REFERENCES.md` for instrument-key conventions before S2/S6. `LOGGING.md` before any new entrypoint script (S0, S4/S5 CLI runners, S7).
+`DECISIONS.md` gets new entries at S8 — read it first to avoid duplicate rows.
 
-**Verify and record:** Copy SHA from `git log --oneline -1`. Open `docs/plan/options_income/options_income_tasks.md`, change `- [ ]` to `- [x]`, append `| SHA: <sha>`. Add one line to `TODOS.md`:
-`- [YYYY-MM-DD] options_income <task-id> — <one-line description> — <SHA>`
+## Task overview
 
-**Stop.** Do not proceed to the next unchecked item.
+- **S0** — Data audit: confirm historical Nifty options EOD data completeness.
+- **S1** — Signal engine: SMA/neutral-zone/VIX-floor/event-calendar entry gate.
+- **S2** — Strike selector: delta-based put and spread selection from a chain snapshot.
+- **S3** — Position manager: exit-check pure function and P&L computation.
+- **S4** — Backtest V1: monthly naked-put simulation over full history.
+- **S5** — Backtest V2: quarterly put-spread simulation over full history.
+- **S6** — Paper trading: daily runner wired to live Upstox chain + Telegram.
+- **S7** — Reporting: backtest summary, V1-vs-V2 comparison, active paper positions.
+- **S8** — Docs close: `CONTEXT.md`, `DECISIONS.md`, `TODOS.md`.
+
+## Definition of done
+
+Both variants (V1 monthly naked put, V2 quarterly spread) are backtested end-to-end on historical data with metrics computed, a paper-trading runner exercises live signals against
+`MockBrokerClient`-verified logic with Telegram alerts on entry/exit, a reporting script prints the V1/V2 comparison plus active paper positions, and `CONTEXT.md` / `DECISIONS.md` / `TODOS.md` reflect
+the new module. Every public function has a happy-path and an edge/error-case test; no network calls in tests.
+
+## Perspectives not covered
+
+No live-execution or real-money review — paper trading is the live gate per `plan.md` "Out of Scope (v1.0)", so this story never reaches a broker-execution or capital-at-risk sign-off; that review
+belongs to whichever story promotes paper to live. No independent options-strategist review of the strategy rules themselves (trend filter thresholds, delta targets, hard-stop level) — `plan.md` is
+treated as given, not re-derived here.

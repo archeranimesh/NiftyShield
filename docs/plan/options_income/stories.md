@@ -1,22 +1,19 @@
 # Options Income Strategy — Story Specs
 
-> One task per session. Find the first unchecked item in `options_income_tasks.md`. That is your only task.
-> Full spec for each task is in this file. After each task: tick `options_income_tasks.md`, append `| SHA: <sha>`, add one line to `TODOS.md`.
+> One task per session. Find the first unchecked item in `tasks.md`. That is your only task. Full spec for each task is in this file. After each task: tick `tasks.md`, append `| SHA: <sha>`, add one
+> line to `TODOS.md`.
 
 ---
 
 ## S0 — Data Audit
 
-**Goal:** Confirm historical Nifty options EOD data is sufficient to backtest. Output a data audit report.
-**Files to change:**
+**Goal:** Confirm historical Nifty options EOD data is sufficient to backtest. Output a data audit report. **Files to change:**
 - `scripts/audit/__init__.py` — new package, single comment line
 - `scripts/audit/options_data_audit.py` — audit script
 - `docs/plan/options_income/DATA_AUDIT.md` — output report (written by the script)
 
-**Before any code:**
-`search_graph("options_data_audit")` — confirm does NOT yet exist;
-`bash find /sessions/bold-hopeful-hypatia/mnt/NiftyShield/data -name "*.parquet" | head -20` — inventory existing data files;
-`bash ls /sessions/bold-hopeful-hypatia/mnt/NiftyShield/data/` — top-level data dirs.
+**Before any code:** `search_graph("options_data_audit")` — confirm does NOT yet exist; `bash find /sessions/bold-hopeful-hypatia/mnt/NiftyShield/data -name "*.parquet" | head -20` — inventory
+existing data files; `bash ls /sessions/bold-hopeful-hypatia/mnt/NiftyShield/data/` — top-level data dirs.
 
 **What to implement:**
 
@@ -37,17 +34,14 @@ No unit tests required. Script is a one-shot audit tool.
 
 ## S1 — Signal Engine
 
-**Goal:** Module returning `SignalResult` (ENTER / WAIT / BLOCKED + reason) for any given date.
-**Files to change:**
+**Goal:** Module returning `SignalResult` (ENTER / WAIT / BLOCKED + reason) for any given date. **Files to change:**
 - `src/options_income/__init__.py` — new package, single comment line
 - `src/options_income/signal.py`
 - `tests/unit/options_income/__init__.py` — new test package
 - `tests/unit/options_income/test_signal.py`
 
-**Before any code:**
-`search_graph("SignalResult")` — confirm does NOT yet exist;
-`search_graph("PortfolioDelta")` — see frozen Pydantic pattern used in this codebase;
-`bash cat /sessions/bold-hopeful-hypatia/mnt/NiftyShield/docs/plan/options_income/options_income_strategy.md | grep -A 30 "Entry Conditions"` — get exact filter rules.
+**Before any code:** `search_graph("SignalResult")` — confirm does NOT yet exist; `search_graph("PortfolioDelta")` — see frozen Pydantic pattern used in this codebase; `bash cat
+/sessions/bold-hopeful-hypatia/mnt/NiftyShield/docs/plan/options_income/plan.md | grep -A 30 "Entry Conditions"` — get exact filter rules.
 
 **What to implement:**
 
@@ -111,15 +105,12 @@ Filter evaluation order (stop at first block):
 
 ## S2 — Strike Selector
 
-**Goal:** Given option chain data for a date+expiry, return the correct strike at target delta.
-**Files to change:**
+**Goal:** Given option chain data for a date+expiry, return the correct strike at target delta. **Files to change:**
 - `src/options_income/strike_selector.py`
 - `tests/unit/options_income/test_strike_selector.py`
 
-**Before any code:**
-`search_graph("StrikeSelection")` — confirm does NOT yet exist;
-`search_graph("SignalResult")` — confirm S1 complete;
-`bash head -3 <options-parquet-path>` (from DATA_AUDIT.md) — confirm column names (delta, strike, close/ltp, option_type).
+**Before any code:** `search_graph("StrikeSelection")` — confirm does NOT yet exist; `search_graph("SignalResult")` — confirm S1 complete; `bash head -3 <options-parquet-path>` (from DATA_AUDIT.md) —
+confirm column names (delta, strike, close/ltp, option_type).
 
 **What to implement:**
 
@@ -166,15 +157,12 @@ If delta column absent in chain_df: log warning, return None.
 
 ## S3 — Position Manager
 
-**Goal:** Position model, exit-check pure function, P&L computation.
-**Files to change:**
+**Goal:** Position model, exit-check pure function, P&L computation. **Files to change:**
 - `src/options_income/position.py`
 - `tests/unit/options_income/test_position.py`
 
-**Before any code:**
-`get_code_snippet("StrikeSelection")` — exact fields from S2;
-`search_graph("OptionPosition")` — confirm does NOT yet exist;
-`get_code_snippet("PickStatus")` — see terminal-status pattern in mvp models.
+**Before any code:** `get_code_snippet("StrikeSelection")` — exact fields from S2; `search_graph("OptionPosition")` — confirm does NOT yet exist; `get_code_snippet("PickStatus")` — see terminal-status
+pattern in mvp models.
 
 **What to implement:**
 
@@ -230,9 +218,7 @@ def close_position(
 ) -> ClosedPosition:
 ```
 
-Take-profit: `current_short_premium <= premium_collected * Decimal("0.75")`.
-Delta stop: `current_short_delta >= Decimal("0.25")`.
-Expiry exit: `trading_days_to_expiry <= 5`.
+Take-profit: `current_short_premium <= premium_collected * Decimal("0.75")`. Delta stop: `current_short_delta >= Decimal("0.25")`. Expiry exit: `trading_days_to_expiry <= 5`.
 
 **Tests (`tests/unit/options_income/test_position.py`):**
 - Delta=0.20, premium at 80%, 10 days to expiry → no exit
@@ -250,20 +236,15 @@ Expiry exit: `trading_days_to_expiry <= 5`.
 
 ## S4 — Backtest Engine V1 (Monthly Naked Put)
 
-**Goal:** Simulate V1 on full historical data. Output trade log + metrics.
-**Files to change:**
+**Goal:** Simulate V1 on full historical data. Output trade log + metrics. **Files to change:**
 - `src/options_income/backtest_v1.py`
 - `scripts/backtest/__init__.py` — new package if absent, single comment line
 - `scripts/backtest/run_v1.py`
 - `tests/unit/options_income/test_backtest_v1.py`
 
-**Before any code:**
-`search_graph("BacktestV1")` — confirm does NOT yet exist;
-`get_code_snippet("get_signal")` — exact signature from S1;
-`get_code_snippet("find_put_strike")` — exact signature from S2;
-`get_code_snippet("check_exit")` — exact signature from S3;
-`get_code_snippet("OptionPosition")` — exact fields;
-`bash ls /sessions/bold-hopeful-hypatia/mnt/NiftyShield/data/backtest/` — create dir if absent.
+**Before any code:** `search_graph("BacktestV1")` — confirm does NOT yet exist; `get_code_snippet("get_signal")` — exact signature from S1; `get_code_snippet("find_put_strike")` — exact signature from
+S2; `get_code_snippet("check_exit")` — exact signature from S3; `get_code_snippet("OptionPosition")` — exact fields; `bash ls /sessions/bold-hopeful-hypatia/mnt/NiftyShield/data/backtest/` — create
+dir if absent.
 
 **What to implement:**
 
@@ -297,8 +278,7 @@ Engine loop per trading day:
 2. Open position → `check_exit` → if signal → `close_position` + apply slippage + brokerage.
 3. One position at a time for V1.
 
-Slippage: `premium_collected * slippage_pct` deducted at entry; `exit_premium * slippage_pct` deducted at exit.
-Brokerage: `brokerage_per_order * 2` per trade (entry order + exit order).
+Slippage: `premium_collected * slippage_pct` deducted at entry; `exit_premium * slippage_pct` deducted at exit. Brokerage: `brokerage_per_order * 2` per trade (entry order + exit order).
 
 `run_v1.py` — CLI: loads parquet data, runs BacktestV1, writes `data/backtest/v1_results.parquet`, prints metrics table.
 
@@ -315,16 +295,12 @@ Brokerage: `brokerage_per_order * 2` per trade (entry order + exit order).
 
 ## S5 — Backtest Engine V2 (Quarterly Put Spread)
 
-**Goal:** V2 simulation on quarterly expiry put spread.
-**Files to change:**
+**Goal:** V2 simulation on quarterly expiry put spread. **Files to change:**
 - `src/options_income/backtest_v2.py`
 - `scripts/backtest/run_v2.py`
 - `tests/unit/options_income/test_backtest_v2.py`
 
-**Before any code:**
-`get_code_snippet("BacktestV1")` — mirror this pattern;
-`get_code_snippet("find_spread")` — exact signature from S2;
-`get_code_snippet("BacktestConfig")` — reuse same dataclass;
+**Before any code:** `get_code_snippet("BacktestV1")` — mirror this pattern; `get_code_snippet("find_spread")` — exact signature from S2; `get_code_snippet("BacktestConfig")` — reuse same dataclass;
 `get_code_snippet("close_position")` — confirm two-leg P&L path.
 
 **What to implement:**
@@ -351,18 +327,13 @@ Brokerage: `brokerage_per_order * 2` per trade (entry order + exit order).
 
 ## S6 — Paper Trading Integration
 
-**Goal:** Daily runner wired to live Upstox option chain.
-**Files to change:**
+**Goal:** Daily runner wired to live Upstox option chain. **Files to change:**
 - `src/paper/options_income_runner.py`
 - `tests/unit/paper/test_options_income_runner.py`
 
-**Before any code:**
-`search_graph("PaperTradeRunner")` — find existing runner pattern in `src/paper/`;
-`search_graph("BrokerClient")` — confirm protocol interface;
-`get_code_snippet("get_option_chain")` — Upstox option chain method on BrokerClient;
-`get_code_snippet("build_notifier")` — notifier factory signature;
-`get_code_snippet("get_signal")` — signal engine signature;
-`search_code("MockBrokerClient")` — confirm available for tests.
+**Before any code:** `search_graph("PaperTradeRunner")` — find existing runner pattern in `src/paper/`; `search_graph("BrokerClient")` — confirm protocol interface;
+`get_code_snippet("get_option_chain")` — Upstox option chain method on BrokerClient; `get_code_snippet("build_notifier")` — notifier factory signature; `get_code_snippet("get_signal")` — signal engine
+signature; `search_code("MockBrokerClient")` — confirm available for tests.
 
 **What to implement:**
 
@@ -410,13 +381,10 @@ Non-fatal contract: if `notifier` is None, skip silently. Never raise on Telegra
 
 ## S7 — Reporting
 
-**Goal:** Script printing backtest summary + V1 vs V2 comparison + active paper positions.
-**Files to change:**
+**Goal:** Script printing backtest summary + V1 vs V2 comparison + active paper positions. **Files to change:**
 - `scripts/reports/options_income_report.py`
 
-**Before any code:**
-`get_code_snippet("compute_metrics")` — confirm metric dict keys from S4;
-`bash ls /sessions/bold-hopeful-hypatia/mnt/NiftyShield/data/backtest/` — confirm parquet files exist.
+**Before any code:** `get_code_snippet("compute_metrics")` — confirm metric dict keys from S4; `bash ls /sessions/bold-hopeful-hypatia/mnt/NiftyShield/data/backtest/` — confirm parquet files exist.
 
 **What to implement:**
 
