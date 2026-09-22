@@ -88,3 +88,11 @@ slug. If it did **not** recur in 3+ such sessions, tick the box — the hook wor
   read-path `init_db` cron fix (2026-09-10) each grepped a `src/`/`scripts/` file then issued a full-file `Read` rather than pivoting to `get_code_snippet` / a targeted `sed -n 'N,Mp'` or stating in
   one line why the graph was insufficient. Decide whether the hook should block on a missing prior graph/snippet call (or emit a harder-to-ignore reminder), implement, then verify over the next 3
   logged sessions. If it still recurs, escalate to a protocol/model discussion. Standalone — no trigger wait.
+- **DEBT-17** — `scheduleWakeup-poll-spawned-agent` (Count 5). No remediation exists. Across ROLL-4, S5.2a, DEBT-9's escalation session, SEC-4 close, and this UXM-2 exit-message session, a session
+  spawns `@test-runner` / `@code-reviewer` and then calls `ScheduleWakeup` one or more times to poll for their completion instead of simply ending the turn — the harness re-invokes on
+  task-notification automatically, so the wakeup is pure waste. Build a PreToolUse hook that flags a `ScheduleWakeup` call made while an `Agent` spawn from the same turn has not yet returned, then
+  verify over the next 3 logged sessions. If it still recurs, escalate to a protocol/model discussion. Standalone — no trigger wait.
+- **DEBT-18** — `context-md-skipped-on-escalated-ops-task` (Count 5). No remediation exists. Across session-close S4c, a nuvama crontab session, an escaping-guard/telegram-env session, a ruff
+  lint-sweep + llm-council session, and this NSE-2026-holiday-fix session, an ops/diagnostic task that turns into a `src/`/`scripts/` code change mid-session lands the edit without ever reading
+  `CONTEXT.md`, even though Step 1 applies the moment code enters scope. Build a PreToolUse hook that tracks per-session whether `CONTEXT.md` has been read and warns (or blocks) on the first
+  `Edit`/`Write` to `src/`/`scripts/` if not, then verify over the next 3 logged sessions. If it still recurs, escalate to a protocol/model discussion. Standalone — no trigger wait.
