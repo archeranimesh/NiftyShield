@@ -120,6 +120,14 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-22] `doc-format-migration/` `plan-folders/` DFM-1 — enumerated and tiered all 19
+  non-archived `docs/plan/` folders (outside this epic + `_TEMPLATE/`) into the confirmed A/B/C/D
+  table in `plan-folders/stories.md`. 15 tier A (active), 3 tier B flagged for Animesh
+  (`broker-abstraction/`, `historical-data-abstraction/`, `phase2-integrations/` — unstarted,
+  0 shipped tasks, not in any active-work list; B is the closest fit but not a clean match), 1
+  tier D (`dev-foundation/` — already ✅ Shipped/Archived but its `code-health/` sub-story never
+  moved to `docs/archive/plan/`; filed a follow-up `git mv`, not a conversion target). SHA
+  `<pending>`.
 - [2026-09-22] `root-doc-organization/` (`docs/archive/plan/root-doc-organization/`) — RDO-16 step 4
   confirmed: this session's own SessionStart produced no `state_doc_freshness.sh` staleness
   warning, and a manual re-run reproduced the clean result — the flag that fired last session
