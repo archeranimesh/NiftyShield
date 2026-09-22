@@ -193,6 +193,22 @@ def test_main_all_passes_on_warnings_only(plan_dir, capsys):
     assert "ERROR:" not in out
 
 
+def test_main_all_strict_fails_on_warnings_only(plan_dir):
+    """`--all --strict` fails even when every finding is a grandfathered warning."""
+    _story(plan_dir / "legacy", tasks="legacy_tasks.md", stories=None)
+
+    assert css.main(["--all"]) == 0
+    assert css.main(["--all", "--strict"]) == 1
+
+
+def test_main_all_strict_still_grandfathers_the_allowlist(plan_dir, monkeypatch):
+    """`--all --strict` passes a folder on `_LEGACY_ALLOWLIST`, matching `--staged`."""
+    _story(plan_dir / "legacy-allowed", tasks="legacy_tasks.md", stories=None)
+    monkeypatch.setattr(css, "_LEGACY_ALLOWLIST", {"legacy-allowed"})
+
+    assert css.main(["--all", "--strict"]) == 0
+
+
 def test_main_all_fails_on_an_error(plan_dir):
     """Audit mode exits 1 when a hard error (stray empty folder) exists."""
     _story(plan_dir / "ok")

@@ -129,7 +129,8 @@ not reflow its rows.
 
 ## Step 5b — `docs/plan/` structure audit
 
-Run: `python scripts/dev/hooks/check_story_structure.py --all`
+This is a local pre-check, not the gate — CI's `docs-format` job (`--all --strict`) is the gate and fails on any finding, warnings included. Run the plain `--all` form here to see the grandfathered
+warnings surfaced separately from hard errors: `python scripts/dev/hooks/check_story_structure.py --all`
 
 Every non-archived `docs/plan/*/` folder must be a flat story (`prompt.md` + `tasks.md` + `stories.md`, plus `schema.md` iff it touches the DB) or an epic root (`prompt.md` router + `README.md`, one
 story sub-folder each). Legacy shapes are grandfathered — the hook warns, does not block. Act on what it reports:

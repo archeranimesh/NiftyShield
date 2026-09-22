@@ -17,7 +17,9 @@ Findings carry a level:
 
 Modes:
     --all            audit every folder under docs/plan/ (used by the md-organize skill);
-                     exits 1 only on ``error`` findings — warnings pass
+                     exits 1 only on ``error`` findings — warnings pass. Add ``--strict``
+                     (CI's ``docs-format`` job) to fail on any non-allowlisted finding,
+                     warnings included — a folder on ``_LEGACY_ALLOWLIST`` still passes.
     --staged         check folders added or modified in the current commit (pre-commit).
                      A folder on ``_LEGACY_ALLOWLIST`` is fully grandfathered (all its
                      findings print as warnings, exit 0). Off the allowlist: hard errors
@@ -318,9 +320,15 @@ def main(argv: list[str]) -> int:
             print(f"\n{total} story-folder issue(s). See docs/plan/README.md §Conventions.")
         return 1 if failed else 0
 
+    strict = "--strict" in argv
     findings: list[Finding] = []
+    failing: list[Finding] = []
     for folder in folders:
-        findings.extend(check_folder(folder))
+        folder_findings = check_folder(folder)
+        findings.extend(folder_findings)
+        allowlisted = audit and strict and folder.name in _LEGACY_ALLOWLIST
+        if not allowlisted:
+            failing.extend(folder_findings)
     for finding in findings:
         print(f"{finding.level.upper()}: {finding.message}")
     if not findings:
@@ -332,8 +340,12 @@ def main(argv: list[str]) -> int:
         f"({len(errors)} error, {len(findings) - len(errors)} warn). "
         "See docs/plan/README.md §Conventions."
     )
-    # --all grandfathers legacy shapes: warnings pass, only errors fail.
+    # --all grandfathers legacy shapes: warnings pass, only errors fail — unless --strict,
+    # which fails on any non-allowlisted finding (the allowlist itself still grandfathers,
+    # matching --staged's per-folder treatment).
     if audit:
+        if strict:
+            return 1 if failing else 0
         return 1 if errors else 0
     return 1
 
