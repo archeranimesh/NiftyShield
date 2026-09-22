@@ -85,8 +85,7 @@ a) If the short call hits its stop (Nifty rallied, call is deep ITM):
 
 b) If the long put hits a take-profit (Nifty fell, put is profitable):
    - Existing rule: hold the put (protection needed during decline).
-   - But if the decline is severe enough that the short call is now far OTM (near worthless),
-     should the Collar be rebalanced mid-cycle or held to expiry?
+   - But if the decline is severe enough that the short call is now far OTM (near worthless), should the Collar be rebalanced mid-cycle or held to expiry?
 
 c) Does leg-independent exit destroy the Collar's structural hedge, or is per-leg management appropriate for a paper-trading system where execution is manual?
 

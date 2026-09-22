@@ -73,12 +73,10 @@
 1. `_fetch_chain(client: BrokerClient, expiry_date: date) -> OptionChain | None` Returns `None` on empty/market-closed response; logs WARNING, does not raise.
 
 2. `_compute_snapshots(chain, expiry_date, today, snapshot_time, store, conn) -> list[GammaChainSnapshot]` Iterates all strikes within ±10% of spot. Computes:
-   - `gamma_gearing = gamma × nifty_spot² / ask_price`
-     Guard: if `ask_price is None` or `ask_price <= Decimal("0.50")` → `gamma_gearing = None`,
-     log `WARNING: ask_price too low for gearing computation (strike=X, ask=Y)`.
+   - `gamma_gearing = gamma × nifty_spot² / ask_price` Guard: if `ask_price is None` or `ask_price <= Decimal("0.50")` → `gamma_gearing = None`, log `WARNING: ask_price too low for gearing computation
+     (strike=X, ask=Y)`.
    - `distance_pct = abs(nifty_spot − strike) / nifty_spot`
-   - `oi_change_1d`: call `store.get_yesterday_snapshot(...)`. `None` or prior `oi` zero → `None`.
-     Otherwise `(today_oi − prior_oi) / prior_oi`.
+   - `oi_change_1d`: call `store.get_yesterday_snapshot(...)`. `None` or prior `oi` zero → `None`. Otherwise `(today_oi − prior_oi) / prior_oi`.
    - `bid_ask_spread = best_ask − best_bid` (both non-None; else `None`)
    - `dte_calendar = (expiry_date − today).days`
 

@@ -43,26 +43,21 @@ Otherwise, `AskUserQuestion`:
 3. Operator picks one (or confirms the pre-selected story from Step A).
 4. Classify the chosen folder (`docs/plan/README.md` §Conventions "Folder shapes"):
    - **Flat single-story folder** — has its own `tasks.md` (or legacy `<name>_tasks.md`).
-   - **Epic root** — `prompt.md` + `README.md`, **no root `tasks.md`**; one sub-folder per
-     story directly under it.
-Legacy epics with `phaseN/` or `stories/<ID>.md` sub-layers are handled the same way as an epic root — the sub-folder holding the first unchecked box is the active story.
+   - **Epic root** — `prompt.md` + `README.md`, **no root `tasks.md`**; one sub-folder per story directly under it. Legacy epics with `phaseN/` or `stories/<ID>.md` sub-layers are handled the same way
+     as an epic root — the sub-folder holding the first unchecked box is the active story.
 5. Load context for the classified shape:
 
 **Flat story:**
    - `docs/plan/<story>/prompt.md` (design / why the story exists)
-   - the story's `*_tasks.md` — identify the **first unchecked `- [ ]` task**; that is the
-     session's task
+   - the story's `*_tasks.md` — identify the **first unchecked `- [ ]` task**; that is the session's task
    - the story's `*_stories.md` if present (spec / DoD detail)
    - the story's `schema.md` if present (DB-touching stories only)
 
 **Epic:**
-   - `docs/plan/<epic>/prompt.md` (the router) + `README.md` (shared brief — story order,
-     scope decisions, cross-cutting constraints)
-   - walk the story list **in the fixed order the router states**; the active story is the
-     first one whose `<epic>/<story>/tasks.md` still has an unchecked `- [ ]`. Do not skip
-     ahead even if a later story looks more urgent.
-   - for that story: its `prompt.md` + `stories.md` (+ `schema.md` if present), and the
-     **first unchecked `- [ ]` task** in its `tasks.md` — that is the session's task
+   - `docs/plan/<epic>/prompt.md` (the router) + `README.md` (shared brief — story order, scope decisions, cross-cutting constraints)
+   - walk the story list **in the fixed order the router states**; the active story is the first one whose `<epic>/<story>/tasks.md` still has an unchecked `- [ ]`. Do not skip ahead even if a later
+     story looks more urgent.
+   - for that story: its `prompt.md` + `stories.md` (+ `schema.md` if present), and the **first unchecked `- [ ]` task** in its `tasks.md` — that is the session's task
    - if every sub-story `tasks.md` is fully checked, the epic is complete — say so and stop.
 6. Also read `CONTEXT.md` (authoritative codebase state — always required before code).
 7. State: the chosen story (and parent epic if any), the first unchecked task id + text, its `| Owner | Model | Review |` values from the task line, and any load hints the story's `prompt.md` calls
@@ -77,15 +72,12 @@ Legacy epics with `phaseN/` or `stories/<ID>.md` sub-layers are handled the same
 1. Read `docs/bugs/prompt.md` (session-start protocol), then `docs/bugs/task.md` and `docs/bugs/bugs.md`.
 2. Present every **open** entry — `🔴 Open` or `🟡 Fix in progress` status in `bugs.md`. For each: the `BUG-NNN` id, the one-line title, and the first unchecked `- [ ]` `**BNNN.x**` line from
    `docs/bugs/task.md`.
-   - Diagnostic-only / awaiting-data entries (e.g. `🔍` status, "awaiting a live trading
-     day") are not actionable — mention them once as still-open, do not offer them as a pick.
-   - Skip unchecked `task.md` lines that sit outside a `BUG-ID` section or are blocked on a
-     human/live-host action; name them once so they are not lost, per `docs/bugs/prompt.md`.
+   - Diagnostic-only / awaiting-data entries (e.g. `🔍` status, "awaiting a live trading day") are not actionable — mention them once as still-open, do not offer them as a pick.
+   - Skip unchecked `task.md` lines that sit outside a `BUG-ID` section or are blocked on a human/live-host action; name them once so they are not lost, per `docs/bugs/prompt.md`.
 3. Operator picks one (or confirms the pre-selected bug from Step A).
 4. Load, for the chosen bug:
    - its full `docs/bugs/bugs.md` entry (symptom / root cause / suggested fix)
-   - its `docs/bugs/task.md` lines — identify the **first unchecked `**BNNN.x**`** line;
-     that is the session's task
+   - its `docs/bugs/task.md` lines — identify the **first unchecked `**BNNN.x**`** line; that is the session's task
 5. Also read `CONTEXT.md`.
 6. Re-confirm the root cause against current code with the graph (`search_graph` / `get_code_snippet` / `trace_path`) before any plan — `bugs.md` is a snapshot at discovery time, not a live source of
    truth.

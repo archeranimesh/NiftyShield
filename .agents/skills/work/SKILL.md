@@ -38,8 +38,7 @@ Otherwise, `AskUserQuestion`:
 3. Operator picks one (or confirms the pre-selected story from Step A).
 4. Load, for the chosen story:
    - `docs/plan/<story>/prompt.md` (design / why the story exists)
-   - the story's `*_tasks.md` (`tasks.md` or `<name>_tasks.md`) — identify the **first
-     unchecked `- [ ]` task**; that is the session's task
+   - the story's `*_tasks.md` (`tasks.md` or `<name>_tasks.md`) — identify the **first unchecked `- [ ]` task**; that is the session's task
    - the story's `*_stories.md` if present (DoD detail)
 5. Also read `CONTEXT.md` (authoritative codebase state — always required before code).
 6. State: the chosen story, the first unchecked task id + text, and any load hints the story's `prompt.md` calls for (module `CLAUDE.md`, `DECISIONS.md`, `REFERENCES.md`, `BACKTEST_PLAN.md`,
@@ -53,15 +52,12 @@ Otherwise, `AskUserQuestion`:
 1. Read `docs/bugs/prompt.md` (session-start protocol), then `docs/bugs/task.md` and `docs/bugs/bugs.md`.
 2. Present every **open** entry — `🔴 Open` or `🟡 Fix in progress` status in `bugs.md`. For each: the `BUG-NNN` id, the one-line title, and the first unchecked `- [ ]` `**BNNN.x**` line from
    `docs/bugs/task.md`.
-   - Diagnostic-only / awaiting-data entries (e.g. `🔍` status, "awaiting a live trading
-     day") are not actionable — mention them once as still-open, do not offer them as a pick.
-   - Skip unchecked `task.md` lines that sit outside a `BUG-ID` section or are blocked on a
-     human/live-host action; name them once so they are not lost, per `docs/bugs/prompt.md`.
+   - Diagnostic-only / awaiting-data entries (e.g. `🔍` status, "awaiting a live trading day") are not actionable — mention them once as still-open, do not offer them as a pick.
+   - Skip unchecked `task.md` lines that sit outside a `BUG-ID` section or are blocked on a human/live-host action; name them once so they are not lost, per `docs/bugs/prompt.md`.
 3. Operator picks one (or confirms the pre-selected bug from Step A).
 4. Load, for the chosen bug:
    - its full `docs/bugs/bugs.md` entry (symptom / root cause / suggested fix)
-   - its `docs/bugs/task.md` lines — identify the **first unchecked `**BNNN.x**`** line;
-     that is the session's task
+   - its `docs/bugs/task.md` lines — identify the **first unchecked `**BNNN.x**`** line; that is the session's task
 5. Also read `CONTEXT.md`.
 6. Re-confirm the root cause against current code with the graph (`search_graph` / `get_code_snippet` / `trace_path`) before any plan — `bugs.md` is a snapshot at discovery time, not a live source of
    truth.

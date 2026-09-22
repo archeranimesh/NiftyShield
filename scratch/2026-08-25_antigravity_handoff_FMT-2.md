@@ -134,13 +134,11 @@ view_file: .claude/agents/code-reviewer.md view_file: REVIEW.md Adopt both as pe
 deferred with a note.
 
 STOP_CONDITIONS Stop mid-implementation and surface to Animesh (who relays to Claude) when:
-  - A design decision arises that isn't resolved by CONTEXT.md, DECISIONS.md, FORMATTING.md,
-    stories.md, or the graph
+  - A design decision arises that isn't resolved by CONTEXT.md, DECISIONS.md, FORMATTING.md, stories.md, or the graph
   - A required symbol or model field is missing from the codebase and needs a new design decision
   - A test is failing for a reason that suggests the spec is wrong, not the implementation
-  - The `format_pct` whole-number-vs-1dp-always question above genuinely can't be resolved by
-    picking the simpler default stories.md suggests — surface it rather than shipping two
-    functions with disagreeing precision rules
+  - The `format_pct` whole-number-vs-1dp-always question above genuinely can't be resolved by picking the simpler default stories.md suggests — surface it rather than shipping two functions with
+    disagreeing precision rules
 
 Do NOT stop for: implementation style choices, naming decisions, minor refactors. When stopping, include in the relay message: what the ambiguity is, the two options you considered, and which you
 would pick if forced. Claude resolves it and you continue.

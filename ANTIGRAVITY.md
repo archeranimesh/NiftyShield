@@ -93,13 +93,10 @@ Execute in this exact order. A written-out commit message is not a commit — th
 
 1. `run_command: git diff HEAD` — review all uncommitted changes.
 2. **Code-reviewer gate:**
-   - **Any commit touching `.py` files** (`src/`, `scripts/`, `tests/`): **stop here**. Emit the signal:
-     `CODE REVIEW GATE — awaiting @code-reviewer via Claude`. Tell Animesh to switch to Claude and run
-     the real `@code-reviewer` agent against `git diff HEAD`. Do not approximate with persona adoption —
-     you are a Gemini engine and cannot spawn Claude agents. Wait for Animesh to confirm the review is
-     clean before proceeding to `git add`.
-   - **Docs / config only** (no `.py` files under `src/`, `scripts/`, or `tests/` in the diff):
-     skip `code-reviewer` entirely — commit immediately after 5a. Matches `CLAUDE.md` / `AGENTS.md` 5c.
+   - **Any commit touching `.py` files** (`src/`, `scripts/`, `tests/`): **stop here**. Emit the signal: `CODE REVIEW GATE — awaiting @code-reviewer via Claude`. Tell Animesh to switch to Claude and
+     run the real `@code-reviewer` agent against `git diff HEAD`. Do not approximate with persona adoption — you are a Gemini engine and cannot spawn Claude agents. Wait for Animesh to confirm the
+     review is clean before proceeding to `git add`.
+   - **Docs / config only** (no `.py` files under `src/`, `scripts/`, or `tests/` in the diff): skip `code-reviewer` entirely — commit immediately after 5a. Matches `CLAUDE.md` / `AGENTS.md` 5c.
 3. Resolve any `CRITICAL` or `ERROR` findings before proceeding. `WARNING` findings may be deferred with a documented reason recorded in the commit `Why:` line.
 4. `view_file: .claude/skills/commit/SKILL.md` — read the required commit format.
 5. Propose `git add <files>` followed by `git commit -m "<message>"` via `run_command`. The UI will block for Animesh's approval before execution.

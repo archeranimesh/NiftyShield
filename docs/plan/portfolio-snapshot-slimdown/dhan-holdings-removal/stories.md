@@ -110,15 +110,10 @@ it.
 1. `_historical_main` — delete the "Dhan portfolio from stored snapshots" block and the "Dhan options from stored EOD snapshot" block; remove `dhan_summary=` and the `summary_text + "\n\n" +
    dhan_options_section` append from the `_format_combined_summary` call.
 2. `_async_main` — delete:
-   - the "Pre-fetch Dhan holdings" block (`_dhan_holdings_prefetched`, `_dhan_tracked_isins`,
-     `fetch_dhan_holdings`, `upstox_keys_for_holdings`, `all_keys |= dhan_upstox_keys`)
-   - the "Dhan portfolio snapshot — enrich with Upstox prices" block
-     (`enrich_with_upstox_prices`, `build_dhan_summary`, `dhan_store.record_snapshot`)
-   - the "Dhan Options (Intraday)" block (both the `snap_date < date.today()` historical
-     branch and the live `fetch_positions_raw` / `parse_fund_limit` /
-     `record_options_snapshot` branch)
-   - `dhan_summary=` and the `dhan_options_section` append from the `_format_combined_summary`
-     call, and update the trailing Telegram-send comment that mentions the Dhan block
+   - the "Pre-fetch Dhan holdings" block (`_dhan_holdings_prefetched`, `_dhan_tracked_isins`, `fetch_dhan_holdings`, `upstox_keys_for_holdings`, `all_keys |= dhan_upstox_keys`)
+   - the "Dhan portfolio snapshot — enrich with Upstox prices" block (`enrich_with_upstox_prices`, `build_dhan_summary`, `dhan_store.record_snapshot`)
+   - the "Dhan Options (Intraday)" block (both the `snap_date < date.today()` historical branch and the live `fetch_positions_raw` / `parse_fund_limit` / `record_options_snapshot` branch)
+   - `dhan_summary=` and the `dhan_options_section` append from the `_format_combined_summary` call, and update the trailing Telegram-send comment that mentions the Dhan block
 3. Remove now-unused imports: `from src.auth.dhan_verify import load_dhan_credentials` (if no longer referenced), `from src.dhan.reader import …`, `from src.dhan.positions import …`, `from
    src.dhan.store import …`, `dhan_trade_count` param on `_async_main` and its `--dhan-trades` CLI arg if it exists solely for the options block.
 4. **Do not** modify `src/auth/dhan_verify.py`, any `src/dhan/` module, or the Dhan tables. `format_options_section` stays in `src/dhan/positions.py`.

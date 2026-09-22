@@ -146,19 +146,12 @@ decision is consistent with the criteria being applied organically (or in retros
   subfolders**, not 3. The README's own "Archived Decisions" tables still list only the 3 old subfolders and omit the `data_architecture/` (q12 strategy-monitor) and 2026-06-26 q11/q12 decisions
   entirely. Downstream breakage this produces:
 
-  - **F12a:** `docs/plan/variance-gate/prompt.md:18` links to
-    `docs/council/2026-05-02_variance-gate-regime-completeness.md` → **dead** (now at
-    `docs/archive/council/risk/...`).
-  - **F12b [ERROR]:** `DECISIONS.md` lines 397–407 cite `docs/council/2026-05-28_paper-trade-exit-philosophy.md`
-    as the source for ~9 CSP/CC/PP/collar exit rules → **dead** (now split across
-    `docs/archive/council/strategy/2026-05-28_...` **and** a revised
-    `docs/archive/council/strategy/2026-06-26_...`). This is a **second independent instance** of
-    the same staleness pattern, on a decision that is load-bearing (it's the source of the paper
-    exit-signal thresholds), and worse than the variance-gate one because the content was *also
-    revised* on 2026-06-26 — a reader following the dead 05-28 link, if they find it, might read the
-    superseded version. Note the newer `paper-exit-codification/prompt.md` correctly points at the
-    `docs/archive/council/.../2026-06-26_...` paths — so the repo *knows* the new location; only the
-    older citations in the README and DECISIONS.md weren't updated when `da93b64` moved the tree.
+  - **F12a:** `docs/plan/variance-gate/prompt.md:18` links to `docs/council/2026-05-02_variance-gate-regime-completeness.md` → **dead** (now at `docs/archive/council/risk/...`).
+  - **F12b [ERROR]:** `DECISIONS.md` lines 397–407 cite `docs/council/2026-05-28_paper-trade-exit-philosophy.md` as the source for ~9 CSP/CC/PP/collar exit rules → **dead** (now split across
+    `docs/archive/council/strategy/2026-05-28_...` **and** a revised `docs/archive/council/strategy/2026-06-26_...`). This is a **second independent instance** of the same staleness pattern, on a
+    decision that is load-bearing (it's the source of the paper exit-signal thresholds), and worse than the variance-gate one because the content was *also revised* on 2026-06-26 — a reader following
+    the dead 05-28 link, if they find it, might read the superseded version. Note the newer `paper-exit-codification/prompt.md` correctly points at the `docs/archive/council/.../2026-06-26_...` paths
+    — so the repo *knows* the new location; only the older citations in the README and DECISIONS.md weren't updated when `da93b64` moved the tree.
 
 These are ERROR (drift/broken-reference, not yet actively causing wrong trading logic) trending toward CRITICAL for F12b specifically, because a dead link to the *source of record* for live exit
 thresholds is exactly the provenance break FR-3 exists to catch — flag it there too.

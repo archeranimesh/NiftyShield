@@ -84,10 +84,10 @@ DECIMAL, close DECIMAL, volume BIGINT, oi BIGINT, settle_price DECIMAL`
 
 - [x] `src/backtest/bhavcopy_ingest.py`:
   - `download_bhavcopy(date)` → downloads the daily CSV ZIP from NSE CDN. Add a politeness delay (≥1 second between requests) — NSE CDN is rate-sensitive.
-  - `parse_bhavcopy(csv_path)` → reads CSV, filters `INSTRUMENT_TYPE == 'OPTSTK' OR 'OPTIDX'`, further filters `SYMBOL == 'NIFTY'` (configurable).
-    Returns list of `BhavRecord` (frozen Pydantic dataclass).
-  - `parse_option_symbol(symbol: str)` → extracts expiry, strike, option_type from NSE option symbol strings (e.g. `NIFTY26APR24000PE` → expiry=2026-04-24, strike=24000, option_type=PE).
-    **Edge cases:** symbols with leading zeros in strike, symbols for weekly expiries. Write a dedicated parser, do not regex guess.
+  - `parse_bhavcopy(csv_path)` → reads CSV, filters `INSTRUMENT_TYPE == 'OPTSTK' OR 'OPTIDX'`, further filters `SYMBOL == 'NIFTY'` (configurable). Returns list of `BhavRecord` (frozen Pydantic
+    dataclass).
+  - `parse_option_symbol(symbol: str)` → extracts expiry, strike, option_type from NSE option symbol strings (e.g. `NIFTY26APR24000PE` → expiry=2026-04-24, strike=24000, option_type=PE). **Edge
+    cases:** symbols with leading zeros in strike, symbols for weekly expiries. Write a dedicated parser, do not regex guess.
   - Batched Parquet write: one file per expiry month, append-mode, `data/offline/options_ohlcv/{year}/{month}/`. Idempotent: if a day's data is already in the Parquet for that month, skip re-download.
   - CLI `scripts/bhavcopy_bootstrap.py`:
     - Args: `--underlying NIFTY --start 2016-01-01 --end <today>`.
@@ -190,22 +190,22 @@ data/historical/
   - Tests: boundary dates, before first known entry, after last known entry.
 
 - [ ] `src/backtest/truedata_parser.py`:
-  - `parse_opt_filename(filename: str) → tuple[str, date, int, str] | None` — returns `(underlying, expiry, strike, option_type)`.
-    Handles both weekly (YYMMDD) and monthly (YYMMMM) formats. Returns `None` on unrecognised pattern (never raises — caller skips).
-  - `parse_opt_csv_rows(content: str) → list[dict]` — parses headerless 8-column CSV. Handles sparse rows (missing minutes = absent, not `NaN`).
-    Returns list of `{ts: datetime, open: Decimal, high: Decimal, low: Decimal, close: Decimal, volume: int, oi: int}`.
+  - `parse_opt_filename(filename: str) → tuple[str, date, int, str] | None` — returns `(underlying, expiry, strike, option_type)`. Handles both weekly (YYMMDD) and monthly (YYMMMM) formats. Returns
+    `None` on unrecognised pattern (never raises — caller skips).
+  - `parse_opt_csv_rows(content: str) → list[dict]` — parses headerless 8-column CSV. Handles sparse rows (missing minutes = absent, not `NaN`). Returns list of `{ts: datetime, open: Decimal, high:
+    Decimal, low: Decimal, close: Decimal, volume: int, oi: int}`.
   - `parse_idx_csv(filename: str, content: str) → list[dict]` — same schema, for spot + VIX files.
   - Tests: weekly filename parse, monthly filename parse, unrecognised filename → `None`, sparse CSV (gaps in minutes), single-row CSV (illiquid far OTM contract).
 
 - [ ] `scripts/truedata_ingest.py` — CLI, processes one or more daily zips:
   - Args: `--zip-dir data/historical/raw/1min/ --parquet-dir data/historical/parquet/ --underlying NIFTY --start 2022-01-01 --end 2024-12-31`
-  - For each OPT zip in date range: open zip in memory, filter filenames starting with `NIFTY` (case-sensitive, excludes BANKNIFTY), parse each file, assemble per-day DataFrame,
-    write Parquet to `options/year=YYYY/month=MM/date=YYYY-MM-DD/data.parquet` with zstd compression.
+  - For each OPT zip in date range: open zip in memory, filter filenames starting with `NIFTY` (case-sensitive, excludes BANKNIFTY), parse each file, assemble per-day DataFrame, write Parquet to
+    `options/year=YYYY/month=MM/date=YYYY-MM-DD/data.parquet` with zstd compression.
   - Idempotent: skip dates where the target Parquet already exists and is non-empty.
   - Progress: `log.info("ingested %s: %d contracts, %d rows", date, contracts, rows)` per day.
   - For each IDX zip: extract `NIFTY.csv` → append to `spot_1min.parquet`; extract `INDIAVIX.csv` → append to `vix_1min.parquet`. Deduplicate on timestamp after append.
-  - Columns written to options Parquet:
-    `symbol TEXT, underlying TEXT, expiry DATE, strike INT, option_type TEXT, ts TIMESTAMP (IST, stored as UTC), open DECIMAL, high DECIMAL, low DECIMAL, close DECIMAL, volume INT, oi INT`.
+  - Columns written to options Parquet: `symbol TEXT, underlying TEXT, expiry DATE, strike INT, option_type TEXT, ts TIMESTAMP (IST, stored as UTC), open DECIMAL, high DECIMAL, low DECIMAL, close
+    DECIMAL, volume INT, oi INT`.
 
 - [ ] `scripts/truedata_registry.py` — builds/updates `registry.sqlite` from ingested Parquet:
   - Schema: `CREATE TABLE IF NOT EXISTS contracts (symbol TEXT PRIMARY KEY, underlying TEXT, expiry DATE, strike INT, option_type TEXT, lot_size INT, first_date DATE, last_date DATE)`.
@@ -259,13 +259,11 @@ Per `PLANNER.md` → "quant-4pc-local Reference", the engine is already designed
   - GST: 18% on brokerage + transaction.
   - SEBI turnover fee: ₹10 per crore of premium.
   - Stamp duty: 0.003% on buy side.
-  - **Slippage model (council decision 2026-04-30 — see `DECISIONS.md → Slippage Model`):** Absolute INR, VIX-regime-aware, with OI liquidity multiplier.
-    `SlippageModel` frozen dataclass holds VIX tiers, OI tiers, and an optional `stop_loss_exit_multiplier`.
-    `estimate_slippage(vix, strike_oi) → float`. `adjusted_fill(settle_price, side, vix, strike_oi) → Decimal`.
-    **Critical:** exit trigger levels (50% profit, 2× stop) must be computed from realized fills, not `settle_price` —
-    propagate slippage through the trigger logic or profitability will be systematically overstated.
-  - Every backtest report must include three-scenario sensitivity output: optimistic / base / conservative slippage bands.
-    Decision rule: profitable at base only → paper trade; profitable at conservative → deploy candidate. See `DECISIONS.md` for exact values.
+  - **Slippage model (council decision 2026-04-30 — see `DECISIONS.md → Slippage Model`):** Absolute INR, VIX-regime-aware, with OI liquidity multiplier. `SlippageModel` frozen dataclass holds VIX
+    tiers, OI tiers, and an optional `stop_loss_exit_multiplier`. `estimate_slippage(vix, strike_oi) → float`. `adjusted_fill(settle_price, side, vix, strike_oi) → Decimal`. **Critical:** exit trigger
+    levels (50% profit, 2× stop) must be computed from realized fills, not `settle_price` — propagate slippage through the trigger logic or profitability will be systematically overstated.
+  - Every backtest report must include three-scenario sensitivity output: optimistic / base / conservative slippage bands. Decision rule: profitable at base only → paper trade; profitable at
+    conservative → deploy candidate. See `DECISIONS.md` for exact values.
 - [ ] Tests: engine happy path, daily-loop invariants, cost model unit tests (each cost component + total on a known trade),
       slippage model — all four VIX tiers, all OI multiplier tiers, stop-loss exit asymmetry, exit trigger propagation (assert 50% target uses realized fill not settle).
 - [ ] `code-reviewer` on diff — heavy focus on Decimal invariant (not float) throughout the cost model.
@@ -322,42 +320,35 @@ log-moneyness before delta computation replaces raw per-strike delta. Full metho
 - Open question resolved: does task 1.3 ingest `FUTIDX NIFTY` rows, or does task 1.6a derive futures price at query time from spot + repo rate?
 
 - [ ] `src/backtest/repo_rates.py`:
-  - `get_repo_rate(date: date) → float` — stepped RBI repo rate lookup.
-    `REPO_HISTORY: list[tuple[str, float]]` constant at module level (~20 entries, 2016–present). Pure function, no I/O, no network.
+  - `get_repo_rate(date: date) → float` — stepped RBI repo rate lookup. `REPO_HISTORY: list[tuple[str, float]]` constant at module level (~20 entries, 2016–present). Pure function, no I/O, no network.
 
 - [ ] `src/backtest/greeks.py` — pure Black '76 functions. All parameterised on `F` (futures forward), not `S` (spot):
   - `black76_price(F, K, T, r, sigma, option_type) → Decimal`
-  - `black76_iv(price, F, K, T, r, option_type) → float | None` — Brent root-finding via `scipy.optimize.brentq`. Bounds `[0.01, 3.0]`.
-    Apply exclusion gates before calling: DTE < 5, price < ₹1.0, extrinsic < ₹0.50. Returns `None` + WARNING on non-convergence.
+  - `black76_iv(price, F, K, T, r, option_type) → float | None` — Brent root-finding via `scipy.optimize.brentq`. Bounds `[0.01, 3.0]`. Apply exclusion gates before calling: DTE < 5, price < ₹1.0,
+    extrinsic < ₹0.50. Returns `None` + WARNING on non-convergence.
   - `black76_delta(F, K, T, r, sigma, option_type) → float`
   - `black76_gamma`, `black76_theta`, `black76_vega` — sibling functions.
   - `T` convention: **calendar days / 365.25**. Document this in the module docstring — trading-days/252 is equally defensible but yields different deltas; the choice must be visible and consistent.
   - Add `scipy` to `requirements.txt` if not already present.
 
 - [ ] `src/backtest/iv_reconstruction.py` — full daily pipeline, pure functions throughout:
-  - `select_price_for_entry(row) → tuple[Decimal | None, str]` — blend logic.
-    Returns `(price, source_tag)` where source_tag ∈ `{'market', 'settle_model', 'unusable'}`.
-    `market` path: `close` if volume > 0 AND `|close − settle_price| / max(settle_price, 0.5) < 0.50`. `settle_model` fallback. `unusable` if neither available.
-  - `atm_sanity_check(chain_df, F, T, r) → dict` — put-call parity check at ATM strike.
-    Returns `parity_error_pct`, `approx_iv` (Brenner-Subrahmanyam: `straddle / (0.8 × F × √T)`), `quality` (`'good' | 'suspect'`).
-    Threshold: parity error > 0.5% of spot → `suspect`.
-  - `fit_smile_and_get_delta(put_chain_df, F, T, r) → pd.DataFrame | None` — fit quadratic `IV = a + b·ln(K/F) + c·ln(K/F)²` weighted by ATM proximity (`w = 1 / (1 + 10·ln(K/F)²)`).
-    For each strike compute smoothed IV, then `black76_delta`.
-    Returns per-strike DataFrame with `strike, iv_raw, iv_smooth, delta` columns. Returns `None` if < 4 valid strikes.
-  - `compute_30dte_atm_iv(date, expiry_surfaces: dict, F_dict: dict) → float | None` — variance-space interpolation to 30-DTE constant-maturity ATM IV.
-    Uses two nearest expiries in 7–90 DTE range. `var_interp = var_short + weight × (var_long − var_short)` where `var = σ²T`.
-    Returns `None` if < 1 usable expiry.
-  - `iv_percentile(current_iv: float, iv_history: list[float], lookback: int = 252) → float | None` — percentile rank of `current_iv` vs trailing `lookback` observations.
-    Returns `None` if < 20 observations.
+  - `select_price_for_entry(row) → tuple[Decimal | None, str]` — blend logic. Returns `(price, source_tag)` where source_tag ∈ `{'market', 'settle_model', 'unusable'}`. `market` path: `close` if
+    volume > 0 AND `|close − settle_price| / max(settle_price, 0.5) < 0.50`. `settle_model` fallback. `unusable` if neither available.
+  - `atm_sanity_check(chain_df, F, T, r) → dict` — put-call parity check at ATM strike. Returns `parity_error_pct`, `approx_iv` (Brenner-Subrahmanyam: `straddle / (0.8 × F × √T)`), `quality` (`'good'
+    | 'suspect'`). Threshold: parity error > 0.5% of spot → `suspect`.
+  - `fit_smile_and_get_delta(put_chain_df, F, T, r) → pd.DataFrame | None` — fit quadratic `IV = a + b·ln(K/F) + c·ln(K/F)²` weighted by ATM proximity (`w = 1 / (1 + 10·ln(K/F)²)`). For each strike
+    compute smoothed IV, then `black76_delta`. Returns per-strike DataFrame with `strike, iv_raw, iv_smooth, delta` columns. Returns `None` if < 4 valid strikes.
+  - `compute_30dte_atm_iv(date, expiry_surfaces: dict, F_dict: dict) → float | None` — variance-space interpolation to 30-DTE constant-maturity ATM IV. Uses two nearest expiries in 7–90 DTE range.
+    `var_interp = var_short + weight × (var_long − var_short)` where `var = σ²T`. Returns `None` if < 1 usable expiry.
+  - `iv_percentile(current_iv: float, iv_history: list[float], lookback: int = 252) → float | None` — percentile rank of `current_iv` vs trailing `lookback` observations. Returns `None` if < 20
+    observations.
   - `DailyChainResult` — frozen dataclass: `date, smile_df, atm_iv_30dte, sanity_check, usable_strikes, suspect`.
-  - `process_daily_chain(date, options_df, futures_df, spot_fallback) → DailyChainResult` — orchestrates full pipeline.
-    Filters monthly expiry only (last Thursday; Wednesday if Thursday is NSE holiday — use `src/market_calendar` for this).
-    Applies exclusion gates. Runs sanity check. Inverts IV per strike. Fits smile. Computes 30-DTE ATM IV.
+  - `process_daily_chain(date, options_df, futures_df, spot_fallback) → DailyChainResult` — orchestrates full pipeline. Filters monthly expiry only (last Thursday; Wednesday if Thursday is NSE holiday
+    — use `src/market_calendar` for this). Applies exclusion gates. Runs sanity check. Inverts IV per strike. Fits smile. Computes 30-DTE ATM IV.
 
 - [ ] `src/backtest/strike_selector.py`:
-  - `select_strike_by_delta(smile_df: pd.DataFrame, target_delta: float, option_type: str) → pd.Series | None` — given smoothed delta output from `fit_smile_and_get_delta`,
-    returns the row with delta closest to `target_delta`.
-    Logs WARNING if closest delta deviates > 0.05 from target. Returns `None` if DataFrame empty.
+  - `select_strike_by_delta(smile_df: pd.DataFrame, target_delta: float, option_type: str) → pd.Series | None` — given smoothed delta output from `fit_smile_and_get_delta`, returns the row with delta
+    closest to `target_delta`. Logs WARNING if closest delta deviates > 0.05 from target. Returns `None` if DataFrame empty.
 
 - [ ] Tests (`tests/unit/backtest/test_greeks.py`, `tests/unit/backtest/test_iv_reconstruction.py`):
   - Black '76 put-call parity to within 1e-4.
@@ -403,11 +394,9 @@ Upstox spot as the sole forward price source.
   The combined P&L (option + ETF) is the authoritative metric for variance comparison against paper results.
 - [ ] **R5 re-entry logic** implemented as an explicit branch in `on_day`, togglable via config flags:
   - `enable_reentry: bool = False` — default off → V1 baseline (no re-entry).
-  - `enable_reentry=True, ivr_gated=True` → V2 (re-enter after profit exit if DTE ≥ 14 and
-    IVR ≥ 25).
-  - `enable_reentry=True, ivr_gated=False` → V3 (re-enter after any exit if DTE ≥ 14, no
-    IVR gate).
-This three-way toggle must be clean enough to flip in config without touching strategy logic, so V1/V2/V3 variant runs differ only in config, not code.
+  - `enable_reentry=True, ivr_gated=True` → V2 (re-enter after profit exit if DTE ≥ 14 and IVR ≥ 25).
+  - `enable_reentry=True, ivr_gated=False` → V3 (re-enter after any exit if DTE ≥ 14, no IVR gate). This three-way toggle must be clean enough to flip in config without touching strategy logic, so
+    V1/V2/V3 variant runs differ only in config, not code.
 - [ ] Tests: entry decision (correct strike from chain), exit decision (each of: profit target, 21-day time stop, delta gate, mark gate), R5 re-entry branch (IVR-gated and ungated paths),
   no-open-position idempotency.
 - [ ] Commit: `feat(strategy): cash-secured put v1`.
@@ -508,11 +497,8 @@ protective legs, and cross-validate against Bhavcopy settle_price where availabl
 - [ ] `src/backtest/skew.py` — parametric vol skew model:
   - `iv_with_skew(atm_iv, spot, strike, option_type)` → adjusted IV.
   - Initial model: fixed markup of +2% IV per 5% OTM (linear extrapolation from ATM).
-  - Calibration interface: `fit_skew(observed_chain: OptionChain)` → `SkewParams`.
-    Uses live Upstox chain snapshots from 1.10 when available; falls back to fixed markup.
-  - Output: `SkewParams` dataclass with `slope_per_pct_otm` (default 0.4, i.e.,
-    +2% per 5% OTM = 0.4% per 1% OTM) and optional quadratic term for smile
-    curvature (deferred to Phase 2).
+  - Calibration interface: `fit_skew(observed_chain: OptionChain)` → `SkewParams`. Uses live Upstox chain snapshots from 1.10 when available; falls back to fixed markup.
+  - Output: `SkewParams` dataclass with `slope_per_pct_otm` (default 0.4, i.e., +2% per 5% OTM = 0.4% per 1% OTM) and optional quadratic term for smile curvature (deferred to Phase 2).
 - [ ] `src/backtest/synthetic_pricer.py`:
   - `price_otm_put(spot, strike, expiry, atm_iv, skew_params, r, now)` → Decimal.
   - Combines `greeks.black_scholes_price` (from 1.6a) with `skew.iv_with_skew`.

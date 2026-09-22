@@ -18,18 +18,12 @@ captured before this story was written. **Do not assume the pattern is yearly-on
 2. Pick the nearest bucket that reliably returns real, nonzero Greeks as GF-5's validation ground truth — the chain we'll compare our BS-computed deltas against to sanity-check the math before
    trusting it anywhere Upstox gives us nothing.
 3. Decide and document the three open items from `prompt.md`:
-   - **Risk-free rate.** Check whether any existing code in this repo (e.g. `src/backtest/ivr.py`,
-     any options-pricing-adjacent module) already has a rate assumption or config value to reuse.
-     If none exists, propose a flat constant (e.g. India's approximate short-term risk-free rate)
-     and get it confirmed rather than picking silently — this is a modeling input, not a
-     mechanical default.
-   - **Time-to-expiry convention.** Calendar-days/365 vs. trading-days/252. Check for an existing
-     convention in this repo's vol/backtest code before introducing a new one.
-   - **Delta tolerance for GF-5.** How close must a BS-computed delta be to Upstox's own delta on
-     the known-good chain to trust the fallback elsewhere? Propose a number (e.g. ±0.02 absolute)
-     based on what's defensible for strike selection at the target-delta bands in
-     `ic_expiry_config.py` (`delta_range=0.05`-`0.06` across presets — the tolerance should be
-     meaningfully tighter than the entry band itself, or it's not adding real precision).
+   - **Risk-free rate.** Check whether any existing code in this repo (e.g. `src/backtest/ivr.py`, any options-pricing-adjacent module) already has a rate assumption or config value to reuse. If none
+     exists, propose a flat constant (e.g. India's approximate short-term risk-free rate) and get it confirmed rather than picking silently — this is a modeling input, not a mechanical default.
+   - **Time-to-expiry convention.** Calendar-days/365 vs. trading-days/252. Check for an existing convention in this repo's vol/backtest code before introducing a new one.
+   - **Delta tolerance for GF-5.** How close must a BS-computed delta be to Upstox's own delta on the known-good chain to trust the fallback elsewhere? Propose a number (e.g. ±0.02 absolute) based on
+     what's defensible for strike selection at the target-delta bands in `ic_expiry_config.py` (`delta_range=0.05`-`0.06` across presets — the tolerance should be meaningfully tighter than the entry
+     band itself, or it's not adding real precision).
 4. **Do not write any pricing code in this task.** Output is the audit findings + the three decisions, appended to this file under a new `### GF-1 findings` heading.
 
 **Files touched:** none (read-only audit, plus scratch script runs). Append findings here.
@@ -43,13 +37,10 @@ permanent fixture, see below).
   **Zero-Greeks pattern confirmed.**
 - **quarterly** (2026-09-29, DTE 69): 104 strike rows, both sides — real, smoothly-varying Greeks across essentially every strike with genuine market activity (call delta ranging ~0.95 down to ~0.001
   as strikes move OTM, put delta mirroring; `iv` 11%–56%; nonzero `theta`/`vega`/`gamma`). **No zero-Greeks pattern here — this bucket is a valid known-good chain.**
-  - **Anomaly to exclude from GF-5's validation set:** several deep-OTM strikes with `ltp=0` (no
-    real trade, e.g. far strikes like 25050 PE, 27000 PE, 30000+ CE/PE) show delta pinned at
-    exactly `-1.0` or `1.0` with every other Greek at `0.0` — this looks like Upstox's own
-    degenerate/fallback value for a strike with no tradeable quote to derive Greeks from, not a
-    real computed delta. GF-5 should only validate against strikes with genuinely smooth,
-    non-pinned Greeks (i.e. exclude any row where `abs(delta) == 1.0` and `gamma == 0.0`
-    simultaneously — the combination that flags the degenerate case).
+  - **Anomaly to exclude from GF-5's validation set:** several deep-OTM strikes with `ltp=0` (no real trade, e.g. far strikes like 25050 PE, 27000 PE, 30000+ CE/PE) show delta pinned at exactly `-1.0`
+    or `1.0` with every other Greek at `0.0` — this looks like Upstox's own degenerate/fallback value for a strike with no tradeable quote to derive Greeks from, not a real computed delta. GF-5 should
+    only validate against strikes with genuinely smooth, non-pinned Greeks (i.e. exclude any row where `abs(delta) == 1.0` and `gamma == 0.0` simultaneously — the combination that flags the degenerate
+    case).
 
 **monthly** (2026-08-25, DTE 19, confirmed 2026-08-06 — Cowork session): 242 strike rows (121 strikes, both sides). Real, smoothly-varying Greeks on liquid strikes — same shape as quarterly (deltas
 trending from near-1.0/-1.0 deep ITM toward ~0 deep OTM, nonzero theta/vega/gamma throughout). Same degenerate-pinned-delta pattern as quarterly on illiquid far strikes (`ltp=0`, `delta` pinned ±1.0,

@@ -62,12 +62,10 @@ No DB schema change anywhere in this story — no `schema.md`.
 2. `compute_ic_payoff(*, short_put, long_put, short_call, long_call, net_credit, lot_size)` `-> ICPayoff`:
    - `put_wing = short_put - long_put`, `call_wing = long_call - short_call`.
    - `max_profit = net_credit * lot_size`.
-   - `max_loss = -(max(put_wing, call_wing) - net_credit) * lot_size` (the wider wing is the
-     capital-at-risk side; a skewed IC risks more on one side).
+   - `max_loss = -(max(put_wing, call_wing) - net_credit) * lot_size` (the wider wing is the capital-at-risk side; a skewed IC risks more on one side).
    - `lower_breakeven = short_put - net_credit`, `upper_breakeven = short_call + net_credit`.
    - `rr_ratio = abs(max_profit / max_loss)` when `max_loss != 0`, else `Decimal("0")`.
-   - Assert `long_put < short_put < short_call < long_call` (raise `ValueError` otherwise —
-     a malformed IC is a programming error at the call site, not a runtime condition).
+   - Assert `long_put < short_put < short_call < long_call` (raise `ValueError` otherwise — a malformed IC is a programming error at the call site, not a runtime condition).
    - Google-style docstring, full type hints, `Decimal` only.
 3. A small `from_legs(legs, net_credit, lot_size)` classmethod or free helper that pulls the four strikes + short/long role from a `list[LegRow]` (or the strategy's leg objects — pick whichever the
    call sites actually hold; document the choice).
@@ -119,20 +117,15 @@ No DB schema change anywhere in this story — no `schema.md`.
 1. `import matplotlib; matplotlib.use("Agg")` at module top, before `pyplot`.
 2. `render_expiry_payoff_png(payoff: ICPayoff, *, spot: Decimal | None = None, current_pnl: Decimal | None = None, dte: int | None = None, title: str = "") -> bytes`:
    - x-range: `short_put - 1.5*wing` … `short_call + 1.5*wing` (wing = wider of the two).
-   - Payoff line from `expiry_pnl_series` (PC-3), ~200 points. Segment above P&L = 0 drawn
-     green, below drawn red (two `plot` calls or a masked array).
+   - Payoff line from `expiry_pnl_series` (PC-3), ~200 points. Segment above P&L = 0 drawn green, below drawn red (two `plot` calls or a masked array).
    - Fill: green between the breakevens where P&L > 0; light-red/pink in the two loss zones.
-   - Vertical dashed lines at `lower_breakeven`, `upper_breakeven`, `short_put`, `short_call`
-     (label the breakevens).
+   - Vertical dashed lines at `lower_breakeven`, `upper_breakeven`, `short_put`, `short_call` (label the breakevens).
    - If `spot` given: solid vertical line at `spot`, labelled `Nifty Spot : <spot>`.
-   - If `current_pnl` given: a marker dot at `(spot, current_pnl)` (needs `spot` too),
-     labelled like Stockmock's `Target P&L : <₹> (<%>)` where % is `current_pnl / margin`
-     when available else `current_pnl / max_profit`.
+   - If `current_pnl` given: a marker dot at `(spot, current_pnl)` (needs `spot` too), labelled like Stockmock's `Target P&L : <₹> (<%>)` where % is `current_pnl / margin` when available else
+     `current_pnl / max_profit`.
    - Title: `title` or `f"{payoff ...}"` — caller passes strategy name + expiry + DTE.
-   - Axis labels; y grid at 0. Render to `io.BytesIO` via `fig.savefig(buf, format="png",
-     dpi=…, bbox_inches="tight")`; `plt.close(fig)`; return `buf.getvalue()`.
-   - Theme-agnostic, single committed look (light background) — this is an image, not a web
-     page.
+   - Axis labels; y grid at 0. Render to `io.BytesIO` via `fig.savefig(buf, format="png", dpi=…, bbox_inches="tight")`; `plt.close(fig)`; return `buf.getvalue()`.
+   - Theme-agnostic, single committed look (light background) — this is an image, not a web page.
 3. Money / strike formatting for labels goes through the `FORMATTING.md` helpers in `src/notifications/formatting.py` (`format_money`, `format_strike`) — do not hand-format.
 4. A structured log line per render (`payoff_chart.rendered`, with strategy + byte size) per `LOGGING.md`.
 

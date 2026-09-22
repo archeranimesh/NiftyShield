@@ -481,10 +481,8 @@ No unit tests for this script.
 3. **`scripts/mvp.py backfill <pick_id>`** subcommand:
    - Loads pick; derives `from_date = pick_date.date()`, `to_date = date.today()`.
    - Calls `fetch_historical_closes` → `backfill_snapshots`.
-   - Then calls `check_prices` over the historical series in chronological order; stops at
-     the **first breach** (SL or target) and calls `close_pick` at that date/price.
-   - Prints: `Backfilled N days. SL hit on 2026-02-14 at ₹1,050.` or
-     `Backfilled N days. No SL/target breach detected.`
+   - Then calls `check_prices` over the historical series in chronological order; stops at the **first breach** (SL or target) and calls `close_pick` at that date/price.
+   - Prints: `Backfilled N days. SL hit on 2026-02-14 at ₹1,050.` or `Backfilled N days. No SL/target breach detected.`
 
 **Tests (`tests/unit/mvp/test_mvp_backfill.py`):**
 - `backfill_snapshots` with 5 dates → 5 rows in `mvp_snapshots`.
