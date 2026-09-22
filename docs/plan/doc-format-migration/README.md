@@ -33,7 +33,7 @@ Confirmed with Animesh, 2026-08-29:
 
 | Story | Purpose | Status | Depends on | Closing SHA |
 |---|---|---|---|---|
-| `plan-folders/` | Tiered batch conversion of every `docs/plan/` folder to the canonical format | 🔄 In progress — DFM-1/DFM-2/DFM-3 done, DFM-4 open | — | — |
+| `plan-folders/` | Tiered batch conversion of every `docs/plan/` folder to the canonical format | ✅ Done — DFM-4 closed as no-op, no tier-C folders in the confirmed tier table | — | 906684c |
 | `repo-wide-reflow/` | Fill-to-≤200 every other `.md` in the repo (root + `docs/**` minus `plan/`, `archive/`, `_TEMPLATE/`) | ⬜ Not started | — | — |
 | `enforcement/` | Widen the hooks repo-wide, add a CI `--all` gate, add new-folder scaffolding | ⬜ Not started | `plan-folders`, `repo-wide-reflow` | — |
 

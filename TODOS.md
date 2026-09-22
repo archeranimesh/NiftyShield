@@ -15,9 +15,9 @@ Forward spec work only — one `docs/plan/` story per line, pointer-only (title 
 starting the next story here; this list only decides *which story is next*. Bugs are **not** here — see `## Open Bugs`. Cross-references use folder names, never list positions, so renumbering can't
 rot them.
 
-1. **doc-format-migration** — `docs/plan/doc-format-migration/` — next **DFM-1** (`plan-folders/`: enumerate + tier every non-archived `docs/plan/` folder A/B/C/D). Epic: `plan-folders/`
-   (batch-convert legacy folders) → `repo-wide-reflow/` (fill-to-≤200 every other `.md`) → `enforcement/` (repo-wide hooks + CI `--all` gate + `/new-story` scaffold). Answers RDO-17.8. Built on
-   `reflow_md.py` (RDO-17.7).
+1. **doc-format-migration** — `docs/plan/doc-format-migration/` — `plan-folders/` done, next story
+   **`repo-wide-reflow/`** (fill-to-≤200 every other `.md`) → `enforcement/` (repo-wide hooks + CI
+   `--all` gate + `/new-story` scaffold). Answers RDO-17.8. Built on `reflow_md.py` (RDO-17.7).
 2. **Greeks Black-Scholes fallback** — `docs/plan/greeks-bs-fallback/` — next **GF-1** (read-only audit scope).
 4. **MVP: Multi-bagger Value Picks Tracker** — `docs/plan/mvp/` — next **M1.1**. Independent — blocks nothing.
 5. **Variance gate — CSP v1 deployment gate observation** — `docs/plan/variance-gate/` — next **VG0** (spec reconciliation; the remaining tasks are human checkpoints, not build tasks).
@@ -120,6 +120,11 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-22] `doc-format-migration/` `plan-folders/` DFM-4 closed as no-op — DFM-1's confirmed
+  tier table classifies all 19 remaining folders as tier A or B (plus `dev-foundation/` tier D);
+  no tier-C folder exists (the two examples named in `prompt.md`, `root-doc-organization/` and
+  `telegram-markdown-migration/`, are already archived). No files changed, no commit. `plan-folders/`
+  story is now fully done; epic `README.md` Stories row flipped to ✅. Next: `repo-wide-reflow/`.
 - [2026-09-22] `doc-format-migration/` `plan-folders/` DFM-3 closed — restructured the last
   tier-B folder, `historical-data-abstraction/`: consolidated 11 `stories/HD-N.md` files into
   one `stories.md`, canonical task-line format, `Story done when` section, reflow. SHA:
