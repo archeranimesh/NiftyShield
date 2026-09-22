@@ -85,6 +85,25 @@ def test_executed_outcome_renders_realised_pnl() -> None:
     assert "🔧 Phase: openrouter\\_only" in msg
 
 
+def test_executed_outcome_message_includes_high_low_line() -> None:
+    out = _OUT_EXEC.model_copy(
+        update={
+            "high_pnl_per_lot": Decimal("2500.00"),
+            "low_pnl_per_lot": Decimal("-300.00"),
+        }
+    )
+    msg = _FMT_OUTCOME(out, _SIGNAL_BUY)
+
+    assert "📈 High \\+₹2,500\\.00 / 📉 Low \\-₹300\\.00 / lot" in msg
+
+
+def test_executed_outcome_message_omits_high_low_when_none() -> None:
+    msg = _FMT_OUTCOME(_OUT_EXEC, _SIGNAL_BUY)
+
+    assert "High" not in msg
+    assert "Low" not in msg
+
+
 def test_not_taken_outcome_derives_would_be_pnl_in_formatter() -> None:
     out_skip = _OUT_EXEC.model_copy(update={"executed": False, "pnl_per_lot": None})
     msg = _FMT_OUTCOME(out_skip, _SIGNAL_BUY)

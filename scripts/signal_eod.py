@@ -227,15 +227,21 @@ def _format_outcome_notification(outcome: SignalOutcome, signal: DailySignal) ->
     label = "P&L" if outcome.executed else "Paper P&L"
     pnl_line = f"{pnl_emoji(pnl_val)} {_E(f'{label}: {format_money(pnl_val, signed=True)} / lot')}"
 
+    range_line = ""
     if outcome.executed:
         header = _E(f"📊 SIGNAL OUTCOME · {day}")
         prem = _E(f"💰 Entry {format_money(entry)} → Exit {format_money(exit_)}")
+        if outcome.high_pnl_per_lot is not None and outcome.low_pnl_per_lot is not None:
+            range_line = "\n" + _E(
+                f"📈 High {format_money(outcome.high_pnl_per_lot, signed=True)} / "
+                f"📉 Low {format_money(outcome.low_pnl_per_lot, signed=True)} / lot"
+            )
     else:
         header = _E(f"📊 SIGNAL OUTCOME · {day} · NOT TAKEN")
         prem = _E(f"💰 Entry {format_money(entry)} → Exit {format_money(exit_)} (would-be)")
 
     return (
-        f"*{header}*\n\n{line_dir}\n{prem}\n{pnl_line}\n\n"
+        f"*{header}*\n\n{line_dir}\n{prem}\n{pnl_line}{range_line}\n\n"
         f"{close}\n{_E(f'🔧 Phase: {outcome.phase}')}"
     )
 
