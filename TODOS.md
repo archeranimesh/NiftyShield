@@ -15,8 +15,8 @@ Forward spec work only — one `docs/plan/` story per line, pointer-only (title 
 starting the next story here; this list only decides *which story is next*. Bugs are **not** here — see `## Open Bugs`. Cross-references use folder names, never list positions, so renumbering can't
 rot them.
 
-1. **doc-format-migration** — `docs/plan/doc-format-migration/` — `plan-folders/` + `repo-wide-reflow/` done, `enforcement/` in progress: DFM-6 shipped (`7107a56`), next **DFM-7** (gate modified
-   folders, not just new). Answers RDO-17.8. Built on `reflow_md.py` (RDO-17.7).
+1. **doc-format-migration** — `docs/plan/doc-format-migration/` — all three stories done (DFM-10 shipped, `fd50a62`); epic complete. Answers RDO-17.8. Next: archive per §Conventions *Completion →
+   archive* (not yet done).
 2. **Greeks Black-Scholes fallback** — `docs/plan/greeks-bs-fallback/` — next **GF-1** (read-only audit scope).
 4. **MVP: Multi-bagger Value Picks Tracker** — `docs/plan/mvp/` — next **M1.1**. Independent — blocks nothing.
 5. **Variance gate — CSP v1 deployment gate observation** — `docs/plan/variance-gate/` — next **VG0** (spec reconciliation; the remaining tasks are human checkpoints, not build tasks).
@@ -119,6 +119,10 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-22] `doc-format-migration/` `enforcement/` DFM-10 done (`fd50a62`) — `scripts/dev/new_plan_folder.py` (`--story`/`--epic`/`--into` CLI) scaffolds a conforming folder from
+  `docs/plan/_TEMPLATE/`, stripping guidance comments and substituting slug/title placeholders; refuses an existing target or a `--into` epic that doesn't exist; `.claude/skills/new-story/SKILL.md`
+  thin wrapper; `docs/plan/README.md` §Conventions now points at `/new-story` and states the format is enforced, not advisory. This closes `enforcement/` (DFM-6..10 all done) and the whole
+  `doc-format-migration/` epic — `plan-folders/`, `repo-wide-reflow/`, and `enforcement/` are all ✅ Done; archival to `docs/archive/plan/` per §Conventions *Completion → archive* is a follow-up.
 - [2026-09-22] `doc-format-migration/` `enforcement/` DFM-9 done — `check_story_structure.py` gained `--strict` (`--all --strict` fails on any finding, warnings included, except a folder on
   `_LEGACY_ALLOWLIST` which still grandfathers — mirrors `--staged`'s per-folder treatment); new `docs-format` CI job runs all three doc hooks repo-wide (`check_md_line_length.py`,
   `check_story_structure.py --all --strict`, `check_checkbox_consistency.py --all`) and fails the build on any finding; `md-organize` SKILL.md Step 5b now says its `--all` audit is a local pre-check,

@@ -20,10 +20,10 @@ both `_send_close_notification`; no option model, ships now) → `chart-model-ov
 shipped. `token_audit.py`, the `CLAUDE.md`/`AGENTS.md` skill-ification, `session-close` off the fork, the SWEEP `PreToolUse` hooks + `commit_preflight.py`, and the Step 4b drain path (`Count >= 5` →
 `technical-debt/` DEBT-8..12) all landed. Closing SHA `2d896a9`.
 
-**`doc-format-migration/`** · 🔄 In progress — `plan-folders/` and `repo-wide-reflow/` done; `enforcement/` in progress (DFM-6, DFM-7, DFM-8, DFM-9 done; DFM-10 open). Batch-converts every legacy
-`docs/plan/` folder to the canonical format and reflows every other `.md` in the repo to fill-to-≤200, then hardens the hooks + adds a CI `--all` gate so new docs cannot drift. Three sub-stories:
-`plan-folders/` (tiered A/B/C/D conversion) → `repo-wide-reflow/` (everything outside `plan/` and `archive/`) → `enforcement/` (repo-wide hooks, CI job, `new_plan_folder.py` + `/new-story` scaffold).
-Answers `root-doc-organization/` RDO-17.8; built on `reflow_md.py` (RDO-17.7, `526e431`).
+**`doc-format-migration/`** · ✅ Done — all three sub-stories complete (`plan-folders/`, `repo-wide-reflow/`, `enforcement/` — DFM-6..10 all shipped, closing SHA `fd50a62`). Batch-converted every
+legacy `docs/plan/` folder to the canonical format and reflowed every other `.md` in the repo to fill-to-≤200, then hardened the hooks + added a CI `--all` gate so new docs cannot drift; new folders
+now start conforming via `/new-story` / `scripts/dev/new_plan_folder.py`. Answers `root-doc-organization/` RDO-17.8; built on `reflow_md.py` (RDO-17.7, `526e431`). Pending: archive per §Conventions
+*Completion → archive*.
 
 **`dev-foundation/`** · ✅ Shipped/Archived Engineering-excellence epic — tooling, CI, code health (3 sub-stories).
 
@@ -290,11 +290,13 @@ headings and nested list/quote structure verbatim. The whole tree is now fill-to
 
 ### Structure audit
 
-`scripts/dev/hooks/check_story_structure.py` checks every non-archived `docs/plan/*/` folder: a flat story folder has `prompt.md` + `tasks.md` + `stories.md`; an epic root has `prompt.md` +
-`README.md` and at least one conforming sub-story. It also flags stray or empty folders, a missing `schema.md` against DDL in `stories.md` / `prompt.md` (warning), and disallowed extra files (see
-*Extra files*). It runs pre-commit on newly-added folders only — legacy shapes are grandfathered, so the repo-wide `--all` sweep warns but does not fail; the full sweep is part of the `md-organize`
-skill's periodic audit, since folders churn only ~monthly. `scripts/dev/hooks/check_checkbox_consistency.py` (see §"Checkbox consistency") is the companion sweep for task-state drift and
-task-line-tail shape; it runs alongside it in the same audit, also not pre-commit.
+The format is **enforced, not advisory** (`doc-format-migration/enforcement/`, DFM-6..10). `scripts/dev/hooks/check_story_structure.py` checks every non-archived `docs/plan/*/` folder: a flat story
+folder has `prompt.md` + `tasks.md` + `stories.md`; an epic root has `prompt.md` + `README.md` and at least one conforming sub-story. It also flags stray or empty folders, a missing `schema.md`
+against DDL in `stories.md` / `prompt.md` (warning), and disallowed extra files (see *Extra files*). Pre-commit runs it `--staged` (added **or** modified folders) — a folder off the shrinking
+`_LEGACY_ALLOWLIST` fails on a hard error or a strict warning; the CI `docs-format` job runs it `--all --strict` and fails on any non-allowlisted finding, warnings included.
+`scripts/dev/hooks/check_checkbox_consistency.py` (see §"Checkbox consistency") is the companion sweep for task-state drift and task-line-tail shape; it is also wired into pre-commit and the CI
+`--all` gate. `md-organize`'s periodic `--all` sweep is now a local pre-check ahead of committing, not the enforcement point. New folders start conforming via `/new-story` (or `python -m
+scripts.dev.new_plan_folder`), which scaffolds from `docs/plan/_TEMPLATE/`.
 
 ### Status transitions
 
