@@ -232,6 +232,27 @@ def test_record_outcome_bool_and_null_handling(store: SignalStore) -> None:
     assert rows[0]["nifty_close"] == "24120.00"
 
 
+def test_signal_outcome_high_low_round_trip(store: SignalStore) -> None:
+    outcome = _outcome().model_copy(
+        update={
+            "high_pnl_per_lot": Decimal("1500"),
+            "low_pnl_per_lot": Decimal("-300"),
+        }
+    )
+    store.record_outcome(outcome)
+    got = store.get_outcome(TRADE_DATE)
+    assert got is not None
+    assert got.high_pnl_per_lot == Decimal("1500")
+    assert got.low_pnl_per_lot == Decimal("-300")
+
+
+def test_init_db_migration_idempotent_on_existing_columns(store: SignalStore) -> None:
+    store.init_db()
+    store.record_outcome(_outcome())
+    got = store.get_outcome(TRADE_DATE)
+    assert got is not None
+
+
 def test_record_outcome_replaces_on_same_date(store: SignalStore) -> None:
     store.record_outcome(_outcome(pnl_per_lot=Decimal("1200")))
     store.record_outcome(_outcome(pnl_per_lot=Decimal("-300")))

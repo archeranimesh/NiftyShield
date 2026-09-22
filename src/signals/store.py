@@ -130,6 +130,8 @@ def _outcome_from_row(row: sqlite3.Row) -> SignalOutcome:
         entry_premium=_opt_decimal(row["entry_premium"]),
         exit_premium=_opt_decimal(row["exit_premium"]),
         pnl_per_lot=_opt_decimal(row["pnl_per_lot"]),
+        high_pnl_per_lot=_opt_decimal(row["high_pnl_per_lot"]),
+        low_pnl_per_lot=_opt_decimal(row["low_pnl_per_lot"]),
         nifty_close=Decimal(row["nifty_close"]),
         executed=bool(row["executed"]),
         phase=row["phase"],
@@ -158,6 +160,8 @@ class SignalStore:
                 "ALTER TABLE signal_responses ADD COLUMN prompt_tokens INTEGER",
                 "ALTER TABLE signal_responses ADD COLUMN completion_tokens INTEGER",
                 "ALTER TABLE signal_responses ADD COLUMN cost_usd TEXT",
+                "ALTER TABLE signal_outcomes ADD COLUMN high_pnl_per_lot TEXT",
+                "ALTER TABLE signal_outcomes ADD COLUMN low_pnl_per_lot TEXT",
             ):
                 try:
                     conn.execute(ddl)
@@ -245,9 +249,9 @@ class SignalStore:
             conn.execute(
                 "INSERT OR REPLACE INTO signal_outcomes ("
                 " trade_date, trade_action, recommended_strike, entry_premium,"
-                " exit_premium, pnl_per_lot, nifty_close, executed, phase,"
-                " notes, recorded_at"
-                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " exit_premium, pnl_per_lot, high_pnl_per_lot, low_pnl_per_lot,"
+                " nifty_close, executed, phase, notes, recorded_at"
+                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     outcome.trade_date.isoformat(),
                     outcome.trade_action.value,
@@ -255,6 +259,8 @@ class SignalStore:
                     _opt_str(outcome.entry_premium),
                     _opt_str(outcome.exit_premium),
                     _opt_str(outcome.pnl_per_lot),
+                    _opt_str(outcome.high_pnl_per_lot),
+                    _opt_str(outcome.low_pnl_per_lot),
                     str(outcome.nifty_close),
                     int(outcome.executed),
                     outcome.phase,

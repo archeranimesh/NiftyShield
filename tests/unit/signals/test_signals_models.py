@@ -131,6 +131,23 @@ def test_signal_outcome_skipped():
     assert outcome.pnl_per_lot is None
 
 
+def test_signal_outcome_high_low_default_none():
+    outcome = SignalOutcome(
+        trade_date=date(2026, 4, 6),
+        trade_action=TradeAction.BUY_CALL,
+        recommended_strike=22500,
+        entry_premium=Decimal("90"),
+        exit_premium=Decimal("110"),
+        pnl_per_lot=Decimal("1200"),
+        nifty_close=Decimal("22600.00"),
+        executed=True,
+        phase="openrouter_only",
+        notes="",
+    )
+    assert outcome.high_pnl_per_lot is None
+    assert outcome.low_pnl_per_lot is None
+
+
 def test_oi_level_negative_change():
     level = OILevel(strike=22500, oi=1500000, oi_change=-350000)
     assert level.oi_change == -350000

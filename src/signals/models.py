@@ -160,6 +160,8 @@ class SignalOutcome(BaseModel, frozen=True):
     entry_premium: Decimal | None
     exit_premium: Decimal | None
     pnl_per_lot: Decimal | None
+    high_pnl_per_lot: Decimal | None = None
+    low_pnl_per_lot: Decimal | None = None
     nifty_close: Decimal
     executed: bool
     phase: str = "openrouter_only"  # "openrouter_only" | "search_enabled"
