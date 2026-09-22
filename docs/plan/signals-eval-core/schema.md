@@ -1,7 +1,6 @@
 # signals-eval-core — Database Schema
 
-Three tables added to `data/portfolio/portfolio.sqlite`.
-All Decimal fields stored as TEXT. All timestamps stored as UTC ISO strings.
+Three tables added to `data/portfolio/portfolio.sqlite`. All Decimal fields stored as TEXT. All timestamps stored as UTC ISO strings.
 
 ---
 
@@ -89,11 +88,9 @@ CREATE INDEX IF NOT EXISTS idx_allocation_strategy_date
 
 ### Notes on existing tables reused by this module
 
-Backtested trade records (entry/exit prices, P&L, equity curve) are written to the
-existing `BacktestStore` tables (`backtest_runs`, `backtest_trades`, `backtest_daily_pnl`,
-`backtest_metrics`) from `src/backtest/store.py` (task B1.1/B1.2 in `backtest-eval-core`).
-`signals-eval-core` tasks write signal metadata into the three tables above and pass
-trade results to `BacktestStore` — no duplicate persistence.
+Backtested trade records (entry/exit prices, P&L, equity curve) are written to the existing `BacktestStore` tables (`backtest_runs`, `backtest_trades`, `backtest_daily_pnl`, `backtest_metrics`) from
+`src/backtest/store.py` (task B1.1/B1.2 in `backtest-eval-core`). `signals-eval-core` tasks write signal metadata into the three tables above and pass trade results to `BacktestStore` — no duplicate
+persistence.
 
 ### regime_cell encoding
 

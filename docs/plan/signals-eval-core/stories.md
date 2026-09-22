@@ -17,13 +17,10 @@
 **Files to change:**
 - `scripts/verify_data_coverage.py` — new script (no unit tests)
 
-**Before any code:**
-`search_code("bhavcopy_ingest")` — confirm bhavcopy Parquet path and partition convention;
-`search_graph("vix_ingest")` — confirm VIX Parquet location;
-`bash ls data/historical/ohlc/` — see what exists.
+**Before any code:** `search_code("bhavcopy_ingest")` — confirm bhavcopy Parquet path and partition convention; `search_graph("vix_ingest")` — confirm VIX Parquet location; `bash ls
+data/historical/ohlc/` — see what exists.
 
-**What to implement:**
-Script that checks five things and prints PASS / FAIL per item:
+**What to implement:** Script that checks five things and prints PASS / FAIL per item:
 1. Nifty 50 Index daily OHLC Parquet exists; row count and date range printed; latest date verified.
 2. Nifty 50 Index 15-min OHLC Parquet exists; same checks.
 3. India VIX daily close Parquet exists; <1% missing trading days (fill holidays with prev close; flag gaps >1 day).
@@ -32,8 +29,7 @@ Script that checks five things and prints PASS / FAIL per item:
 
 If any item fails, print the specific gap and stop — do not proceed to SE1.2 until this passes.
 
-**No unit tests.** This is a one-time verification script.
-**Commit:** `chore(signals-eval-core): add verify_data_coverage.py — SE1.1 data infrastructure gate`
+**No unit tests.** This is a one-time verification script. **Commit:** `chore(signals-eval-core): add verify_data_coverage.py — SE1.1 data infrastructure gate`
 
 ---
 
@@ -43,15 +39,11 @@ If any item fails, print the specific gap and stop — do not proceed to SE1.2 u
 - `src/instruments/pe_loader.py` — new module
 - `tests/unit/instruments/test_pe_loader.py` — new test file
 
-**Before any code:**
-`search_graph("vix_ingest")` — reuse Parquet write pattern;
-`get_code_snippet("get_expiry_candidates")` — existing instruments module pattern;
-`bash ls data/historical/` — confirm storage root.
+**Before any code:** `search_graph("vix_ingest")` — reuse Parquet write pattern; `get_code_snippet("get_expiry_candidates")` — existing instruments module pattern; `bash ls data/historical/` — confirm
+storage root.
 
-**NSE PE CSV format:** NSE publishes `ind_close_all_20XXXXXX.csv` with columns:
-`Index Name`, `Index Date` (DD-MM-YYYY), `Open Index Value`, `High Index Value`,
-`Low Index Value`, `Closing Index Value`, `Points Change`, `Change(%)`, `Volume`, `Turnover (Rs. Cr.)`,
-`P/E`, `P/B`, `Div Yield`. Filter rows where `Index Name == "Nifty 50"`. The `P/E` column is the trailing PE.
+**NSE PE CSV format:** NSE publishes `ind_close_all_20XXXXXX.csv` with columns: `Index Name`, `Index Date` (DD-MM-YYYY), `Open Index Value`, `High Index Value`, `Low Index Value`, `Closing Index
+Value`, `Points Change`, `Change(%)`, `Volume`, `Turnover (Rs. Cr.)`, `P/E`, `P/B`, `Div Yield`. Filter rows where `Index Name == "Nifty 50"`. The `P/E` column is the trailing PE.
 
 **What to implement:**
 
@@ -107,9 +99,7 @@ def get_pe_series(
 - `src/instruments/rf_rate.py` — new module
 - `tests/unit/instruments/test_rf_rate.py` — new test file
 
-**Before any code:**
-`search_graph("MFHolding")` — confirm AMFI/MF infrastructure in `src/mf/`;
-`get_code_snippet("get_nav_series")` or `search_code("nav_snapshots")` — confirm MF NAV table.
+**Before any code:** `search_graph("MFHolding")` — confirm AMFI/MF infrastructure in `src/mf/`; `get_code_snippet("get_nav_series")` or `search_code("nav_snapshots")` — confirm MF NAV table.
 
 **What to implement:**
 
@@ -158,8 +148,7 @@ def annualised_to_period(annual_rate: Decimal, months: int) -> Decimal:
 - `src/strategy/CLAUDE.md` — module invariants and conventions
 - `src/strategy/signals/__init__.py` — sub-package stub
 
-**Before any code:**
-`bash ls src/strategy/` — confirm does NOT exist (expected: no such directory).
+**Before any code:** `bash ls src/strategy/` — confirm does NOT exist (expected: no such directory).
 
 **`src/strategy/CLAUDE.md` content:**
 
@@ -191,8 +180,7 @@ def annualised_to_period(annual_rate: Decimal, months: int) -> Decimal:
    generators — call `is_event_exclusion_date(date) -> tuple[bool, str | None]`.
 ```
 
-**No tests required.** Package init files and CLAUDE.md are not unit-tested.
-**Commit:** `chore(strategy): add src/strategy/ package setup + CLAUDE.md invariants (SE2.1)`
+**No tests required.** Package init files and CLAUDE.md are not unit-tested. **Commit:** `chore(strategy): add src/strategy/ package setup + CLAUDE.md invariants (SE2.1)`
 
 ---
 
@@ -205,9 +193,7 @@ def annualised_to_period(annual_rate: Decimal, months: int) -> Decimal:
 - `tests/unit/strategy/__init__.py` — new test package stub
 - `tests/unit/backtest/test_signal_eval_store.py` — new test file (regime-related methods only)
 
-**Before any code:**
-`search_graph("BacktestStore")` — confirm existing store pattern for init_db/CRUD;
-`get_code_snippet("OptionChainStrike")` — confirm Decimal/float conventions in models;
+**Before any code:** `search_graph("BacktestStore")` — confirm existing store pattern for init_db/CRUD; `get_code_snippet("OptionChainStrike")` — confirm Decimal/float conventions in models;
 `search_code("percentile_rank")` or `search_code("percentileofscore")` in `src/` — existing usage.
 
 **What to implement (`src/strategy/regime.py`):**
@@ -284,15 +270,12 @@ class RegimeTagger:
         """
 ```
 
-ATR formula: `pd.DataFrame.rolling(n).apply(lambda w: true_range_mean(w))` using Wilder's
-smoothing or simple rolling mean — document choice in docstring. Use simple rolling mean for
-consistency with the research doc.
+ATR formula: `pd.DataFrame.rolling(n).apply(lambda w: true_range_mean(w))` using Wilder's smoothing or simple rolling mean — document choice in docstring. Use simple rolling mean for consistency with
+the research doc.
 
-Slope formula: `numpy.polyfit(range(n), close_window, 1)[0]` — slope of degree-1 polynomial.
-Trend score = `slope / ATR_50`.
+Slope formula: `numpy.polyfit(range(n), close_window, 1)[0]` — slope of degree-1 polynomial. Trend score = `slope / ATR_50`.
 
-VIX percentile: `scipy.stats.percentileofscore(vix_series[-252:], current_vix) / 100`.
-If fewer than 252 VIX rows, use all available rows and log DEBUG.
+VIX percentile: `scipy.stats.percentileofscore(vix_series[-252:], current_vix) / 100`. If fewer than 252 VIX rows, use all available rows and log DEBUG.
 
 **`src/backtest/signal_eval_store.py`** — new store class (extended in SE3.1 and SE4.1):
 
@@ -332,13 +315,9 @@ DDL: use exact schema from `docs/plan/signals-eval-core/schema.md`.
 **Files to change:**
 - `scripts/regime_distribution_report.py` — new script (no unit tests)
 
-**Before any code:**
-`get_code_snippet("RegimeTagger")` — constructor and `tag_history` signature;
-`search_code("NIFTY_OHLC_PARQUET")` or similar — confirm Parquet path for Nifty daily data.
+**Before any code:** `get_code_snippet("RegimeTagger")` — constructor and `tag_history` signature; `search_code("NIFTY_OHLC_PARQUET")` or similar — confirm Parquet path for Nifty daily data.
 
-**What to implement:**
-Script that loads full Nifty daily OHLC and VIX Parquet, calls `RegimeTagger().tag_history()`,
-then prints a distribution table:
+**What to implement:** Script that loads full Nifty daily OHLC and VIX Parquet, calls `RegimeTagger().tag_history()`, then prints a distribution table:
 
 ```
 Regime Distribution Report
@@ -354,11 +333,9 @@ range_bound   | normal_vol  |  ...
 ...
 ```
 
-Also prints: "Gate check: no single cell >40% of trading days — PASS / FAIL".
-Saves the tagged DataFrame to `data/historical/regime/regime_tags_YYYYMMDD.parquet`.
+Also prints: "Gate check: no single cell >40% of trading days — PASS / FAIL". Saves the tagged DataFrame to `data/historical/regime/regime_tags_YYYYMMDD.parquet`.
 
-**No unit tests.** Visual inspection script.
-**Commit:** `feat(scripts): regime_distribution_report.py — SE2.3 regime distribution gate`
+**No unit tests.** Visual inspection script. **Commit:** `feat(scripts): regime_distribution_report.py — SE2.3 regime distribution gate`
 
 ---
 
@@ -373,10 +350,8 @@ Saves the tagged DataFrame to `data/historical/regime/regime_tags_YYYYMMDD.parqu
 - `tests/unit/strategy/signals/test_donchian.py` — new test file
 - `tests/unit/backtest/test_signal_eval_store.py` — extend with swing signal CRUD tests
 
-**Before any code:**
-`get_code_snippet("RegimeTag")` — frozen dataclass fields;
-`get_code_snippet("SignalEvalStore")` — current public API (post SE2.2);
-`search_graph("SwingSignal")` — confirm does NOT yet exist.
+**Before any code:** `get_code_snippet("RegimeTag")` — frozen dataclass fields; `get_code_snippet("SignalEvalStore")` — current public API (post SE2.2); `search_graph("SwingSignal")` — confirm does
+NOT yet exist.
 
 **Council constraints (from `docs/archive/council/strategy/2026-04-30_donchian-roll-mechanics.md`):**
 - Signal-in-only architecture (NOT always-in). Flat between signals — no position during consolidation.
@@ -417,8 +392,7 @@ class DonchianConfig:
 - Signal logic: close > N-day channel high → LONG; close < N-day channel low → SHORT.
 - A new breakout in the opposite direction while holding → exits current signal, emits reverse signal.
 - No signal for the first `channel_lookback` days (warm-up).
-- Trailing stop: `stop_level = entry_price ± (atr_stop_mult × atr_value)`, recalculated daily.
-  When stop triggers, emit FLAT signal. Next signal only on next fresh channel breakout.
+- Trailing stop: `stop_level = entry_price ± (atr_stop_mult × atr_value)`, recalculated daily. When stop triggers, emit FLAT signal. Next signal only on next fresh channel breakout.
 - `spread_width` is NOT stored on `SwingSignal` (it's computed at execution time in SE5.3).
 
 **Tests (`tests/unit/strategy/signals/test_donchian.py`):**
@@ -437,16 +411,12 @@ class DonchianConfig:
 
 **Files to change:**
 - `src/strategy/signals/orb.py` — `ORBConfig` + `ORBSignalGenerator`
-- `src/market_calendar/exclusions.py` — `is_event_exclusion_date(date) → tuple[bool, str | None]`
-  (if not already implemented; check `search_graph("is_event_exclusion_date")` first)
+- `src/market_calendar/exclusions.py` — `is_event_exclusion_date(date) → tuple[bool, str | None]` (if not already implemented; check `search_graph("is_event_exclusion_date")` first)
 - `tests/unit/strategy/signals/test_orb.py` — new test file
 
-**Before any code:**
-`get_code_snippet("SwingSignal")` — frozen dataclass fields;
-`get_code_snippet("RegimeTag")` — for regime_cell;
-`search_graph("is_event_exclusion_date")` — confirm if already exists in `src/market_calendar/`;
-`search_graph("select_expiry")` or `get_code_snippet("get_expiry_candidates")` — expiry selection logic;
-`search_code("vix_ivp")` in `src/` — any existing VIX percentile rank utility.
+**Before any code:** `get_code_snippet("SwingSignal")` — frozen dataclass fields; `get_code_snippet("RegimeTag")` — for regime_cell; `search_graph("is_event_exclusion_date")` — confirm if already
+exists in `src/market_calendar/`; `search_graph("select_expiry")` or `get_code_snippet("get_expiry_candidates")` — expiry selection logic; `search_code("vix_ivp")` in `src/` — any existing VIX
+percentile rank utility.
 
 **Council constraints (from `docs/archive/council/strategy/2026-05-01_orb-volatility-filter-design.md`):**
 - Primary ATR filter: OR width < (fraction × 14D ATR).
@@ -473,12 +443,9 @@ class ORBConfig:
 - Target = entry ± (rr_multiple × OR width). Stop = session high/low of first N candles.
 - `expiry_date` set by DTE rule: find next Thursday ≥3 DTE from signal_date.
 
-**`is_event_exclusion_date(d: date) → tuple[bool, str | None]`:**
-Returns `(True, "reason_string")` for excluded dates, `(False, None)` otherwise.
-Reason strings: `"thursday_expiry"`, `"rbi_mpc_day"`, `"budget_day"`, `"fomc_plus1"`.
-Hard-code known 2019–2026 RBI MPC and Budget dates. FOMC+1 is the next NSE session after
-each FOMC meeting date (hard-coded list for 2019–2026). Log a WARNING if the requested date
-is beyond the hard-coded calendar range.
+**`is_event_exclusion_date(d: date) → tuple[bool, str | None]`:** Returns `(True, "reason_string")` for excluded dates, `(False, None)` otherwise. Reason strings: `"thursday_expiry"`, `"rbi_mpc_day"`,
+`"budget_day"`, `"fomc_plus1"`. Hard-code known 2019–2026 RBI MPC and Budget dates. FOMC+1 is the next NSE session after each FOMC meeting date (hard-coded list for 2019–2026). Log a WARNING if the
+requested date is beyond the hard-coded calendar range.
 
 **Tests (`tests/unit/strategy/signals/test_orb.py`):**
 - Day with OR width < 0.6× ATR → LONG signal when close breaks above OR high.
@@ -500,11 +467,8 @@ is beyond the hard-coded calendar range.
 - `src/strategy/signals/gap_fade.py` — `GapFadeConfig` + `GapFadeSignalGenerator`
 - `tests/unit/strategy/signals/test_gap_fade.py` — new test file
 
-**Before any code:**
-`get_code_snippet("SwingSignal")` — frozen dataclass fields;
-`get_code_snippet("ORBConfig")` — reuse VIX-IVP pattern;
-`get_code_snippet("is_event_exclusion_date")` — for consistency (gap fade does NOT exclude
-RBI/Budget days, but does exclude Thursday expiry; document this asymmetry).
+**Before any code:** `get_code_snippet("SwingSignal")` — frozen dataclass fields; `get_code_snippet("ORBConfig")` — reuse VIX-IVP pattern; `get_code_snippet("is_event_exclusion_date")` — for
+consistency (gap fade does NOT exclude RBI/Budget days, but does exclude Thursday expiry; document this asymmetry).
 
 **Council constraints (from `docs/archive/council/strategy/2026-05-02_gap-fade-vix-filter-threshold.md`):**
 - VIX-IVP threshold: 75th percentile (63D lookback). `vix_ivp_threshold = 0.75`.
@@ -554,9 +518,7 @@ class GapFadeConfig:
 - `tests/unit/strategy/signals/test_sma_filter.py` — new test file
 - `tests/unit/backtest/test_signal_eval_store.py` — extend with allocation CRUD tests
 
-**Before any code:**
-`get_code_snippet("SwingSignal")` — existing `models.py` for co-location of AllocationDecision;
-`get_code_snippet("SignalEvalStore")` — current API;
+**Before any code:** `get_code_snippet("SwingSignal")` — existing `models.py` for co-location of AllocationDecision; `get_code_snippet("SignalEvalStore")` — current API;
 `search_graph("AllocationDecision")` — confirm does NOT yet exist.
 
 **`AllocationDecision` frozen dataclass:**
@@ -609,9 +571,7 @@ class SMAFilterConfig:
 - `src/strategy/signals/dual_mom.py` — `DualMomConfig` + `DualMomSignalGenerator`
 - `tests/unit/strategy/signals/test_dual_mom.py` — new test file
 
-**Before any code:**
-`get_code_snippet("AllocationDecision")` — frozen dataclass fields;
-`get_code_snippet("get_monthly_rf_rate")` — RF rate helper signature;
+**Before any code:** `get_code_snippet("AllocationDecision")` — frozen dataclass fields; `get_code_snippet("get_monthly_rf_rate")` — RF rate helper signature;
 `get_code_snippet("annualised_to_period")` — helper.
 
 **`DualMomConfig` frozen dataclass:**
@@ -650,10 +610,8 @@ class DualMomConfig:
 - `src/strategy/signals/pe_band.py` — `PEBandConfig` + `PEBandSignalGenerator`
 - `tests/unit/strategy/signals/test_pe_band.py` — new test file
 
-**Before any code:**
-`get_code_snippet("AllocationDecision")` — frozen dataclass fields;
-`get_code_snippet("get_pe_series")` — PE data loader signature;
-`get_code_snippet("SMASignalGenerator")` — reuse monthly decision pattern.
+**Before any code:** `get_code_snippet("AllocationDecision")` — frozen dataclass fields; `get_code_snippet("get_pe_series")` — PE data loader signature; `get_code_snippet("SMASignalGenerator")` —
+reuse monthly decision pattern.
 
 **`PEBandConfig` frozen dataclass:**
 ```python
@@ -688,30 +646,22 @@ class PEBandConfig:
 
 ## SE4.4 — Covered Call Overlay: strategy doc + paper-trading setup
 
-> **Type:** Yield enhancement overlay — not a signal generator. No backtest engine required.
-> Validation is a 6-month paper overlay period, not a walk-forward pipeline.
-> Full spec lives at `docs/strategies/covered_call_overlay_v1.md`.
-> The task for this story is to create that doc, confirm broker mechanics, and begin paper trading.
+> **Type:** Yield enhancement overlay — not a signal generator. No backtest engine required. Validation is a 6-month paper overlay period, not a walk-forward pipeline. Full spec lives at
+> `docs/strategies/covered_call_overlay_v1.md`. The task for this story is to create that doc, confirm broker mechanics, and begin paper trading.
 
 **Files to change:**
 - `docs/strategies/covered_call_overlay_v1.md` — new strategy doc (primary deliverable)
 - Paper trades recorded via `record_paper_trade.py` (no code changes to the tool itself)
 - After task completion: note broker compatibility status in `DECISIONS.md`
 
-**Before any code:**
-`get_code_snippet("record_paper_trade")` — confirm CLI interface and `leg_role` values;
-`search_code("paper_csp_nifty_v1")` — confirm naming convention for paper strategy prefixes.
+**Before any code:** `get_code_snippet("record_paper_trade")` — confirm CLI interface and `leg_role` values; `search_code("paper_csp_nifty_v1")` — confirm naming convention for paper strategy
+prefixes.
 
-**Prerequisite (HARD BLOCK — do not paper-trade until confirmed):**
-Contact Upstox support to verify: NiftyBees ETF units pledged as Finideas margin collateral
-can simultaneously serve as the covered leg for a short Nifty 50 call position. These are
-two margin obligations on the same asset. If Upstox treats them as separate margin blocks,
-the short call must be cash-margined independently — the capital efficiency argument changes
-and the position size may need revision.
+**Prerequisite (HARD BLOCK — do not paper-trade until confirmed):** Contact Upstox support to verify: NiftyBees ETF units pledged as Finideas margin collateral can simultaneously serve as the covered
+leg for a short Nifty 50 call position. These are two margin obligations on the same asset. If Upstox treats them as separate margin blocks, the short call must be cash-margined independently — the
+capital efficiency argument changes and the position size may need revision.
 
-Record the broker's response in `docs/strategies/covered_call_overlay_v1.md` under a
-"Broker Mechanics" section. Status must be either ✅ Confirmed or ⛔ Blocked before
-paper trading can start.
+Record the broker's response in `docs/strategies/covered_call_overlay_v1.md` under a "Broker Mechanics" section. Status must be either ✅ Confirmed or ⛔ Blocked before paper trading can start.
 
 **What `docs/strategies/covered_call_overlay_v1.md` must contain:**
 
@@ -735,32 +685,24 @@ Status:        Pending broker confirmation
 - Delta stop: close immediately if call delta crosses +0.40
 - Quantity: maximum 1 lot (65 units) per ~5,700 NiftyBees units pledged; recompute at each annual NiftyBees leg reset
 
-**Entry logic:**
-Sell 1 Nifty 50 monthly call at the 15-delta strike, same expiry as the CSP short put.
-Use live Upstox option chain for delta. Limit order at mid of bid/ask; same ₹0.25 improvement
-discipline as CSP if unfilled after 5 minutes. Log India VIX + IVR at every entry decision,
-including cycles where entry is skipped due to IVR filter.
+**Entry logic:** Sell 1 Nifty 50 monthly call at the 15-delta strike, same expiry as the CSP short put. Use live Upstox option chain for delta. Limit order at mid of bid/ask; same ₹0.25 improvement
+discipline as CSP if unfilled after 5 minutes. Log India VIX + IVR at every entry decision, including cycles where entry is skipped due to IVR filter.
 
 **Exit rules (first to fire wins):**
 1. Profit target: close when mark-to-market value decays to ≤50% of entry credit.
 2. Time stop: 21 calendar days from entry.
 3. Delta stop: close when call delta > +0.40.
 
-**Expected yield (indicative):**
-15-delta OTM Nifty monthly call at IVR ~35 collects ₹55–85/unit × 65 units = ₹3,575–5,525
-gross credit. Net of ₹80–100 round-trip costs per lot: **₹3,475–5,425 per cycle**.
-On ₹15.5L NiftyBees notional ≈ **0.22–0.35% per cycle; 2.7–4.2% annualised**.
+**Expected yield (indicative):** 15-delta OTM Nifty monthly call at IVR ~35 collects ₹55–85/unit × 65 units = ₹3,575–5,525 gross credit. Net of ₹80–100 round-trip costs per lot: **₹3,475–5,425 per
+cycle**. On ₹15.5L NiftyBees notional ≈ **0.22–0.35% per cycle; 2.7–4.2% annualised**.
 
-**Portfolio context:**
-Running CSP (short put) + Covered Call (short call) in the same monthly cycle creates a
-synthetic short strangle at the portfolio level. When Iron Condor is eventually deployed,
+**Portfolio context:** Running CSP (short put) + Covered Call (short call) in the same monthly cycle creates a synthetic short strangle at the portfolio level. When Iron Condor is eventually deployed,
 evaluate retiring the standalone Covered Call leg to avoid position overlap and double margin.
 
 **Paper trading:**
 - Prefix: `paper_covered_call_v1`
 - Duration: minimum 6 months (2 rebalance events minimum per strategy; 6 gives 5–6 cycles)
-- Retrospective Bhavcopy cross-check: once SE7.1 Bhavcopy data is available, cross-check
-  paper entry/exit prices against Bhavcopy settle_price for validation
+- Retrospective Bhavcopy cross-check: once SE7.1 Bhavcopy data is available, cross-check paper entry/exit prices against Bhavcopy settle_price for validation
 - Report: paper trading report after 6 months; comparison to indicative yield range above
 
 **No unit tests.** This task produces a strategy doc and paper trades, not library code.
@@ -775,9 +717,7 @@ evaluate retiring the standalone Covered Call leg to avoid position overlap and 
 - `src/backtest/points_bt.py` — `PointsBacktesterConfig` + `PointsBacktester`
 - `tests/unit/backtest/test_points_bt.py` — new test file
 
-**Before any code:**
-`get_code_snippet("BacktestStore")` — `record_trade`, `record_daily_pnl` API from backtest-eval-core;
-`get_code_snippet("SwingSignal")` — frozen dataclass fields;
+**Before any code:** `get_code_snippet("BacktestStore")` — `record_trade`, `record_daily_pnl` API from backtest-eval-core; `get_code_snippet("SwingSignal")` — frozen dataclass fields;
 `get_code_snippet("DonchianConfig")` — for expected signal format.
 
 **What to implement:**
@@ -799,8 +739,8 @@ class PointsBacktesterConfig:
 - Trade P&L: `(exit_price − entry_price) × direction_sign − 2 × slippage_points`.
 - `BacktestResult` frozen dataclass: `run_id, total_trades, win_rate, avg_pnl_points, max_dd_points, calmar_ratio`.
 
-**Donchian pass criteria (must document in test):** trade count 15–25/year, win rate 35–50%, profit factor >1.3. Tests do not validate these thresholds (too few synthetic bars for reliable stats),
-but the test docstring notes them as the Phase 2.S3a gate.
+**Donchian pass criteria (must document in test):** trade count 15–25/year, win rate 35–50%, profit factor >1.3. Tests do not validate these thresholds (too few synthetic bars for reliable stats), but
+the test docstring notes them as the Phase 2.S3a gate.
 
 **Tests (`tests/unit/backtest/test_points_bt.py`):**
 - Empty signals list → `BacktestResult` with zero trades, no error.
@@ -820,10 +760,8 @@ but the test docstring notes them as the Phase 2.S3a gate.
 - `src/backtest/allocation_bt.py` — `AllocationBacktesterConfig` + `AllocationBacktester`
 - `tests/unit/backtest/test_allocation_bt.py` — new test file
 
-**Before any code:**
-`get_code_snippet("AllocationDecision")` — frozen dataclass fields;
-`get_code_snippet("BacktestStore")` — API;
-`get_code_snippet("get_monthly_rf_rate")` — for cash return computation.
+**Before any code:** `get_code_snippet("AllocationDecision")` — frozen dataclass fields; `get_code_snippet("BacktestStore")` — API; `get_code_snippet("get_monthly_rf_rate")` — for cash return
+computation.
 
 **What to implement:**
 
@@ -860,9 +798,7 @@ class AllocationBacktesterConfig:
 - `src/strategy/execution.py` — `SpreadSpec` frozen dataclass + `SpreadSelector`
 - `tests/unit/strategy/test_execution.py` — new test file
 
-**Before any code:**
-`get_code_snippet("OptionChain")` and `get_code_snippet("OptionLeg")` — existing models;
-`get_code_snippet("SwingSignal")` — fields consumed by SpreadSelector;
+**Before any code:** `get_code_snippet("OptionChain")` and `get_code_snippet("OptionLeg")` — existing models; `get_code_snippet("SwingSignal")` — fields consumed by SpreadSelector;
 `search_graph("parse_upstox_option_chain")` — confirm OptionChain source.
 
 **`SpreadSpec` frozen dataclass:**
@@ -909,10 +845,8 @@ class SpreadSpec:
 - `src/backtest/walkforward.py` — `WalkForwardConfig` + `WalkForwardEngine` + `WFWindow` + `WFResult`
 - `tests/unit/backtest/test_walkforward.py` — new test file
 
-**Before any code:**
-`get_code_snippet("PointsBacktester")` — runner protocol it must accept;
-`get_code_snippet("AllocationBacktester")` — same;
-`get_code_snippet("BacktestStore")` — how to write per-window results.
+**Before any code:** `get_code_snippet("PointsBacktester")` — runner protocol it must accept; `get_code_snippet("AllocationBacktester")` — same; `get_code_snippet("BacktestStore")` — how to write
+per-window results.
 
 **`WalkForwardConfig` frozen dataclass:**
 ```python
@@ -949,9 +883,7 @@ class WalkForwardConfig:
 - `src/backtest/montecarlo.py` — `MCConfig` + `MonteCarloSimulator` + `MCResult`
 - `tests/unit/backtest/test_montecarlo.py` — new test file
 
-**Before any code:**
-`search_code("numpy")` in `src/backtest/` — confirm numpy import pattern;
-`get_code_snippet("BacktestResult")` — trade return field format.
+**Before any code:** `search_code("numpy")` in `src/backtest/` — confirm numpy import pattern; `get_code_snippet("BacktestResult")` — trade return field format.
 
 **`MCResult` frozen dataclass:**
 ```python
@@ -990,9 +922,7 @@ class MCResult:
 - `src/backtest/sensitivity.py` — `SensitivityConfig` + `SensitivityAnalyser` + `SensitivityResult`
 - `tests/unit/backtest/test_sensitivity.py` — new test file
 
-**Before any code:**
-`get_code_snippet("WalkForwardEngine")` — how to get optimal params and metric;
-`get_code_snippet("WFResult")` — structure.
+**Before any code:** `get_code_snippet("WalkForwardEngine")` — how to get optimal params and metric; `get_code_snippet("WFResult")` — structure.
 
 **`SensitivityResult` frozen dataclass:**
 ```python
@@ -1029,25 +959,18 @@ class SensitivityResult:
 - `src/backtest/reports.py` — `SwingValidationReport` + `InvestmentValidationReport` + generator functions
 - `tests/unit/backtest/test_reports.py` — new test file
 
-**Before any code:**
-`get_code_snippet("WFResult")` — fields needed;
-`get_code_snippet("MCResult")` — fields;
-`get_code_snippet("SensitivityResult")` — fields;
-`get_code_snippet("SignalEvalStore")` — `get_regime_tags`, `get_swing_signals`;
-`get_code_snippet("BacktestStore")` — `get_metrics`.
+**Before any code:** `get_code_snippet("WFResult")` — fields needed; `get_code_snippet("MCResult")` — fields; `get_code_snippet("SensitivityResult")` — fields; `get_code_snippet("SignalEvalStore")` —
+`get_regime_tags`, `get_swing_signals`; `get_code_snippet("BacktestStore")` — `get_metrics`.
 
-**`SwingValidationReport` frozen dataclass:**
-All fields from: `WFResult`, `MCResult`, `SensitivityResult`, regime decomposition table,
-6 failure condition checks. Plus:
+**`SwingValidationReport` frozen dataclass:** All fields from: `WFResult`, `MCResult`, `SensitivityResult`, regime decomposition table, 6 failure condition checks. Plus:
 - `strategy`: str
 - `train_period`, `test_period`: tuple[date, date]
 - `regime_decomposition`: dict — `{regime_cell: {"days_pct": float, "profit_pct": float}}`
 - `failure_conditions`: dict — `{condition_name: {"passed": bool, "value": float, "threshold": float}}`
 - `summary`: str — one-line human-readable result ("PASS" or "KILL: <reason>")
 
-**`InvestmentValidationReport`** — same structure but with `buyhold_comparison` field
-(required per `docs/plan/signals-eval-core/stories.md §SE4.x` design: must demonstrate
-either higher Calmar OR >30% drawdown reduction).
+**`InvestmentValidationReport`** — same structure but with `buyhold_comparison` field (required per `docs/plan/signals-eval-core/stories.md §SE4.x` design: must demonstrate either higher Calmar OR
+> 30% drawdown reduction).
 
 **`generate_swing_report(run_id, store, signal_store) → SwingValidationReport`:**
 - Loads WFResult, MCResult, SensitivityResult from BacktestStore.
@@ -1072,22 +995,16 @@ either higher Calmar OR >30% drawdown reduction).
 
 ## SE6.5 — Portfolio construction analysis script (swing strategies, conditional)
 
-> **Conditional:** Run only if ≥2 of SE3.1–SE3.3 swing strategies pass all 6 failure
-> conditions in SE6.1–SE6.4. If only 1 strategy survives, skip this task — combining one
-> validated strategy with a failed one adds no diversification and dilutes the edge.
-> If all 3 fail, the swing research track ends here.
+> **Conditional:** Run only if ≥2 of SE3.1–SE3.3 swing strategies pass all 6 failure conditions in SE6.1–SE6.4. If only 1 strategy survives, skip this task — combining one validated strategy with a
+> failed one adds no diversification and dilutes the edge. If all 3 fail, the swing research track ends here.
 
 **Files to change:**
 - `scripts/portfolio_construction_report.py` — new research script (no unit tests)
 
-**Before any code:**
-`get_code_snippet("PointsBacktester")` — trade record structure (daily equity curve format);
-`get_code_snippet("MonteCarloSimulator")` — how to pass trade returns;
+**Before any code:** `get_code_snippet("PointsBacktester")` — trade record structure (daily equity curve format); `get_code_snippet("MonteCarloSimulator")` — how to pass trade returns;
 `search_code("BacktestStore")` — how to load per-strategy OOS trade sequences.
 
-**What to implement:**
-Script that takes N surviving strategy run_ids from the walk-forward OOS phase (SE6.1) and
-combines them into a portfolio equity curve. Prints PASS / FAIL and key metrics.
+**What to implement:** Script that takes N surviving strategy run_ids from the walk-forward OOS phase (SE6.1) and combines them into a portfolio equity curve. Prints PASS / FAIL and key metrics.
 
 ```python
 def equal_risk_allocate(
@@ -1105,31 +1022,22 @@ def equal_risk_allocate(
 
 **Portfolio metrics to compute and print:**
 
-1. **Combined walk-forward median Calmar** — using the combined daily equity curve from
-   the OOS windows. Gate: combined Calmar ≥ 1.0. If below this, the combination adds
-   complexity without meaningful improvement — trade the single best strategy.
+1. **Combined walk-forward median Calmar** — using the combined daily equity curve from the OOS windows. Gate: combined Calmar ≥ 1.0. If below this, the combination adds complexity without meaningful
+   improvement — trade the single best strategy.
 
-2. **Pairwise daily return correlation** — compute for every pair of surviving strategies.
-   Gate: all pairwise correlations < 0.3. If any pair > 0.3, note which pair and explain
-   why: correlated strategies share a regime dependency and combining them does not reduce
-   tail risk.
+2. **Pairwise daily return correlation** — compute for every pair of surviving strategies. Gate: all pairwise correlations < 0.3. If any pair > 0.3, note which pair and explain why: correlated
+   strategies share a regime dependency and combining them does not reduce tail risk.
 
-3. **Combined Monte Carlo (95th pctile drawdown)** — bootstrap the combined trade sequence
-   (10,000 iterations). Gate: combined MC p95 drawdown < individual strategy worst-case
-   drawdown. If the combination does not reduce tail risk vs. the single-strategy Monte Carlo,
-   diversification is not working — report this explicitly.
+3. **Combined Monte Carlo (95th pctile drawdown)** — bootstrap the combined trade sequence (10,000 iterations). Gate: combined MC p95 drawdown < individual strategy worst-case drawdown. If the
+   combination does not reduce tail risk vs. the single-strategy Monte Carlo, diversification is not working — report this explicitly.
 
 4. **Individual vs. combined equity curve comparison** — print side-by-side:
    - Individual OOS Calmar for each surviving strategy
    - Combined portfolio OOS Calmar
    - Individual MC p95 drawdown
-   - Combined MC p95 drawdown
-   The combination must be Pareto-superior (higher Calmar AND lower p95 DD) to justify
-   the operational overhead of running multiple strategies simultaneously.
+   - Combined MC p95 drawdown The combination must be Pareto-superior (higher Calmar AND lower p95 DD) to justify the operational overhead of running multiple strategies simultaneously.
 
-**If only 1 strategy survived (skip path):**
-Script prints: "Only 1 strategy validated — portfolio construction skipped. Deploy as
-single strategy." and exits. This is a valid outcome.
+**If only 1 strategy survived (skip path):** Script prints: "Only 1 strategy validated — portfolio construction skipped. Deploy as single strategy." and exits. This is a valid outcome.
 
 **Output format (print to stdout):**
 ```
@@ -1148,11 +1056,9 @@ RESULT: PASS — proceed with combined portfolio
 Allocation weights: docs/plan/signals-eval-core/portfolio_allocation.md [auto-generated]
 ```
 
-Auto-generates `docs/plan/signals-eval-core/portfolio_allocation.md` with the final weights
-and a brief rationale (which strategies, why weights were chosen, gate metrics).
+Auto-generates `docs/plan/signals-eval-core/portfolio_allocation.md` with the final weights and a brief rationale (which strategies, why weights were chosen, gate metrics).
 
-**No unit tests.** This is a research script that requires live BacktestStore data.
-Run manually after SE6.4 completes for each surviving strategy.
+**No unit tests.** This is a research script that requires live BacktestStore data. Run manually after SE6.4 completes for each surviving strategy.
 
 **Commit:** `feat(scripts): add portfolio_construction_report.py — swing strategy combination analysis (SE6.5)`
 
@@ -1166,14 +1072,10 @@ Run manually after SE6.4 completes for each surviving strategy.
 - `src/backtest/spread_bt.py` — `SpreadBacktesterConfig` + `SpreadBacktester`
 - `tests/unit/backtest/test_spread_bt.py` — new test file
 
-**Before any code:**
-`get_code_snippet("BhavcopyLoader")` — Bhavcopy data access;
-`get_code_snippet("SpreadSpec")` — execution input;
-`get_code_snippet("PointsBacktester")` — reuse trade record structure;
-`search_code("brentq")` or `search_code("bs_iv")` — any existing IV reconstruction.
+**Before any code:** `get_code_snippet("BhavcopyLoader")` — Bhavcopy data access; `get_code_snippet("SpreadSpec")` — execution input; `get_code_snippet("PointsBacktester")` — reuse trade record
+structure; `search_code("brentq")` or `search_code("bs_iv")` — any existing IV reconstruction.
 
-**What to implement:**
-`SpreadBacktester.run(signals, spread_specs, bhavcopy_df, config, run_id, store) → BacktestResult`:
+**What to implement:** `SpreadBacktester.run(signals, spread_specs, bhavcopy_df, config, run_id, store) → BacktestResult`:
 - For each signal with a `SpreadSpec`, look up Bhavcopy settle_price for both legs.
 - If either leg missing (settle_price = 0 or NaN) → mark trade "excluded"; increment exclusion counter.
 - Net credit = short leg settle_price − long leg settle_price.
@@ -1182,9 +1084,8 @@ Run manually after SE6.4 completes for each surviving strategy.
 - Slippage sensitivity: config param `slippage_pts_per_leg` (test at 0, 2, 4).
 - Exclusion rate report: if >20% excluded → log CRITICAL with count; `BacktestResult.exclusion_rate` field.
 
-IV reconstruction (for delta verification only, not P&L):
-`compute_bs_iv(settle_price, spot, strike, tte_years, rate, is_call) → float | None`
-using `scipy.optimize.brentq`. Returns `None` if solution not found.
+IV reconstruction (for delta verification only, not P&L): `compute_bs_iv(settle_price, spot, strike, tte_years, rate, is_call) → float | None` using `scipy.optimize.brentq`. Returns `None` if solution
+not found.
 
 **Tests (`tests/unit/backtest/test_spread_bt.py`):**
 - Both legs have valid Bhavcopy data → trade recorded; P&L = credit minus costs.
@@ -1206,5 +1107,4 @@ using `scipy.optimize.brentq`. Returns `None` if solution not found.
 - `TODOS.md` — targeted `Edit`: session log entry
 - `BACKTEST_PLAN_PHASE1.md` — tick completed Phase 2 checkboxes (2.S0–2.S3b, 2.I0–2.I2 as applicable)
 
-No code changes. No tests. **Never use `Write` on these files — `Edit` only.**
-**Commit:** `docs(signals-eval-core): update CONTEXT.md, DECISIONS.md, TODOS.md, BACKTEST_PLAN_PHASE1.md (SE8)`
+No code changes. No tests. **Never use `Write` on these files — `Edit` only.** **Commit:** `docs(signals-eval-core): update CONTEXT.md, DECISIONS.md, TODOS.md, BACKTEST_PLAN_PHASE1.md (SE8)`
