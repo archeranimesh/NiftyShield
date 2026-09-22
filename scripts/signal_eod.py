@@ -187,6 +187,23 @@ def _pnl_per_lot(entry: Decimal | None, exit_premium: Decimal | None) -> Decimal
     return (exit_premium - entry) * LOT_SIZE
 
 
+def _high_low_pnl_per_lot(
+    trade_id: int | None, entry_premium: Decimal | None
+) -> tuple[Decimal | None, Decimal | None]:
+    """Profit high/low per lot from the trade's mark history, or ``(None, None)``.
+
+    Sourced from the last (most recent) ``paper_signal_marks`` row's
+    ``mfe_pct`` / ``mae_pct`` — both are running extremes since entry.
+    """
+    if trade_id is None or entry_premium is None:
+        return None, None
+    marks = PaperStore(settings.db_path).get_marks(trade_id)
+    if not marks:
+        return None, None
+    last = marks[-1]
+    return last.mfe_pct * entry_premium * LOT_SIZE, last.mae_pct * entry_premium * LOT_SIZE
+
+
 def _format_outcome_notification(outcome: SignalOutcome, signal: DailySignal) -> str:
     """Render the daily outcome as MarkdownV2-ready Telegram message text.\n\n    S5.5c vertical layout (reference renderer ``format_outcome_notification``,\n    validated on-device 2026-09-08): bold header + blank line + one\n    emoji-prefixed line per field. This formatter owns its escaping — every\n    dynamic part is escaped per value and literal ``*`` is emitted for bold — so\n    the caller sends the result WITHOUT re-wrapping it in ``escape_markdown``.\n\n    Would-be P&L for the not-taken case is derived here from\n    ``entry_premium``/``exit_premium`` (both populated by ``--auto`` even when\n    ``executed`` is False) — no ``SignalOutcome`` change.\n\n    Args:\n        outcome: The persisted ``SignalOutcome`` for the trading day.\n        signal: The aggregated ``DailySignal`` — direction of the trade call.\n\n    Returns:\n        Fully-escaped message text. One of: an executed block, a not-taken\n        (would-be P&L) block, a NO_TRADE line, or a close-only fallback when a\n        premium leg is missing.\n"""
     day = outcome.trade_date.strftime("%d %b")
@@ -463,10 +480,12 @@ def run_record_phase(args: argparse.Namespace) -> None:
 
     is_trade = signal.is_actionable
 
+    trade_id = None
     if is_trade and not executed:
         live_entries = PaperStore(settings.db_path).get_entries(trade_date, trade_date)
         if live_entries:
             executed = True
+            trade_id = live_entries[0].trade_id
             if entry_premium is None:
                 # one open position at a time (open_signal_entry) -> earliest
                 # trade_id is the entry for this signal_date
@@ -510,6 +529,9 @@ def run_record_phase(args: argparse.Namespace) -> None:
     if not is_trade:
         entry_premium = exit_premium = None
         executed = False
+        trade_id = None
+
+    high_pnl_per_lot, low_pnl_per_lot = _high_low_pnl_per_lot(trade_id, entry_premium)
 
     outcome = SignalOutcome(
         trade_date=trade_date,
@@ -518,6 +540,8 @@ def run_record_phase(args: argparse.Namespace) -> None:
         entry_premium=entry_premium,
         exit_premium=exit_premium,
         pnl_per_lot=_pnl_per_lot(entry_premium, exit_premium) if executed else None,
+        high_pnl_per_lot=high_pnl_per_lot,
+        low_pnl_per_lot=low_pnl_per_lot,
         nifty_close=nifty_close,
         executed=executed,
         phase=_resolve_phase(),

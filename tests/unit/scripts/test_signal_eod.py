@@ -350,7 +350,9 @@ def test_executed_detected_from_live_paper_entry(
 
     live_entry = MagicMock()
     live_entry.entry_premium = Decimal("120.00")
+    live_entry.trade_id = 42
     mock_paper_store_cls.return_value.get_entries.return_value = [live_entry]
+    mock_paper_store_cls.return_value.get_marks.return_value = []
 
     signal_eod.main()
 
@@ -358,6 +360,227 @@ def test_executed_detected_from_live_paper_entry(
     assert outcome.executed is True
     assert outcome.entry_premium == Decimal("120.00")
     assert outcome.pnl_per_lot == (Decimal("150.00") - Decimal("120.00")) * LOT_SIZE
+
+
+@patch("scripts.signal_eod.PaperStore")
+@patch("scripts.signal_eod.guard_trading_day")
+@patch("scripts.signal_eod._parse_args")
+@patch("scripts.signal_eod.market_today")
+@patch("scripts.signal_eod.SignalStore")
+@patch("scripts.signal_eod._resolve_option_key")
+@patch("scripts.signal_eod._fetch_ltp")
+@patch("scripts.signal_eod.build_notifier")
+def test_executed_outcome_computes_high_low_from_marks(
+    mock_notifier: MagicMock,
+    mock_fetch_ltp: MagicMock,
+    mock_resolve: MagicMock,
+    mock_store_cls: MagicMock,
+    mock_market_today: MagicMock,
+    mock_parse_args: MagicMock,
+    mock_guard: MagicMock,
+    mock_paper_store_cls: MagicMock,
+) -> None:
+    """A live entry's mark history produces high/low P&L from the last row's mfe/mae."""
+    mock_parse_args.return_value = MagicMock(
+        auto=True,
+        report_only=False,
+        from_date=None,
+        to_date=None,
+        phase=None,
+        entry_premium=None,
+        exit_premium=None,
+        executed=False,
+        nifty_close=None,
+        bod_path=Path("/fake/bod.json"),
+        notes="",
+        trade_date="2026-09-08",
+    )
+    mock_market_today.return_value = date(2026, 9, 8)
+    mock_notifier.return_value = None
+    mock_guard.return_value = False
+
+    mock_store = MagicMock()
+    mock_store_cls.return_value = mock_store
+
+    signal = DailySignal(
+        trade_date=date(2026, 9, 8),
+        responses=[],
+        consensus_direction=Direction.BULLISH,
+        consensus_confidence=Decimal("4"),
+        trade_action=TradeAction.BUY_CALL,
+        recommended_strike=24800,
+        entry_premium=None,
+        agreeing_models=[],
+        dissenting_models=[],
+    )
+    mock_store.get_signal.return_value = signal
+
+    mock_resolve.return_value = "NSE_FO|12345"
+    mock_fetch_ltp.return_value = {
+        "NSE_FO|12345": Decimal("150.00"),
+        "NSE_INDEX|Nifty 50": Decimal("24850.00"),
+    }
+
+    live_entry = MagicMock()
+    live_entry.entry_premium = Decimal("120.00")
+    live_entry.trade_id = 42
+    mock_paper_store_cls.return_value.get_entries.return_value = [live_entry]
+
+    early_mark = MagicMock()
+    early_mark.mfe_pct = Decimal("0.10")
+    early_mark.mae_pct = Decimal("-0.05")
+    last_mark = MagicMock()
+    last_mark.mfe_pct = Decimal("0.25")
+    last_mark.mae_pct = Decimal("-0.08")
+    mock_paper_store_cls.return_value.get_marks.return_value = [early_mark, last_mark]
+
+    signal_eod.main()
+
+    mock_paper_store_cls.return_value.get_marks.assert_called_once_with(42)
+    outcome = mock_store.record_outcome.call_args[0][0]
+    assert outcome.high_pnl_per_lot == Decimal("0.25") * Decimal("120.00") * LOT_SIZE
+    assert outcome.low_pnl_per_lot == Decimal("-0.08") * Decimal("120.00") * LOT_SIZE
+
+
+@patch("scripts.signal_eod.PaperStore")
+@patch("scripts.signal_eod.guard_trading_day")
+@patch("scripts.signal_eod._parse_args")
+@patch("scripts.signal_eod.market_today")
+@patch("scripts.signal_eod.SignalStore")
+@patch("scripts.signal_eod._resolve_option_key")
+@patch("scripts.signal_eod._fetch_ltp")
+@patch("scripts.signal_eod.build_notifier")
+def test_not_executed_outcome_leaves_high_low_none(
+    mock_notifier: MagicMock,
+    mock_fetch_ltp: MagicMock,
+    mock_resolve: MagicMock,
+    mock_store_cls: MagicMock,
+    mock_market_today: MagicMock,
+    mock_parse_args: MagicMock,
+    mock_guard: MagicMock,
+    mock_paper_store_cls: MagicMock,
+) -> None:
+    """No live entry / not executed leaves both high/low `None`, no `get_marks` call."""
+    mock_parse_args.return_value = MagicMock(
+        auto=True,
+        report_only=False,
+        from_date=None,
+        to_date=None,
+        phase=None,
+        entry_premium=None,
+        exit_premium=None,
+        executed=False,
+        nifty_close=None,
+        bod_path=Path("/fake/bod.json"),
+        notes="",
+        trade_date="2026-09-08",
+    )
+    mock_market_today.return_value = date(2026, 9, 8)
+    mock_notifier.return_value = None
+    mock_guard.return_value = False
+
+    mock_store = MagicMock()
+    mock_store_cls.return_value = mock_store
+
+    signal = DailySignal(
+        trade_date=date(2026, 9, 8),
+        responses=[],
+        consensus_direction=Direction.BULLISH,
+        consensus_confidence=Decimal("4"),
+        trade_action=TradeAction.BUY_CALL,
+        recommended_strike=24800,
+        entry_premium=Decimal("120.00"),
+        agreeing_models=[],
+        dissenting_models=[],
+    )
+    mock_store.get_signal.return_value = signal
+
+    mock_resolve.return_value = "NSE_FO|12345"
+    mock_fetch_ltp.return_value = {
+        "NSE_FO|12345": Decimal("150.00"),
+        "NSE_INDEX|Nifty 50": Decimal("24850.00"),
+    }
+
+    mock_paper_store_cls.return_value.get_entries.return_value = []
+
+    signal_eod.main()
+
+    outcome = mock_store.record_outcome.call_args[0][0]
+    assert outcome.high_pnl_per_lot is None
+    assert outcome.low_pnl_per_lot is None
+    mock_paper_store_cls.return_value.get_marks.assert_not_called()
+
+
+@patch("scripts.signal_eod.PaperStore")
+@patch("scripts.signal_eod.guard_trading_day")
+@patch("scripts.signal_eod._parse_args")
+@patch("scripts.signal_eod.market_today")
+@patch("scripts.signal_eod.SignalStore")
+@patch("scripts.signal_eod._resolve_option_key")
+@patch("scripts.signal_eod._fetch_ltp")
+@patch("scripts.signal_eod.build_notifier")
+def test_executed_with_no_marks_leaves_high_low_none(
+    mock_notifier: MagicMock,
+    mock_fetch_ltp: MagicMock,
+    mock_resolve: MagicMock,
+    mock_store_cls: MagicMock,
+    mock_market_today: MagicMock,
+    mock_parse_args: MagicMock,
+    mock_guard: MagicMock,
+    mock_paper_store_cls: MagicMock,
+) -> None:
+    """A resolved live entry with no mark rows yet leaves both high/low `None`, no exception."""
+    mock_parse_args.return_value = MagicMock(
+        auto=True,
+        report_only=False,
+        from_date=None,
+        to_date=None,
+        phase=None,
+        entry_premium=None,
+        exit_premium=None,
+        executed=False,
+        nifty_close=None,
+        bod_path=Path("/fake/bod.json"),
+        notes="",
+        trade_date="2026-09-08",
+    )
+    mock_market_today.return_value = date(2026, 9, 8)
+    mock_notifier.return_value = None
+    mock_guard.return_value = False
+
+    mock_store = MagicMock()
+    mock_store_cls.return_value = mock_store
+
+    signal = DailySignal(
+        trade_date=date(2026, 9, 8),
+        responses=[],
+        consensus_direction=Direction.BULLISH,
+        consensus_confidence=Decimal("4"),
+        trade_action=TradeAction.BUY_CALL,
+        recommended_strike=24800,
+        entry_premium=None,
+        agreeing_models=[],
+        dissenting_models=[],
+    )
+    mock_store.get_signal.return_value = signal
+
+    mock_resolve.return_value = "NSE_FO|12345"
+    mock_fetch_ltp.return_value = {
+        "NSE_FO|12345": Decimal("150.00"),
+        "NSE_INDEX|Nifty 50": Decimal("24850.00"),
+    }
+
+    live_entry = MagicMock()
+    live_entry.entry_premium = Decimal("120.00")
+    live_entry.trade_id = 42
+    mock_paper_store_cls.return_value.get_entries.return_value = [live_entry]
+    mock_paper_store_cls.return_value.get_marks.return_value = []
+
+    signal_eod.main()
+
+    outcome = mock_store.record_outcome.call_args[0][0]
+    assert outcome.high_pnl_per_lot is None
+    assert outcome.low_pnl_per_lot is None
 
 
 @patch("scripts.signal_eod.PaperStore")
