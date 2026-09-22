@@ -143,6 +143,10 @@ dedupe `expiry_unresolved` logging, BOD-resolve replacement-leg keys, atomic clo
 **`paper-ic-daily-snapshot/`** · ✅ Shipped/Archived 2026-08-07 → `docs/archive/plan/paper-ic-daily-snapshot/` IC daily P&L snapshot wiring (SNAP-1..5): confirmed realized/unrealized semantics, built
 `scripts/reporting/paper_pnl_report.py`, fixed `paper_nav_snapshots.total_pnl` invariant + backfilled 42 rows.
 
+**`paper-store-position-granularity/`** · ✅ Archived → `docs/archive/plan/paper-store-position-granularity/` (PG-1..PG-4i) `PaperStore.get_positions()`/`get_position()` group by `(strategy_name,
+leg_role, instrument_key)`, not `leg_role` alone, so a roll overlap no longer collapses two same-role positions into one. `ApprovedAction.legs_to_close` carries `LegClose(leg_role, instrument_key)`
+pairs; `PaperExecutor.apply()` passes `instrument_key` through to `get_position()`.
+
 ---
 
 ## Blocked / Later Stories
