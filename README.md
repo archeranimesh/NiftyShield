@@ -72,27 +72,28 @@ NiftyShield/
 │   ├── auth/              # OAuth flow — Upstox, Nuvama, Dhan
 │   ├── client/
 │   │   ├── protocol.py        # BrokerClient + sub-protocols (ISP)
-│   │   ├── upstox_live.py     # Live Upstox implementation
-│   │   ├── upstox_sandbox.py  # Sandbox implementation
-│   │   ├── upstox_market.py   # Analytics Token market data (legacy)
+│   │   ├── upstox_live.py     # Live Upstox implementation — also used for sandbox (different token, same class)
+│   │   ├── upstox_market.py   # Analytics Token market data (V3 LTP + option chain)
 │   │   ├── mock_client.py     # Stateful offline mock
 │   │   └── factory.py         # Composition root (sole concrete importer)
 │   ├── models/            # Shared Pydantic models (option chain, portfolio, mf)
 │   ├── portfolio/         # Strategy P&L, daily snapshots, trade ledger
-│   ├── paper/             # Paper trading — PaperTrade, PaperStore, PaperTracker
-│   ├── strategy/          # Paper-backbone strategies — CSP/CC/PP/Collar/Iron Condor V1+V2, StrategyMonitor, exit-signal engine
+│   ├── paper/              # Paper trading — PaperTrade, PaperStore, PaperTracker, cycle_pnl (round-trip reconstruction)
+│   ├── strategy/          # Paper-backbone strategies — CSP/CC/PP/Collar/Iron Condor V1+V2/SignalTrackV1, StrategyMonitor, exit-signal engine
+│   ├── signals/            # Multi-LLM daily directional signal pipeline (Grok/GPT-4o/Gemini consensus) — own SQLite tables
 │   ├── risk/              # Portfolio delta gating — PortfolioDeltaTracker, entry gate
 │   ├── backtest/          # IVR, VIX ingestion, EOD/intraday chain Parquet writer+reader
-│   ├── gamma/             # Near-Expiry Gamma Buy — chain snapshot model + store
+│   ├── gamma/              # Near-Expiry Gamma Buy — chain snapshot model + store
 │   ├── council/           # LLM Council client (RapidCouncil) — stage-1 fan-out + chairman synthesis
 │   ├── mf/                # MF transaction ledger, AMFI NAV fetcher
-│   ├── dhan/              # Dhan equity/bond holdings + Upstox LTP enrichment
-│   ├── nuvama/            # Nuvama bond holdings + options P&L
+│   ├── dhan/               # Dhan equity/bond holdings + Upstox LTP enrichment
+│   ├── nuvama/             # Nuvama bond holdings + options P&L
 │   ├── instruments/       # BOD instrument lookup, expiry/strike resolution
 │   ├── market_calendar/   # NSE holiday calendar (YAML-backed, fail-open)
-│   ├── notifications/     # Telegram notifier (non-fatal, MarkdownV2 parse_mode)
+│   ├── notifications/     # Telegram notifier (non-fatal, MarkdownV2 parse_mode) + shared entry/exit message renderers
+│   ├── reporting/          # Promoted EOD report builders (cross-strategy paper-trade summary)
 │   ├── intraday/          # Intraday monitoring orchestration (Dhan + Nuvama)
-│   ├── utils/             # Structured logging, number formatting, config helpers
+│   ├── utils/              # Structured logging, number formatting, config helpers
 │   ├── config.py          # Settings singleton (pydantic-settings) — import, never os.getenv
 │   ├── db.py              # Shared SQLite context manager (WAL, FK, Row factory)
 │   ├── execution/         # [empty — planned Phase 1–2, see BACKTEST_PLAN.md]
@@ -104,16 +105,16 @@ NiftyShield/
 │   ├── strategies/        # Per-strategy entry/roll/snapshot scripts (csp/, ic/, three_track/, cc_calibration/)
 │   ├── portfolio/         # Live portfolio P&L crons (daily_snapshot, morning_nav, paper_snapshot, roll_leg, backup_db)
 │   ├── intraday/          # Intraday tracker crons (Dhan + Nuvama)
-│   ├── reporting/         # Paper P&L report builder
 │   ├── seed/              # One-time DB seed scripts
 │   ├── council/           # ask_council.py CLI + templates
-│   ├── dev/               # Diagnostics, one-off migrations, backfills
-│   ├── cron/              # Cron line references
+│   ├── dev/               # Diagnostics, one-off migrations, backfills, repo-integrity hooks (dev/hooks/)
 │   ├── healthcheck.py           # Dead man's switch for EOD cron validation
 │   ├── monitor_daemon.py        # StrategyMonitor daemon main loop
 │   ├── position_health_check.py # Roll-overdue / unmapped-asset alert cron
 │   ├── pre_market_brief.py      # Pre-market summary cron
 │   ├── eod_summary.py           # EOD P&L summary cron
+│   ├── eod_pt_summary.py        # EOD PT Summary cron — wraps src/reporting/eod_pt_summary.py
+│   ├── morning_signal.py / signal_eod.py  # Signals pipeline crons (09:30 / 16:00 IST)
 │   └── start_monitor.py / stop_monitor.py  # Daemon launcher / shutdown
 ├── tests/
 │   ├── unit/              # ~2980 offline tests (default — no network, no real tokens)
@@ -667,6 +668,7 @@ All backtesting runs **fully offline** against local Parquet/SQLite stores. No A
   (the full multi-phase backtest engine — portfolio construction, live promotion — remains in progress, see `BACKTEST_PLAN_PHASE1.md`, **P0**)
 - [x] Strategy engine (`src/strategy/`) — CSP/CC/PP/Collar overlays, Iron Condor V1+V2, `StrategyMonitor`, exit-signal engine; paper-trading backbone live since 2026-07
 - [x] Portfolio delta risk manager (`src/risk/`) — `PortfolioDeltaTracker`, entry gate, warning/cap thresholds
+- [x] Multi-LLM daily signal pipeline (`src/signals/`) — Grok/GPT-4o/Gemini consensus, `SignalAggregator`, paper-traded via `SignalTrackV1` (shipped 2026-09-09)
 - [ ] Order execution engine (`src/execution/`) — blocked (static IP)
 - [ ] Websocket streaming + replay (`src/streaming/`) — Phase 1–2, see `BACKTEST_PLAN.md`
 
@@ -737,9 +739,13 @@ NiftyShield has pre-configured skills and agents you invoke by saying a phrase t
 
 | Skill | Say this | What happens |
 |---|---|---|
-| **plan view** | "show me the plan" · "plan status" | Renders `BACKTEST_PLAN.md` as an interactive card widget — task cards, `[x]` state, badges, gate rows. Auto-renders on file read. |
+| **work** | "/work" · "start work" · "pick up a task" | Front door for task-shaped sessions — routes to a feature story or a bug, loads the prompt + first unchecked task + `CONTEXT.md`. |
 | **md-organize** | "organize the markdown" · "archive TODOs" | Archives done stories + old log entries, syncs docs, reflows prose, reconciles the `CLAUDE.md` / `AGENTS.md` mirrors, commits. |
 | **commit** | "generate a commit message" | Produces a commit in the project format (`type(scope): subject` + `Why:` + `What:` + `Ref:`). Full spec in `.claude/skills/commit/SKILL.md`. |
+| **session-close** | (auto, end of session) | Session-efficiency + protocol-compliance report, plus a DOC STALENESS content-gap check. |
+| **protocol-reference** | (auto, per `CLAUDE.md`) | Deferred reference material — Council Decision Protocol, quick-reference table, AI-collaboration workflow, review rules. |
+| **handoff-antigravity** | (auto, per Step 3b routing) | Produces the structured handoff prompt when a task routes to Antigravity implementation. |
+| **weekly-audit** | "run the weekly audit" | Weekly repo-health audit. |
 
 ### Agents (specialist sub-tasks)
 

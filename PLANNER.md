@@ -24,27 +24,19 @@
 
 ---
 
-## Near-Term (May–June 2026)
+## Near-Term (May–June 2026) — mostly shipped; see `CONTEXT.md` for current state
 
-Active code queue in priority order — see `TODOS.md` for full specs.
+Original May–June queue below is superseded by delivered work (RDO-16 refresh, 2026-09-22):
+Task 1 (VIX/IVR) and Task 2 (`PortfolioDeltaTracker`) shipped — see `src/backtest/ivr.py` and
+`src/risk/`. Task 3's NIFTY_JUN legs did not roll — the finideas_ilts option legs were closed
+manually on 2026-07-14 (`CONTEXT.md` §Live Data); only the EBBETF0431 leg remains live. Task 4c
+(`src/strategy/` paper-backbone) shipped in full: 8 strategies, `StrategyMonitor` daemon,
+`PaperExecutor`, `TelegramGateway` approval flow — see `CONTEXT.md` §`src/strategy/`. The
+multi-LLM signals pipeline (`src/signals/`, not in this list originally) also shipped
+2026-09-09 — see `CONTEXT.md` §`src/signals/`. Active queue now lives in `TODOS.md` §Feature
+Backlog + `docs/plan/`, not here — this file is roadmap-level, not task-level.
 
-### Task 0 — Fix bhavcopy UDiFF format migration (ASAP)
-`src/backtest/bhavcopy_ingest.py` needs dual-URL + dual-parser to cover Dec 2024+. Safe range until fix ships: `--end 2024-11-01`.
-
-### Task 1 — India VIX ingestion + IVR calculation (Jun 2026)
-Daily VIX Parquet from Upstox (`NSE_INDEX|India VIX`). Wires `compute_ivr()` (already in `src/backtest/ivr.py`) into paper trade entry logging. Enables R3 filter + Phase 0.8 gate criteria C/D.
-
-### Task 2 — PortfolioDeltaTracker (Jun 2026)
-`src/risk/` package: `PortfolioDelta` dataclass, `PortfolioDeltaTracker.aggregate_delta()`, `check_entry_allowed()`. Caps: options-only +1.0 lots, combined +2.0 lots.
-
-### Task 3 — June 2026 Finideas Roll (HARD DEADLINE 2026-06-30)
-NIFTY_JUN 23000 CE + PE legs expire. Invoke `roll-validator` agent ≥1 week before deadline.
-
-### Task 4c — paper-backbone (Jun–Jul 2026)
-`src/strategy/` protocol + `StrategyMonitor` daemon + `RapidCouncil` + `TelegramGateway` approval flow.
-CSP and 3-Track strategies are already live as paper trades (since 2026-05-11); this phase adds
-automated signal detection and Telegram approval routing. **Full spec: `docs/plan/paper-backbone/`** — copy `prompt.md` to start.
-PT-0 (PB1.1–PB1.7) is the only unblocked entry point and blocks all strategy phases.
+Task 0 (bhavcopy UDiFF dual-parser) also shipped — `_parse_udiff()` in `src/backtest/bhavcopy_ingest.py` covers Dec 2024+.
 
 ### P&L Visualization artifact
 ~6 weeks of snapshot data now available — buildable.

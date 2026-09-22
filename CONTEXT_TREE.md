@@ -97,6 +97,8 @@ src/
 │   ├── metrics.py            # Pure metric functions: compute_nee() (Nifty-equivalent exposure), cost attribution helpers. NIFTYBEES_BETA_TO_NIFTY = 0.92.
 │   ├── overlay_selector.py   # Overlay expiry selector — finds most cost-efficient protection leg across candidate expiries. Async; returns ranked candidates.
 │   ├── proxy_monitor.py      # Track C delta monitor. ProxyDeltaMonitor tracks DITM call delta drift for the proxy track and flags rebalance triggers.
+│   ├── cycle_pnl.py          # reconstruct_cycles(): derives round-trip cycle boundaries by walking paper_trades in execution order and cutting when tracked legs are simultaneously flat
+│   │                         #   (no cycle_id column). get_last_cycle_realized_pnl(), cycle_stats(), LegGroup, resolve_target(). Shared by scripts/dev/cycle_pnl_report.py + BUG-043.
 │   ├── chain_utils.py        # Shared option-chain lookup helpers used across paper entry/roll scripts
 │   ├── _display.py           # Legacy labels (BASE_LABELS, OVERLAY_LABELS) and hedge_verdict. Kept for backward compat with older snapshot scripts.
 │   └── _utils.py             # Paper-local utilities: safe_float(val, default) — converts any value to float without raising.
@@ -124,18 +126,33 @@ src/
 │   ├── ic_close_executor.py  # close_ic_legs(): shared auto-close persistence helper for IronCondorV1/V2 — batch LTP fetch + atomic closing-trade writes;
 │                             #   settlement-fallback for missing LTP on expiry day
 │   ├── _price_utils.py       # Shared price/LTP resolution helpers used by executor.py + ic_close_executor.py
-│   └── profit_lock_engine.py # ProfitLockEngine: stateless 3-zone profit-lock evaluator; ProfitLockState + ProfitLockDecision frozen dataclasses; floor formula max(W,W)+D_cum+D_lock+K ≤ 0.75×C₀;
-│                             #   Zone 1 log-only, Zone 2 wing contraction to ~19Δ, Zone 3 CLOSE_FULL; council ruling 2026-06-27
-├── signals/                  # Multi-LLM daily directional signal pipeline (docs/plan/signals/). Self-contained: own SQLite tables, no src/backtest/ dependency.
+│   ├── profit_lock_engine.py # ProfitLockEngine: stateless 3-zone profit-lock evaluator; ProfitLockState + ProfitLockDecision frozen dataclasses; floor formula max(W,W)+D_cum+D_lock+K ≤ 0.75×C₀;
+│   │                         #   Zone 1 log-only, Zone 2 wing contraction to ~19Δ, Zone 3 CLOSE_FULL; council ruling 2026-06-27
+│   ├── collar_entry.py       # Shared Collar two-leg strike selection + PaperTrade construction (Collar3b); used by both the 3-track CLI bootstrap and CollarOverlayV1's close+reenter action.
+│   ├── signal_exit.py        # Signals-paper-track exit policy: SL_PCT/TGT_PCT/RULESET_VERSION constants + pure evaluate() (SPT-3/SPT-3b) — the sole SL/target owner for paper_signal_track_v1.
+│   └── signal_track_v1.py    # SignalTrackV1 (SPT-3): turns the signals/ epic's daily consensus DailySignal into a simulated long-option paper position on paper_signal_track_v1
+│                             #   (paper_trades + paper_signal_entries namespace).
+├── signals/                  # Multi-LLM daily directional signal pipeline (shipped 2026-09-09; docs/archive/plan/signals/). Self-contained: own SQLite tables, no src/backtest/ dependency.
 │   ├── __init__.py           # Package marker
 │   ├── models.py             # Frozen Pydantic: Direction/TradeAction enums; input OILevel/OptionChainSummary/FIIData/MarketSnapshot; output SignalResponse/DailySignal/SignalOutcome.
 │   ├── protocol.py           # SignalProvider Protocol — contract for all providers (Grok, GPT-4o, Gemini, Mock).
 │   ├── prompt.py             # build_prompt(snapshot, provider_name) → chat messages; SUFFIXES dict per provider; NIFTY_STRIKE_STEP=50 (pure).
 │   ├── aggregator.py         # SignalAggregator: pure consensus — strike/confidence validation, direction voting, Decimal confidence gate (min 3), modal strike with ATM tie-break.
+│   ├── option_resolver.py    # Resolves a DailySignal's strike/expiry into an InstrumentLookup instrument key for the paper-track entry (uses src/instruments/lookup.py).
+│   ├── market_inputs.py      # gift_nifty / usd_inr / fii fetchers — the three MarketSnapshot fields with no other source in the repo (spike-confirmed 2026-09-07).
+│   ├── snapshot.py           # assemble_market_snapshot(): builds the full MarketSnapshot from live sources (~09:10 IST); delegates gift_nifty/usd_inr/fii to market_inputs.py.
+│   ├── factory.py            # build_providers(): sole composition root for concrete SignalProvider instances (Grok/GPT-4o/Gemini/Mock) — everything downstream depends only on the protocol.
+│   ├── pipeline.py           # Morning signal pipeline body (extracted from scripts/morning_signal.py, SEC-4): MarketSnapshot → provider fan-out → aggregation → persistence → SPT-6 paper-entry
+│   │                         #   tail-call. No Telegram / setup_logging — those stay cron-boundary concerns in the script.
 │   ├── store.py              # SignalStore: init_db (signal_inputs/signal_responses/daily_signals/signal_outcomes + 2 indexes, idempotent) + write methods
-│                             #   record_snapshot/record_response/record_signal/record_outcome. Model→schema column mapping; Decimal→TEXT; INSERT OR IGNORE for responses.
+│   │                         #   record_snapshot/record_response/record_signal/record_outcome. Model→schema column mapping; Decimal→TEXT; INSERT OR IGNORE for responses. get_signal_cost()
+│   │                         #   aggregates OpenRouter token usage + USD cost across providers.
 │   └── providers/
-│       └── __init__.py       # Package marker (provider impls land in S3.x)
+│       ├── __init__.py       # Package marker
+│       ├── gpt4o.py          # OpenRouter-backed SignalProvider for GPT-4o (Phase 1 openrouter_only).
+│       ├── grok.py           # Grok SignalProvider — Phase 1 OpenRouter shim, Phase 2 xAI direct.
+│       ├── gemini.py         # Gemini SignalProvider — Phase 1 OpenRouter shim, Phase 2 Google AI SDK.
+│       └── mock.py           # Deterministic SignalProvider for tests and offline runs.
 ├── mf/
 │   ├── CLAUDE.md             # Module context: transaction ledger model, AMFI source, Decimal TEXT invariant, MFHolding location
 │   ├── __init__.py           # Package marker
@@ -192,9 +209,14 @@ src/
 │   ├── protocol.py           # NotifierProtocol — abstracts the notification sink for testability
 │   ├── formatting.py         # Per-parameter-type value formatters (money / greek / strike / pct / expiry) + monospace table builders for Telegram messages.
 │                             #   Canonical rules: FORMATTING.md (root) + src/notifications/CLAUDE.md §"Instrument Label Formatting".
-│   ├── telegram.py           # TelegramNotifier: fire-and-forget sendMessage via raw requests (HTML parse_mode, <pre> block). build_notifier() returns None when env vars absent.
+│   ├── telegram.py           # TelegramNotifier: fire-and-forget sendMessage via raw requests (MarkdownV2 parse_mode; HTML <pre> migration complete + archived 2026-09-06).
 │                             #   send() never raises — catches Exception broadly, logs WARNING, returns False.
-│   └── telegram_gateway.py   # TelegramGateway: council-free approval request dispatch + inbound callback polling + auth guard (chat-ID allowlist) + timeout scan for stale pending approvals
+│   ├── telegram_gateway.py   # TelegramGateway: council-free approval request dispatch + inbound callback polling + auth guard (chat-ID allowlist) + timeout scan for stale pending approvals
+│   ├── markdown.py           # MarkdownV2 escaping helpers — escapes the 18 reserved characters outside a code span; every caller must route dynamic values through this before sending.
+│   ├── alerts.py             # Shared Telegram message builders (uses formatting.py + markdown.py).
+│   ├── entry_message.py      # Shared lean entry-confirmation renderer for paper strategies — IC v1/v2 + CSP + CC + Collar/PP + 3track bootstrap (UEM-1/2, OEM-1..4). Typed dataclass +
+│   │                         #   pure format_* function; every dynamic value escaped via escape_markdown(); fenced table emitted literally.
+│   └── exit_message.py       # Shared close-confirmation renderer — IC/CSP/CC/PP/Collar + this-exit / cycle / inception P&L + win-rate (UXM-1..7). Mirrors entry_message.py's design.
 ├── nuvama/
 │   ├── __init__.py           # Package marker
 │   ├── models.py             # Frozen dataclasses: NuvamaBondHolding (isin/qty/avg_price/ltp/chg_pct/hair_cut;
@@ -338,17 +360,36 @@ scripts/
 │   │   ├── __init__.py
 │   │   ├── check_md_line_length.py       # pre-commit `md-line-length` — fail any .md line > 200 chars
 │   │   ├── check_story_structure.py      # pre-commit `check-story-structure` + `--all` audit — docs/plan story/epic folder shape
-│   │   └── check_checkbox_consistency.py # `--all` audit only (md-organize skill) — tasks.md checkbox + task-line-tail consistency
+│   │   ├── check_checkbox_consistency.py # `--all` audit only (md-organize skill) — tasks.md checkbox + task-line-tail consistency
+│   │   ├── check_inline_full_suite.py    # PreToolUse block (`.claude/hooks/inline_full_suite.sh`) — blocks a bare full-suite pytest run from the main session (exit 2); spawn test-runner instead.
+│   │   ├── check_repeat_read.py          # PreToolUse block (`.claude/hooks/repeat_read.sh`) — blocks a second Read of a path already read this session with no intervening Edit/Write.
+│   │   └── check_wide_grep.py            # PreToolUse warn (`.claude/hooks/wide_grep.sh`) — flags an unscoped grep/sed/awk over a large file; always exits 0.
+│   ├── reflow_md.py           # Reusable whitespace-only Markdown paragraph-reflow engine (RDO-17.7 §A) — fills prose to the fill-to-≤200 line style; `--check` / in-place; fenced code,
+│   │                          #   tables, headings and nested list/quote structure left verbatim.
+│   ├── commit_preflight.py    # CLI the `commit` skill runs in Step 1 (not a git hook) — catches a recurring re-stage / swap-only-commit cycle before pre-commit runs, including the
+│   │                          #   SHA-placeholder check for the closing-commit SHA-backfill policy.
+│   ├── cycle_pnl_report.py    # Per-cycle P&L / exit-reason / days-in-trade report for paper strategies — reconstructs cycles via src/paper/cycle_pnl.py.
+│   ├── graph_snippet.py       # Thin CLI wrapper over codebase-memory-mcp's get_code_snippet that strips the unused fp/sp/bt fingerprint fields (~244 tokens/call); defaults --project.
+│   ├── session_audit_log.py   # Append/read per-session feature-usage rows for the weekly-audit skill; session-close computes protocol-compliance + token-efficiency counts off this log.
+│   ├── token_audit.py         # Attributes a Claude Code session transcript's tokens by bucket — where the session's tokens went (tool output, prompt, thinking, etc.).
 │   ├── send_test_telegram.py # Smoke-test script. Reads TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID from .env, sends a sample P&L message. Exit code 0/1. Run before first cron to verify credentials.
 │   ├── validate_strategy_spec.py # strategy spec linter.
 │   ├── probe_nuvama_schema.py # Diagnostic script (not production). Dumps all rmsHdg fields from live Holdings() response.
 │   ├── migrate_strike_to_text.py
 │   ├── migrate_add_closed_state.py    # One-off migration: adds CLOSED to TradeState-related schema.
 │   ├── migrate_exit_events_decimal.py # One-off migration: paper_exit_events numeric columns → Decimal-safe TEXT.
+│   ├── migrate_exit_events_counterfactual_dte_marks.py # One-off migration: adds counterfactual DTE-mark columns to paper_exit_events.
+│   ├── migrate_overlay_pnl_attribution.py # One-off migration: overlay P&L attribution schema updates.
+│   ├── migrate_3track_close_duplicate_overlays.py # One-off migration: dedupes 3-track close-duplicate overlay rows.
 │   ├── migrate_paper_action_audit.py  # One-off migration: adds action-audit columns/table for paper trade actions.
 │   ├── migrate_paper_strategies.py    # One-off migration: paper_strategies table schema updates (e.g. proxy_delta_breach_count).
 │   ├── migrate_paper_trades_state.py  # One-off migration: adds TradeState column to paper_trades.
 │   ├── migrate_paper_trades_unique.py # One-off migration: uniqueness constraint fix on paper_trades.
+│   ├── backfill_bug032_overlay_pp.py  # One-off backfill for BUG-032 (overlay PP data).
+│   ├── backfill_leg_snapshot_net_qty.py # One-off backfill: net_qty on historical leg snapshots.
+│   ├── backfill_mark_trade_closed_overlay.py # One-off backfill: marks historical overlay trades closed.
+│   ├── backfill_nav_total_pnl.py      # One-off backfill: total_pnl on historical NAV snapshots.
+│   ├── audit_bug024_fabricated_keys.py # One-off diagnostic audit for BUG-024 (fabricated instrument keys).
 │   ├── check_ic_margin.py    # Diagnostic: queries live/mock order margin for an IC leg basket.
 │   ├── cleanup_cc_collar_dedup.py # One-off cleanup: dedupes overlapping CC/Collar paper positions from a historical bug.
 │   ├── generate_3track_viz.py # Generates a visualization/report of the 3-track comparison history.
@@ -361,17 +402,38 @@ scripts/
 ├── position_health_check.py # Standalone position/Greeks sanity-check cron — flags stale or missing Greeks/LTP on open paper positions.
 ├── eod_summary.py         # EOD P&L summary cron — Telegram digest across all strategies. (Moved out of scripts/daemon/ — that subfolder no longer exists.)
 ├── eod_pt_summary.py      # EOD PT Summary cron — thin wrapper over src/reporting/eod_pt_summary.py. --send/--dry-run/--date/--db-path/--bod-path. Runs alongside eod_summary.py (PT-2).
+├── morning_signal.py      # Morning signal-pipeline cron (09:30 IST, Mon-Fri): assembles MarketSnapshot, fans out to 3 LLM providers, aggregates consensus, persists, sends Telegram;
+                           #   includes the guarded SPT-6 paper-entry tail-call. Cron: 15 9 * * 1-5.
+├── signal_eod.py          # End-of-day signal pipeline cron (16:00 IST): records outcome then reports, one guard_trading_day call. --auto/--report-only for manual phase-only use.
+                           #   Cron: 0 16 * * 1-5. Replaces the retired record_signal_outcome.py / signal_report.py (signals-entrypoint-consolidation/).
+├── signal_paper_entry.py  # Manual --date backfill/replay tool for the signals paper track (SPT-6) — not a cron entrypoint; morning_signal.py already opens the position.
+├── signal_paper_report.py # 6-month evaluation report + go-live gate for the signals paper track (SPT-7) — run manually, no cron.
 ├── pre_market_brief.py    # Pre-market summary cron. (Moved out of scripts/daemon/ — that subfolder no longer exists.)
 ├── monitor_daemon.py      # Monitor daemon main loop (StrategyMonitor host process). (Moved out of scripts/daemon/ — that subfolder no longer exists.)
 ├── start_monitor.py       # Launcher for monitor_daemon.py. (Moved out of scripts/daemon/ — that subfolder no longer exists.)
 └── stop_monitor.py        # Graceful shutdown for monitor_daemon.py. (Moved out of scripts/daemon/ — that subfolder no longer exists.)
 
 .claude/
-├── settings.json             # PreToolUse hook: warns on Read targeting src/ or scripts/
+├── settings.json             # Hook wiring: SessionStart / UserPromptSubmit / PreToolUse
 ├── settings.local.json       # Local permissions allowlist (not committed)
 ├── hooks/
-│   └── guard_src_reads.sh    # Hook script: prints graph decision tree reminder, exit 0 (warn only)
-├── skills/commit/SKILL.md    # NiftyShield commit format (disable-model-invocation: true — manual only)
+│   ├── guard_src_reads.sh    # PreToolUse(Read) warn — graph decision tree reminder, exit 0 (warn only)
+│   ├── task_protocol.sh      # UserPromptSubmit — fires the CLAUDE.md pre-task protocol reminder
+│   ├── council_check.sh      # PreToolUse — Step 2b council-checkpoint reminder
+│   ├── doc_update_gate.sh    # PreToolUse(Bash, git commit) — advisory state-doc reminder (RDO-11: kept advisory, see DECISIONS.md)
+│   ├── state_doc_freshness.sh # SessionStart — flags root state docs behind recent src/scripts commits (informational, always exit 0)
+│   ├── inline_full_suite.sh  # PreToolUse(Bash) — blocks a bare full-suite pytest run from the main session (exit 2)
+│   ├── repeat_read.sh        # PreToolUse(Read/Edit/Write) — blocks a second Read of a path already read this session
+│   └── wide_grep.sh          # PreToolUse(Bash) — warns on an unscoped grep/sed/awk over a large file
+├── skills/
+│   ├── commit/SKILL.md              # NiftyShield commit format (disable-model-invocation: true — manual only)
+│   ├── work/SKILL.md                # /work session entry point — routes to feature story or bug, loads prompt + first unchecked task + CONTEXT.md
+│   ├── md-organize/SKILL.md         # Repo-wide doc maintenance sweep (CONTEXT re-slim / DECISIONS roll / line-length + structure + checkbox audits / mirror re-sync)
+│   ├── session-close/SKILL.md       # End-of-session compliance + token-efficiency report + DOC STALENESS content-gap check
+│   ├── protocol-reference/SKILL.md  # Deferred reference material for CLAUDE.md (Council Decision Protocol, quick-reference table, AI-collaboration workflow, review rules)
+│   ├── handoff-antigravity/SKILL.md # Produces the structured handoff prompt when a task routes to Antigravity implementation
+│   ├── weekly-audit/SKILL.md        # Weekly repo-health audit
+│   └── prompt-refine/SKILL.md       # Prompt refinement skill
 └── agents/
     ├── code-reviewer.md      # Opus: checks Decimal, BrokerClient protocol, type hints, async correctness
     ├── test-runner.md        # Haiku: runs python -m pytest tests/unit/ and reports

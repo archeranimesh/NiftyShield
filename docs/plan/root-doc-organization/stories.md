@@ -28,6 +28,15 @@ The end-to-end test of "the docs preserve their state" — not any individual ho
 
 If any link breaks (flag never fires, threshold wrong, `md-organize` doesn't touch the flagged doc, flag persists after the fix), file the gap as a new RDO task and leave RDO-16 open.
 
+**Progress (2026-09-22), steps 1-3 of 4 observed in one real session:**
+1. Went stale: this session's own `state_doc_freshness.sh` SessionStart output flagged `PLANNER.md` (123 src commits, 24d), `CONTEXT_TREE.md` (85 src commits, 14d), `README.md` (123 src commits, 24d)
+   — all three past the RDO-10 #5 tuned thresholds.
+2. Flagged at SessionStart: confirmed — the flag fired before any tool call, exactly as designed.
+3. Acted on: all three docs refreshed this session (module-tree gaps in `CONTEXT_TREE.md` for `src/signals/`, `src/notifications/`, `src/paper/cycle_pnl.py`, `src/strategy/signal_*`, `scripts/dev/*`,
+   `.claude/skills/`/`hooks/`; `PLANNER.md`'s stale May-June near-term queue reconciled against shipped work; `README.md`'s Project Structure tree + Skills table brought current).
+4. **Not yet observed** — whether the flag clears at the *next* SessionStart is, by definition, only checkable in a future session. RDO-16 stays open until that session confirms it (or files a gap if
+   it doesn't clear).
+
 **Commit:** `docs(plan): close RDO-16 — doc-freshness loop verified end to end`
 
 ---

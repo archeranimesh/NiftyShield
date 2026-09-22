@@ -123,6 +123,12 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-22] `root-doc-organization/` RDO-16 (steps 1-3 of 4) — this session's own
+  `state_doc_freshness.sh` SessionStart flag (`PLANNER.md`/`CONTEXT_TREE.md`/`README.md` behind
+  code) was acted on: all three refreshed against current `src/`/`scripts/` state (signals
+  pipeline, paper-backbone completions, `.claude/skills/` + `hooks/` drift, stale May-June
+  roadmap items reconciled). RDO-16 stays open — step 4 (flag clears at next SessionStart) can
+  only be confirmed in a future session.
 - [2026-09-22] `root-doc-organization/` RDO-11 — measured the full observation window
   (2026-08-27 → 2026-09-22): 84 of 116 code commits (72%) would have tripped
   `doc_update_gate.sh`, `[skip-docs]` used zero times. Kept the gate tuned-advisory (flipping to
