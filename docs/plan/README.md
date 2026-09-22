@@ -165,9 +165,10 @@ This section is canonical and self-contained — there is no pointer to `docs/ar
 Work under `docs/plan/` takes one of two shapes.
 
 - **Single story** — one coherent goal, however many tasks. A flat folder `docs/plan/<slug>/` (`<slug>` kebab-case — no date prefix, no `<slug>_` filename prefix). `risk-gamma-phase-a/` is the model.
-  Start it by copying `docs/plan/_TEMPLATE/story/`.
+  Start it with `/new-story` (or `python -m scripts.dev.new_plan_folder --story <slug>`).
 - **Epic** — two or more related stories shipped together. `docs/plan/<slug>/` with a router `prompt.md` + `README.md` at the root and one sub-story folder per story **directly under it** —
-  `docs/plan/<slug>/<story-slug>/`, no `stories/` layer. `telegram-markdown-migration/` is the model. Start it by copying `docs/plan/_TEMPLATE/epic/`.
+  `docs/plan/<slug>/<story-slug>/`, no `stories/` layer. `telegram-markdown-migration/` is the model. Start it with `/new-story` (or `python -m scripts.dev.new_plan_folder --epic <slug>`, then
+  `--story <story-slug> --into <slug>` per sub-story).
 
 A single story that grows a second story is promoted: create `<slug>/<story-a>/` and `<slug>/<story-b>/`, move the original three files into `<story-a>/`, add the root `prompt.md` router +
 `README.md`.
