@@ -1,15 +1,13 @@
 # FR-0 — Model Validation Pilot: Fable vs. Opus
 
-**No persona** — infrastructure/methodology check, not a content review of NiftyShield.
-**Task run:** FR-1's task list (steps 1–5), identical prompt and scope, run once on Fable
-and once on Opus via the `Agent` tool with a `model` override, back to back, same session.
+**No persona** — infrastructure/methodology check, not a content review of NiftyShield. **Task run:** FR-1's task list (steps 1–5), identical prompt and scope, run once on Fable and once on Opus via
+the `Agent` tool with a `model` override, back to back, same session.
 
 ---
 
 ## 1. Raw outputs
 
-Both runs are reproduced in full below exactly as returned by each subagent, since both are
-short enough to include verbatim (no summarization loss).
+Both runs are reproduced in full below exactly as returned by each subagent, since both are short enough to include verbatim (no summarization loss).
 
 ### 1a. Fable run (full output)
 
@@ -222,142 +220,79 @@ short enough to include verbatim (no summarization loss).
 Both models independently found, in substance:
 
 - **Step 3/3b go-ahead gap for ≤2-file tasks** (Fable F3 = Opus F1).
-- **`options-strategist`/Step 2b ambiguity** — Fable calls this out explicitly (F4);
-  Opus doesn't name `options-strategist` by row but converges on the adjacent Step 2b
-  under-specification via its council-checkpoint discussion (F11).
-- **Rule 0's "state why insufficient" is a soft, unenforceable norm** (Fable F2's "NEVER
-  vs. decision is yours" + Opus F3 — same underlying mechanism, different emphasis).
-- **prompt.md structural drift across eras**, with the same conclusion that the
-  load-bearing core is uniform and only the optional gates eroded (Fable F9/F10 ≈ Opus
-  F8/F9). Both independently flag that `telegram-leg-labels` isn't actually the more
-  procedurally rigorous file, just the more narratively detailed one — Opus states this
-  more explicitly as "the epic's premise is miscalibrated."
-- **Council checkpoint: substantively honored, upstream trigger unauditable, n=1** —
-  near word-for-word convergence (Fable F11 ≈ Opus F11), down to citing the same decision
-  (paper-delta-source-architecture / B002.4) and the same counter-observation about it
-  arising from bug-triage rather than a clean planning phase.
-- **`docs/council/README.md` / Step 3b Antigravity path is stale or unexercised** — both
-  flag this, though from different angles (Fable's F12 is about the stale *file path*
-  taxonomy; Opus's F12 is about the *zero-commits-ever* audit-trail gap). These are
-  adjacent, not identical, findings about the same underlying subsystem (see 2b).
-- **LOGGING.md vs. REVIEW.md §G7 contradiction** — both flag it, both correctly note
-  it's already known/documented in LOGGING.md's own migration checklist. Severity
-  differs (Fable: CRITICAL: Opus: ERROR) — see 2c.
-- **Module CLAUDE.md files license patterns REVIEW.md calls CRITICAL for new code**
-  (broad `except Exception` without intent comment; `assert`-flavored language for a
-  `ValueError`-raising invariant) — both found the identical two collisions
-  (`src/paper/CLAUDE.md`, `src/notifications/CLAUDE.md`), both correctly noted the
-  REVIEW.md diff-scoping meta-rule mitigates this for existing code but not new code.
-  Severity differs (Fable: WARNING x2; Opus: CRITICAL, combined) — see 2c.
-- **Step 5 recommendation: revise-then-promote**, with near-identical reasoning
-  structure (apply a "does this change concrete behavior?" test; promote severity-by-
-  mission-impact and a generalized missing-perspective norm; keep the co-investor prose
-  and FR-N scaffolding scoped). This is the strongest convergence in the whole pilot —
-  both models reached the same three-part decomposition independently.
+- **`options-strategist`/Step 2b ambiguity** — Fable calls this out explicitly (F4); Opus doesn't name `options-strategist` by row but converges on the adjacent Step 2b under-specification via its
+  council-checkpoint discussion (F11).
+- **Rule 0's "state why insufficient" is a soft, unenforceable norm** (Fable F2's "NEVER vs. decision is yours" + Opus F3 — same underlying mechanism, different emphasis).
+- **prompt.md structural drift across eras**, with the same conclusion that the load-bearing core is uniform and only the optional gates eroded (Fable F9/F10 ≈ Opus F8/F9). Both independently flag
+  that `telegram-leg-labels` isn't actually the more procedurally rigorous file, just the more narratively detailed one — Opus states this more explicitly as "the epic's premise is miscalibrated."
+- **Council checkpoint: substantively honored, upstream trigger unauditable, n=1** — near word-for-word convergence (Fable F11 ≈ Opus F11), down to citing the same decision
+  (paper-delta-source-architecture / B002.4) and the same counter-observation about it arising from bug-triage rather than a clean planning phase.
+- **`docs/council/README.md` / Step 3b Antigravity path is stale or unexercised** — both flag this, though from different angles (Fable's F12 is about the stale *file path* taxonomy; Opus's F12 is
+  about the *zero-commits-ever* audit-trail gap). These are adjacent, not identical, findings about the same underlying subsystem (see 2b).
+- **LOGGING.md vs. REVIEW.md §G7 contradiction** — both flag it, both correctly note it's already known/documented in LOGGING.md's own migration checklist. Severity differs (Fable: CRITICAL: Opus:
+  ERROR) — see 2c.
+- **Module CLAUDE.md files license patterns REVIEW.md calls CRITICAL for new code** (broad `except Exception` without intent comment; `assert`-flavored language for a `ValueError`-raising invariant) —
+  both found the identical two collisions (`src/paper/CLAUDE.md`, `src/notifications/CLAUDE.md`), both correctly noted the REVIEW.md diff-scoping meta-rule mitigates this for existing code but not new
+  code. Severity differs (Fable: WARNING x2; Opus: CRITICAL, combined) — see 2c.
+- **Step 5 recommendation: revise-then-promote**, with near-identical reasoning structure (apply a "does this change concrete behavior?" test; promote severity-by- mission-impact and a generalized
+  missing-perspective norm; keep the co-investor prose and FR-N scaffolding scoped). This is the strongest convergence in the whole pilot — both models reached the same three-part decomposition
+  independently.
 
 ### 2b. Real disagreements (not stylistic)
 
-1. **Severity calibration on two shared findings.** Fable rates the G7/LOGGING.md
-   contradiction CRITICAL; Opus rates the identical finding ERROR. Fable rates the
-   module-CLAUDE.md-vs-REVIEW.md contradiction as two separate WARNINGs; Opus rates the
-   same substance as one combined CRITICAL. This is a genuine, not cosmetic, disagreement
-   — it changes which findings would be blocking under the repo's own AutoTrigger
-   convention ("CRITICAL/ERROR findings must resolve before commit"). Opus's read is
-   arguably more consistent with its own top-line CRITICAL (F2, the "blocking-but-
-   unsatisfiable" AutoTrigger finding) — it applies "this can produce a wrong CRITICAL
-   verdict in the review gate itself" as the CRITICAL bar and applies it to both G7 and
-   the module-doc collision. Fable applies CRITICAL only to G7 and downgrades the
-   module-doc collision to WARNING with weaker "an agent risks writing a literal assert"
-   language, without stating why the bar differs between the two same-shaped
-   contradictions.
-2. **Opus surfaced a CRITICAL that Fable did not find at all: the AutoTrigger
-   "mandatory and blocking... not optional" language is unsatisfiable on Antigravity and
-   subagent surfaces, with no escape hatch, and Opus ties this directly to a named,
-   dated real failure (the 2026-04-24/25 commit-drafted-not-executed incidents already
-   in `CLAUDE.md`'s own text).** This is Opus's single most load-bearing finding and it
-   has no Fable counterpart — Fable's review never questions whether the AutoTrigger
-   table is executable across surfaces at all, only whether individual trigger
-   *conditions* are ambiguous (F4, F5). This is a genuine miss on Fable's side, not a
-   difference in framing: Opus's finding is about protocol satisfiability, Fable's
-   parallel findings (F4, F5) are about trigger *scope* ambiguity, a narrower question.
-3. **Opus explicitly ran and reported the `git log --format=%an` author-distribution
-   check (929 Animesh commits, 0 Antigravity) as hard evidence for "Step 3b has never
-   been exercised."** Fable's parallel finding (F13) asserts the same conclusion
-   ("no audit trail... nothing records which engine implemented a phase") but frames it
-   as an absence-of-mechanism problem, not as a directly-verified fact via git history.
-   Opus's version is falsifiable and cites the exact command; Fable's is not. This is a
-   thoroughness gap, not just a framing difference — Opus did strictly more verification
-   work here.
-4. **Fable caught one concrete stale-reference chain Opus did not surface at all**:
-   `docs/council/README.md`'s declared folder taxonomy (`docs/council/archive/...`) vs.
-   the actual post-`da93b64` location (`docs/archive/council/...`), plus the specific
-   downstream dead link this produces (`docs/plan/variance-gate/prompt.md:18`). Opus's
-   parallel council finding (F12) is entirely about the Antigravity-author-count angle
-   and never touches the folder-path/dead-link angle. This is a genuine Fable-only catch
-   — it required actually diffing the README's stated structure against a directory
-   listing / git history for the rename commit, which Opus's method note says it could
-   only partially do (VM bash was intermittently unavailable during that run).
-5. **REVIEW.md's own docstring still saying "Thursday" (Fable F17) has no Opus
-   counterpart at all.** This is a small but concrete, independently checkable finding
-   (grep for "Thursday" in REVIEW.md) that Opus's Step 4 pass did not surface, despite
-   Opus reading REVIEW.md as part of scope.
-6. **Opus's closing missing-persona answer differs substantively from Fable's, not just
-   in wording.** Fable names a token-economics/context-budget persona and a general
-   onboarding persona. Opus names a Human-Factors/Onboarding persona (same idea as
-   Fable's onboarding half) and an Execution-Environment/Tooling persona — and Opus
-   grounds the tooling persona in something that actually happened during its own run
-   (deferred graph tools, intermittent bash), i.e. it used its own failure mode as
-   evidence for the gap, which Fable did not do despite reportedly also encountering
-   deferred tools per its own scope note. This is a meaningful difference in
-   self-awareness/grounding, not just a naming difference.
+1. **Severity calibration on two shared findings.** Fable rates the G7/LOGGING.md contradiction CRITICAL; Opus rates the identical finding ERROR. Fable rates the module-CLAUDE.md-vs-REVIEW.md
+   contradiction as two separate WARNINGs; Opus rates the same substance as one combined CRITICAL. This is a genuine, not cosmetic, disagreement — it changes which findings would be blocking under the
+   repo's own AutoTrigger convention ("CRITICAL/ERROR findings must resolve before commit"). Opus's read is arguably more consistent with its own top-line CRITICAL (F2, the "blocking-but-
+   unsatisfiable" AutoTrigger finding) — it applies "this can produce a wrong CRITICAL verdict in the review gate itself" as the CRITICAL bar and applies it to both G7 and the module-doc collision.
+   Fable applies CRITICAL only to G7 and downgrades the module-doc collision to WARNING with weaker "an agent risks writing a literal assert" language, without stating why the bar differs between the
+   two same-shaped contradictions.
+2. **Opus surfaced a CRITICAL that Fable did not find at all: the AutoTrigger "mandatory and blocking... not optional" language is unsatisfiable on Antigravity and subagent surfaces, with no escape
+   hatch, and Opus ties this directly to a named, dated real failure (the 2026-04-24/25 commit-drafted-not-executed incidents already in `CLAUDE.md`'s own text).** This is Opus's single most
+   load-bearing finding and it has no Fable counterpart — Fable's review never questions whether the AutoTrigger table is executable across surfaces at all, only whether individual trigger
+   *conditions* are ambiguous (F4, F5). This is a genuine miss on Fable's side, not a difference in framing: Opus's finding is about protocol satisfiability, Fable's parallel findings (F4, F5) are
+   about trigger *scope* ambiguity, a narrower question.
+3. **Opus explicitly ran and reported the `git log --format=%an` author-distribution check (929 Animesh commits, 0 Antigravity) as hard evidence for "Step 3b has never been exercised."** Fable's
+   parallel finding (F13) asserts the same conclusion ("no audit trail... nothing records which engine implemented a phase") but frames it as an absence-of-mechanism problem, not as a
+   directly-verified fact via git history. Opus's version is falsifiable and cites the exact command; Fable's is not. This is a thoroughness gap, not just a framing difference — Opus did strictly more
+   verification work here.
+4. **Fable caught one concrete stale-reference chain Opus did not surface at all**: `docs/council/README.md`'s declared folder taxonomy (`docs/council/archive/...`) vs. the actual post-`da93b64`
+   location (`docs/archive/council/...`), plus the specific downstream dead link this produces (`docs/plan/variance-gate/prompt.md:18`). Opus's parallel council finding (F12) is entirely about the
+   Antigravity-author-count angle and never touches the folder-path/dead-link angle. This is a genuine Fable-only catch — it required actually diffing the README's stated structure against a directory
+   listing / git history for the rename commit, which Opus's method note says it could only partially do (VM bash was intermittently unavailable during that run).
+5. **REVIEW.md's own docstring still saying "Thursday" (Fable F17) has no Opus counterpart at all.** This is a small but concrete, independently checkable finding (grep for "Thursday" in REVIEW.md)
+   that Opus's Step 4 pass did not surface, despite Opus reading REVIEW.md as part of scope.
+6. **Opus's closing missing-persona answer differs substantively from Fable's, not just in wording.** Fable names a token-economics/context-budget persona and a general onboarding persona. Opus names
+   a Human-Factors/Onboarding persona (same idea as Fable's onboarding half) and an Execution-Environment/Tooling persona — and Opus grounds the tooling persona in something that actually happened
+   during its own run (deferred graph tools, intermittent bash), i.e. it used its own failure mode as evidence for the gap, which Fable did not do despite reportedly also encountering deferred tools
+   per its own scope note. This is a meaningful difference in self-awareness/grounding, not just a naming difference.
 
 ### 2c. Where one is clearly more thorough
 
-- **Opus is more thorough on protocol-satisfiability and verification rigor**: its two
-  strongest findings (F2 on AutoTrigger cross-surface unsatisfiability, F12 on the
-  git-author-count check) both involved either tying a finding to a concrete prior
-  documented incident or running and citing an exact reproducible command. Fable's
-  findings are, on the whole, well-argued but more textual/comparative (diffing wording
-  across documents) than empirically verified against git/repo state.
-- **Fable is more thorough on cross-document reference-chain checking**: the stale
-  `docs/council/README.md` taxonomy + specific dead downstream link (2b.4), and the
-  REVIEW.md "Thursday" docstring staleness (2b.5), are both findings that required
-  tracing a claim through to a second or third document and confirming the chain breaks
-  — exactly FR-3's Systems Architect job description, arguably outside strict FR-1 scope,
-  but genuinely useful and something Opus's run did not produce.
-- **Neither is more thorough on Step 2 (prompt.md drift) or Step 5 (promote/keep-scoped)**
-  — these two sections are close to word-for-word equivalent in substance, sample
-  selection, and conclusion between the two runs.
+- **Opus is more thorough on protocol-satisfiability and verification rigor**: its two strongest findings (F2 on AutoTrigger cross-surface unsatisfiability, F12 on the git-author-count check) both
+  involved either tying a finding to a concrete prior documented incident or running and citing an exact reproducible command. Fable's findings are, on the whole, well-argued but more
+  textual/comparative (diffing wording across documents) than empirically verified against git/repo state.
+- **Fable is more thorough on cross-document reference-chain checking**: the stale `docs/council/README.md` taxonomy + specific dead downstream link (2b.4), and the REVIEW.md "Thursday" docstring
+  staleness (2b.5), are both findings that required tracing a claim through to a second or third document and confirming the chain breaks — exactly FR-3's Systems Architect job description, arguably
+  outside strict FR-1 scope, but genuinely useful and something Opus's run did not produce.
+- **Neither is more thorough on Step 2 (prompt.md drift) or Step 5 (promote/keep-scoped)** — these two sections are close to word-for-word equivalent in substance, sample selection, and conclusion
+  between the two runs.
 
 ---
 
 ## 3. Cost-premium verdict
 
-Per Anthropic's published pricing, Fable carries roughly a 5x per-token premium over
-Opus (Fable is a larger/slower-horizon model positioned for long-context synthesis;
-Opus is priced below it). Token usage in this run: Fable consumed ~96.8K tokens across
-28 tool calls in ~246s; Opus consumed ~126.7K tokens across 31 tool calls in ~239s —
-Opus was *not* cheaper on token count here (it read more, partly because it ran the
-`git log --format=%an` full-history check and additional verification passes Fable did
-not attempt), but at even a conservative 5x per-token multiplier, Fable's run would cost
-roughly 5x more than Opus's *despite Opus doing measurably more verification work and
-producing the single highest-value finding of the pilot (F2, cross-surface AutoTrigger
-unsatisfiability)*.
+Per Anthropic's published pricing, Fable carries roughly a 5x per-token premium over Opus (Fable is a larger/slower-horizon model positioned for long-context synthesis; Opus is priced below it). Token
+usage in this run: Fable consumed ~96.8K tokens across 28 tool calls in ~246s; Opus consumed ~126.7K tokens across 31 tool calls in ~239s — Opus was *not* cheaper on token count here (it read more,
+partly because it ran the `git log --format=%an` full-history check and additional verification passes Fable did not attempt), but at even a conservative 5x per-token multiplier, Fable's run would
+cost roughly 5x more than Opus's *despite Opus doing measurably more verification work and producing the single highest-value finding of the pilot (F2, cross-surface AutoTrigger unsatisfiability)*.
 
-**Verdict for this specific task shape (protocol/prompt-methodology review over ~15
-markdown/doc files, moderate cross-referencing, no deep single-formula derivation): the
-Fable cost premium is not justified by this diff.** Fable did produce two findings Opus
-missed (the stale council folder taxonomy/dead-link chain, the REVIEW.md "Thursday"
-docstring) that have genuine standalone value, and the two runs' convergence on ~10 of
-~15 substantive findings plus an identical Step 5 recommendation is itself informative
-(cross-model agreement is a legitimate signal). But Opus's run was not shallower in any
-dimension that showed up in the diff — it was more empirically grounded, tied findings
-to concrete verifiable commands and to a real documented incident, and it caught the
-single most consequential finding in the entire pilot. If the goal is "the best possible
-protocol review at the lowest defensible cost," Opus is the better buy for this specific
-task shape; if the goal is "maximize total distinct findings surfaced regardless of
-cost," running both (as this pilot did) beats either alone, but that is not the same
-claim as "Fable alone justifies its premium over Opus alone."
+**Verdict for this specific task shape (protocol/prompt-methodology review over ~15 markdown/doc files, moderate cross-referencing, no deep single-formula derivation): the Fable cost premium is not
+justified by this diff.** Fable did produce two findings Opus missed (the stale council folder taxonomy/dead-link chain, the REVIEW.md "Thursday" docstring) that have genuine standalone value, and the
+two runs' convergence on ~10 of ~15 substantive findings plus an identical Step 5 recommendation is itself informative (cross-model agreement is a legitimate signal). But Opus's run was not shallower
+in any dimension that showed up in the diff — it was more empirically grounded, tied findings to concrete verifiable commands and to a real documented incident, and it caught the single most
+consequential finding in the entire pilot. If the goal is "the best possible protocol review at the lowest defensible cost," Opus is the better buy for this specific task shape; if the goal is
+"maximize total distinct findings surfaced regardless of cost," running both (as this pilot did) beats either alone, but that is not the same claim as "Fable alone justifies its premium over Opus
+alone."
 
 ---
 
@@ -371,68 +306,51 @@ Per-task recommendation, each as a task shape, a recommendation, and the reasoni
 
 **Recommendation:** **Downgrade to Opus.**
 
-**Reasoning tied to this diff:** This *is* the FR-1 task.
-The diff directly shows Opus produced the most consequential single finding (F2)
-and did more empirical verification (git-author-count check) at comparable or lower cost, while Fable's unique catches (council folder taxonomy, Thursday docstring) are real
-but narrower in blast radius than F2. Extrapolation confidence: **high** — this is a direct test, not an analogy.
+**Reasoning tied to this diff:** This *is* the FR-1 task. The diff directly shows Opus produced the most consequential single finding (F2) and did more empirical verification (git-author-count check)
+at comparable or lower cost, while Fable's unique catches (council folder taxonomy, Thursday docstring) are real but narrower in blast radius than F2. Extrapolation confidence: **high** — this is a
+direct test, not an analogy.
 
 ### **FR-3** (Systems Architect — cross-document architecture/provenance synthesis over `docs/archive/`, ~144 files, DECISIONS.md-to-council-source tracing)
 
-**Task shape:** Different cognitive demand:
-much larger document corpus (144 archive files vs. ~15 here), deeper provenance-tracing (does a current decision still match its cited archived source) rather than internal-consistency-of-current-docs
+**Task shape:** Different cognitive demand: much larger document corpus (144 archive files vs. ~15 here), deeper provenance-tracing (does a current decision still match its cited archived source)
+rather than internal-consistency-of-current-docs
 
 **Recommendation:** **Keep Fable — do not extrapolate from this pilot with high confidence.**
 
-**Reasoning tied to this diff:** This pilot's payload was ~15 files with light cross-referencing;
-FR-3 explicitly must hold a much larger document graph in mind at once and trace provenance across an order of magnitude more files.
-Fable's *only* two unique catches in this pilot (2b.4, 2b.5) were both exactly this genre of cross-document reference-chain tracing,
-which is weak evidence *in Fable's favor* for FR-3's specific demand, but the sample size (2 findings, one document graph) is too thin to be confident.
-State explicitly: **cannot extrapolate confidently from an FR-1-shaped test to FR-3's provenance-and-scale demand** — this is a genuine limitation of this pilot, not a hedge.
-Default to keeping Fable per the epic's own stated fallback ("if FR-0 can't extrapolate confidently, treat default-to-Fable as the safer choice").
+**Reasoning tied to this diff:** This pilot's payload was ~15 files with light cross-referencing; FR-3 explicitly must hold a much larger document graph in mind at once and trace provenance across an
+order of magnitude more files. Fable's *only* two unique catches in this pilot (2b.4, 2b.5) were both exactly this genre of cross-document reference-chain tracing, which is weak evidence *in Fable's
+favor* for FR-3's specific demand, but the sample size (2 findings, one document graph) is too thin to be confident. State explicitly: **cannot extrapolate confidently from an FR-1-shaped test to
+FR-3's provenance-and-scale demand** — this is a genuine limitation of this pilot, not a hedge. Default to keeping Fable per the epic's own stated fallback ("if FR-0 can't extrapolate confidently,
+treat default-to-Fable as the safer choice").
 
 ### **FR-7** (Chairman — synthesis-of-synthesis over FR-1..FR-6's six findings documents plus their closing missing-persona blocks)
 
-**Task shape:** Different cognitive demand again: not reviewing the repo, reviewing *other reviews* —
-cross-referencing six documents' worth of findings for convergence/duplication, and weighing closing-block self-reports
+**Task shape:** Different cognitive demand again: not reviewing the repo, reviewing *other reviews* — cross-referencing six documents' worth of findings for convergence/duplication, and weighing
+closing-block self-reports
 
 **Recommendation:** **Keep Fable — do not extrapolate from this pilot with high confidence.**
 
-**Reasoning tied to this diff:** Same limitation as FR-3, arguably stronger: this pilot never tested a model reading *another model's output* and synthesizing across it —
-it tested two models independently reading the *same primary-source* repo.
-FR-7's actual demand (read six findings docs, deduplicate,
-weigh self-reported gaps) is structurally closer to FR-1/FR-3's long-horizon-synthesis profile than to Opus's demonstrated strength in this pilot (empirical verification against primary repo state —
-there is no "primary repo state" to verify in FR-7, only other models' prose).
-Flagging explicitly, per the epic's own instruction: FR-0's recommendation for FR-7 is **low-confidence** and defaults to keeping Fable rather than downgrading on thin evidence.
+**Reasoning tied to this diff:** Same limitation as FR-3, arguably stronger: this pilot never tested a model reading *another model's output* and synthesizing across it — it tested two models
+independently reading the *same primary-source* repo. FR-7's actual demand (read six findings docs, deduplicate, weigh self-reported gaps) is structurally closer to FR-1/FR-3's long-horizon-synthesis
+profile than to Opus's demonstrated strength in this pilot (empirical verification against primary repo state — there is no "primary repo state" to verify in FR-7, only other models' prose). Flagging
+explicitly, per the epic's own instruction: FR-0's recommendation for FR-7 is **low-confidence** and defaults to keeping Fable rather than downgrading on thin evidence.
 
 
 ---
 
 ## 5. Limitations of this pilot (read before applying the table above)
 
-- **n=1 comparison, one task shape.** This pilot ran exactly one prompt once per model.
-  It is direct, strong evidence for FR-1 (identical task) and weak, non-extrapolable
-  evidence for FR-3 and FR-7 (different cognitive demands), as stated above. Do not treat
-  the FR-3/FR-7 "keep Fable" recommendation as validated — it is a default applied under
-  uncertainty, not a tested conclusion.
-- **Tool availability asymmetry.** The Opus run's own method note states its
-  `codebase-memory-mcp` graph tools were deferred and VM bash was intermittently
-  unavailable during part of its run; the Fable run did not report the same disruption.
-  This may partly explain why Opus leaned more heavily on `git log`/author-count style
-  verification (available) versus deeper graph-based cross-referencing (unavailable) —
-  i.e., the diff may partly reflect which tools happened to be reachable in each run
-  rather than a pure model-capability difference. This is a genuine confound; a repeat
-  run with identical tool availability would strengthen the FR-1 recommendation further
-  and is worth doing if the FR-1 downgrade decision is ever revisited.
-- **No blind grading.** Both outputs were read and diffed by the same orchestrating
-  session that requested them, with knowledge of which output came from which model.
-  This introduces a risk of confirmation bias in what counts as "more thorough" — the
-  diff above tries to ground every thoroughness claim in a specific, checkable action
-  (a command run, a cited incident, a second-document trace) rather than a subjective
-  quality judgment, but this is a mitigation, not a full blind-review control.
+- **n=1 comparison, one task shape.** This pilot ran exactly one prompt once per model. It is direct, strong evidence for FR-1 (identical task) and weak, non-extrapolable evidence for FR-3 and FR-7
+  (different cognitive demands), as stated above. Do not treat the FR-3/FR-7 "keep Fable" recommendation as validated — it is a default applied under uncertainty, not a tested conclusion.
+- **Tool availability asymmetry.** The Opus run's own method note states its `codebase-memory-mcp` graph tools were deferred and VM bash was intermittently unavailable during part of its run; the
+  Fable run did not report the same disruption. This may partly explain why Opus leaned more heavily on `git log`/author-count style verification (available) versus deeper graph-based
+  cross-referencing (unavailable) — i.e., the diff may partly reflect which tools happened to be reachable in each run rather than a pure model-capability difference. This is a genuine confound; a
+  repeat run with identical tool availability would strengthen the FR-1 recommendation further and is worth doing if the FR-1 downgrade decision is ever revisited.
+- **No blind grading.** Both outputs were read and diffed by the same orchestrating session that requested them, with knowledge of which output came from which model. This introduces a risk of
+  confirmation bias in what counts as "more thorough" — the diff above tries to ground every thoroughness claim in a specific, checkable action (a command run, a cited incident, a second-document
+  trace) rather than a subjective quality judgment, but this is a mitigation, not a full blind-review control.
 
 ---
 
-**This is a one-time validation.** Do not re-run this pilot for every subsequent
-Fable-assigned task in this epic. FR-1 reads this file and downgrades to Opus per the
-table above. FR-3 and FR-7 each read this file once and keep Fable per the table above,
-noting FR-0's explicit low-confidence flag for their task shape.
+**This is a one-time validation.** Do not re-run this pilot for every subsequent Fable-assigned task in this epic. FR-1 reads this file and downgrades to Opus per the table above. FR-3 and FR-7 each
+read this file once and keep Fable per the table above, noting FR-0's explicit low-confidence flag for their task shape.
