@@ -20,10 +20,7 @@ both `_send_close_notification`; no option model, ships now) → `chart-model-ov
 shipped. `token_audit.py`, the `CLAUDE.md`/`AGENTS.md` skill-ification, `session-close` off the fork, the SWEEP `PreToolUse` hooks + `commit_preflight.py`, and the Step 4b drain path (`Count >= 5` →
 `technical-debt/` DEBT-8..12) all landed. Closing SHA `2d896a9`.
 
-**`doc-format-migration/`** · ✅ Done — all three sub-stories complete (`plan-folders/`, `repo-wide-reflow/`, `enforcement/` — DFM-6..10 all shipped, closing SHA `fd50a62`). Batch-converted every
-legacy `docs/plan/` folder to the canonical format and reflowed every other `.md` in the repo to fill-to-≤200, then hardened the hooks + added a CI `--all` gate so new docs cannot drift; new folders
-now start conforming via `/new-story` / `scripts/dev/new_plan_folder.py`. Answers `root-doc-organization/` RDO-17.8; built on `reflow_md.py` (RDO-17.7, `526e431`). Pending: archive per §Conventions
-*Completion → archive*.
+**`doc-format-migration/`** · ✅ Archived → `docs/archive/plan/doc-format-migration/`.
 
 **`dev-foundation/`** · ✅ Shipped/Archived Engineering-excellence epic — tooling, CI, code health (3 sub-stories).
 
@@ -71,7 +68,7 @@ previous phase's closing GATE task; `phase1` itself gated on the Phase 0.8 varia
 **`variance-gate/`** · ⬜ Not started · next: **VG0** (CSP v1 spec reconciliation) CSP v1 Phase 0.8 deployment gate — spec reconciliation + gate criteria A–D.
 
 **`root-doc-organization/`** · ✅ Archived 2026-09-22 → `docs/archive/plan/root-doc-organization/` Token-efficiency cleanup of the ~22 root `.md` files + doc-maintenance automation + `docs/plan/`
-story/epic format standardization (RDO-1..17.8, all shipped). RDO-17.8's legacy-folder execution continues in `doc-format-migration/` (above).
+story/epic format standardization (RDO-1..17.8, all shipped). RDO-17.8's legacy-folder execution completed in `doc-format-migration/`, itself archived (above).
 
 **`session-entry-point/`** · ✅ Archived 2026-08-28 → `docs/archive/plan/session-entry-point/` Unified manual `/work` skill (SEP-1..4) — routes a task session to Feature or Bug, loads the right
 prompt + first unchecked task, hands to `CLAUDE.md` Step 2b.
