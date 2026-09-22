@@ -120,6 +120,9 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-22] `doc-format-migration/` `plan-folders/` DFM-3 — restructured `full-repo-review/`
+  (tier B, 3 of 4, via parallel subagent): canonical task-line format, `stories.md` trimmed
+  from 11 forward specs to one-line digests (shipped/superseded folder), reflow. SHA: `caeafc7`.
 - [2026-09-22] `doc-format-migration/` `plan-folders/` DFM-3 — restructured `phase2-integrations/`
   (tier B, 2 of 4, via parallel subagent): canonical task-line format + prompt.md template
   sections + reflow. No shipped tasks, no digests needed. SHA: `107f58b`.

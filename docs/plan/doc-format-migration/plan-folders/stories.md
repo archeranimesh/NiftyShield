@@ -48,7 +48,7 @@ Epics, `TODOS.md` §Feature Backlog. Several folders in the old provisional pass
 | `chain-decay-analysis/` | flat, 3 files | none | A | task-line format + reflow 3 files. Backlog #16. | ✅ 8b1c5df |
 | `dev-foundation/` | epic, stray root `README.md`, 2/3 subs archived | root missing `prompt.md` | D | see note below — archive move, not a conversion. | ⬜ |
 | `entry-event-filter/` | flat, 2 files | missing `stories.md` | A | add `stories.md`; reflow 2 files. Backlog #18. | ✅ b22052a |
-| `full-repo-review/` | flat, 3 files | none | B | Complete, superseded — structure + reflow 13 files, digests. | ⬜ |
+| `full-repo-review/` | flat, 3 files | none | B | Complete, superseded — structure + reflow 13 files, digests. | ✅ caeafc7 |
 | `full-repo-review-followups/` | epic, 9 subs OK | root missing `prompt.md` | A | add router; reflow 28 files. Backlog #12/13/14. | ✅ 4dc1ed1 |
 | `greeks-bs-fallback/` | flat, 3 files | none | A | task-line format + reflow 3 files. Backlog #2. | ✅ 0a2838a |
 | `historical-data-abstraction/` | flat, `stories/HD-N.md` layout | missing `stories.md` | B\* | consolidate to `stories.md`; reflow 13 files. See note below. | ⬜ |
