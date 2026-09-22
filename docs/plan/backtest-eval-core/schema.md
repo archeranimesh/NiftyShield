@@ -1,8 +1,7 @@
 # backtest-eval-core — Database Schema
 
-Five tables in `data/portfolio/portfolio.sqlite` (shared DB via `src/db.py`).
-Analytics module (`src/analytics/`) is pure-function — no DB tables of its own.
-All `BacktestStore` tables live in the same SQLite file as the portfolio, isolated by prefix.
+Five tables in `data/portfolio/portfolio.sqlite` (shared DB via `src/db.py`). Analytics module (`src/analytics/`) is pure-function — no DB tables of its own. All `BacktestStore` tables live in the
+same SQLite file as the portfolio, isolated by prefix.
 
 ---
 
