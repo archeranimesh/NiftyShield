@@ -14,33 +14,6 @@ collapsed) inline `tasks.md` notes plus the `TODOS.md` Session Log. For full for
 
 ## Open tasks — full forward spec
 
-### RDO-11 — graduate the advisory doc-freshness hooks to enforcing
-
-**Gate:** do not start before **2026-09-03**. The observation window opened 2026-08-27 and needs ~1 week of real firings to judge the false-positive rate.
-
-**Files to change:**
-- `.claude/hooks/doc_update_gate.sh` — the `exit 0` → `exit 2` flip, iff the false-positive rate is tolerable.
-- `.claude/hooks/state_doc_freshness.sh` — apply RDO-10 #5's threshold tuning if not already landed (`CONTEXT_TREE.md` / `DB_REGISTRY.md` / `README.md` → 60); confirm signal-not-noise across 3–4 real
-  sessions.
-- `CLAUDE.md` §Step 5c + `AGENTS.md` §Step 5c — document the `[skip-docs]` commit-message escape hatch, iff `doc_update_gate.sh` becomes blocking.
-- `DECISIONS.md` — one STILL-ENFORCED RULE entry recording the final hook contract (blocking / advisory, the tuned thresholds) so it is documented, not only coded.
-
-**Before any code:**
-- `git log --oneline --since=2026-08-27 -- src/ scripts/` — the commits the gate saw.
-- `git log --all --grep='\[skip-docs\]' --oneline` — how often the escape hatch was used.
-- Read both hook scripts as text (shell, not graph-indexed).
-
-**What to implement:**
-1. Review ~1 week of `doc_update_gate.sh` firings; count the false positives (pure refactors, mid-phase multi-commit work where the doc update lands in a later commit).
-2. If the false-positive rate is tolerable: flip `exit 0` → `exit 2` and document `[skip-docs]` in both `CLAUDE.md` / `AGENTS.md` §Step 5c. If not: tighten the staged-file match, or keep it advisory
-   and re-review after another week.
-3. Confirm `state_doc_freshness.sh` thresholds are the RDO-10 #5 values and the flag is signal not noise.
-4. Record the outcome as a STILL-ENFORCED RULE entry in `DECISIONS.md`.
-
-**Tests:** the hook scripts have unit coverage under `tests/unit/scripts/` — extend it if the match logic changes. No new domain tests.
-
-**Commit:** `chore(hooks): graduate doc-freshness gate to <blocking|tuned-advisory>`
-
 ### RDO-16 — doc-freshness loop-closure check
 
 The end-to-end test of "the docs preserve their state" — not any individual hook. Runs after RDO-6 (`md-organize`), which is shipped.
@@ -60,6 +33,12 @@ If any link breaks (flag never fires, threshold wrong, `md-organize` doesn't tou
 ---
 
 ## Shipped tasks — as-built digests
+
+### RDO-11 — measured, kept advisory (SHA `<pending>`)
+Measured the full observation window (2026-08-27 → 2026-09-22): 116 non-tests-only commits touched `src/`/`scripts/` `*.py`, 84 (72%) would have tripped `doc_update_gate.sh` (no state doc staged
+alongside), and `[skip-docs]` was used zero times despite that. Decision: kept the gate tuned-advisory — no code change — since the fire rate reflects the documented closing-commit-only doc-update
+pattern, not a genuine omission rate; flipping to blocking would have blocked ~3 of 4 code commits with an escape hatch nobody uses. `state_doc_freshness.sh` thresholds confirmed unchanged at the
+RDO-10 #5 values. Recorded as a `DECISIONS.md` §Developer Tooling entry.
 
 ### RDO-1 — slim CONTEXT.md (SHA `fd1bd0b`)
 CONTEXT.md 156 → 159 lines but ~20K → ~2.6K tokens; the run-on "What Exists" paragraphs became a one-line-per-package list pointing at `CONTEXT_TREE.md`. Old prose archived verbatim to

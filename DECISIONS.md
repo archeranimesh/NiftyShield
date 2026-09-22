@@ -8,6 +8,15 @@
 
 ## Developer Tooling
 
+**`doc_update_gate.sh` stays tuned-advisory, not blocking (2026-09-22, RDO-11):** measured over the full observation window (2026-08-27 → 2026-09-22, 116 non-tests-only commits touching `src/`
+or `scripts/` `*.py`), 84 of those commits (72%) would have tripped the gate — staged code with no `TODOS.md` / `CONTEXT.md` / `DECISIONS.md` / `docs/plan/README.md` in the same commit — and
+the `[skip-docs]` escape hatch was used **zero** times in that window despite the gate firing constantly. That combination (near-3-in-4 fire rate, never-used escape hatch) means most fires are
+the expected shape documented in `docs/plan/README.md` §Conventions — a multi-commit phase lands its doc update at the closing commit, not every intermediate commit — not a genuine omission.
+Flipping `exit 0` → `exit 2` today would block roughly three of every four code commits on a habit nobody has adopted. Decision: keep `doc_update_gate.sh` advisory (no code change to the hook
+itself); re-review after `[skip-docs]` sees real adoption or the match logic is narrowed to the closing-commit boundary specifically, rather than every commit in a phase.
+`state_doc_freshness.sh` thresholds are unchanged — already at the RDO-10 #5 tuned values (`CONTEXT_TREE.md` / `DB_REGISTRY.md` / `README.md` = 60) and firing as signal, not noise, per the
+SessionStart output seen this session.
+
 **Closing-commit SHA-backfill policy, repo-wide (2026-09-11, DEBT-11):** when a commit ticks a `tasks.md` box in the same commit that does the work, set `SHA: <pending>` on that line and backfill the
 real SHA as the first edit of the **next** commit that touches that folder's docs — never a dedicated swap-only commit just to record one SHA. This is the sole policy;
 `docs/plan/root-doc-organization/tasks.md`'s prior "one commit plus a follow-up" line contradicted it and has been corrected to match. `commit_preflight.py`'s SHA-placeholder warning already enforces

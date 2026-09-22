@@ -5,9 +5,9 @@ Token-efficiency cleanup of the ~22 root `.md` files, doc-maintenance automation
 file-by-file root inventory (D6 extra file). Work top-down: the first unchecked `- [ ]` line is the task. When a phase ticks its own box in the same commit, `SHA: <pending>` is the sanctioned interim
 — the real SHA is backfilled in the next commit's docs touch, never in a dedicated swap-only commit (`docs/plan/README.md` §Conventions).
 
-**Open: RDO-16 (next, after RDO-6 — shipped), RDO-11 (date-gated ≥ 2026-09-03).** RDO-17.5 (`5508e41`) + RDO-17.6 (`cf46ff4`) shipped the two POC full conversions; RDO-17.7 §A shipped the fill-to-≤200
-*guidance* inside RDO-17.5 (`7d28d16`), then RDO-17.7 swept both POC folders to that style in full; RDO-17.8 (`0be92a1`) recorded the legacy-folder decision — batch-convert everything — now the
-`docs/plan/doc-format-migration/` epic.
+**Open: RDO-16 (next, after RDO-6 — shipped).** RDO-11 closed 2026-09-22 — kept tuned-advisory (see `DECISIONS.md` §Developer Tooling). RDO-17.5 (`5508e41`) + RDO-17.6 (`cf46ff4`) shipped the two POC
+full conversions; RDO-17.7 §A shipped the fill-to-≤200 *guidance* inside RDO-17.5 (`7d28d16`), then RDO-17.7 swept both POC folders to that style in full; RDO-17.8 (`0be92a1`) recorded the
+legacy-folder decision — batch-convert everything — now the `docs/plan/doc-format-migration/` epic.
 
 ## Tasks
 
@@ -21,7 +21,7 @@ file-by-file root inventory (D6 extra file). Work top-down: the first unchecked 
 - [x] **RDO-8** — 5 protocol-doc consistency fixes (CLAUDE.md / AGENTS.md / ANTIGRAVITY.md); git rm the dead .codex/ tree | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: bf26d81
 - [x] **RDO-9** — semantic split of DECISIONS.md — completed-work log → docs/archive/DECISIONS_worklog_2026.md | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 2fb5c5b
 - [x] **RDO-10** — reconcile RDO-7 / Phase 7 with the two shipped doc-freshness hooks; tune the staleness thresholds | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: a4431ec
-- [ ] **RDO-11** — graduate the advisory doc-freshness hooks to enforcing after a ~1-week observation window | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <—>
+- [x] **RDO-11** — measured the observation window, false-positive rate too high (72%) to flip to blocking; kept tuned-advisory | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <pending>
 - [x] **RDO-12** — unified /work session entry point — delivered via the session-entry-point epic (SEP-1..4) | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 42eabb2
 - [x] **RDO-13** — §Conventions made canonical + check_story_structure.py + _TEMPLATE/; TODOS.md cut to pointer-only | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 3c50826
 - [x] **RDO-14** — split TODOS.md into pointer-only Feature Backlog + Open Bugs; add the Completion→archive rule | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: e7cecab

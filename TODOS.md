@@ -123,6 +123,11 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-22] `root-doc-organization/` RDO-11 — measured the full observation window
+  (2026-08-27 → 2026-09-22): 84 of 116 code commits (72%) would have tripped
+  `doc_update_gate.sh`, `[skip-docs]` used zero times. Kept the gate tuned-advisory (flipping to
+  blocking would have blocked ~3 of 4 commits on an unused escape hatch); recorded in
+  `DECISIONS.md` §Developer Tooling. SHA `<pending>`.
 - [2026-09-22] `signal-outcome-profit-range/` SOP-3 (`docs/archive/plan/signal-outcome-profit-range/`)
   — `_format_outcome_notification` renders a "📈 High / 📉 Low" line in the executed branch
   only, using the existing `_E(...)` / `format_money(..., signed=True)` escaping pattern;
