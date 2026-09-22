@@ -79,6 +79,11 @@ prompt + first unchecked task, hands to `CLAUDE.md` Step 2b.
 
 **`mvp/`** · ⬜ Not started · next: **M1** (models + store) Multi-bagger Value Picks Tracker (`src/mvp/`, `scripts/mvp.py`, `scripts/mvp_watch.py`).
 
+**`options_income/`** · ⬜ Not started · next: **S0** (audit scope) Options-income overlay spec (9 tasks, S0–S8) — no code shipped yet; `src/options_income/` does not exist.
+
+**`technical-debt/`** · 🔄 Opportunistic backlog, actively fed 10 open / 7 closed items — not a normal sequenced story, no single "next" task; each item is picked up opportunistically per its own
+trigger condition in `tasks.md` (see `prompt.md`).
+
 **`council-refactor/`** · ✅ Shipped/Archived Remove `RapidCouncil` from the daemon approval path; fix `send_approval_request` signature bug; add deterministic backtestable roll rules to
 `ExitSignalEngine`.
 

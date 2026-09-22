@@ -120,6 +120,14 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-22] `doc-format-migration/` `plan-folders/` DFM-2 closed — converted the remaining 12 tier-A folders (`backtest-eval-core/`, `chain-decay-analysis/`, `entry-event-filter/`,
+  `full-repo-review-followups/`, `greeks-bs-fallback/`, `ic-payoff-charts/`, `mvp/`, `options_income/`, `risk-gamma-phase-a/`, `signals-eval-core/`, `technical-debt/`, `variance-gate/`) via 12
+  parallel subagents, one commit each (SHAs: `7fcdba2`, `8b1c5df`, `b22052a`, `4dc1ed1`, `0a2838a`, `500c290`, `8455d50`, `ddf0964`, `1f0a6cd`, `6a9c87e`, `b1bf839`, `0b8d897`);
+  `portfolio-snapshot-slimdown/` needed zero changes (already canonical + reflow-clean). Notable catches beyond format: `full-repo-review-followups/` had 6 sub-story `tasks.md` files with task
+  descriptions truncated mid-sentence since the original authoring commit (`149408f`), reconstructed from each sub-story's `stories.md`; `mvp/`/`options_income/`/`variance-gate/` legacy filenames
+  renamed via plain `mv` (git detected the renames by content similarity anyway). All 14 tier-A folders now pass `check_story_structure.py --all` and `check_checkbox_consistency.py --all` clean;
+  `reflow_md.py --check` clean repo-wide across `docs/plan/`. Added missing `docs/plan/README.md` status lines for `options_income/` and `technical-debt/` (neither had one before). DFM-2 ticked,
+  DFM-1's own SHA corrected from `PENDING` to `37bf311`. Remaining tier-B folders (`broker-abstraction/`, `historical-data-abstraction/`, `phase2-integrations/`) are DFM-3's scope, not touched here.
 - [2026-09-22] `doc-format-migration/` `plan-folders/` DFM-1 — enumerated and tiered all 19 non-archived `docs/plan/` folders (outside this epic + `_TEMPLATE/`) into the confirmed A/B/C/D table in
   `plan-folders/stories.md`. 15 tier A (active), 3 tier B flagged for Animesh (`broker-abstraction/`, `historical-data-abstraction/`, `phase2-integrations/` — unstarted, 0 shipped tasks, not in any
   active-work list; B is the closest fit but not a clean match), 1 tier D (`dev-foundation/` — already ✅ Shipped/Archived but its `code-health/` sub-story never moved to `docs/archive/plan/`; filed a
