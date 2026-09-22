@@ -119,6 +119,10 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-22] `doc-format-migration/` `enforcement/` DFM-8 done — added `check-checkbox-consistency` local hook to `.pre-commit-config.yaml` (`files: '^docs/(plan|bugs)/.*\.md$'`, `pass_filenames:
+  true`); `check_checkbox_consistency.py` already supported path-mode invocation and `--all` was already green tree-wide post `plan-folders/` + `repo-wide-reflow/`, so no script change or new test was
+  needed — existing `test_main_path_mode_checks_owning_task_file` already covers the pre-commit invocation shape. `pre-commit run --all-files` clean except two pre-existing, unrelated failures (`mypy`
+  on `src/notifications/exit_message.py`, out of DFM-8 scope). SHA `d4d249d`.
 - [2026-09-22] `doc-format-migration/` `enforcement/` DFM-7 done — `check_story_structure.py` gained `--staged` mode (added *or* modified `docs/plan/` folders, via `git diff --cached --name-only` with
   no `--diff-filter`), replacing `--staged-added` in `.pre-commit-config.yaml`. Added `_LEGACY_ALLOWLIST = {"dev-foundation"}` (its epic-root `prompt.md` and one sub-story's legacy `*_tasks.md` name
   are a known tier-D gap per `plan-folders/stories.md`, not yet archived) — allowlisted folders' findings all print as warnings and never fail `--staged`. `Finding` gained a `strict: bool` field: off
