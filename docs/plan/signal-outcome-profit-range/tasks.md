@@ -3,10 +3,10 @@
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
 spec.
 
-**Open: SOP-2, SOP-3.**
+**Open: SOP-3.**
 
 - [x] **SOP-1** — `SignalOutcome` fields + `signal_outcomes` migration | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 4096c07
-- [ ] **SOP-2** — Compute high/low from `paper_signal_marks` in `run_record_phase` | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: <—>
+- [x] **SOP-2** — Compute high/low from `paper_signal_marks` in `run_record_phase` | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 180ccae
 - [ ] **SOP-3** — Render high/low in the Telegram outcome message | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: <—>
 
 ## Story done when

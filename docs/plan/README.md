@@ -44,7 +44,7 @@ comparison snapshot; automated base-leg rolling; full unattended automation.
 
 ## Active Stories
 
-**`signal-outcome-profit-range/`** · 🟡 In progress (SOP-1 done, `4096c07`) · next: **SOP-2** (compute high/low from `paper_signal_marks` in `run_record_phase`) Show the profit high/low reached since
+**`signal-outcome-profit-range/`** · 🟡 In progress (SOP-1 `4096c07`, SOP-2 `180ccae` done) · next: **SOP-3** (render high/low in the Telegram outcome message) Show the profit high/low reached since
 entry (existing `mfe_pct`/`mae_pct` in `paper_signal_marks`) in the daily SIGNAL OUTCOME Telegram message for executed signal-track trades. Signal-track only, not IC/positional strategies; no backfill
 of historical rows. Has `schema.md` (2 new columns, no new table). Requested by Animesh 2026-09-22.
 
