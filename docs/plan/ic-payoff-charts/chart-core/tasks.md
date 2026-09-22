@@ -1,8 +1,7 @@
 # Chart Core — tasks
 
-Work top-down. Find the first unchecked `- [ ]` and do only that task.
-Each task = one commit unless noted. See `prompt.md` for why the story exists;
-see `stories.md` for the per-task implementation spec.
+Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
+spec.
 
 **Open: PC-2.**
 
@@ -27,8 +26,8 @@ see `stories.md` for the per-task implementation spec.
 - **PC-1** — the epic folder exists with a valid epic root + two conforming sub-stories; `check_story_structure.py` clean; registered in `TODOS.md` and `docs/plan/README.md`.
 - **PC-2** — `compute_ic_payoff` returns correct max profit / max loss / lower + upper breakeven / R:R for a known IC, with a happy-path and an edge-case (credit ≥ wing, credit ≤ 0) test.
 - **PC-3** — `expiry_pnl_at` exact at the profit plateau, past each breakeven, ≈ 0 at a breakeven; `expiry_pnl_series` returns matched-length spot / pnl arrays.
-- **PC-4** — `render_expiry_payoff_png` returns non-empty PNG bytes (magic `\x89PNG`) under Agg with no display; trapezoid, fills, verticals, spot
-  line, P&L dot drawn; `matplotlib` in `requirements.txt`.
+- **PC-4** — `render_expiry_payoff_png` returns non-empty PNG bytes (magic `\x89PNG`) under Agg with no display; trapezoid, fills, verticals, spot line, P&L dot drawn; `matplotlib` in
+  `requirements.txt`.
 - **PC-5** — the stat strip shows Max Profit, Max Loss, R:R, Net Credit, and Breakevens with % from spot; Est. Margin appears only when a margin value is passed.
 - **PC-6** — `TelegramNotifier.send_photo` POSTs a multipart `sendPhoto` (`chat_id`, `photo`, optional `caption`); a non-200 is logged and does not raise; it respects the per-session budget.
 - **PC-7** — `TelegramGateway.send_photo` delegates and is non-fatal; the `NotificationGateway` protocol carries `send_photo` iff a type-checked caller needs it.
@@ -41,7 +40,5 @@ see `stories.md` for the per-task implementation spec.
 
 ## After each task
 
-Set `SHA:` to the real commit SHA on the task line and tick the box.
-Then update this story's status in the epic `README.md` **Stories** table and add one line to
-`TODOS.md` Session Log. Follow `docs/plan/README.md` §Conventions *Completion → archive* only
-once **both** sub-stories are complete — the epic folder moves as a unit.
+Set `SHA:` to the real commit SHA on the task line and tick the box. Then update this story's status in the epic `README.md` **Stories** table and add one line to `TODOS.md` Session Log. Follow
+`docs/plan/README.md` §Conventions *Completion → archive* only once **both** sub-stories are complete — the epic folder moves as a unit.
