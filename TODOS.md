@@ -15,8 +15,7 @@ Forward spec work only — one `docs/plan/` story per line, pointer-only (title 
 starting the next story here; this list only decides *which story is next*. Bugs are **not** here — see `## Open Bugs`. Cross-references use folder names, never list positions, so renumbering can't
 rot them.
 
-1. **doc-format-migration** — `docs/plan/doc-format-migration/` — `plan-folders/` done, next story
-   **`repo-wide-reflow/`** (fill-to-≤200 every other `.md`) → `enforcement/` (repo-wide hooks + CI
+1. **doc-format-migration** — `docs/plan/doc-format-migration/` — `plan-folders/` done, next story **`repo-wide-reflow/`** (fill-to-≤200 every other `.md`) → `enforcement/` (repo-wide hooks + CI
    `--all` gate + `/new-story` scaffold). Answers RDO-17.8. Built on `reflow_md.py` (RDO-17.7).
 2. **Greeks Black-Scholes fallback** — `docs/plan/greeks-bs-fallback/` — next **GF-1** (read-only audit scope).
 4. **MVP: Multi-bagger Value Picks Tracker** — `docs/plan/mvp/` — next **M1.1**. Independent — blocks nothing.
@@ -120,27 +119,18 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
-- [2026-09-22] `doc-format-migration/` `plan-folders/` DFM-4 closed as no-op — DFM-1's confirmed
-  tier table classifies all 19 remaining folders as tier A or B (plus `dev-foundation/` tier D);
-  no tier-C folder exists (the two examples named in `prompt.md`, `root-doc-organization/` and
-  `telegram-markdown-migration/`, are already archived). No files changed, no commit. `plan-folders/`
-  story is now fully done; epic `README.md` Stories row flipped to ✅. Next: `repo-wide-reflow/`.
-- [2026-09-22] `doc-format-migration/` `plan-folders/` DFM-3 closed — restructured the last
-  tier-B folder, `historical-data-abstraction/`: consolidated 11 `stories/HD-N.md` files into
-  one `stories.md`, canonical task-line format, `Story done when` section, reflow. SHA:
-  `906684c`. All 4 tier-B folders done (`broker-abstraction/` `525c0d2`, `phase2-integrations/`
-  `107f58b`, `full-repo-review/` `caeafc7`, `historical-data-abstraction/` `906684c`, the last 3
-  via parallel subagents). DFM-3 ticked. Next: DFM-4 (tier-C reflow-only pass).
-- [2026-09-22] `doc-format-migration/` `plan-folders/` DFM-3 — restructured `full-repo-review/`
-  (tier B, 3 of 4, via parallel subagent): canonical task-line format, `stories.md` trimmed
-  from 11 forward specs to one-line digests (shipped/superseded folder), reflow. SHA: `caeafc7`.
-- [2026-09-22] `doc-format-migration/` `plan-folders/` DFM-3 — restructured `phase2-integrations/`
-  (tier B, 2 of 4, via parallel subagent): canonical task-line format + prompt.md template
-  sections + reflow. No shipped tasks, no digests needed. SHA: `107f58b`.
-- [2026-09-22] `doc-format-migration/` `plan-folders/` DFM-3 — restructured `broker-abstraction/`
-  (tier B, first of 4): consolidated 16 `stories/BA-N.md` files into one `stories.md`, canonical
-  task-line format, reflow. No shipped tasks, no digests needed. SHA: `525c0d2`. DFM-3 not
-  ticked — `full-repo-review/`, `historical-data-abstraction/` remain.
+- [2026-09-22] `doc-format-migration/` `plan-folders/` DFM-4 closed as no-op — DFM-1's confirmed tier table classifies all 19 remaining folders as tier A or B (plus `dev-foundation/` tier D); no
+  tier-C folder exists (the two examples named in `prompt.md`, `root-doc-organization/` and `telegram-markdown-migration/`, are already archived). No files changed, no commit. `plan-folders/` story is
+  now fully done; epic `README.md` Stories row flipped to ✅. Next: `repo-wide-reflow/`.
+- [2026-09-22] `doc-format-migration/` `plan-folders/` DFM-3 closed — restructured the last tier-B folder, `historical-data-abstraction/`: consolidated 11 `stories/HD-N.md` files into one
+  `stories.md`, canonical task-line format, `Story done when` section, reflow. SHA: `906684c`. All 4 tier-B folders done (`broker-abstraction/` `525c0d2`, `phase2-integrations/` `107f58b`,
+  `full-repo-review/` `caeafc7`, `historical-data-abstraction/` `906684c`, the last 3 via parallel subagents). DFM-3 ticked. Next: DFM-4 (tier-C reflow-only pass).
+- [2026-09-22] `doc-format-migration/` `plan-folders/` DFM-3 — restructured `full-repo-review/` (tier B, 3 of 4, via parallel subagent): canonical task-line format, `stories.md` trimmed from 11
+  forward specs to one-line digests (shipped/superseded folder), reflow. SHA: `caeafc7`.
+- [2026-09-22] `doc-format-migration/` `plan-folders/` DFM-3 — restructured `phase2-integrations/` (tier B, 2 of 4, via parallel subagent): canonical task-line format + prompt.md template sections +
+  reflow. No shipped tasks, no digests needed. SHA: `107f58b`.
+- [2026-09-22] `doc-format-migration/` `plan-folders/` DFM-3 — restructured `broker-abstraction/` (tier B, first of 4): consolidated 16 `stories/BA-N.md` files into one `stories.md`, canonical
+  task-line format, reflow. No shipped tasks, no digests needed. SHA: `525c0d2`. DFM-3 not ticked — `full-repo-review/`, `historical-data-abstraction/` remain.
 - [2026-09-22] `doc-format-migration/` `plan-folders/` DFM-2 closed — converted the remaining 12 tier-A folders (`backtest-eval-core/`, `chain-decay-analysis/`, `entry-event-filter/`,
   `full-repo-review-followups/`, `greeks-bs-fallback/`, `ic-payoff-charts/`, `mvp/`, `options_income/`, `risk-gamma-phase-a/`, `signals-eval-core/`, `technical-debt/`, `variance-gate/`) via 12
   parallel subagents, one commit each (SHAs: `7fcdba2`, `8b1c5df`, `b22052a`, `4dc1ed1`, `0a2838a`, `500c290`, `8455d50`, `ddf0964`, `1f0a6cd`, `6a9c87e`, `b1bf839`, `0b8d897`);

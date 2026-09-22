@@ -1,7 +1,6 @@
 # NiftyShield — How to Work with Claude
 
-> Practical workflow for every session. Tear-off prompts for each task type.
-> The system is only as good as the prompts you give it — this file is your cheat sheet.
+> Practical workflow for every session. Tear-off prompts for each task type. The system is only as good as the prompts you give it — this file is your cheat sheet.
 
 ---
 
@@ -47,29 +46,23 @@ Read CONTEXT.md and REFERENCES.md. [Task involving instrument keys / AMFI codes 
 
 ## Prompt Crafting Guide
 
-Every prompt you write is classified by a hook before Claude processes it.
-Get this right and the full protocol (prompt scoring, council check, routing,
-AutoTrigger agents) fires automatically. Get it wrong and Claude skips straight
-to implementation.
+Every prompt you write is classified by a hook before Claude processes it. Get this right and the full protocol (prompt scoring, council check, routing, AutoTrigger agents) fires automatically. Get it
+wrong and Claude skips straight to implementation.
 
 ### Two prompt types — write them differently
 
-**Task prompt** (file changes expected) → start with an action verb:
-`fix`, `implement`, `add`, `build`, `create`, `write`, `update`, `refactor`,
-`migrate`, `roll`, `backtest`, `record`, `seed`, `extend`, `convert`, `wire`
+**Task prompt** (file changes expected) → start with an action verb: `fix`, `implement`, `add`, `build`, `create`, `write`, `update`, `refactor`, `migrate`, `roll`, `backtest`, `record`, `seed`,
+`extend`, `convert`, `wire`
 
-**Query prompt** (read-only, no code changes) → start with a question word:
-`what`, `why`, `how does`, `explain`, `show me`, `list`, `is`, `are`, `which`
+**Query prompt** (read-only, no code changes) → start with a question word: `what`, `why`, `how does`, `explain`, `show me`, `list`, `is`, `are`, `which`
 
-Do not start a task prompt with "can you" or "could you" — those read as queries
-and skip the protocol. Write the verb directly: `fix X`, not `can you fix X`.
+Do not start a task prompt with "can you" or "could you" — those read as queries and skip the protocol. Write the verb directly: `fix X`, not `can you fix X`.
 
 ---
 
 ### What a complete task prompt includes
 
-The protocol hook scores your prompt on four dimensions. Include all four and
-Claude starts immediately. Miss three or more and it stops to ask one question.
+The protocol hook scores your prompt on four dimensions. Include all four and Claude starts immediately. Miss three or more and it stops to ask one question.
 
 | Dimension | What to provide | Example |
 |---|---|---|
@@ -78,15 +71,13 @@ Claude starts immediately. Miss three or more and it stops to ask one question.
 | **Tests** | Whether tests are needed and what kind | `offline unit tests, happy path + edge case` |
 | **DoD** | What "done" looks like | `all tests pass, CONTEXT.md updated, SHA confirmed` |
 
-The context files to load (`CONTEXT.md`, `DECISIONS.md`, etc.) are handled
-automatically — you do not need to list them unless the task is unusual.
+The context files to load (`CONTEXT.md`, `DECISIONS.md`, etc.) are handled automatically — you do not need to list them unless the task is unusual.
 
 ---
 
 ### Routing — Claude or Antigravity?
 
-You can direct the routing at the prompt level. Claude will ask if you don't,
-but stating it upfront saves a round-trip.
+You can direct the routing at the prompt level. Claude will ask if you don't, but stating it upfront saves a round-trip.
 
 Add one of these to the end of any task prompt:
 
@@ -97,11 +88,9 @@ Implement this via Antigravity — produce the handoff prompt and stop.
 Implement this directly — Claude path.
 ```
 
-**When to choose Antigravity:** 3+ files, spec fully documented in DECISIONS.md
-or BACKTEST_PLAN.md, TDD loop needed, no mid-implementation design decisions expected.
+**When to choose Antigravity:** 3+ files, spec fully documented in DECISIONS.md or BACKTEST_PLAN.md, TDD loop needed, no mid-implementation design decisions expected.
 
-**When to choose Claude:** single or two-file task, exploratory work where the
-spec may change, or the task needs graph queries mid-implementation.
+**When to choose Claude:** single or two-file task, exploratory work where the spec may change, or the task needs graph queries mid-implementation.
 
 ---
 
@@ -353,8 +342,8 @@ Run the roll-validator agent — I just changed roll logic in scripts/roll_leg.p
 Run the options-strategist agent — council checkpoint for [decision].
 ```
 
-**Blocking** means the next protocol step does not proceed until the agent returns clean.
-For `code-reviewer`: any `CRITICAL` or `ERROR` finding must be resolved before committing; `WARNING` may be deferred with a documented reason in the commit message.
+**Blocking** means the next protocol step does not proceed until the agent returns clean. For `code-reviewer`: any `CRITICAL` or `ERROR` finding must be resolved before committing; `WARNING` may be
+deferred with a documented reason in the commit message.
 
 ---
 
@@ -372,31 +361,20 @@ Skills live in `.claude/skills/`. Unlike agents (which spawn isolated subagents)
 
 **What each skill does in one line:**
 
-`commit` — diff review → pytest → construct message → `git add` + `git commit` → SHA
-confirmation.
-Stops and invokes `@code-reviewer` before committing if financial logic (Decimal, Greeks,
+`commit` — diff review → pytest → construct message → `git add` + `git commit` → SHA confirmation. Stops and invokes `@code-reviewer` before committing if financial logic (Decimal, Greeks,
 BrokerClient) is touched.
 
-`md-organize` — archives completed TODOs to `docs/archive/`,
-updates CONTEXT.md date + test count,
-syncs README.md project structure and roadmap checkboxes,
-relocates stale plan/prompt files out of root,
-reflows prose to fill each line to ≤200 chars,
-and reconciles the `CLAUDE.md` / `AGENTS.md` / `.agents/` / `work` protocol mirrors.
+`md-organize` — archives completed TODOs to `docs/archive/`, updates CONTEXT.md date + test count, syncs README.md project structure and roadmap checkboxes, relocates stale plan/prompt files out of
+root, reflows prose to fill each line to ≤200 chars, and reconciles the `CLAUDE.md` / `AGENTS.md` / `.agents/` / `work` protocol mirrors.
 
-`prompt-refine` — scores your prompt on 8 dimensions (named files, phase, tests, DoD,
-boundaries, etc.); fills minor gaps from CONTEXT.md and proceeds; asks exactly ONE targeted
-question if 3+ dimensions are missing.
+`prompt-refine` — scores your prompt on 8 dimensions (named files, phase, tests, DoD, boundaries, etc.); fills minor gaps from CONTEXT.md and proceeds; asks exactly ONE targeted question if 3+
+dimensions are missing.
 
-`handoff-antigravity` — extracts only the relevant blocks from BACKTEST_PLAN.md and
-CONTEXT.md inline (saves Antigravity 3,000–5,000 input tokens vs file reads), outputs a
-complete OBJECTIVE / GRAPH_POINTERS / BOUNDARIES / CONTEXT_EXTRACT / REVIEW_RULES / DOD /
-QUALITY_GATES / PHASE_COMPLETION_OUTPUT block.
+`handoff-antigravity` — extracts only the relevant blocks from BACKTEST_PLAN.md and CONTEXT.md inline (saves Antigravity 3,000–5,000 input tokens vs file reads), outputs a complete OBJECTIVE /
+GRAPH_POINTERS / BOUNDARIES / CONTEXT_EXTRACT / REVIEW_RULES / DOD / QUALITY_GATES / PHASE_COMPLETION_OUTPUT block.
 
-`session-close` — reconstructs the session action log, scores all 14 protocol steps as
-FOLLOWED / LEGITIMATE SKIP / VIOLATION, audits Rule 0 + Rule 1 token efficiency, flags agents
-inlined instead of spawned, produces improvement suggestions based only on violations
-actually observed.
+`session-close` — reconstructs the session action log, scores all 14 protocol steps as FOLLOWED / LEGITIMATE SKIP / VIOLATION, audits Rule 0 + Rule 1 token efficiency, flags agents inlined instead of
+spawned, produces improvement suggestions based only on violations actually observed.
 
 ---
 

@@ -1,17 +1,12 @@
 # NiftyShield — Project Context
 
-> **For AI assistants:** This file is the authoritative state of the codebase.
-> Read this before writing any code. Do not rely on session summaries or chat history.
-> Repo: https://github.com/archeranimesh/NiftyShield
+> **For AI assistants:** This file is the authoritative state of the codebase. Read this before writing any code. Do not rely on session summaries or chat history. Repo:
+> https://github.com/archeranimesh/NiftyShield
 
-**Related files:**
-[MISSION.md](MISSION.md) — immutable mission + grounding principles |
-[DECISIONS.md](DECISIONS.md) | [REFERENCES.md](REFERENCES.md) | [TODOS.md](TODOS.md) |
-[PLANNER.md](PLANNER.md) | [BACKTEST_PLAN.md](BACKTEST_PLAN.md) — Phase 0 active tasks only
-(~300 lines) | [BACKTEST_PLAN_PHASE1.md](BACKTEST_PLAN_PHASE1.md) — Phase 1+ tasks (load only
-after Phase 0.8 gate) | [LITERATURE.md](LITERATURE.md) — concept reference (Kelly, Sharpe,
-meta-labeling) | [LOGGING.md](LOGGING.md) — logging standard | [docs/plan/](docs/plan/) — one
-story file per task | [INSTRUCTION.md](INSTRUCTION.md)
+**Related files:** [MISSION.md](MISSION.md) — immutable mission + grounding principles | [DECISIONS.md](DECISIONS.md) | [REFERENCES.md](REFERENCES.md) | [TODOS.md](TODOS.md) | [PLANNER.md](PLANNER.md)
+| [BACKTEST_PLAN.md](BACKTEST_PLAN.md) — Phase 0 active tasks only (~300 lines) | [BACKTEST_PLAN_PHASE1.md](BACKTEST_PLAN_PHASE1.md) — Phase 1+ tasks (load only after Phase 0.8 gate) |
+[LITERATURE.md](LITERATURE.md) — concept reference (Kelly, Sharpe, meta-labeling) | [LOGGING.md](LOGGING.md) — logging standard | [docs/plan/](docs/plan/) — one story file per task |
+[INSTRUCTION.md](INSTRUCTION.md)
 
 ---
 
@@ -19,11 +14,9 @@ story file per task | [INSTRUCTION.md](INSTRUCTION.md)
 
 ### What Exists (committed and working)
 
-Full file-level module tree with per-file descriptions: **[CONTEXT_TREE.md](CONTEXT_TREE.md)**.
-Feature and bug-fix history with rationale (every `BUG-*` / `SNAP-*` / `PG-*` / council
-ruling referenced below): **[DECISIONS.md](DECISIONS.md)**.
-Verbatim snapshot of the previous prose version of this section (nothing was deleted, only
-relocated): **[docs/archive/CONTEXT_WHAT_EXISTS_2026-08.md](docs/archive/CONTEXT_WHAT_EXISTS_2026-08.md)**.
+Full file-level module tree with per-file descriptions: **[CONTEXT_TREE.md](CONTEXT_TREE.md)**. Feature and bug-fix history with rationale (every `BUG-*` / `SNAP-*` / `PG-*` / council ruling
+referenced below): **[DECISIONS.md](DECISIONS.md)**. Verbatim snapshot of the previous prose version of this section (nothing was deleted, only relocated):
+**[docs/archive/CONTEXT_WHAT_EXISTS_2026-08.md](docs/archive/CONTEXT_WHAT_EXISTS_2026-08.md)**.
 
 Top-level `src/` packages, one line each (detail → `CONTEXT_TREE.md`):
 
@@ -31,76 +24,54 @@ Top-level `src/` packages, one line each (detail → `CONTEXT_TREE.md`):
 - `src/client/` — `BrokerClient` protocol + 4 impls (Upstox live/sandbox, Mock); `factory.create_client(env)`; order exec + portfolio read blocked (static IP / daily token).
 - `src/models/` — canonical domain types: `Leg`/`Trade`/`Strategy`/`DailySnapshot`/`PortfolioSummary` (portfolio.py), MF types (mf.py), `OptionLeg`/`OptionChain` frozen Pydantic (options.py).
 - `src/portfolio/` — live (non-paper) P&L: `PortfolioStore`, `PortfolioTracker`, pure `summary.py`/`formatting.py`, `SnapshotService`, `overlay_coverage.py`; finideas strategies (ILTS, FinRakshak).
-- `src/paper/` — paper-trading engine. Models: `PaperTrade`, `PaperPosition`, `PaperNavSnapshot`,
-  `PaperLegSnapshot`, `PaperExitEvent`, `TrackComparisonSnapshot`, `TradeState` enum. `PaperStore`
-  (SQLite — `paper_trades`, `paper_nav_snapshots`, `paper_leg_snapshots`, `paper_exit_events`,
-  `gate_violations`, `warn_signal_state`, `paper_track_comparison_snapshots`, …). `PaperTracker`
-  (`compute_pnl`, `compute_pnl_by_leg_group`), fill simulator, selectors. `cycle_pnl.py`
-  (`reconstruct_cycles` / `get_last_cycle_realized_pnl` — round-trip cycle boundaries from the
-  `paper_trades` ledger; shared with `scripts/dev/cycle_pnl_report.py` and BUG-043).
-- `src/strategy/` — paper-backbone strategy layer. `PaperStrategy` protocol,
-  `SignalEvent`/`ApprovedAction`/`LegSpec`/`LegClose`, `StrategyMonitor` daemon (tick loop, WARN
-  dedup, auto-execute dispatch), `PaperExecutor`, `ReEntryMixin`. 8 strategies: `CSPNiftyV1`,
-  `CCOverlayV1`, `PPOverlayV1`, `CollarOverlayV1`, `IronCondorV1`, `IronCondorV2`,
-  `NiftyTrackComparisonV1`, `SignalTrackV1` (`paper_signal_track_v1` — the `signals-paper-track/`
-  execution layer, 30 s cadence, entry/exit via `open_signal_paper_entry` +
-  `signal_exit.evaluate`). Engines: `ExitSignalEngine`, `ProfitLockEngine`, `OverlayCloser`,
-  `ic_close_executor`, `roll_utils`.
+- `src/paper/` — paper-trading engine. Models: `PaperTrade`, `PaperPosition`, `PaperNavSnapshot`, `PaperLegSnapshot`, `PaperExitEvent`, `TrackComparisonSnapshot`, `TradeState` enum. `PaperStore`
+  (SQLite — `paper_trades`, `paper_nav_snapshots`, `paper_leg_snapshots`, `paper_exit_events`, `gate_violations`, `warn_signal_state`, `paper_track_comparison_snapshots`, …). `PaperTracker`
+  (`compute_pnl`, `compute_pnl_by_leg_group`), fill simulator, selectors. `cycle_pnl.py` (`reconstruct_cycles` / `get_last_cycle_realized_pnl` — round-trip cycle boundaries from the `paper_trades`
+  ledger; shared with `scripts/dev/cycle_pnl_report.py` and BUG-043).
+- `src/strategy/` — paper-backbone strategy layer. `PaperStrategy` protocol, `SignalEvent`/`ApprovedAction`/`LegSpec`/`LegClose`, `StrategyMonitor` daemon (tick loop, WARN dedup, auto-execute
+  dispatch), `PaperExecutor`, `ReEntryMixin`. 8 strategies: `CSPNiftyV1`, `CCOverlayV1`, `PPOverlayV1`, `CollarOverlayV1`, `IronCondorV1`, `IronCondorV2`, `NiftyTrackComparisonV1`, `SignalTrackV1`
+  (`paper_signal_track_v1` — the `signals-paper-track/` execution layer, 30 s cadence, entry/exit via `open_signal_paper_entry` + `signal_exit.evaluate`). Engines: `ExitSignalEngine`,
+  `ProfitLockEngine`, `OverlayCloser`, `ic_close_executor`, `roll_utils`.
 - `src/signals/` — multi-LLM daily directional signal pipeline (shipped 2026-09-09; `docs/archive/plan/signals/`). Frozen Pydantic models
-  (`MarketSnapshot`/`SignalResponse`/`DailySignal`/`SignalOutcome`, `Direction`/`TradeAction`), `SignalProvider` protocol, pure `build_prompt`, pure
-  `SignalAggregator` consensus, `option_resolver.py`, `market_inputs.py` (gift_nifty / usd_inr / fii fetchers), `snapshot.py` `assemble_market_snapshot`,
-  `SignalStore` (own SQLite tables `signal_inputs`/`signal_responses`/`daily_signals`/`signal_outcomes`). Three GPT-4o / Grok / Gemini providers via
-  OpenRouter + `build_providers` factory. Each provider response records OpenRouter token usage + USD cost (`signal_responses.prompt_tokens`/`completion_tokens`/`cost_usd`,
-  inline `usage.include`; `NULL` for mock / Google-SDK paths), aggregated by `SignalStore.get_signal_cost()` and surfaced as today's total on the 09:30 message (`signals-cost-tracking/`,
-  cost data trustworthy from 2026-09-11). Two crons live on the Mac host (Phase 1 `openrouter_only`): `scripts/morning_signal.py` 09:30 (assembles snapshot, fans out to
-  LLMs, aggregates, persists, Telegram — includes the guarded SPT-6 paper-entry tail-call), `scripts/signal_eod.py` 16:00 (record phase then report phase, one `guard_trading_day` call; `--auto` /
-  `--report-only` flags for manual phase-only use), each Mon–Fri, each pushing a Telegram message. The `signal_track_v1` monitor daemon (`StrategyMonitor`) manages the paper-traded position
-  intraday at 30 s cadence. `scripts/signal_paper_entry.py` is a manual `--date` backfill/replay tool, not a cron entrypoint (kept per `signals-entrypoint-consolidation/` SEC-5's deferred
-  keep-or-delete review — no live track record yet to judge reliability against). `record_signal_outcome.py` and `signal_report.py` are retired — merged into `signal_eod.py`
-  (`signals-entrypoint-consolidation/`, archived).
-- `src/risk/` — portfolio-level delta controls: `PortfolioDelta` frozen dataclass,
-  `PortfolioDeltaTracker.aggregate_delta(...)` (chain-derived `position_deltas` used as-is, else
-  CE/PE approximation with logged WARNING; pure/zero-I/O per council 2026-07-02),
-  `check_entry_allowed` gate.
+  (`MarketSnapshot`/`SignalResponse`/`DailySignal`/`SignalOutcome`, `Direction`/`TradeAction`), `SignalProvider` protocol, pure `build_prompt`, pure `SignalAggregator` consensus, `option_resolver.py`,
+  `market_inputs.py` (gift_nifty / usd_inr / fii fetchers), `snapshot.py` `assemble_market_snapshot`, `SignalStore` (own SQLite tables
+  `signal_inputs`/`signal_responses`/`daily_signals`/`signal_outcomes`). Three GPT-4o / Grok / Gemini providers via OpenRouter + `build_providers` factory. Each provider response records OpenRouter
+  token usage + USD cost (`signal_responses.prompt_tokens`/`completion_tokens`/`cost_usd`, inline `usage.include`; `NULL` for mock / Google-SDK paths), aggregated by `SignalStore.get_signal_cost()`
+  and surfaced as today's total on the 09:30 message (`signals-cost-tracking/`, cost data trustworthy from 2026-09-11). Two crons live on the Mac host (Phase 1 `openrouter_only`):
+  `scripts/morning_signal.py` 09:30 (assembles snapshot, fans out to LLMs, aggregates, persists, Telegram — includes the guarded SPT-6 paper-entry tail-call), `scripts/signal_eod.py` 16:00 (record
+  phase then report phase, one `guard_trading_day` call; `--auto` / `--report-only` flags for manual phase-only use), each Mon–Fri, each pushing a Telegram message. The `signal_track_v1` monitor
+  daemon (`StrategyMonitor`) manages the paper-traded position intraday at 30 s cadence. `scripts/signal_paper_entry.py` is a manual `--date` backfill/replay tool, not a cron entrypoint (kept per
+  `signals-entrypoint-consolidation/` SEC-5's deferred keep-or-delete review — no live track record yet to judge reliability against). `record_signal_outcome.py` and `signal_report.py` are retired —
+  merged into `signal_eod.py` (`signals-entrypoint-consolidation/`, archived).
+- `src/risk/` — portfolio-level delta controls: `PortfolioDelta` frozen dataclass, `PortfolioDeltaTracker.aggregate_delta(...)` (chain-derived `position_deltas` used as-is, else CE/PE approximation
+  with logged WARNING; pure/zero-I/O per council 2026-07-02), `check_entry_allowed` gate.
 - `src/mf/` — MF transaction ledger: `MFTransaction`/`MFNavSnapshot`/`MFHolding`, `MFStore`, AMFI flat-file `nav_fetcher`, `MFTracker`.
 - `src/dhan/` — Dhan holdings + intraday options: frozen models, pure `reader.py`/`positions.py` (classify/enrich/charges), `DhanStore`.
 - `src/nuvama/` — Nuvama bonds + options: frozen models, `reader.py`/`options_reader.py` (pure parse + aggregate), `NuvamaStore` (bond + options + intraday snapshot tables, SQL-layer aggregation).
 - `src/intraday/` — `IntradayMarketStore`: broker-agnostic `intraday_market_snapshots` table, 30-day retention, stale-row guard.
 - `src/instruments/` — `DateAwareLotSizeResolver`, `strike_selector` (filter/gate/rank + `_apply_liquidity_gate`), offline BOD `lookup` (ranked fuzzy search, `get_expiry_candidates`).
 - `src/market_calendar/` — NSE holiday detection from version-controlled YAML: `is_trading_day`, `prev_trading_day` (fail-open).
-- `src/notifications/` — `NotifierProtocol`, `TelegramNotifier` (non-fatal, `parse_mode=MarkdownV2` — HTML `<pre>` migration
-  complete + archived 2026-09-06, `telegram-markdown-migration/` epic; every caller escapes via `markdown.py`),
-  `TelegramGateway` (council-free approval dispatch + callback polling + chat-ID allowlist),
-  `alerts.py` (shared Telegram message builders), `formatting.py` (per-type value formatters + table builders),
-  `entry_message.py` (shared lean entry-confirmation renderer — IC v1/v2 + CSP + CC +
-  Collar/PP + 3track bootstrap, UEM-1/2 + OEM-1..4),
-  `exit_message.py` (shared close-confirmation renderer — IC/CSP/CC/PP/Collar + this-exit /
-  cycle / inception P&L + win-rate, UXM-1..7). `src/paper/cycle_pnl.py`'s `Cycle` gained
-  `short_decay_pct` (gross-short-premium ratio) and the module gained `cycle_stats`,
-  `LegGroup`, `resolve_target` (moved in from `scripts/dev/cycle_pnl_report.py`).
-  `scripts/pre_market_brief.py` redesigned to MarkdownV2 fenced tables with the overlay
-  broken into CC/Collar/PP sub-rows (UXM-7). The S9 "NiftyBees vs overlays" recovery digest
-  (`_build_recovery_digest`, `scripts/strategies/three_track/paper_3track_snapshot.py`) is
-  fenced-format MarkdownV2 too (ORD-3) and `_overlay_type_groups` no longer folds a standalone
-  CC bootstrap into the collar total (BUG-044 fix, ORD-2) — `telegram-message-unification/`
-  epic archived 2026-09-15.
-- `src/reporting/` — promoted EOD report builders. `eod_pt_summary.py`: cross-strategy paper-trade summary as 1-3 MarkdownV2 Telegram messages (open positions /
-  closed-today / strategy P&L + Ann.% on margin), off live `PaperStore.get_positions()` + broker LTP. Runs alongside `scripts/eod_summary.py`, not a replacement
-  (PT-2, `docs/archive/plan/eod-pt-summary/`).
+- `src/notifications/` — `NotifierProtocol`, `TelegramNotifier` (non-fatal, `parse_mode=MarkdownV2` — HTML `<pre>` migration complete + archived 2026-09-06, `telegram-markdown-migration/` epic; every
+  caller escapes via `markdown.py`), `TelegramGateway` (council-free approval dispatch + callback polling + chat-ID allowlist), `alerts.py` (shared Telegram message builders), `formatting.py`
+  (per-type value formatters + table builders), `entry_message.py` (shared lean entry-confirmation renderer — IC v1/v2 + CSP + CC + Collar/PP + 3track bootstrap, UEM-1/2 + OEM-1..4), `exit_message.py`
+  (shared close-confirmation renderer — IC/CSP/CC/PP/Collar + this-exit / cycle / inception P&L + win-rate, UXM-1..7). `src/paper/cycle_pnl.py`'s `Cycle` gained `short_decay_pct` (gross-short-premium
+  ratio) and the module gained `cycle_stats`, `LegGroup`, `resolve_target` (moved in from `scripts/dev/cycle_pnl_report.py`). `scripts/pre_market_brief.py` redesigned to MarkdownV2 fenced tables with
+  the overlay broken into CC/Collar/PP sub-rows (UXM-7). The S9 "NiftyBees vs overlays" recovery digest (`_build_recovery_digest`, `scripts/strategies/three_track/paper_3track_snapshot.py`) is
+  fenced-format MarkdownV2 too (ORD-3) and `_overlay_type_groups` no longer folds a standalone CC bootstrap into the collar total (BUG-044 fix, ORD-2) — `telegram-message-unification/` epic archived
+  2026-09-15.
+- `src/reporting/` — promoted EOD report builders. `eod_pt_summary.py`: cross-strategy paper-trade summary as 1-3 MarkdownV2 Telegram messages (open positions / closed-today / strategy P&L + Ann.% on
+  margin), off live `PaperStore.get_positions()` + broker LTP. Runs alongside `scripts/eod_summary.py`, not a replacement (PT-2, `docs/archive/plan/eod-pt-summary/`).
 - `src/backtest/` — offline research: `compute_ivr` (trailing 252-day VIX IVR), `vix_ingest` (NSE CSV + Upstox), `ChainWriter`/`ChainReader` (Parquet + DuckDB), bhavcopy ingest/loader.
 - `src/gamma/` — Near-Expiry Gamma Buy scaffolding: frozen models + `GammaStore`.
 - `src/council/` — AI council infra: `RapidCouncil` (parallel Stage-1 fan-out + chairman synthesis), request/response models.
 - `src/utils/` — `setup_logging(*, json, level)` (structlog, canonical entrypoint — see `LOGGING.md`), `fmt_inr` Indian-numbering formatter.
 - `src/config.py` — `Settings(BaseSettings)` singleton; declares every env var. `src/db.py` — shared SQLite context manager (WAL, FK, auto commit/rollback).
 
-Scripts (`scripts/`, organised by functional axis — `pipeline/`, `lookup/`, `record/`,
-`strategies/`, `portfolio/`, `intraday/`, `reporting/`, `seed/`, `council/`, `dev/`, plus
-top-level crons `healthcheck.py`, `eod_summary.py`, `eod_pt_summary.py`,
-`pre_market_brief.py`, `monitor_daemon.py`): see `CONTEXT_TREE.md` §`scripts/`.
+Scripts (`scripts/`, organised by functional axis — `pipeline/`, `lookup/`, `record/`, `strategies/`, `portfolio/`, `intraday/`, `reporting/`, `seed/`, `council/`, `dev/`, plus top-level crons
+`healthcheck.py`, `eod_summary.py`, `eod_pt_summary.py`, `pre_market_brief.py`, `monitor_daemon.py`): see `CONTEXT_TREE.md` §`scripts/`.
 
-Developer + research tooling (`pyproject.toml`, `Makefile`, `.pre-commit-config.yaml`,
-`.github/workflows/ci.yml`, `docs/strategies/regime_probe.pine`): see `CONTEXT_TREE.md`
-§"Developer tooling" and §"Research tooling".
+Developer + research tooling (`pyproject.toml`, `Makefile`, `.pre-commit-config.yaml`, `.github/workflows/ci.yml`, `docs/strategies/regime_probe.pine`): see `CONTEXT_TREE.md` §"Developer tooling" and
+§"Research tooling".
 
 ### What Does NOT Exist Yet
 
@@ -115,16 +86,11 @@ Developer + research tooling (`pyproject.toml`, `Makefile`, `.pre-commit-config.
 - `daily_snapshots` empty — first clean baseline on Monday 2026-04-06 (pre-market run)
 - `underlying_price` will populate from 2026-04-06 onwards
 - Greeks columns are null across all snapshots
-- `trades` table seeded 2026-04-08 — 7 rows: finideas_ilts (6 legs including LIQUIDBEES) +
-  finrakshak (1). EBBETF0431 net=465 @ avg ₹1388.01. **strategy_name migrated 2026-04-08:**
-  `ILTS` → `finideas_ilts`, `FinRakshak` → `finrakshak` to match strategies table. Must use DB
-  strategy names in all future `record_trade.py` calls.
-- **2026-07-14:** Manual Zerodha close, 4 `record_trade.py` entries. `finideas_ilts`
-  NIFTY_JUL_CE (`NSE_FO|63895`) and NIFTY_JUL_PE (`NSE_FO|63896`) closed to 0 (both legs of the
-  post-roll overlay). NIFTY_DEC_PE hedge (`NSE_FO|37810`) closed to 0 in both `finideas_ilts`
-  and `finrakshak` (130 combined units sold @ ₹269.95, split 65/65 by strategy). `finideas_ilts`
-  now holds only the EBBETF0431 leg live. See REFERENCES.md strategy tables + TODOS.md session
-  log for per-leg detail.
+- `trades` table seeded 2026-04-08 — 7 rows: finideas_ilts (6 legs including LIQUIDBEES) + finrakshak (1). EBBETF0431 net=465 @ avg ₹1388.01. **strategy_name migrated 2026-04-08:** `ILTS` →
+  `finideas_ilts`, `FinRakshak` → `finrakshak` to match strategies table. Must use DB strategy names in all future `record_trade.py` calls.
+- **2026-07-14:** Manual Zerodha close, 4 `record_trade.py` entries. `finideas_ilts` NIFTY_JUL_CE (`NSE_FO|63895`) and NIFTY_JUL_PE (`NSE_FO|63896`) closed to 0 (both legs of the post-roll overlay).
+  NIFTY_DEC_PE hedge (`NSE_FO|37810`) closed to 0 in both `finideas_ilts` and `finrakshak` (130 combined units sold @ ₹269.95, split 65/65 by strategy). `finideas_ilts` now holds only the EBBETF0431
+  leg live. See REFERENCES.md strategy tables + TODOS.md session log for per-leg detail.
 - `nuvama_intraday_snapshots` logging active on 2026-04-17 (30-day retention loop engaged automatically).
 - Cron jobs set up: `45 15 * * 1-5` for daily EOD options recording, plus `*/5 9-15 * * 1-5` for intraday extremes monitoring.
 
@@ -132,8 +98,7 @@ Developer + research tooling (`pyproject.toml`, `Makefile`, `.pre-commit-config.
 
 ## Key Decisions
 
-Architecture decisions, rationale, and deferred items: **[DECISIONS.md](DECISIONS.md)**
-Instrument keys, AMFI codes, API quirks, auth tokens: **[REFERENCES.md](REFERENCES.md)**
+Architecture decisions, rationale, and deferred items: **[DECISIONS.md](DECISIONS.md)** Instrument keys, AMFI codes, API quirks, auth tokens: **[REFERENCES.md](REFERENCES.md)**
 
 ---
 
@@ -157,10 +122,8 @@ Before writing any code: read `CONTEXT.md`, state `CONTEXT.md ✓`, confirm scop
 - Architecture decisions or new modules: also read `DECISIONS.md`
 - Instrument keys, market data, AMFI codes: also read `REFERENCES.md`
 - Starting new feature work: also read `TODOS.md` + `PLANNER.md`
-- Working on backtest, paper trading, strategy research, or any Phase 0 task: also read
-  `BACKTEST_PLAN.md` (Phase 0, ~300 lines). Phase 1+ work: also read `BACKTEST_PLAN_PHASE1.md`
-  (only after Phase 0.8 gate passes). Tick `[x]` only when the task's DoD is fully met and the
-  commit has landed. Do not skip phase gates.
+- Working on backtest, paper trading, strategy research, or any Phase 0 task: also read `BACKTEST_PLAN.md` (Phase 0, ~300 lines). Phase 1+ work: also read `BACKTEST_PLAN_PHASE1.md` (only after Phase
+  0.8 gate passes). Tick `[x]` only when the task's DoD is fully met and the commit has landed. Do not skip phase gates.
 - Working in a `src/` module: that module's `CLAUDE.md` loads automatically
 - Adding a new entrypoint script or any `logger.*()` call: also read `LOGGING.md` (canonical logging standard; see `BUG-010` in `docs/bugs/bugs.md`)
 
@@ -179,9 +142,7 @@ Strategy leg tables (instrument keys, entry prices, quantities, protected MF por
 ## Test Coverage
 
 - Test count: run `python -m pytest tests/unit/ --tb=no -q | tail -1` (last green 2026-08-26).
-- Per-module breakdown (last snapshot, not re-verified every pass):
-  **[docs/archive/CONTEXT_WHAT_EXISTS_2026-08.md](docs/archive/CONTEXT_WHAT_EXISTS_2026-08.md)**
-  §"Test Coverage".
+- Per-module breakdown (last snapshot, not re-verified every pass): **[docs/archive/CONTEXT_WHAT_EXISTS_2026-08.md](docs/archive/CONTEXT_WHAT_EXISTS_2026-08.md)** §"Test Coverage".
 
 ---
 

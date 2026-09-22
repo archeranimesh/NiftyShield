@@ -2,8 +2,7 @@
 
 **Options selling automation on NiftyBees ETF, powered by Upstox API.**
 
-NiftyShield is a systematic options trading engine built on a leveraged capital structure —
-FD-backed Overdraft facility funding NiftyBees ETF purchases (pledged for margin) and ILTS allocation,
+NiftyShield is a systematic options trading engine built on a leveraged capital structure — FD-backed Overdraft facility funding NiftyBees ETF purchases (pledged for margin) and ILTS allocation,
 generating two parallel income streams from one pool of borrowed capital.
 
 ---
@@ -187,8 +186,8 @@ Confirms Upstox API connectivity by fetching your account profile.
 
 ### Nuvama Login (one-time)
 
-NiftyShield tracks your Nuvama bond and gold bond holdings for margin and portfolio visibility.
-Nuvama uses a `request_id` redirect flow — run this once and the session persists indefinitely in a local settings file.
+NiftyShield tracks your Nuvama bond and gold bond holdings for margin and portfolio visibility. Nuvama uses a `request_id` redirect flow — run this once and the session persists indefinitely in a
+local settings file.
 
 **Prerequisites:** Add these to your `.env`:
 
@@ -204,10 +203,8 @@ NUVAMA_SETTINGS_FILE=data/nuvama/settings.json
 python -m src.auth.nuvama_login
 ```
 
-Opens your browser to the Nuvama login page.
-After authenticating, you'll be redirected to a URL containing a `request_id` token.
-Paste the full redirect URL (or just the token) at the prompt.
-The session is saved to `NUVAMA_SETTINGS_FILE` — no daily re-auth required.
+Opens your browser to the Nuvama login page. After authenticating, you'll be redirected to a URL containing a `request_id` token. Paste the full redirect URL (or just the token) at the prompt. The
+session is saved to `NUVAMA_SETTINGS_FILE` — no daily re-auth required.
 
 **Verify:**
 
@@ -237,9 +234,8 @@ NiftyShield automatically tracks Nuvama options positional M2M Highs/Lows and ca
 ```bash
 */5 9-15 * * 1-5 cd /path/to/NiftyShield && .venv/bin/python -m scripts.nuvama_intraday_tracker
 ```
-The tracker efficiently polls Nuvama + Upstox
-and permanently persists the 30-day bounding history (M2M max/min + Spot bounds) directly localized inside `portfolio.sqlite`
-to be naturally utilized during Daily Snapshots.
+The tracker efficiently polls Nuvama + Upstox and permanently persists the 30-day bounding history (M2M max/min + Spot bounds) directly localized inside `portfolio.sqlite` to be naturally utilized
+during Daily Snapshots.
 
 
 ### EOD Option Chain Snapshot (Cron)
@@ -268,10 +264,8 @@ Output path: `data/offline/chain_snapshots_5min/{year}/{month}/{day}/upstox_{HHM
 
 ### Database Backup and Retention (Cron)
 
-Creates an online backup of the live WAL-mode portfolio database
-and prunes older backups (retains newest 30 daily and 12 monthly backups).
-The backup destination is determined by `BACKUP_DIR` in `.env` (defaults to `/var/backups/niftyshield`),
-ensuring backups are physically isolated from the repo mount.
+Creates an online backup of the live WAL-mode portfolio database and prunes older backups (retains newest 30 daily and 12 monthly backups). The backup destination is determined by `BACKUP_DIR` in
+`.env` (defaults to `/var/backups/niftyshield`), ensuring backups are physically isolated from the repo mount.
 
 ```bash
 # Online DB backup — 4:00 PM IST, Mon–Fri
@@ -298,10 +292,8 @@ Find it: login to [web.dhan.co](https://web.dhan.co) → Profile icon (top-right
 python -m src.auth.dhan_login
 ```
 
-Opens your browser to Dhan web portal.
-Navigate to Profile → "Access DhanHQ APIs" → "Generate Access Token".
-Fill in App Name (e.g. `NiftyShield`), keep Token validity at 24h.
-Copy the generated token and paste it at the prompt.
+Opens your browser to Dhan web portal. Navigate to Profile → "Access DhanHQ APIs" → "Generate Access Token". Fill in App Name (e.g. `NiftyShield`), keep Token validity at 24h. Copy the generated token
+and paste it at the prompt.
 
 **Verify:**
 
@@ -339,10 +331,8 @@ This will:
 
 ## Trade Ledger
 
-NiftyShield tracks every physical trade execution in a `trades` table — separate from the strategy leg definitions in `ilts.py` / `finrakshak.py`.
-This enables accurate weighted-average cost basis across multiple entries,
-a full audit trail for option rolls,
-and position queries without touching strategy files.
+NiftyShield tracks every physical trade execution in a `trades` table — separate from the strategy leg definitions in `ilts.py` / `finrakshak.py`. This enables accurate weighted-average cost basis
+across multiple entries, a full audit trail for option rolls, and position queries without touching strategy files.
 
 The two systems run in parallel: `Leg.entry_price` continues to drive `daily_snapshot.py` P&L until an explicit switch is made. The trade ledger grows independently.
 
@@ -525,8 +515,8 @@ python scripts/record_paper_trade.py \
     --price 65.63
 ```
 
-Price defaults to `(bid + ask) / 2`; falls back to LTP when the spread is zero.
-`--leg` is auto-inferred from `--option-type` + `--action` when omitted (`PE + SELL → short_put`, `CE + SELL → short_call`, etc.).
+Price defaults to `(bid + ask) / 2`; falls back to LTP when the spread is zero. `--leg` is auto-inferred from `--option-type` + `--action` when omitted (`PE + SELL → short_put`, `CE + SELL →
+short_call`, etc.).
 
 All flags:
 
@@ -662,10 +652,9 @@ All backtesting runs **fully offline** against local Parquet/SQLite stores. No A
 - [x] CSP v1 strategy spec — `docs/strategies/csp_nifty_v1.md` (Nifty 50 index options, R1–R7)
 - [x] NiftyShield integrated strategy spec — `docs/strategies/niftyshield_integrated_v1.md`
 - [x] `find_strike_by_delta.py` — live chain → |delta| filter → strike/IV/key table + `--dry-run` record_paper_trade commands (2026-05-03)
-- [x] Historical data pipeline — VIX ingestion (`src/backtest/vix_ingest.py`) + EOD/intraday option chain
-  Parquet writer/reader (`src/backtest/chain_writer.py`/`chain_reader.py`)
-- [x] Backtest analytics module (`src/backtest/`) — IVR computation, chain data pipeline
-  (the full multi-phase backtest engine — portfolio construction, live promotion — remains in progress, see `BACKTEST_PLAN_PHASE1.md`, **P0**)
+- [x] Historical data pipeline — VIX ingestion (`src/backtest/vix_ingest.py`) + EOD/intraday option chain Parquet writer/reader (`src/backtest/chain_writer.py`/`chain_reader.py`)
+- [x] Backtest analytics module (`src/backtest/`) — IVR computation, chain data pipeline (the full multi-phase backtest engine — portfolio construction, live promotion — remains in progress, see
+  `BACKTEST_PLAN_PHASE1.md`, **P0**)
 - [x] Strategy engine (`src/strategy/`) — CSP/CC/PP/Collar overlays, Iron Condor V1+V2, `StrategyMonitor`, exit-signal engine; paper-trading backbone live since 2026-07
 - [x] Portfolio delta risk manager (`src/risk/`) — `PortfolioDeltaTracker`, entry gate, warning/cap thresholds
 - [x] Multi-LLM daily signal pipeline (`src/signals/`) — Grok/GPT-4o/Gemini consensus, `SignalAggregator`, paper-traded via `SignalTrackV1` (shipped 2026-09-09)
@@ -685,17 +674,14 @@ All backtesting runs **fully offline** against local Parquet/SQLite stores. No A
 
 ## Disclaimer
 
-This project is for personal use and educational purposes.
-Options trading involves significant risk of loss.
-Past performance of any strategy does not guarantee future results.
-Always do your own analysis before placing trades.
+This project is for personal use and educational purposes. Options trading involves significant risk of loss. Past performance of any strategy does not guarantee future results. Always do your own
+analysis before placing trades.
 
 ---
 
 ## Reference Documents (for AI assistants and contributors)
 
-The project root contains a set of markdown files that serve as structured context for both AI coding assistants and human contributors.
-`CLAUDE.md` defines exactly when each file should be loaded.
+The project root contains a set of markdown files that serve as structured context for both AI coding assistants and human contributors. `CLAUDE.md` defines exactly when each file should be loaded.
 
 ### Always load at the start of every session
 

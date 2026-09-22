@@ -1,7 +1,6 @@
 # NiftyShield — References
 
-> Read this when: touching instrument keys, AMFI codes, API endpoints, or auth tokens.
-> Also read when defining new strategy legs or verifying any market data key.
+> Read this when: touching instrument keys, AMFI codes, API endpoints, or auth tokens. Also read when defining new strategy legs or verifying any market data key.
 
 ---
 
@@ -16,11 +15,8 @@
 | Dhan Client ID | `DHAN_CLIENT_ID` | Permanent | Identifies Dhan account (numeric) |
 | Dhan Access Token | `DHAN_ACCESS_TOKEN` | 24 hours | Portfolio, positions, funds (free Trading APIs) |
 
-**Nuvama login (one-time):** `python -m src.auth.nuvama_login`
-**Nuvama verify:** `python -m src.auth.nuvama_verify`
-**Upstox OAuth:** `python -m src.auth.login` (daily for portfolio/order features)
-**Dhan login:** `python -m src.auth.dhan_login` (daily — opens browser, saves token)
-**Dhan verify:** `python -m src.auth.dhan_verify` (confirms connectivity + prints holdings)
+**Nuvama login (one-time):** `python -m src.auth.nuvama_login` **Nuvama verify:** `python -m src.auth.nuvama_verify` **Upstox OAuth:** `python -m src.auth.login` (daily for portfolio/order features)
+**Dhan login:** `python -m src.auth.dhan_login` (daily — opens browser, saves token) **Dhan verify:** `python -m src.auth.dhan_verify` (confirms connectivity + prints holdings)
 
 
 ---
@@ -43,9 +39,8 @@
 
 ## AMFI Codes (verified against live AMFI flat file 2026-04-04)
 
-All 11 original codes were wrong — replaced by grepping the live AMFI flat file.
-**Do NOT trust codes from any other source without verifying against the live flat file.**
-Verification: `grep -i "<scheme name>" <(curl https://www.amfiindia.com/spages/NAVAll.txt)`
+All 11 original codes were wrong — replaced by grepping the live AMFI flat file. **Do NOT trust codes from any other source without verifying against the live flat file.** Verification: `grep -i
+"<scheme name>" <(curl https://www.amfiindia.com/spages/NAVAll.txt)`
 
 | Scheme | AMFI Code |
 |---|---|
@@ -71,11 +66,10 @@ Verification: `grep -i "<scheme name>" <(curl https://www.amfiindia.com/spages/N
 - **Monthly NSE options expire last Tuesday of the month.** Monthly symbols show only month name; weeklies show full date.
 - **Nifty Index LTP:** `NSE_INDEX|Nifty 50` can be included in the standard V3 LTP batch call alongside equity and F&O keys — no separate endpoint needed for spot price.
 - **Upstox has no MF API.** No holdings, NAV, or transaction endpoints in V2 or V3. Community requests confirmed unanswered as of Feb 2026.
-- **Yearly-expiry option Greeks are not reported.** Known Upstox limitation —
-  the December/yearly-band contracts return `option_greeks.delta` as missing/None (silently coerced to `0.0` by any `_safe()`-style helper), even at high OI.
-  Confirmed 2026-07-28 via `find_chain_entry` against the 2026-12-29 Nifty chain (OI 2.2M, spread 0.01%, delta reported as 0.000 — implausible for a real ~4% OTM 154-DTE call).
-  Any strategy relying on delta-based exit signals (e.g. `evaluate_cc`'s DELTA_STOP/DELTA_WARN) cannot be trusted against a yearly-expiry position —
-  LOSS_STOP (premium multiple) becomes the only working defense for that band.
+- **Yearly-expiry option Greeks are not reported.** Known Upstox limitation — the December/yearly-band contracts return `option_greeks.delta` as missing/None (silently coerced to `0.0` by any
+  `_safe()`-style helper), even at high OI. Confirmed 2026-07-28 via `find_chain_entry` against the 2026-12-29 Nifty chain (OI 2.2M, spread 0.01%, delta reported as 0.000 — implausible for a real ~4%
+  OTM 154-DTE call). Any strategy relying on delta-based exit signals (e.g. `evaluate_cc`'s DELTA_STOP/DELTA_WARN) cannot be trusted against a yearly-expiry position — LOSS_STOP (premium multiple)
+  becomes the only working defense for that band.
 
 ---
 
@@ -108,10 +102,9 @@ Verification: `grep -i "<scheme name>" <(curl https://www.amfiindia.com/spages/N
 | NIFTY_JUL_CE | NIFTY JUL 23000 CE | `NSE_FO\|63895` | ₹1245.00 | 0 (closed 2026-07-14 @ ₹1164.05) | — |
 | NIFTY_JUL_PE | NIFTY JUL 23000 PE | `NSE_FO\|63896` | ₹90.95 | 0 (closed 2026-07-14 @ ₹26.95) | — |
 
-> Note: EBBETF0431 net qty = 465 @ avg ₹1388.01 (trade-adjusted via `apply_trade_positions()`).
-> Entry prices above are from strategy definition; actual cost basis driven by `trades` table.
-> JUN CE/PE (`NSE_FO|37799`/`NSE_FO|37805`) rolled to JUL CE/PE on 2026-06-17 — see TODOS.md session log.
-> Both JUL legs and the DEC PE hedge were closed manually via Zerodha on 2026-07-14; `finideas_ilts` currently holds only the EBBETF0431 leg.
+> Note: EBBETF0431 net qty = 465 @ avg ₹1388.01 (trade-adjusted via `apply_trade_positions()`). Entry prices above are from strategy definition; actual cost basis driven by `trades` table. JUN CE/PE
+> (`NSE_FO|37799`/`NSE_FO|37805`) rolled to JUL CE/PE on 2026-06-17 — see TODOS.md session log. Both JUL legs and the DEC PE hedge were closed manually via Zerodha on 2026-07-14; `finideas_ilts`
+> currently holds only the EBBETF0431 leg.
 
 ### Finideas FinRakshak (`finrakshak`)
 

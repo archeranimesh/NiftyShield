@@ -8,14 +8,13 @@
 
 ## Developer Tooling
 
-**`doc_update_gate.sh` stays tuned-advisory, not blocking (2026-09-22, RDO-11):** measured over the full observation window (2026-08-27 → 2026-09-22, 116 non-tests-only commits touching `src/`
-or `scripts/` `*.py`), 84 of those commits (72%) would have tripped the gate — staged code with no `TODOS.md` / `CONTEXT.md` / `DECISIONS.md` / `docs/plan/README.md` in the same commit — and
-the `[skip-docs]` escape hatch was used **zero** times in that window despite the gate firing constantly. That combination (near-3-in-4 fire rate, never-used escape hatch) means most fires are
-the expected shape documented in `docs/plan/README.md` §Conventions — a multi-commit phase lands its doc update at the closing commit, not every intermediate commit — not a genuine omission.
-Flipping `exit 0` → `exit 2` today would block roughly three of every four code commits on a habit nobody has adopted. Decision: keep `doc_update_gate.sh` advisory (no code change to the hook
-itself); re-review after `[skip-docs]` sees real adoption or the match logic is narrowed to the closing-commit boundary specifically, rather than every commit in a phase.
-`state_doc_freshness.sh` thresholds are unchanged — already at the RDO-10 #5 tuned values (`CONTEXT_TREE.md` / `DB_REGISTRY.md` / `README.md` = 60) and firing as signal, not noise, per the
-SessionStart output seen this session.
+**`doc_update_gate.sh` stays tuned-advisory, not blocking (2026-09-22, RDO-11):** measured over the full observation window (2026-08-27 → 2026-09-22, 116 non-tests-only commits touching `src/` or
+`scripts/` `*.py`), 84 of those commits (72%) would have tripped the gate — staged code with no `TODOS.md` / `CONTEXT.md` / `DECISIONS.md` / `docs/plan/README.md` in the same commit — and the
+`[skip-docs]` escape hatch was used **zero** times in that window despite the gate firing constantly. That combination (near-3-in-4 fire rate, never-used escape hatch) means most fires are the
+expected shape documented in `docs/plan/README.md` §Conventions — a multi-commit phase lands its doc update at the closing commit, not every intermediate commit — not a genuine omission. Flipping
+`exit 0` → `exit 2` today would block roughly three of every four code commits on a habit nobody has adopted. Decision: keep `doc_update_gate.sh` advisory (no code change to the hook itself);
+re-review after `[skip-docs]` sees real adoption or the match logic is narrowed to the closing-commit boundary specifically, rather than every commit in a phase. `state_doc_freshness.sh` thresholds
+are unchanged — already at the RDO-10 #5 tuned values (`CONTEXT_TREE.md` / `DB_REGISTRY.md` / `README.md` = 60) and firing as signal, not noise, per the SessionStart output seen this session.
 
 **Closing-commit SHA-backfill policy, repo-wide (2026-09-11, DEBT-11):** when a commit ticks a `tasks.md` box in the same commit that does the work, set `SHA: <pending>` on that line and backfill the
 real SHA as the first edit of the **next** commit that touches that folder's docs — never a dedicated swap-only commit just to record one SHA. This is the sole policy;
@@ -307,28 +306,17 @@ entry card into `EntryMessage` + `format_entry_message`, strategy-chosen via `he
 on a successful open. `ivr` relaxed to optional vs ROLL-17's required (CSP / CC have no IVR at record time); `dte` / `spot` / `net_credit` stay required. PP / collar / three-track bootstrap /
 track-comparison entry cards deferred to `overlay-entry-message/`.
 
-**2026-09-14 — unified exit renderer + brief redesign (UXM-1..8,
-`telegram-message-unification/unified-exit-message/`):** `src/notifications/exit_message.py`
-(`ExitMessage` + `format_exit_message`) renders a strategy-agnostic close card with three P&L
-levels — this-exit / cycle / inception — inception always from `get_strategy_realized_pnl`
-(the store), never the summed cycle P&L, which stays an approximation; win-rate + avg-decay%
-(from `src/paper/cycle_pnl.py::cycle_stats`) gate at `closed_count >= 5`. Decay is reported on
-the **gross-short-premium** basis (`Cycle.short_decay_pct`, `None` for pure-long PP), not the
-net `decay_pct`. IC v1/v2, CSP, CC, PP, Collar strategy-class closes and all three
-`auto_close.py` daemon branches route through this one renderer.
-`scripts/pre_market_brief.py` migrated off hand-rolled `<b>` HTML onto a MarkdownV2 fenced
-table, with the `paper_nifty_overlay` row broken into CC / Collar / PP sub-rows.
+**2026-09-14 — unified exit renderer + brief redesign (UXM-1..8, `telegram-message-unification/unified-exit-message/`):** `src/notifications/exit_message.py` (`ExitMessage` + `format_exit_message`)
+renders a strategy-agnostic close card with three P&L levels — this-exit / cycle / inception — inception always from `get_strategy_realized_pnl` (the store), never the summed cycle P&L, which stays an
+approximation; win-rate + avg-decay% (from `src/paper/cycle_pnl.py::cycle_stats`) gate at `closed_count >= 5`. Decay is reported on the **gross-short-premium** basis (`Cycle.short_decay_pct`, `None`
+for pure-long PP), not the net `decay_pct`. IC v1/v2, CSP, CC, PP, Collar strategy-class closes and all three `auto_close.py` daemon branches route through this one renderer.
+`scripts/pre_market_brief.py` migrated off hand-rolled `<b>` HTML onto a MarkdownV2 fenced table, with the `paper_nifty_overlay` row broken into CC / Collar / PP sub-rows.
 
-**2026-09-13 — overlay entries unified onto the shared renderer (OEM-1..4,
-`telegram-message-unification/overlay-entry-message/`):** `entry_message.py::_credit_line` made
-sign-aware — negative `net_credit` renders `💰 *Net debit:*` (absolute value, label flipped),
-positive / zero byte-identical, so IC / CSP / CC output is unchanged. A successful automated
-Collar re-entry (`CollarOverlayV1._reenter_collar`) now sends a `✅ *Collar Entry*` card; CC/PP
-have no in-tick automated re-entry path (OEM-3 merged into OEM-4 — only the three-track
-bootstrap actually reopens a CC/PP position). The `📥 Overlay Entry — {TYPE} Bootstrap`
-hand-rolled message in `paper_3track_overlay_entry.py` is replaced by the shared renderer for
-cc / pp / collar, with the `⚠️ Gate Logged` line appended by the caller. `nifty_track_comparison_v1`
-still deferred (not a credit structure).
+**2026-09-13 — overlay entries unified onto the shared renderer (OEM-1..4, `telegram-message-unification/overlay-entry-message/`):** `entry_message.py::_credit_line` made sign-aware — negative
+`net_credit` renders `💰 *Net debit:*` (absolute value, label flipped), positive / zero byte-identical, so IC / CSP / CC output is unchanged. A successful automated Collar re-entry
+(`CollarOverlayV1._reenter_collar`) now sends a `✅ *Collar Entry*` card; CC/PP have no in-tick automated re-entry path (OEM-3 merged into OEM-4 — only the three-track bootstrap actually reopens a
+CC/PP position). The `📥 Overlay Entry — {TYPE} Bootstrap` hand-rolled message in `paper_3track_overlay_entry.py` is replaced by the shared renderer for cc / pp / collar, with the `⚠️ Gate Logged` line
+appended by the caller. `nifty_track_comparison_v1` still deferred (not a credit structure).
 
 **Two distinct P&L metrics:** (1) Inception P&L — current value minus total invested; (2) Day-change P&L — today vs previous snapshot via `get_prev_snapshots()` / `get_prev_nav_snapshots()` (MAX date
 < today, calendar-agnostic). Δday column omitted silently on first run.
@@ -1085,8 +1073,8 @@ Verification (per `docs/plan/technical-debt/stories.md` DEBT-8/-9/-10/-12 common
 single post-remediation hit closed out the slug's Count-5 escalation and it was drained from `suggestions.md` (`ef8f555`) into this DEBT-15 line — it has not recurred in any of the dozens of sessions
 since (S5.3 through S5.6, S6, SCT-1..4, SPT-1..6, ROLL-5..17, BUG-040..046, DEBT-8/-9/-10/-11/-12/-13/-14), well past the 3-session check window `tasks.md` sets. Like DEBT-12 (and unlike
 DEBT-8/DEBT-9's warn-only hooks), this remediation is a staged pre-commit blocker: the one cited recurrence shows the check firing and the commit actually aborting before landing — `tasks.md`'s own
-note that it "caught the S5.3 case (`✗ ruff-format` on `signal_eod.py`) before the commit" confirms the same behavior on the very next session. The check is doing its job — no unformatted
-`.py` has reached a commit since `2b85b84`. What recurs (once) is a pre-stage checklist gap (`ruff check` run without `ruff format --check`), not a hook failure.
+note that it "caught the S5.3 case (`✗ ruff-format` on `signal_eod.py`) before the commit" confirms the same behavior on the very next session. The check is doing its job — no unformatted `.py` has
+reached a commit since `2b85b84`. What recurs (once) is a pre-stage checklist gap (`ruff check` run without `ruff format --check`), not a hook failure.
 
 **Decision (Animesh):** no further hook change. The blocker is a real, firing, effective backstop — the residual cost is a re-stage cycle when pre-stage discipline skips `ruff format --check`, which
 is authoring-time cost, not hook failure, matching the DEBT-12 verdict exactly. DEBT-15 closes as **verified effective**, no protocol/model discussion opened.
@@ -1109,23 +1097,15 @@ ticked (flags) and one with it open (clean). Full `tests/unit/` suite green (302
 
 ## `telegram-message-unification` epic closed — recovery digest grouping decision (ORD-4, 2026-09-15)
 
-Epic (`unified-entry-message` → `overlay-entry-message` → `unified-exit-message` →
-`overlay-recovery-digest`) archived to `docs/archive/plan/telegram-message-unification/`.
-Every paper-strategy Telegram entry/close card now routes through `entry_message.py` /
-`exit_message.py`; the S9 recovery digest is a fenced MarkdownV2 block (ORD-3, SHA `8f0e8e4`).
+Epic (`unified-entry-message` → `overlay-entry-message` → `unified-exit-message` → `overlay-recovery-digest`) archived to `docs/archive/plan/telegram-message-unification/`. Every paper-strategy
+Telegram entry/close card now routes through `entry_message.py` / `exit_message.py`; the S9 recovery digest is a fenced MarkdownV2 block (ORD-3, SHA `8f0e8e4`).
 
-`_overlay_type_groups` grouping decision (ORD-1, BUG-044): a standalone `overlay_cc` bootstrap
-and a `collar` can genuinely coexist as unrelated positions — confirmed from live
-`paper_trades` history, not just in theory. The prior BUG-030 fix's `has_cc and has_put →
-collar` merge branch conflated that case with the collar's own dedup-exempted call leg, so it
-was retired (ORD-2, SHA `7c255fd`): `_overlay_type_groups` now always emits a standalone `cc`
-group when `overlay_cc` is present and a put-only `collar` group when only
-`overlay_collar_put` is present, never merging the two. No reliable marker distinguishes a
-genuine dedup-exempted collar call from an unrelated CC re-entry after the fact (the
-`call_instrument_key` link is established only at entry time and never persisted as a
-relationship), so the freshly-entered dedup-exempted case now surfaces as separate `CC` /
-`Collar (put only)` lines instead of one merged `Collar` line — a labeling ambiguity flagged as
-worth a workshop, not a blocker.
+`_overlay_type_groups` grouping decision (ORD-1, BUG-044): a standalone `overlay_cc` bootstrap and a `collar` can genuinely coexist as unrelated positions — confirmed from live `paper_trades` history,
+not just in theory. The prior BUG-030 fix's `has_cc and has_put → collar` merge branch conflated that case with the collar's own dedup-exempted call leg, so it was retired (ORD-2, SHA `7c255fd`):
+`_overlay_type_groups` now always emits a standalone `cc` group when `overlay_cc` is present and a put-only `collar` group when only `overlay_collar_put` is present, never merging the two. No reliable
+marker distinguishes a genuine dedup-exempted collar call from an unrelated CC re-entry after the fact (the `call_instrument_key` link is established only at entry time and never persisted as a
+relationship), so the freshly-entered dedup-exempted case now surfaces as separate `CC` / `Collar (put only)` lines instead of one merged `Collar` line — a labeling ambiguity flagged as worth a
+workshop, not a blocker.
 
 ---
 

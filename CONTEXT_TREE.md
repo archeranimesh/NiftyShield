@@ -1,8 +1,7 @@
 # NiftyShield — Module Tree
 
-> File-level descriptions for every module in `src/`, `scripts/`, `tests/`, `.claude/`, and `docs/archive/`.
-> Load this file when: adding new modules, reviewing full codebase structure, or when the graph cannot answer a structural question.
-> For day-to-day task work, the graph (`search_graph`, `get_code_snippet`) is faster and cheaper.
+> File-level descriptions for every module in `src/`, `scripts/`, `tests/`, `.claude/`, and `docs/archive/`. Load this file when: adding new modules, reviewing full codebase structure, or when the
+> graph cannot answer a structural question. For day-to-day task work, the graph (`search_graph`, `get_code_snippet`) is faster and cheaper.
 
 ---
 
@@ -508,9 +507,8 @@ tests/
 | `scripts/dev/post_commit_hook.sh` | Post-commit: echoes graph re-index reminder when `src/` or `scripts/` changed. |
 | `docs/plan/dev-foundation/dx-foundation/mypy_baseline.md` | Per-module mypy error counts at the DX-3 baseline. |
 
-`ruff` runs lint+fix; `mypy` is scoped.
-`md-line-length` — RDO-5, 200-char cap on root + `docs/plan` + `docs/bugs` `.md`.
-`check-story-structure` — RDO-13, checks newly-added `docs/plan` story folders.
+`ruff` runs lint+fix; `mypy` is scoped. `md-line-length` — RDO-5, 200-char cap on root + `docs/plan` + `docs/bugs` `.md`. `check-story-structure` — RDO-13, checks newly-added `docs/plan` story
+folders.
 
 ## Research tooling (docs/)
 
