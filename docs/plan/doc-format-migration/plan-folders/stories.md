@@ -42,7 +42,7 @@ Epics, `TODOS.md` §Feature Backlog. Several folders in the old provisional pass
 
 | Folder | Shape now | Finding | Tier | Work needed | Status |
 |---|---|---|---|---|---|
-| `backtest-engine/` | epic, 4 phase subdirs OK | root missing `prompt.md`+`README.md` | A | add router; reflow 12 files. Backlog #7. | ✅ DFM-2 |
+| `backtest-engine/` | epic, 4 phase subdirs OK | root missing `prompt.md`+`README.md` | A | add router; reflow 12 files. Backlog #7. | ✅ 150fab9 |
 | `backtest-eval-core/` | flat, 4 files | none | A | reflow 4 files; verify tasks. Backlog #9 (blocked). | ⬜ |
 | `broker-abstraction/` | flat, `stories/BA-N.md` layout | missing `stories.md` | B\* | consolidate to `stories.md`; reflow 18 files. See note below. | ⬜ |
 | `chain-decay-analysis/` | flat, 3 files | none | A | task-line format + reflow 3 files. Backlog #16. | ⬜ |

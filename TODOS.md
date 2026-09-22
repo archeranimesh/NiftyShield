@@ -127,7 +127,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 - [2026-09-22] `doc-format-migration/` `plan-folders/` DFM-2 — converted tier-A folder `backtest-engine/` to canonical epic shape: added root `prompt.md` (router) + `README.md` (both missing before);
   `phase1..4/` sub-story shape was already canonical, no changes beyond reflow. `reflow_md.py` applied repo-wide across the folder; `check_story_structure.py --all` and `check_checkbox_consistency.py`
   both clean for `backtest-engine/`. Added a status line to `docs/plan/README.md` §Active Stories (the folder had none before). Proof-of-approach pass — 13 remaining tier-A folders still open. SHA
-  `<pending>`.
+  `150fab9`.
 - [2026-09-22] `root-doc-organization/` (`docs/archive/plan/root-doc-organization/`) — RDO-16 step 4 confirmed: this session's own SessionStart produced no `state_doc_freshness.sh` staleness warning,
   and a manual re-run reproduced the clean result — the flag that fired last session for `PLANNER.md`/`CONTEXT_TREE.md`/`README.md` cleared once those docs were refreshed. All four loop-closure steps
   verified end to end; RDO-16 closes, completing every task box in the story, so the story archived in the same commit per §Completion → archive. SHA `<pending>`.
