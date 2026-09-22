@@ -54,6 +54,13 @@ repos:
         files: '^docs/plan/.*'
         pass_filenames: false
 
+      - id: check-checkbox-consistency
+        name: "docs/plan and docs/bugs task lines must match their Story done when blocks"
+        language: system
+        entry: python scripts/dev/hooks/check_checkbox_consistency.py
+        files: '^docs/(plan|bugs)/.*\.md$'
+        pass_filenames: true
+
   - repo: https://github.com/Yelp/detect-secrets
     rev: v1.5.0
     hooks:

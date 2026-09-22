@@ -86,9 +86,7 @@ def _niftybees_units_held(store: PaperStore) -> int:
     for a zero/undersized holding.
     """
     return sum(
-        position.net_qty
-        for position in store.get_positions(STRATEGY_SPOT)
-        if position.net_qty > 0
+        position.net_qty for position in store.get_positions(STRATEGY_SPOT) if position.net_qty > 0
     )
 
 
