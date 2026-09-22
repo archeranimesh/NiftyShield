@@ -119,6 +119,10 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-22] `doc-format-migration/` `enforcement/` DFM-9 done — `check_story_structure.py` gained `--strict` (`--all --strict` fails on any finding, warnings included, except a folder on
+  `_LEGACY_ALLOWLIST` which still grandfathers — mirrors `--staged`'s per-folder treatment); new `docs-format` CI job runs all three doc hooks repo-wide (`check_md_line_length.py`,
+  `check_story_structure.py --all --strict`, `check_checkbox_consistency.py --all`) and fails the build on any finding; `md-organize` SKILL.md Step 5b now says its `--all` audit is a local pre-check,
+  CI is the gate. Confirmed the tree is currently clean against `--strict` (only `dev-foundation`'s grandfathered warnings survive). SHA `ade7420`.
 - [2026-09-22] `doc-format-migration/` `enforcement/` DFM-8 done — added `check-checkbox-consistency` local hook to `.pre-commit-config.yaml` (`files: '^docs/(plan|bugs)/.*\.md$'`, `pass_filenames:
   true`); `check_checkbox_consistency.py` already supported path-mode invocation and `--all` was already green tree-wide post `plan-folders/` + `repo-wide-reflow/`, so no script change or new test was
   needed — existing `test_main_path_mode_checks_owning_task_file` already covers the pre-commit invocation shape. `pre-commit run --all-files` clean except two pre-existing, unrelated failures (`mypy`

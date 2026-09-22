@@ -35,7 +35,7 @@ Confirmed with Animesh, 2026-08-29:
 |---|---|---|---|---|
 | `plan-folders/` | Tiered batch conversion of every `docs/plan/` folder to the canonical format | ✅ Done — DFM-4 closed as no-op, no tier-C folders in the confirmed tier table | — | 906684c |
 | `repo-wide-reflow/` | Fill-to-≤200 every other `.md` in the repo (root + `docs/**` minus `plan/`, `archive/`, `_TEMPLATE/`) | ✅ Done — DFM-5, 77 files in 4 batches | — | 15698be |
-| `enforcement/` | Widen the hooks repo-wide, add a CI `--all` gate, add new-folder scaffolding | 🔄 In progress — DFM-6, DFM-7, DFM-8 done | `plan-folders`, `repo-wide-reflow` | — |
+| `enforcement/` | Widen the hooks repo-wide, add a CI `--all` gate, add new-folder scaffolding | 🔄 In progress — DFM-6, DFM-7, DFM-8, DFM-9 done | `plan-folders`, `repo-wide-reflow` | — |
 
 Status: ⬜ Not started · 🔄 In progress · ✅ Done. This column is the epic's progress view — per-task checkboxes live only in each sub-story's `tasks.md`.
 

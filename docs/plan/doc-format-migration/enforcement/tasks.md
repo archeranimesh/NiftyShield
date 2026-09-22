@@ -4,14 +4,14 @@ Work top-down. Find the first unchecked `- [ ]` and do only that task. See `prom
 
 **Blocked until `plan-folders/` and `repo-wide-reflow/` are both complete.**
 
-**Open: DFM-9, DFM-10.**
+**Open: DFM-10.**
 
 - [x] **DFM-6** — widen `md-line-length` + `md-reflow` `files:` to every repo `.md` bar `docs/archive/` + `_TEMPLATE/` + `docs/council/` (follow-up filed); tests | Owner: Claude | Model:
   claude-sonnet-5 | Review: code-reviewer | SHA: 7107a56
 - [x] **DFM-7** — `check_story_structure.py`: `--staged` mode + shrinking legacy allowlist (`dev-foundation`); rewire pre-commit | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA:
   8e711f1
 - [x] **DFM-8** — wire `check_checkbox_consistency.py` into `.pre-commit-config.yaml`; confirm green tree-wide | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: d4d249d
-- [ ] **DFM-9** — `ci.yml` `docs-format` job: three hooks `--all`, fail on any finding; update `md-organize` skill | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: <—>
+- [x] **DFM-9** — `ci.yml` `docs-format` job: three hooks `--all`, fail on any finding; update `md-organize` skill | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: ade7420
 - [ ] **DFM-10** — `scripts/dev/new_plan_folder.py` + tests + `/new-story` skill; link from README §Conventions | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: <—>
 
 ## Story done when

@@ -20,7 +20,7 @@ both `_send_close_notification`; no option model, ships now) → `chart-model-ov
 shipped. `token_audit.py`, the `CLAUDE.md`/`AGENTS.md` skill-ification, `session-close` off the fork, the SWEEP `PreToolUse` hooks + `commit_preflight.py`, and the Step 4b drain path (`Count >= 5` →
 `technical-debt/` DEBT-8..12) all landed. Closing SHA `2d896a9`.
 
-**`doc-format-migration/`** · 🔄 In progress — `plan-folders/` and `repo-wide-reflow/` done; `enforcement/` in progress (DFM-6, DFM-7 done; DFM-8, DFM-9, DFM-10 open). Batch-converts every legacy
+**`doc-format-migration/`** · 🔄 In progress — `plan-folders/` and `repo-wide-reflow/` done; `enforcement/` in progress (DFM-6, DFM-7, DFM-8, DFM-9 done; DFM-10 open). Batch-converts every legacy
 `docs/plan/` folder to the canonical format and reflows every other `.md` in the repo to fill-to-≤200, then hardens the hooks + adds a CI `--all` gate so new docs cannot drift. Three sub-stories:
 `plan-folders/` (tiered A/B/C/D conversion) → `repo-wide-reflow/` (everything outside `plan/` and `archive/`) → `enforcement/` (repo-wide hooks, CI job, `new_plan_folder.py` + `/new-story` scaffold).
 Answers `root-doc-organization/` RDO-17.8; built on `reflow_md.py` (RDO-17.7, `526e431`).
