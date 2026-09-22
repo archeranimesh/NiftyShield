@@ -5,6 +5,17 @@
 
 ---
 
+## 2026-09-22 — `signal-outcome-profit-range` story archived
+
+Moved to `docs/archive/plan/signal-outcome-profit-range/`. Shows the profit high/low reached
+since entry (existing `mfe_pct`/`mae_pct` in `paper_signal_marks`) in the daily SIGNAL OUTCOME
+Telegram message for executed signal-track trades, persisted on `SignalOutcome` for later
+querying. SOP-1 (`SignalOutcome` fields + idempotent `signal_outcomes` migration, SHA
+`4096c07`) → SOP-2 (`run_record_phase` computes both fields from the trade's own
+`paper_signal_marks` history, SHA `180ccae`) → SOP-3 (renders a "📈 High / 📉 Low" line in the
+executed branch only, SHA `a73b6b6`). Signal-track only, not IC/positional strategies; no
+backfill of historical rows. Requested by Animesh 2026-09-22; closed 2026-09-22.
+
 ## 2026-09-15 — `telegram-message-unification` epic archived
 
 Moved to `docs/archive/plan/telegram-message-unification/`. Four sub-stories, sequenced and

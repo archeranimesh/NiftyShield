@@ -85,11 +85,6 @@ rot them.
     (DHR-1..4 — remove Dhan holdings / P&L / the Dhan Options block from the snapshot; keep the Dhan
     login flow + client + tables wired). No `schema.md`. `/work` routes via the epic `prompt.md`.
     Requested by Animesh 2026-09-10.
-25. **Signal outcome profit range** — `docs/plan/signal-outcome-profit-range/` — next **SOP-3**
-    (render high/low in the Telegram outcome message). Surface the profit high/low reached
-    since entry (existing `mfe_pct`/`mae_pct` in `paper_signal_marks`) in the daily SIGNAL OUTCOME
-    Telegram message, signal-track only, no backfill. Has `schema.md`. Requested by Animesh
-    2026-09-22.
 ## Open Bugs
 
 Confirmed defects in shipped code live in **[`docs/bugs/`](docs/bugs/)** — registry `bugs.md` (status `🔴 Open` → `🟡 Fix in progress` → `✅ Fixed`), tasks `docs/bugs/task.md`. `/work` → Bug branch reads
@@ -128,6 +123,11 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-22] `signal-outcome-profit-range/` SOP-3 (`docs/archive/plan/signal-outcome-profit-range/`)
+  — `_format_outcome_notification` renders a "📈 High / 📉 Low" line in the executed branch
+  only, using the existing `_E(...)` / `format_money(..., signed=True)` escaping pattern;
+  omitted (no blank-line artifact) when either field is `None`. SHA `a73b6b6`. Story complete
+  (SOP-1..3) — archived to `docs/archive/plan/signal-outcome-profit-range/`.
 - [2026-09-22] `signal-outcome-profit-range/` SOP-2 (`docs/plan/signal-outcome-profit-range/`) —
   `run_record_phase` captures `trade_id` from the auto-detected live `paper_signal_entries` row
   and computes `high_pnl_per_lot`/`low_pnl_per_lot` via new `_high_low_pnl_per_lot()` off the
