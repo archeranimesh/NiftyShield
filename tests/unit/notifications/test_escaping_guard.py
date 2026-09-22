@@ -175,17 +175,19 @@ def scan_call_sites() -> list[CallSite]:
 # task names (flagged "untracked gap" - worth a future task, not this one).
 # (file, line): reason
 _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
-    ("scripts/signal_eod.py", 231): (
+    ("scripts/signal_eod.py", 255): (
         "S5.5a — value is fully escaped inside the callee _format_outcome_notification() "
         "(the message-builder owns the MarkdownV2 boundary: escape_markdown() per dynamic "
         "value, literal * for bold), but this guard only inspects the immediate enclosing "
-        "function (_notify_outcome), not the builder it calls — same shape as the morning_signal.py:218 entry"
+        "function (_notify_outcome), not the builder it calls — same shape as the morning_signal.py:218 entry. "
+        "Line moved from 232 -> 255 by SOP-1/SOP-2's profit high/low addition (767c0bd, a73b6b6)."
     ),
-    ("scripts/signal_eod.py", 440): (
+    ("scripts/signal_eod.py", 464): (
         "S5.5d — report body is wrapped as a MarkdownV2 fenced code block inside the "
         "callee _format_report_message() (fence content only needs backslash/backtick "
         "escaping, never the general escape_markdown), but this guard only inspects the "
-        "immediate enclosing function (_notify_report), not the builder it calls"
+        "immediate enclosing function (_notify_report), not the builder it calls. "
+        "Line moved from 441 -> 464 by SOP-1/SOP-2's profit high/low addition (767c0bd, a73b6b6)."
     ),
     (
         "scripts/dev/send_test_telegram.py",
