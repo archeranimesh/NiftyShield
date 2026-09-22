@@ -128,6 +128,10 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-22] `signal-outcome-profit-range/` SOP-1 (`docs/plan/signal-outcome-profit-range/`) —
+  added `high_pnl_per_lot`/`low_pnl_per_lot: Decimal | None` to `SignalOutcome`, idempotent
+  `signal_outcomes` ALTER TABLE migration, read/write in `SignalStore.record_outcome` /
+  `_outcome_from_row`. No backfill, existing rows read back as `None`. SHA `4096c07`. Next: SOP-2.
 - [2026-09-18] MVP design decisions (`docs/plan/mvp/`) — resolved the 9 open questions blocking M1 in `mvp_tasks.md` (whole-share tranche rounding + idle cash, 25bps cost per transaction, live-fetch
   benchmark_entry, N=6mo time stop, independent-per-pick portfolio mode, M-A lump-sum-first / M-B ladder phasing, no council call needed). Added `mvp_tranches` table + new `mvp_recommendations`
   columns to `mvp_schema.md`, rewrote M1.1's spec in `mvp_stories.md` for the full capital-deployment field set, and added a new M0 (equity+index bhavcopy ingest) task ahead of M6 since
