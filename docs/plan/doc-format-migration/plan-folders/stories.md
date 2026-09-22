@@ -51,7 +51,7 @@ Epics, `TODOS.md` §Feature Backlog. Several folders in the old provisional pass
 | `full-repo-review/` | flat, 3 files | none | B | Complete, superseded — structure + reflow 13 files, digests. | ✅ caeafc7 |
 | `full-repo-review-followups/` | epic, 9 subs OK | root missing `prompt.md` | A | add router; reflow 28 files. Backlog #12/13/14. | ✅ 4dc1ed1 |
 | `greeks-bs-fallback/` | flat, 3 files | none | A | task-line format + reflow 3 files. Backlog #2. | ✅ 0a2838a |
-| `historical-data-abstraction/` | flat, `stories/HD-N.md` layout | missing `stories.md` | B\* | consolidate to `stories.md`; reflow 13 files. See note below. | ⬜ |
+| `historical-data-abstraction/` | flat, `stories/HD-N.md` layout | missing `stories.md` | B\* | consolidate to `stories.md`; reflow 13 files. See note below. | ✅ 906684c |
 | `ic-payoff-charts/` | epic, 2 subs OK | none | A | already canonical — reflow 8 files; verify coverage. | ✅ 500c290 |
 | `mvp/` | flat, `mvp_*.md` names | legacy filenames | A | `git mv` to canonical names; reflow 1 file. Backlog #4. | ✅ 8455d50 |
 | `options_income/` | flat, `options_income_*.md` | legacy filenames | A | `git mv`; `_strategy.md`->`plan.md`; reflow 4 files. Backlog #6. | ✅ ddf0964 |

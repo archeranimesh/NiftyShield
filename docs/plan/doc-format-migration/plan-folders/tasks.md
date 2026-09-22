@@ -3,11 +3,11 @@
 Work top-down. Find the first unchecked `- [ ]` and do only that task. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation spec and the per-folder progress
 table.
 
-**Open: DFM-3, DFM-4.**
+**Open: DFM-4.**
 
 - [x] **DFM-1** — enumerate + tier every non-archived `docs/plan/` folder (A/B/C/D), record the table in `stories.md` | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 37bf311
 - [x] **DFM-2** — convert every tier-A folder (full: structure + `stories.md` covers every task + reflow); 1 commit/folder | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: b1bf839
-- [ ] **DFM-3** — convert every tier-B folder (structure + 1-line digest per shipped task + reflow); 1 commit/folder | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <—>
+- [x] **DFM-3** — convert every tier-B folder (structure + 1-line digest per shipped task + reflow); 1 commit/folder | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 906684c
 - [ ] **DFM-4** — reflow-only pass on every tier-C folder (structure already canonical) | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <—>
 
 ## Story done when

@@ -120,6 +120,12 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-22] `doc-format-migration/` `plan-folders/` DFM-3 closed — restructured the last
+  tier-B folder, `historical-data-abstraction/`: consolidated 11 `stories/HD-N.md` files into
+  one `stories.md`, canonical task-line format, `Story done when` section, reflow. SHA:
+  `906684c`. All 4 tier-B folders done (`broker-abstraction/` `525c0d2`, `phase2-integrations/`
+  `107f58b`, `full-repo-review/` `caeafc7`, `historical-data-abstraction/` `906684c`, the last 3
+  via parallel subagents). DFM-3 ticked. Next: DFM-4 (tier-C reflow-only pass).
 - [2026-09-22] `doc-format-migration/` `plan-folders/` DFM-3 — restructured `full-repo-review/`
   (tier B, 3 of 4, via parallel subagent): canonical task-line format, `stories.md` trimmed
   from 11 forward specs to one-line digests (shipped/superseded folder), reflow. SHA: `caeafc7`.
