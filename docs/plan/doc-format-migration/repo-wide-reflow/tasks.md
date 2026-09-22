@@ -4,7 +4,7 @@ Work top-down. Find the first unchecked `- [ ]` and do only that task. See `prom
 
 **Open: DFM-5.**
 
-- [ ] **DFM-5** — reflow every in-bounds `.md` to fill-to-≤200, per-directory commits; update the line-style rule | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <—>
+- [x] **DFM-5** — reflow every in-bounds `.md` to fill-to-≤200, per-directory commits; update the line-style rule | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 15698be
 
 ## Story done when
 

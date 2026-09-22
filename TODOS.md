@@ -119,6 +119,9 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-22] `doc-format-migration/` `repo-wide-reflow/` DFM-5 closed — reflowed 77 in-bounds `.md` files repo-wide (root, `docs/` non-plan, `.claude/`+`.agents/`, `src`/`scripts`/`scratch` strays)
+  to fill-to-≤200 in 4 per-directory commits, then updated `docs/plan/README.md` §"Markdown line style" to drop the POC-folder carve-out. `repo-wide-reflow/` story now fully done; epic `README.md`
+  Stories row flipped to ✅. SHA: `15698be`. Next: `enforcement/` (blocked until both `plan-folders/` and `repo-wide-reflow/` are green — both now are).
 - [2026-09-22] `doc-format-migration/` `plan-folders/` DFM-4 closed as no-op — DFM-1's confirmed tier table classifies all 19 remaining folders as tier A or B (plus `dev-foundation/` tier D); no
   tier-C folder exists (the two examples named in `prompt.md`, `root-doc-organization/` and `telegram-markdown-migration/`, are already archived). No files changed, no commit. `plan-folders/` story is
   now fully done; epic `README.md` Stories row flipped to ✅. Next: `repo-wide-reflow/`.
