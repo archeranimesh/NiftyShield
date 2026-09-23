@@ -87,10 +87,10 @@
   2026-09-23** against M0's real `data/offline/equity_ohlcv/` Parquet layout, explicitly scoped apart from M8 (M6 = snapshot backfill + breach detection for a known `entry_price`; M8 = entry
   *determination* for an unresolved `entry_price`, Uniparts flow). Unblocked — depends only on M0, not M7. See full spec: `stories.md`. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer
   | SHA: 499d382
-- [ ] **M7** — `src/mvp/models.py` + `src/mvp/store.py`: add `reco_price: Decimal | None` to `Pick` (recommendation-quoted price, distinct from `entry_price`, the price we actually recorded entering
+- [x] **M7** — `src/mvp/models.py` + `src/mvp/store.py`: add `reco_price: Decimal | None` to `Pick` (recommendation-quoted price, distinct from `entry_price`, the price we actually recorded entering
   at). `scripts/mvp.py`: `add` gains `--reco-price` (settable at creation, not only via later `update`, so fresh picks always carry it); `update` also accepts `--reco-price` for correction.
   `summary`/`list` show entry-vs-reco deviation (`(entry_price - reco_price) / reco_price`) computed on read — no stored deviation column. No migration needed — DB is freshly seeded, so every pick
-  from here on is created with both fields. | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: —
+  from here on is created with both fields. | Owner: Antigravity | Model: Gemini | Review: code-reviewer | SHA: d2f60d2
 - [ ] **M8** — Backfill entry + walk-forward for a past reco (blocked on M0 landing; full spec is the canonical Uniparts worked example above — implement and run that pick end-to-end as this task's
   acceptance test, do not derive a separate one). New `src/mvp/backfill.py`: `enter_backfill_pick(pick, closes)` — the backfill half of the entry rule only (next trading day's close after `reco_date`;
   enter at that close if it's above `reco_price`, else the pick stays unentered, no re-check). `run_backfill(pick, closes)` — walk daily equity closes (M0's ingested table) from entry date to today,
