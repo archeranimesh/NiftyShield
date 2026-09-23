@@ -1,8 +1,11 @@
 """Tests for MVPStore init_db and provider/category persistence."""
 
+from decimal import Decimal
 from pathlib import Path
 
-from src.mvp.models import Category, Provider, ProviderSource
+import pytest
+
+from src.mvp.models import Category, MVPSnapshot, Pick, PickStatus, Provider, ProviderSource
 from src.mvp.store import MVPStore
 
 
@@ -30,6 +33,23 @@ def _make_category(
         notes=None,
         created_at="2026-09-22T00:00:00Z",
     )
+
+
+def _make_pick(pick_id: str = "pick-1", category_id: str | None = None) -> Pick:
+    return Pick(
+        pick_id=pick_id,
+        category_id=category_id,
+        symbol="TCS",
+        pick_date="2026-09-22",
+        created_at="2026-09-22T00:00:00Z",
+        updated_at="2026-09-22T00:00:00Z",
+    )
+
+
+def _make_snapshot(
+    pick_id: str = "pick-1", captured_at: str = "2026-09-22T10:00:00Z"
+) -> MVPSnapshot:
+    return MVPSnapshot(pick_id=pick_id, ltp=Decimal("3500.50"), captured_at=captured_at)
 
 
 def test_init_db_is_idempotent(tmp_path: Path) -> None:
@@ -131,3 +151,110 @@ def test_list_categories_filters_by_provider(tmp_path: Path) -> None:
     assert prov1_categories[0].provider_id == "prov-1"
     assert len(prov2_categories) == 1
     assert prov2_categories[0].provider_id == "prov-2"
+
+
+def test_add_pick_get_pick_round_trip(tmp_path: Path) -> None:
+    store = MVPStore(str(tmp_path / "test.sqlite"))
+    store.init_db()
+    pick = _make_pick()
+    store.add_pick(pick)
+
+    fetched = store.get_pick("pick-1")
+
+    assert fetched is not None
+    assert fetched.symbol == "TCS"
+    assert fetched.capital_allotted == Decimal("100000")
+    assert fetched.tranche_step_pct == Decimal("6")
+    assert isinstance(fetched.capital_allotted, Decimal)
+
+
+def test_update_pick_with_entry_price_advances_pending_to_open(tmp_path: Path) -> None:
+    store = MVPStore(str(tmp_path / "test.sqlite"))
+    store.init_db()
+    store.add_pick(_make_pick())
+
+    store.update_pick("pick-1", entry_price=Decimal("3500"))
+
+    fetched = store.get_pick("pick-1")
+    assert fetched is not None
+    assert fetched.status == PickStatus.OPEN
+    assert fetched.entry_price == Decimal("3500")
+
+
+def test_update_pick_without_entry_price_stays_pending(tmp_path: Path) -> None:
+    store = MVPStore(str(tmp_path / "test.sqlite"))
+    store.init_db()
+    store.add_pick(_make_pick())
+
+    store.update_pick("pick-1", notes="watching")
+
+    fetched = store.get_pick("pick-1")
+    assert fetched is not None
+    assert fetched.status == PickStatus.PENDING
+    assert fetched.notes == "watching"
+
+
+def test_close_pick_with_manual_close_sets_closed_at_and_price(tmp_path: Path) -> None:
+    store = MVPStore(str(tmp_path / "test.sqlite"))
+    store.init_db()
+    store.add_pick(_make_pick())
+
+    store.close_pick("pick-1", Decimal("3600"), PickStatus.MANUAL_CLOSE)
+
+    fetched = store.get_pick("pick-1")
+    assert fetched is not None
+    assert fetched.status == PickStatus.MANUAL_CLOSE
+    assert fetched.close_price == Decimal("3600")
+    assert fetched.closed_at is not None
+
+
+def test_close_pick_with_non_terminal_status_raises(tmp_path: Path) -> None:
+    store = MVPStore(str(tmp_path / "test.sqlite"))
+    store.init_db()
+    store.add_pick(_make_pick())
+
+    with pytest.raises(ValueError):
+        store.close_pick("pick-1", Decimal("3600"), PickStatus.OPEN)
+
+
+def test_get_open_picks_excludes_pending_and_terminal(tmp_path: Path) -> None:
+    store = MVPStore(str(tmp_path / "test.sqlite"))
+    store.init_db()
+    store.add_pick(_make_pick(pick_id="pick-pending"))
+    store.add_pick(_make_pick(pick_id="pick-open"))
+    store.update_pick("pick-open", entry_price=Decimal("100"))
+    store.add_pick(_make_pick(pick_id="pick-closed"))
+    store.update_pick("pick-closed", entry_price=Decimal("100"))
+    store.close_pick("pick-closed", Decimal("110"), PickStatus.MANUAL_CLOSE)
+
+    open_picks = store.get_open_picks()
+
+    assert [p.pick_id for p in open_picks] == ["pick-open"]
+
+
+def test_list_picks_filters_by_provider_via_category(tmp_path: Path) -> None:
+    store = MVPStore(str(tmp_path / "test.sqlite"))
+    store.init_db()
+    store.add_provider(_make_provider())
+    store.add_category(_make_category())
+    store.add_pick(_make_pick(pick_id="pick-1", category_id="cat-1"))
+    store.add_pick(_make_pick(pick_id="pick-2", category_id=None))
+
+    picks = store.list_picks(provider_id="prov-1")
+
+    assert [p.pick_id for p in picks] == ["pick-1"]
+
+
+def test_record_snapshot_get_snapshots_round_trip(tmp_path: Path) -> None:
+    store = MVPStore(str(tmp_path / "test.sqlite"))
+    store.init_db()
+    store.add_pick(_make_pick())
+    store.record_snapshot(_make_snapshot(captured_at="2026-09-22T09:00:00Z"))
+    store.record_snapshot(_make_snapshot(captured_at="2026-09-22T10:00:00Z"))
+
+    snapshots = store.get_snapshots("pick-1")
+
+    assert len(snapshots) == 2
+    assert snapshots[0].captured_at == "2026-09-22T10:00:00Z"
+    assert snapshots[0].ltp == Decimal("3500.50")
+    assert isinstance(snapshots[0].ltp, Decimal)
