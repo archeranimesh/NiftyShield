@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 
@@ -502,6 +502,38 @@ class MVPStore:
             )
             for row in rows
         ]
+
+    def backfill_snapshots(self, pick_id: str, daily_closes: list[tuple[date, Decimal]]) -> int:
+        """Bulk-insert historical daily close prices as snapshots for a pick.
+
+        Skips dates already present for this pick (``mvp_snapshots`` has no unique
+        constraint on ``(pick_id, captured_at)`` to lean on, so dedup is application-side).
+
+        Args:
+            pick_id: The pick to backfill snapshots for.
+            daily_closes: ``(date, close)`` pairs to insert.
+
+        Returns:
+            The number of rows actually inserted.
+        """
+        with connect(self.db_path) as conn:
+            existing_dates = {
+                row["captured_at"][:10]
+                for row in conn.execute(
+                    "SELECT captured_at FROM mvp_snapshots WHERE pick_id = ?", (pick_id,)
+                ).fetchall()
+            }
+            to_insert = [
+                (pick_id, str(close), f"{d.isoformat()}T00:00:00+00:00")
+                for d, close in daily_closes
+                if d.isoformat() not in existing_dates
+            ]
+            if to_insert:
+                conn.executemany(
+                    "INSERT INTO mvp_snapshots (pick_id, ltp, captured_at) VALUES (?, ?, ?)",
+                    to_insert,
+                )
+        return len(to_insert)
 
     @staticmethod
     def _row_to_pick(row: sqlite3.Row) -> Pick:

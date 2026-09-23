@@ -1,5 +1,6 @@
 """Tests for MVPStore init_db and provider/category persistence."""
 
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
@@ -275,3 +276,46 @@ def test_record_snapshot_get_snapshots_round_trip(tmp_path: Path) -> None:
     assert snapshots[0].captured_at == "2026-09-22T10:00:00Z"
     assert snapshots[0].ltp == Decimal("3500.50")
     assert isinstance(snapshots[0].ltp, Decimal)
+
+
+def test_backfill_snapshots_inserts_all_new_dates(tmp_path: Path) -> None:
+    store = MVPStore(str(tmp_path / "test.sqlite"))
+    store.init_db()
+    store.add_pick(_make_pick())
+
+    daily_closes = [
+        (date(2026, 9, 1), Decimal("100.00")),
+        (date(2026, 9, 2), Decimal("101.50")),
+        (date(2026, 9, 3), Decimal("99.75")),
+        (date(2026, 9, 4), Decimal("102.00")),
+        (date(2026, 9, 5), Decimal("103.25")),
+    ]
+
+    inserted = store.backfill_snapshots("pick-1", daily_closes)
+
+    assert inserted == 5
+    assert len(store.get_snapshots("pick-1", limit=10)) == 5
+
+
+def test_backfill_snapshots_skips_dates_already_present(tmp_path: Path) -> None:
+    store = MVPStore(str(tmp_path / "test.sqlite"))
+    store.init_db()
+    store.add_pick(_make_pick())
+    store.backfill_snapshots(
+        "pick-1",
+        [
+            (date(2026, 9, 1), Decimal("100.00")),
+            (date(2026, 9, 2), Decimal("101.50")),
+        ],
+    )
+
+    inserted = store.backfill_snapshots(
+        "pick-1",
+        [
+            (date(2026, 9, 2), Decimal("101.50")),
+            (date(2026, 9, 3), Decimal("99.75")),
+        ],
+    )
+
+    assert inserted == 1
+    assert len(store.get_snapshots("pick-1", limit=10)) == 3

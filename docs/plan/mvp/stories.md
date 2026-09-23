@@ -539,30 +539,41 @@ No unit tests for this script.
 
 ## M6 — Historical backfill + retrospective SL/target detection (Good-to-Have)
 
-> **Not part of core story. Implement only after M5 is complete.** Useful when adding picks that were issued in the past (e.g. a tip from 1 Jan 2026 recorded today). Without this, `mvp_snapshots` will
-> only have data from the day of recording forward.
+> **Not part of core story.** Useful when adding a pick whose `entry_price` is already known (entered via the normal `mvp add`/`update` CLI) but that was issued in the past — its snapshot history is
+> otherwise empty from `pick_date` to today. **Rewritten 2026-09-23** against M0's real Parquet layout and to draw the M6/M8 boundary explicitly: **M6 is the generic backfill primitive** (given a pick
+> with a known `entry_price`, fetch its historical daily closes and detect the first breach) — it does not decide *whether* or *at what price* a pick was entered. **M8 owns entry determination** (the
+> Uniparts-style unresolved-`entry_price` flow: next-trading-day-close-above-`reco_price`, `benchmark_close` day-by-day alpha) and may call M6's `fetch_historical_closes` / `backfill_snapshots` as its
+> own walk-forward primitives instead of duplicating them — that reuse is left to M8's implementer to decide, not mandated here. M6 has no dependency on M7 (`reco_price`) and is unblocked now that M0
+> has landed.
 
 **What it adds:**
 
-1. **`MVPStore.backfill_snapshots(pick_id, daily_closes: list[tuple[date, Decimal]]) → None`** — bulk-inserts historical daily close prices into `mvp_snapshots` for dates between `pick_date` and
-   today. Skips dates already present (INSERT OR IGNORE keyed on `pick_id + captured_at date`). Monetary values follow TEXT/Decimal invariant.
+1. **`MVPStore.backfill_snapshots(pick_id, daily_closes: list[tuple[date, Decimal]]) → int`** — bulk-inserts historical daily close prices into `mvp_snapshots` for the given pick, one row per `(date,
+   close)` pair, `captured_at` stamped as that date's midnight UTC ISO string (`f"{d.isoformat()}T00:00:00+00:00"`). Skips dates already present for that pick (queries existing `captured_at` dates for
+   `pick_id` first, filters application-side — `mvp_snapshots` has no unique constraint on `(pick_id, captured_at)` to lean on for `INSERT OR IGNORE`). Returns the count of rows actually inserted.
+   Monetary values follow the TEXT/Decimal invariant (`str(close)`).
 
-2. **`src/mvp/backfill.py` — `fetch_historical_closes(symbol, from_date, to_date) → list[tuple[date, Decimal]]`** — fetches daily EOD close prices from NSE Bhavcopy Parquet (already ingested at
-   `data/historical/bhavcopy/`). Falls back to a warning + empty list if data not available. No live API calls — Bhavcopy only.
+2. **`src/mvp/backfill.py` (new module) — `fetch_historical_closes(symbol, from_date, to_date, *, data_dir: Path = Path("data/offline/equity_ohlcv")) → list[tuple[date, Decimal]]`** — reads M0's
+   ingested equity Parquet (`data_dir/<year>/<month>/equity_<year>_<month>.parquet`, columns `trade_date`/`symbol`/`close`, `decimal128(18,4)`), filters to the given `symbol` and `[from_date,
+   to_date]` inclusive range across every month partition the range spans, returns results sorted by date ascending. Missing partition files are skipped (not an error — a month with no ingested data
+   yet). Logs a `structlog` warning and returns `[]` if no partitions in range exist at all. No live API calls — Parquet only, matching M0's actual `data/offline/` layout (the prior
+   `data/historical/bhavcopy/` path in this section was stale and never existed).
 
 3. **`scripts/mvp.py backfill <pick_id>`** subcommand:
-   - Loads pick; derives `from_date = pick_date.date()`, `to_date = date.today()`.
-   - Calls `fetch_historical_closes` → `backfill_snapshots`.
-   - Then calls `check_prices` over the historical series in chronological order; stops at the **first breach** (SL or target) and calls `close_pick` at that date/price.
-   - Prints: `Backfilled N days. SL hit on 2026-02-14 at ₹1,050.` or `Backfilled N days. No SL/target breach detected.`
+   - Loads the pick via `store.get_pick`; requires `entry_price is not None` and `status == PickStatus.OPEN` (errors otherwise — this path does not determine entry, see M8).
+   - Derives `from_date = date.fromisoformat(pick.pick_date[:10])`, `to_date = date.today()`.
+   - Calls `fetch_historical_closes(pick.symbol, from_date, to_date)` → `backfill_snapshots(pick.pick_id, closes)`.
+   - Walks the closes chronologically, calling `check_prices([pick], {pick.instrument_key: close})` per day (requires `pick.instrument_key` set); stops at the **first** returned `MVPEvent` and calls
+     `store.close_pick(pick.pick_id, event.trigger_price, event.event_type)`.
+   - Prints: `Backfilled N days. SL hit on 2026-02-14 at ₹1,050.` / `Backfilled N days. Target hit on ...` or `Backfilled N days. No SL/target breach detected.`
 
-**Tests (`tests/unit/mvp/test_mvp_backfill.py`):**
-- `backfill_snapshots` with 5 dates → 5 rows in `mvp_snapshots`.
-- Duplicate call → no duplicate rows (INSERT OR IGNORE).
-- Historical series with SL breach on day 3 → `close_pick` called at day 3 price.
-- Historical series with no breach → pick stays OPEN.
+**Tests (`tests/unit/mvp/test_mvp_backfill.py` + additions to `tests/unit/mvp/test_mvp_store.py`):**
+- `backfill_snapshots` with 5 dates → 5 rows in `mvp_snapshots`, return value `5`.
+- Duplicate call with an overlapping date range → only the new dates inserted, return value reflects the delta, no duplicate rows.
+- `fetch_historical_closes` happy path: a fixture Parquet partition with the target symbol → correct `(date, Decimal)` list, sorted ascending, range spanning two month partitions.
+- `fetch_historical_closes` edge case: no partition file for the requested range → `[]`, warning logged, no exception.
 
-**Commit:** `feat(mvp): historical backfill + retrospective SL/target detection`
+**Commit:** `feat(mvp): M6 historical backfill primitives (snapshot bulk-insert + Parquet close reader)`
 
 ---
 

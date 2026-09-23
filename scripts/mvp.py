@@ -8,6 +8,7 @@ Usage:
     python -m scripts.mvp add <symbol> [-p <provider_slug>] [-c <category_slug>] [--defer-key]
     python -m scripts.mvp update <pick_id> [--price N] [--target N] [--sl N] [--notes TEXT]
     python -m scripts.mvp close <pick_id> --price N
+    python -m scripts.mvp backfill <pick_id>
     python -m scripts.mvp list [--open] [--all] [-p <provider_slug>] [-c <category_slug>]
     python -m scripts.mvp summary [-p <provider_slug>] [-c <category_slug>]
     python -m scripts.mvp summary <SYMBOL>
@@ -18,14 +19,16 @@ from __future__ import annotations
 import argparse
 import sys
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 
 from scripts.lookup.instrument_lookup import DEFAULT_BOD_PATH
 from src.instruments.lookup import InstrumentLookup
+from src.mvp.backfill import fetch_historical_closes
 from src.mvp.models import Category, Pick, PickStatus, Provider, ProviderSource
 from src.mvp.store import MVPStore
+from src.mvp.tracker import check_prices
 
 DB_PATH = Path("data/portfolio/portfolio.sqlite")
 
@@ -185,6 +188,43 @@ def _update(store: MVPStore, args: argparse.Namespace) -> None:
 def _close(store: MVPStore, args: argparse.Namespace) -> None:
     store.close_pick(args.pick_id, Decimal(str(args.price)), PickStatus.MANUAL_CLOSE)
     print(f"✓ Closed at {args.price}.")
+
+
+def _backfill(store: MVPStore, args: argparse.Namespace) -> None:
+    pick = store.get_pick(args.pick_id)
+    if pick is None:
+        print(f"No pick found for id {args.pick_id}.")
+        return
+    if pick.entry_price is None or pick.status != PickStatus.OPEN:
+        print("Backfill requires an OPEN pick with entry_price already set.")
+        return
+
+    from_date = date.fromisoformat(pick.pick_date[:10])
+    to_date = date.today()
+    closes = fetch_historical_closes(pick.symbol, from_date, to_date)
+    inserted = store.backfill_snapshots(pick.pick_id, closes)
+
+    if pick.instrument_key is None:
+        print(f"Backfilled {inserted} days. (Breach detection skipped: no instrument_key on pick.)")
+        return
+    if pick.target_price is None and pick.stop_loss is None:
+        print(f"Backfilled {inserted} days. (Breach detection skipped: no target/SL set on pick.)")
+        return
+
+    event = None
+    event_day = None
+    for day, close in closes:
+        events = check_prices([pick], {pick.instrument_key: close})
+        if events:
+            event, event_day = events[0], day
+            break
+
+    if event is not None:
+        store.close_pick(pick.pick_id, event.trigger_price, event.event_type)
+        label = "Target" if event.event_type == PickStatus.TARGET_HIT else "SL"
+        print(f"Backfilled {inserted} days. {label} hit on {event_day} at ₹{event.trigger_price}.")
+    else:
+        print(f"Backfilled {inserted} days. No SL/target breach detected.")
 
 
 def _build_category_map(store: MVPStore) -> dict[str, tuple[str, str]]:
@@ -348,6 +388,12 @@ def build_parser() -> argparse.ArgumentParser:
     close_parser.add_argument("pick_id")
     close_parser.add_argument("--price", type=float, required=True)
     close_parser.set_defaults(func=_close)
+
+    backfill_parser = subparsers.add_parser(
+        "backfill", help="Backfill snapshot history for an already-entered pick."
+    )
+    backfill_parser.add_argument("pick_id")
+    backfill_parser.set_defaults(func=_backfill)
 
     list_parser = subparsers.add_parser("list", help="List picks.")
     list_parser.add_argument("--open", action="store_true", default=False)
