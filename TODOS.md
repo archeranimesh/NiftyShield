@@ -87,6 +87,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-23] MVP M6 — historical backfill primitives (`backfill_snapshots`, `fetch_historical_closes`, `mvp.py backfill`); spec rewritten against M0's Parquet layout, scoped apart from M8 —
+  `499d382`
 - [2026-09-23] MVP M0.4 — equity bhavcopy bootstrap CLI — d85523a
 - [2026-09-22] MVP M1.1 — `src/mvp/models.py`: Provider, Category, Pick, MVPTranche, MVPSnapshot frozen Pydantic models + 7 tests — `90fa0af`.
 - [2026-09-22] MVP M1.2 — `src/mvp/store.py`: `MVPStore` init_db + provider/category CRUD + 14 tests — `14700c3`.

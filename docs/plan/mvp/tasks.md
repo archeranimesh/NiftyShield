@@ -83,10 +83,10 @@
   day, `FileNotFoundError` → log-and-skip (holiday), other exceptions logged not raised (per-day resilience, mirrors `bhavcopy_bootstrap.py`). Tests (in
   `tests/unit/backtest/test_equity_bhavcopy_ingest.py`, mirroring how `bootstrap_main` is tested alongside `bhavcopy_ingest.py`): happy-path over a 2–3 day mocked range, holiday-skip edge case. M0
   fully done once this lands — no separate M0 checklist tick needed beyond M0.4's. | Owner: Antigravity | Model: Gemini | Review: code-reviewer | SHA: d85523a
-- [ ] **M6** — generic historical-backfill primitives (`MVPStore.backfill_snapshots`, `src/mvp/backfill.py:fetch_historical_closes`, `scripts/mvp.py backfill` for already-entered picks); **rewritten
+- [x] **M6** — generic historical-backfill primitives (`MVPStore.backfill_snapshots`, `src/mvp/backfill.py:fetch_historical_closes`, `scripts/mvp.py backfill` for already-entered picks); **rewritten
   2026-09-23** against M0's real `data/offline/equity_ohlcv/` Parquet layout, explicitly scoped apart from M8 (M6 = snapshot backfill + breach detection for a known `entry_price`; M8 = entry
   *determination* for an unresolved `entry_price`, Uniparts flow). Unblocked — depends only on M0, not M7. See full spec: `stories.md`. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer
-  | SHA: —
+  | SHA: 499d382
 - [ ] **M7** — `src/mvp/models.py` + `src/mvp/store.py`: add `reco_price: Decimal | None` to `Pick` (recommendation-quoted price, distinct from `entry_price`, the price we actually recorded entering
   at). `scripts/mvp.py`: `add` gains `--reco-price` (settable at creation, not only via later `update`, so fresh picks always carry it); `update` also accepts `--reco-price` for correction.
   `summary`/`list` show entry-vs-reco deviation (`(entry_price - reco_price) / reco_price`) computed on read — no stored deviation column. No migration needed — DB is freshly seeded, so every pick
