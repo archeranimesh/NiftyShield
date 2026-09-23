@@ -91,17 +91,20 @@
   at). `scripts/mvp.py`: `add` gains `--reco-price` (settable at creation, not only via later `update`, so fresh picks always carry it); `update` also accepts `--reco-price` for correction.
   `summary`/`list` show entry-vs-reco deviation (`(entry_price - reco_price) / reco_price`) computed on read — no stored deviation column. No migration needed — DB is freshly seeded, so every pick
   from here on is created with both fields. | Owner: Antigravity | Model: Gemini | Review: code-reviewer | SHA: d2f60d2
-- [ ] **M8** — Backfill entry + walk-forward for a past reco (blocked on M0 landing; full spec is the canonical Uniparts worked example above — implement and run that pick end-to-end as this task's
-  acceptance test, do not derive a separate one). New `src/mvp/backfill.py`: `enter_backfill_pick(pick, closes)` — the backfill half of the entry rule only (next trading day's close after `reco_date`;
-  enter at that close if it's above `reco_price`, else the pick stays unentered, no re-check). `run_backfill(pick, closes)` — walk daily equity closes (M0's ingested table) from entry date to today,
-  one `MVPSnapshot` per trading day via `store.record_snapshot`, auto-exit (`store.close_pick`) on the first day a close crosses `target_price` or `stop_loss`, no snapshots past the exit day. Resolves
+- [x] **M8** — Backfill entry + walk-forward for a past reco (blocked on M0 landing; full spec is the canonical Uniparts worked example above — implement and run that pick end-to-end as this task's
+  acceptance test, do not derive a separate one). Uniparts acceptance run passed clean 2026-09-23: entry ₹659.70 (2026-06-12 close, next trading day after reco > reco_price 640.10), TARGET_HIT at
+  ₹873.15, +3.06% entry-vs-reco deviation, `mvp summary`/`summary -p/-c`/`list --all` all show a single clean pick. Three duplicate/orphan picks created during Antigravity's earlier failed attempts
+  were found and deleted from the live DB (pick_ids 58a62b12/3c4e4e56/06057ce7) — the no-duplicate-pick-guard WARNING flagged in Phase D review materialized for real; a dedup/idempotency guard on the
+  `backfill` CLI is deferred, not fixed. New `src/mvp/backfill.py`: `enter_backfill_pick(pick, closes)` — the backfill half of the entry rule only (next trading day's close after `reco_date`; enter at
+  that close if it's above `reco_price`, else the pick stays unentered, no re-check). `run_backfill(pick, closes)` — walk daily equity closes (M0's ingested table) from entry date to today, one
+  `MVPSnapshot` per trading day via `store.record_snapshot`, auto-exit (`store.close_pick`) on the first day a close crosses `target_price` or `stop_loss`, no snapshots past the exit day. Resolves
   stories.md open point 5 (day-by-day alpha, not entry/exit-only): each `MVPSnapshot` also carries that day's `benchmark_close` (NIFTY 50 index close from M0's ingested table, same trading-day walk) —
   `src/mvp/models.py` `MVPSnapshot` gains `benchmark_close: Decimal | None = None`, `src/mvp/store.py` `record_snapshot` persists it (`schema.md` `mvp_snapshots.benchmark_close`, nullable — `NULL` for
   existing/live-watch snapshots, populated only by M8's backfill path for now). The live-watch path (M4.1, already shipped) is **not** touched by this task — wiring `benchmark_close` into
   `scripts/mvp_watch.py`'s hourly snapshots is a separate follow-on if day-by-day alpha is wanted for live picks too. The live-forward half of the entry rule (poll `BrokerClient.get_ltp`, enter at
   first tick above `reco_price`) is **not** part of this task — `scripts/mvp_watch.py`'s existing hourly cron already covers live picks once entered; M8 is backfill-only. `scripts/mvp.py` gains a
   `backfill` subcommand wiring `pick_date` to `reco_date` (not "now", unlike `add`). Depends on M0 (equity daily-close table) and M7 (`reco_price` field). | Owner: Antigravity | Model: n/a | Review:
-  code-reviewer | SHA: —
+  code-reviewer | SHA: cc42392
 - [ ] **M9** — M-A lump-sum fill math (resolves stories.md open point 2). `src/mvp/store.py`: `update_pick`'s existing PENDING→OPEN auto-advance (on `entry_price` being set) also computes and persists
   the fill in the same call: `total_qty = floor(capital_allotted / entry_price)`, `deployed_capital = total_qty * entry_price`, `avg_cost = entry_price`, `idle_cash = capital_allotted -
   deployed_capital` (2026-09-18 decision #1 — residual does not roll into a later tranche, M-A has only one fill). Apply the 25 bps round-trip cost knob (decision #2) on this entry fill, capitalized
