@@ -16,7 +16,7 @@ starting the next story here; this list only decides *which story is next*. Bugs
 rot them.
 
 2. **Greeks Black-Scholes fallback** — `docs/plan/greeks-bs-fallback/` — next **GF-1** (read-only audit scope).
-4. **MVP: Multi-bagger Value Picks Tracker** — `docs/plan/mvp/` — next **M1.1**. Independent — blocks nothing.
+4. **MVP: Multi-bagger Value Picks Tracker** — `docs/plan/mvp/` — next **M5** (docs close). Independent — blocks nothing.
 5. **Variance gate — CSP v1 deployment gate observation** — `docs/plan/variance-gate/` — next **VG0** (spec reconciliation; the remaining tasks are human checkpoints, not build tasks).
 6. **Options Income strategy** — `docs/plan/options_income/` — next **S0** (data audit).
 7. **Backtest Engine** — `docs/plan/backtest-engine/` (`phase1..4/`) — next **1.3a / 1.4** (parallel, `phase1/`). Four chained phases; each phase's GATE task blocks the next dir. Gated on
@@ -96,6 +96,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 - [2026-09-23] MVP M3.2 — `scripts/mvp.py`: add + update + close subcommands with instrument resolution (CLI, no new tests) — `74b84c8`.
 - [2026-09-23] MVP M3.3 — `scripts/mvp.py`: list + summary subcommands (CLI, no new tests) — `731529b`.
 - [2026-09-23] MVP M4.1 — `scripts/mvp_watch.py`: hourly LTP fetch + snapshot recording + auto-close (integration-only, no new tests) — `8fbe496`.
+- [2026-09-23] MVP M4.2 — `scripts/mvp_watch.py`: Telegram per-alert + consolidated hourly summary (integration-only, no new tests) — `6ed6aa9`.
 - [2026-09-22] `doc-format-migration/` `enforcement/` DFM-10 done (`fd50a62`) — `scripts/dev/new_plan_folder.py` (`--story`/`--epic`/`--into` CLI) scaffolds a conforming folder from
   `docs/plan/_TEMPLATE/`, stripping guidance comments and substituting slug/title placeholders; refuses an existing target or a `--into` epic that doesn't exist; `.claude/skills/new-story/SKILL.md`
   thin wrapper; `docs/plan/README.md` §Conventions now points at `/new-story` and states the format is enforced, not advisory. This closed `enforcement/` (DFM-6..10 all done) and the whole
