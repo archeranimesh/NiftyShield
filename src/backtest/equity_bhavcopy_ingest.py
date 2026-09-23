@@ -41,11 +41,17 @@ _NSE_HEADERS = {
 }
 
 _CM_UDIFF_CDN = "https://nsearchives.nseindia.com/content/cm"
+_INDEX_CDN = "https://nsearchives.nseindia.com/content/indices"
 
 
 class EquityBhavRecord(BaseModel, frozen=True):
     trade_date: date
     symbol: str
+    close: Decimal
+
+
+class IndexBhavRecord(BaseModel, frozen=True):
+    trade_date: date
     close: Decimal
 
 
@@ -196,6 +202,104 @@ def write_equity_to_parquet(
         # Note: This batch behavior is conservative — if any date in a batch
         # overlaps, the whole batch is skipped rather than just the duplicates.
         # For the bootstrap use case (one day at a time) this is correct.
+        if any(d in existing_dates for d in new_dates):
+            return
+
+        final_table = pa.concat_tables([existing_table, new_table])
+        final_table = final_table.replace_schema_metadata(schema.metadata)
+    else:
+        final_table = new_table
+
+    pq.write_table(final_table, parquet_path)
+
+
+def download_index_bhavcopy(trade_date: date, dest_dir: Path) -> Path:
+    """Download the NSE 'indices close' CSV for the given trade date."""
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    session = _build_session()
+
+    filename = f"ind_close_all_{trade_date:%d%m%Y}.csv"
+    url = f"{_INDEX_CDN}/{filename}"
+
+    try:
+        resp = session.get(url, timeout=30)
+    except Exception as e:
+        raise OSError(f"Error downloading index close {trade_date}: {e}") from e
+
+    if resp.status_code == 404:
+        raise FileNotFoundError(f"NSE returned 404 for index close {trade_date} — likely a holiday")
+    if resp.status_code != 200:
+        raise OSError(f"HTTP {resp.status_code} for index close {trade_date}")
+
+    content = resp.content
+    if b"<html" in content[:100].lower() or b"<!doctype" in content[:100].lower():
+        raise OSError(
+            f"Response for {trade_date} is HTML — Akamai bot-check. "
+            f"Set NSE_COOKIE env-var with a browser session cookie."
+        )
+
+    dest_path = dest_dir / filename
+    dest_path.write_bytes(content)
+    logger.info("Downloaded index close for %s → %s", trade_date, filename)
+    return dest_path
+
+
+def parse_index_bhavcopy(csv_path: Path) -> IndexBhavRecord | None:
+    """Parse an NSE ind_close_all CSV and return the Nifty 50 record."""
+    date_str = csv_path.stem[-8:]  # extracts DDMMYYYY from ind_close_all_DDMMYYYY
+    trade_date = datetime.strptime(date_str, "%d%m%Y").date()
+
+    with csv_path.open("r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            if row["Index Name"].strip().strip('"') == "Nifty 50":
+                return IndexBhavRecord(
+                    trade_date=trade_date,
+                    close=Decimal(row["Closing Index Value"].strip()),
+                )
+    return None
+
+
+def write_index_to_parquet(
+    records: list[IndexBhavRecord], month_date: date, dest_dir: Path
+) -> None:
+    """Idempotently appends index close records to the Parquet file for the given month."""
+    if not records:
+        return
+
+    year = month_date.strftime("%Y")
+    month = month_date.strftime("%m")
+
+    partition_dir = dest_dir / year / month
+    partition_dir.mkdir(parents=True, exist_ok=True)
+
+    parquet_path = partition_dir / f"index_{year}_{month}.parquet"
+
+    data = [r.model_dump() for r in records]
+
+    schema = pa.schema(
+        [
+            ("trade_date", pa.date32()),
+            ("close", pa.decimal128(18, 4)),
+        ]
+    )
+
+    metadata = schema.metadata or {}
+    metadata.update(
+        {
+            b"git_commit": _git_commit_metadata(),
+            b"run_timestamp": datetime.now(timezone.utc).isoformat().encode("utf-8"),
+        }
+    )
+    schema = schema.with_metadata(metadata)
+
+    new_table = pa.Table.from_pylist(data, schema=schema)
+
+    if parquet_path.exists():
+        existing_table = pq.read_table(parquet_path)
+        existing_dates = set(existing_table.column("trade_date").to_pylist())
+        new_dates = set(new_table.column("trade_date").to_pylist())
+
         if any(d in existing_dates for d in new_dates):
             return
 

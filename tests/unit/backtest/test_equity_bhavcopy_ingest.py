@@ -10,7 +10,9 @@ import pytest
 from src.backtest.equity_bhavcopy_ingest import (
     download_equity_bhavcopy,
     parse_equity_bhavcopy,
+    parse_index_bhavcopy,
     write_equity_to_parquet,
+    write_index_to_parquet,
 )
 
 _ZIP_MAGIC = b"PK\x03\x04"
@@ -114,3 +116,46 @@ def test_write_equity_to_parquet_idempotent_append(equity_bhavcopy_zip, tmp_path
 def test_write_equity_to_parquet_empty_records_noop(tmp_path):
     write_equity_to_parquet([], date(2026, 6, 1), tmp_path)
     assert not (tmp_path / "2026").exists()
+
+
+@pytest.fixture
+def index_bhavcopy_csv(tmp_path):
+    csv_path = Path("tests/fixtures/responses/bhavcopy/synthetic_index_close.csv")
+    test_path = tmp_path / "ind_close_all_12062026.csv"
+    test_path.write_text(csv_path.read_text(encoding="utf-8"), encoding="utf-8")
+    return test_path
+
+
+def test_parse_index_bhavcopy_happy_path(index_bhavcopy_csv):
+    record = parse_index_bhavcopy(index_bhavcopy_csv)
+    assert record is not None
+    assert record.trade_date == date(2026, 6, 12)
+    assert record.close == Decimal("23398.90")
+
+
+def test_parse_index_bhavcopy_missing_row(tmp_path):
+    # CSV without "Nifty 50" row
+    content = (
+        "Index Name,Index Date,Open Index Value,High Index Value,Low Index Value,Closing Index Value,Points Change(Absolute),Points Change(%),Volume,Turnover (Rs. Cr.),P/E,P/B,Div Yield\n"
+        '"Nifty Next 50",12-06-2026,71556.70,72121.25,71363.30,71926.85,735.65,1.03,812002165,22115.65,26.79,5.54,1.13\n'
+    )
+    test_path = tmp_path / "ind_close_all_12062026.csv"
+    test_path.write_text(content, encoding="utf-8")
+    record = parse_index_bhavcopy(test_path)
+    assert record is None
+
+
+def test_write_index_to_parquet_idempotent_append(index_bhavcopy_csv, tmp_path):
+    record = parse_index_bhavcopy(index_bhavcopy_csv)
+    month_date = date(2026, 6, 1)
+
+    write_index_to_parquet([record], month_date, tmp_path)
+    parquet_path = tmp_path / "2026" / "06" / "index_2026_06.parquet"
+    assert parquet_path.exists()
+    table = pq.read_table(parquet_path)
+    assert table.num_rows == 1
+
+    # Second write is a no-op
+    write_index_to_parquet([record], month_date, tmp_path)
+    table_after = pq.read_table(parquet_path)
+    assert table_after.num_rows == 1

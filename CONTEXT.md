@@ -62,7 +62,8 @@ Top-level `src/` packages, one line each (detail → `CONTEXT_TREE.md`):
 - `src/reporting/` — promoted EOD report builders. `eod_pt_summary.py`: cross-strategy paper-trade summary as 1-3 MarkdownV2 Telegram messages (open positions / closed-today / strategy P&L + Ann.% on
   margin), off live `PaperStore.get_positions()` + broker LTP. Runs alongside `scripts/eod_summary.py`, not a replacement (PT-2, `docs/archive/plan/eod-pt-summary/`).
 - `src/backtest/` — offline research: `compute_ivr` (trailing 252-day VIX IVR), `vix_ingest` (NSE CSV + Upstox), `ChainWriter`/`ChainReader` (Parquet + DuckDB), F&O bhavcopy ingest/loader,
-  `equity_bhavcopy_ingest.py` (NSE CM equity daily-close ingest — `EquityBhavRecord`, download/parse/write-to-parquet, EQ-series only; MVP M0 prerequisite, no CLI wiring yet).
+  `equity_bhavcopy_ingest.py` (NSE CM equity daily-close ingest — `EquityBhavRecord`, download/parse/write-to-parquet, EQ-series only; index-level counterpart for NIFTY 50 via `IndexBhavRecord`; MVP
+  M0 prerequisite, no CLI wiring yet).
 - `src/gamma/` — Near-Expiry Gamma Buy scaffolding: frozen models + `GammaStore`.
 - `src/council/` — AI council infra: `RapidCouncil` (parallel Stage-1 fan-out + chairman synthesis), request/response models.
 - `src/utils/` — `setup_logging(*, json, level)` (structlog, canonical entrypoint — see `LOGGING.md`), `fmt_inr` Indian-numbering formatter.
