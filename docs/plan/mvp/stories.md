@@ -67,8 +67,8 @@ Not yet decided; do not silently resolve these — surface and confirm before pr
 1. ~~M0 data source~~ — **RESOLVED 2026-09-23: NSE CM bhavcopy (equity) + NSE index-close bhavcopy (NIFTY 50)** (see decisions above). Both legs closed.
 2. ~~P&L math (Issue A) is still fully unscoped.~~ — **RESOLVED 2026-09-23: drafted as M9** (`tasks.md`), scoped to the M-A lump-sum fill only — does not depend on M0/M8 landing first, since it's pure
    fill math against `entry_price`/`close_price`, independent of the backfill path.
-3. **Implementation not yet greenlit.** Everything so far (M7, this worked example, the entry-rule split, the M0 data-source probe) is planning/docs only — no `src/` code written. M0 and M8 are
-   described here in prose but **not yet added to `tasks.md`** as checklist items (unlike M7, which is). Add them as proper checklist entries once the M0 data-source decision (point 1) is confirmed.
+3. ~~Implementation not yet greenlit.~~ — **RESOLVED 2026-09-23: M8 drafted as a checklist item** (`tasks.md`), blocked on M0. M0 already had a checklist entry (pre-existing, this point's premise was
+   stale on that half). No `src/` code written yet for either — this point only gated *drafting*, not *implementing*.
 4. **Live-forward branch of the entry rule is unverified against real infra.** The live-forward half of the entry rule (poll `BrokerClient.get_ltp` on the next trading day, enter at first tick above
    `reco_price`) assumes the same live-polling pattern `scripts/mvp_watch.py` already uses will work unchanged for this new use case. Not a known correctness risk, just not yet exercised — worth a
    quick check once M8's live-forward branch is implemented, before relying on it for a real future reco.
