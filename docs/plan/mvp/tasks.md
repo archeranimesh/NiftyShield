@@ -51,7 +51,7 @@
 - [x] **M3.3** — `scripts/mvp.py`: list + summary subcommands | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 731529b
 - [x] **M4.1** — `scripts/mvp_watch.py`: LTP fetch + snapshot recording + auto-close | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 8fbe496
 - [x] **M4.2** — `scripts/mvp_watch.py`: Telegram per-alert + consolidated hourly summary | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 6ed6aa9
-- [ ] **M0** — Equity + NIFTY index bhavcopy ingest (prerequisite for M6/M8 — not M1–M5). `src/backtest/bhavcopy_ingest.py` is F&O-only today; add equity cash-market daily close + NIFTY 50 index level
+- [x] **M0** — Equity + NIFTY index bhavcopy ingest (prerequisite for M6/M8 — not M1–M5). `src/backtest/bhavcopy_ingest.py` is F&O-only today; add equity cash-market daily close + NIFTY 50 index level
   ingest. **Storage — resolved 2026-09-23: Parquet, not portfolio.sqlite** (`equity_ohlcv/` and `nifty_index/` dirs under `data/offline/`, same `write_to_parquet` idempotent-append pattern and
   `year/month` partitioning already used for `options_ohlcv/`/`futures_ohlcv/`), consistent with the existing F&O ingest — bulk historical time-series stays out of the transactional/state SQLite DB.
   Two new NSE fetchers (mirroring `fetch_bhavcopy`/`download_bhavcopy`): equity daily close from the CM bhavcopy (`scratch/2026-09-23_mvp_m0_data_source_probe.py`,
@@ -77,12 +77,12 @@
   (plain unzipped `ind_close_all_DDMMYYYY.csv`, same session pattern); `parse_index_bhavcopy(csv_path) -> IndexBhavRecord | None` (extracts the `Nifty 50` row only, `None` if absent);
   `write_index_to_parquet(records, month_date, dest_dir)` (`data/offline/nifty_index/`, `decimal128(18,4)` schema). New fixture `tests/fixtures/responses/bhavcopy/synthetic_index_close.csv`. Tests:
   happy-path parse, no-`Nifty 50`-row edge case, write idempotency. | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: 27ff5f8
-- [ ] **M0.4** — `scripts/pipeline/equity_bhavcopy_bootstrap.py` (new script): manual `--start`/`--end`/`--dest` CLI (default `data/offline`), no cron entry (decision above). Pulls the equity symbol
+- [x] **M0.4** — `scripts/pipeline/equity_bhavcopy_bootstrap.py` (new script): manual `--start`/`--end`/`--dest` CLI (default `data/offline`), no cron entry (decision above). Pulls the equity symbol
   filter via `MVPStore.get_distinct_symbols()` at startup (once, not per-day). Walks calendar days from `--start` to `--end`, skips weekends + `get_nse_holidays()` (same pattern as
   `bhavcopy_bootstrap.py`), calls `download_equity_bhavcopy`/`parse_equity_bhavcopy`/`write_equity_to_parquet` and `download_index_bhavcopy`/`parse_index_bhavcopy`/`write_index_to_parquet` per trading
   day, `FileNotFoundError` → log-and-skip (holiday), other exceptions logged not raised (per-day resilience, mirrors `bhavcopy_bootstrap.py`). Tests (in
   `tests/unit/backtest/test_equity_bhavcopy_ingest.py`, mirroring how `bootstrap_main` is tested alongside `bhavcopy_ingest.py`): happy-path over a 2–3 day mocked range, holiday-skip edge case. M0
-  fully done once this lands — no separate M0 checklist tick needed beyond M0.4's. | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: —
+  fully done once this lands — no separate M0 checklist tick needed beyond M0.4's. | Owner: Antigravity | Model: Gemini | Review: code-reviewer | SHA: d85523a
 - [ ] **M5** — Docs close: CONTEXT.md tree, DECISIONS.md entry, TODOS.md session log | Owner: Claude | Model: n/a | Review: none | SHA: —
 - [ ] **M6** — see full spec below (Good-to-Have, blocked on M0) | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: —
 - [ ] **M7** — `src/mvp/models.py` + `src/mvp/store.py`: add `reco_price: Decimal | None` to `Pick` (recommendation-quoted price, distinct from `entry_price`, the price we actually recorded entering
