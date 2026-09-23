@@ -105,7 +105,8 @@ class MVPStore:
                     snapshot_id   INTEGER PRIMARY KEY AUTOINCREMENT,
                     pick_id       TEXT NOT NULL REFERENCES mvp_recommendations(pick_id),
                     ltp           TEXT NOT NULL,
-                    captured_at   TEXT NOT NULL
+                    captured_at   TEXT NOT NULL,
+                    benchmark_close TEXT
                 )
                 """
             )
@@ -472,8 +473,13 @@ class MVPStore:
         """
         with connect(self.db_path) as conn:
             conn.execute(
-                "INSERT INTO mvp_snapshots (pick_id, ltp, captured_at) VALUES (?, ?, ?)",
-                (snapshot.pick_id, str(snapshot.ltp), snapshot.captured_at),
+                "INSERT INTO mvp_snapshots (pick_id, ltp, captured_at, benchmark_close) VALUES (?, ?, ?, ?)",
+                (
+                    snapshot.pick_id,
+                    str(snapshot.ltp),
+                    snapshot.captured_at,
+                    str(snapshot.benchmark_close) if snapshot.benchmark_close is not None else None,
+                ),
             )
 
     def get_snapshots(self, pick_id: str, limit: int = 10) -> list[MVPSnapshot]:
@@ -489,7 +495,8 @@ class MVPStore:
         with connect(self.db_path) as conn:
             rows = conn.execute(
                 """
-                SELECT * FROM mvp_snapshots
+                SELECT snapshot_id, pick_id, ltp, captured_at, benchmark_close
+                FROM mvp_snapshots
                 WHERE pick_id = ?
                 ORDER BY captured_at DESC
                 LIMIT ?
@@ -502,6 +509,7 @@ class MVPStore:
                 pick_id=row["pick_id"],
                 ltp=row["ltp"],
                 captured_at=row["captured_at"],
+                benchmark_close=row["benchmark_close"],
             )
             for row in rows
         ]

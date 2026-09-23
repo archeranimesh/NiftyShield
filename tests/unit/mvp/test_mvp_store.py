@@ -267,14 +267,25 @@ def test_record_snapshot_get_snapshots_round_trip(tmp_path: Path) -> None:
     store = MVPStore(str(tmp_path / "test.sqlite"))
     store.init_db()
     store.add_pick(_make_pick())
-    store.record_snapshot(_make_snapshot(captured_at="2026-09-22T09:00:00Z"))
-    store.record_snapshot(_make_snapshot(captured_at="2026-09-22T10:00:00Z"))
+
+    snapshot_1 = _make_snapshot(captured_at="2026-09-22T09:00:00Z")
+    store.record_snapshot(snapshot_1)
+
+    snapshot_2 = MVPSnapshot(
+        pick_id="pick-1",
+        ltp=Decimal("3500.50"),
+        captured_at="2026-09-22T10:00:00Z",
+        benchmark_close=Decimal("25000.00"),
+    )
+    store.record_snapshot(snapshot_2)
 
     snapshots = store.get_snapshots("pick-1")
 
     assert len(snapshots) == 2
     assert snapshots[0].captured_at == "2026-09-22T10:00:00Z"
     assert snapshots[0].ltp == Decimal("3500.50")
+    assert snapshots[0].benchmark_close == Decimal("25000.00")
+    assert snapshots[1].benchmark_close is None
     assert isinstance(snapshots[0].ltp, Decimal)
 
 
