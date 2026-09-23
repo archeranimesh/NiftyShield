@@ -105,6 +105,18 @@ def test_mvp_snapshot_pre_insert_valid():
         pick_id="p1",
         ltp=Decimal("150.50"),
         captured_at="2026-09-22T12:00:00Z",
+        benchmark_close=Decimal("25000.00"),
     )
     assert snapshot.snapshot_id is None
     assert snapshot.ltp == Decimal("150.50")
+    assert snapshot.benchmark_close == Decimal("25000.00")
+
+
+def test_mvp_snapshot_benchmark_close_none():
+    """Test 8: MVPSnapshot without benchmark_close defaults to None."""
+    snapshot = MVPSnapshot(
+        pick_id="p1",
+        ltp=Decimal("150.50"),
+        captured_at="2026-09-22T12:00:00Z",
+    )
+    assert snapshot.benchmark_close is None

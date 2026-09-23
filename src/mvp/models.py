@@ -139,8 +139,9 @@ class MVPSnapshot(BaseModel):
     pick_id: str
     ltp: Decimal
     captured_at: str
+    benchmark_close: Decimal | None = None
 
-    @field_validator("ltp", mode="before")
+    @field_validator("ltp", "benchmark_close", mode="before")
     @classmethod
     def _parse_decimal(cls, v: Any) -> Decimal | None:
         if v is None:
