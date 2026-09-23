@@ -65,8 +65,8 @@ numbers. Open point 1 below is fully closed.
 Not yet decided; do not silently resolve these — surface and confirm before proceeding.
 
 1. ~~M0 data source~~ — **RESOLVED 2026-09-23: NSE CM bhavcopy (equity) + NSE index-close bhavcopy (NIFTY 50)** (see decisions above). Both legs closed.
-2. **P&L math (Issue A) is still fully unscoped.** Deliberately deferred in favor of backfill (Issue B) first. `capital_allotted`/`deployed_capital`/`avg_cost`/`realized_pnl` on `Pick` remain unused
-   schema columns from the 2026-09-18 design decisions above. No task drafted yet — needs its own `tasks.md` entry (fill logic + return% surfaced in `summary`) once M0/M8 land.
+2. ~~P&L math (Issue A) is still fully unscoped.~~ — **RESOLVED 2026-09-23: drafted as M9** (`tasks.md`), scoped to the M-A lump-sum fill only — does not depend on M0/M8 landing first, since it's pure
+   fill math against `entry_price`/`close_price`, independent of the backfill path.
 3. **Implementation not yet greenlit.** Everything so far (M7, this worked example, the entry-rule split, the M0 data-source probe) is planning/docs only — no `src/` code written. M0 and M8 are
    described here in prose but **not yet added to `tasks.md`** as checklist items (unlike M7, which is). Add them as proper checklist entries once the M0 data-source decision (point 1) is confirmed.
 4. **Live-forward branch of the entry rule is unverified against real infra.** The live-forward half of the entry rule (poll `BrokerClient.get_ltp` on the next trading day, enter at first tick above

@@ -59,3 +59,10 @@
   at). `scripts/mvp.py`: `add` gains `--reco-price` (settable at creation, not only via later `update`, so fresh picks always carry it); `update` also accepts `--reco-price` for correction.
   `summary`/`list` show entry-vs-reco deviation (`(entry_price - reco_price) / reco_price`) computed on read — no stored deviation column. No migration needed — DB is freshly seeded, so every pick
   from here on is created with both fields. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
+- [ ] **M9** — M-A lump-sum fill math (resolves stories.md open point 2). `src/mvp/store.py`: `update_pick`'s existing PENDING→OPEN auto-advance (on `entry_price` being set) also computes and persists
+  the fill in the same call: `total_qty = floor(capital_allotted / entry_price)`, `deployed_capital = total_qty * entry_price`, `avg_cost = entry_price`, `idle_cash = capital_allotted -
+  deployed_capital` (2026-09-18 decision #1 — residual does not roll into a later tranche, M-A has only one fill). Apply the 25 bps round-trip cost knob (decision #2) on this entry fill, capitalized
+  into `avg_cost` (not `deployed_capital`, so `idle_cash` stays the untouched residual). `close_pick`: compute `realized_pnl = (close_price * (1 - 25bps) - avg_cost) * total_qty` on the terminal
+  transition. `scripts/mvp.py`: `summary`/`list` surface `deployed_capital`, `avg_cost`, `realized_pnl`, and return% (`realized_pnl / deployed_capital` when closed, unrealized `(ltp - avg_cost) *
+  total_qty / deployed_capital` when open — unrealized needs an `ltp_map` param threaded through, same as `check_prices`). Out of scope: `mvp_tranches` table population (M-B), `benchmark_entry`/alpha
+  display (separate, decision #3). | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
