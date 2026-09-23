@@ -45,7 +45,7 @@
 - [x] **M1.2** — `src/mvp/store.py`: init_db + provider/category CRUD + tests | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 14700c3
 - [x] **M1.3** — `src/mvp/store.py`: pick CRUD + snapshot methods + tests | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 44c8408
 - [x] **M2.1** — `src/mvp/tracker.py`: MVPEvent + check_prices pure logic + tests | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: af5ea2a
-- [ ] **M2.2** — `src/mvp/tracker.py`: format_telegram_summary + tests | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
+- [x] **M2.2** — `src/mvp/tracker.py`: format_telegram_summary + tests | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 77e9d53
 - [ ] **M3.1** — `scripts/mvp.py`: provider + category subcommands | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
 - [ ] **M3.2** — `scripts/mvp.py`: add + update + close subcommands (with instrument resolution) | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
 - [ ] **M3.3** — `scripts/mvp.py`: list + summary subcommands | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
