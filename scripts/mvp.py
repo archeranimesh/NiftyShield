@@ -8,6 +8,9 @@ Usage:
     python -m scripts.mvp add <symbol> [-p <provider_slug>] [-c <category_slug>] [--defer-key]
     python -m scripts.mvp update <pick_id> [--price N] [--target N] [--sl N] [--notes TEXT]
     python -m scripts.mvp close <pick_id> --price N
+    python -m scripts.mvp list [--open] [--all] [-p <provider_slug>] [-c <category_slug>]
+    python -m scripts.mvp summary [-p <provider_slug>] [-c <category_slug>]
+    python -m scripts.mvp summary <SYMBOL>
 """
 
 from __future__ import annotations
@@ -184,6 +187,113 @@ def _close(store: MVPStore, args: argparse.Namespace) -> None:
     print(f"✓ Closed at {args.price}.")
 
 
+def _build_category_map(store: MVPStore) -> dict[str, tuple[str, str]]:
+    mapping: dict[str, tuple[str, str]] = {}
+    for provider in store.list_providers():
+        for category in store.list_categories(provider.provider_id):
+            mapping[category.category_id] = (provider.display_name, category.display_name)
+    return mapping
+
+
+def _resolve_filter_ids(
+    store: MVPStore, provider_slug: str | None, category_slug: str | None
+) -> tuple[str | None, str | None]:
+    provider_id: str | None = None
+    category_id: str | None = None
+    if provider_slug is not None:
+        provider = store.get_provider(provider_slug)
+        if provider is None:
+            print(f"✗ Provider '{provider_slug}' not found.")
+            sys.exit(1)
+        provider_id = provider.provider_id
+    if category_slug is not None:
+        if provider_id is None:
+            print("✗ --category requires --provider.")
+            sys.exit(1)
+        category = store.get_category(provider_id, category_slug)
+        if category is None:
+            print(f"✗ Category '{category_slug}' not found.")
+            sys.exit(1)
+        category_id = category.category_id
+    return provider_id, category_id
+
+
+def _list(store: MVPStore, args: argparse.Namespace) -> None:
+    if args.all:
+        status = None
+    elif args.open:
+        status = PickStatus.OPEN
+    else:
+        status = PickStatus.PENDING
+    provider_id, category_id = _resolve_filter_ids(store, args.provider, args.category)
+    picks = store.list_picks(status=status, provider_id=provider_id, category_id=category_id)
+    if not picks:
+        print("No picks.")
+        return
+    category_map = _build_category_map(store)
+    print("ID | SYMBOL | STATUS | ENTRY | TARGET | SL | PROVIDER/CATEGORY | DATE")
+    for pick in picks:
+        prov_disp, cat_disp = category_map.get(pick.category_id, ("-", "-"))
+        print(
+            f"{pick.pick_id[:8]} | {pick.symbol} | {pick.status.value} | "
+            f"{pick.entry_price if pick.entry_price is not None else '-'} | "
+            f"{pick.target_price if pick.target_price is not None else '-'} | "
+            f"{pick.stop_loss if pick.stop_loss is not None else '-'} | "
+            f"{prov_disp}/{cat_disp} | {pick.pick_date}"
+        )
+
+
+def _summary_by_symbol(store: MVPStore, symbol: str) -> None:
+    picks = [p for p in store.list_picks() if p.symbol.upper() == symbol.upper()]
+    if not picks:
+        print("No picks.")
+        return
+    category_map = _build_category_map(store)
+    print("PROVIDER | CATEGORY | ENTRY | STATUS | CLOSE_PRICE | DATE")
+    for pick in picks:
+        prov_disp, cat_disp = category_map.get(pick.category_id, ("-", "-"))
+        print(
+            f"{prov_disp} | {cat_disp} | "
+            f"{pick.entry_price if pick.entry_price is not None else '-'} | "
+            f"{pick.status.value} | "
+            f"{pick.close_price if pick.close_price is not None else '-'} | {pick.pick_date}"
+        )
+
+
+def _summary_grouped(store: MVPStore, args: argparse.Namespace) -> None:
+    provider_id, category_id = _resolve_filter_ids(store, args.provider, args.category)
+    picks = store.list_picks(provider_id=provider_id, category_id=category_id)
+    if not picks:
+        print("No picks.")
+        return
+    category_map = _build_category_map(store)
+    groups: dict[tuple[str, str], list[Pick]] = {}
+    for pick in picks:
+        key = category_map.get(pick.category_id, ("-", "-"))
+        groups.setdefault(key, []).append(pick)
+
+    print("PROVIDER/CATEGORY | OPEN | TARGET_HIT | SL_HIT | WIN_RATE | CLOSED")
+    for (prov_disp, cat_disp), group_picks in sorted(groups.items()):
+        open_count = sum(1 for p in group_picks if p.status == PickStatus.OPEN)
+        target_hit = sum(1 for p in group_picks if p.status == PickStatus.TARGET_HIT)
+        sl_hit = sum(1 for p in group_picks if p.status == PickStatus.SL_HIT)
+        manual_close = sum(1 for p in group_picks if p.status == PickStatus.MANUAL_CLOSE)
+        closed = target_hit + sl_hit + manual_close
+        win_denom = target_hit + sl_hit
+        win_rate = f"{(target_hit / win_denom * 100):.1f}%" if win_denom else "-"
+        print(
+            f"{prov_disp}/{cat_disp} | {open_count} | {target_hit} | {sl_hit} | "
+            f"{win_rate} | {closed}"
+        )
+
+
+def _summary(store: MVPStore, args: argparse.Namespace) -> None:
+    if args.symbol is not None:
+        _summary_by_symbol(store, args.symbol)
+    else:
+        _summary_grouped(store, args)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="mvp")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -238,6 +348,19 @@ def build_parser() -> argparse.ArgumentParser:
     close_parser.add_argument("pick_id")
     close_parser.add_argument("--price", type=float, required=True)
     close_parser.set_defaults(func=_close)
+
+    list_parser = subparsers.add_parser("list", help="List picks.")
+    list_parser.add_argument("--open", action="store_true", default=False)
+    list_parser.add_argument("--all", action="store_true", default=False)
+    list_parser.add_argument("-p", "--provider", dest="provider", default=None)
+    list_parser.add_argument("-c", "--category", dest="category", default=None)
+    list_parser.set_defaults(func=_list)
+
+    summary_parser = subparsers.add_parser("summary", help="Summarize picks.")
+    summary_parser.add_argument("symbol", nargs="?", default=None)
+    summary_parser.add_argument("-p", "--provider", dest="provider", default=None)
+    summary_parser.add_argument("-c", "--category", dest="category", default=None)
+    summary_parser.set_defaults(func=_summary)
 
     return parser
 
