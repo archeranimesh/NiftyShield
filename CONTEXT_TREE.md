@@ -277,6 +277,7 @@ scripts/
 │   ├── upstox_chain_intraday.py # 5-min intraday option chain snapshot. Writes to Parquet.
 │   ├── gamma_daily_watch.py     # Greeks monitoring from chain snapshots.
 │   ├── bhavcopy_bootstrap.py    # Resumable bulk NSE bhavcopy download 2016–present.
+│   ├── equity_bhavcopy_bootstrap.py # M0.4 resumable bulk NSE equity & index close bhavcopy download.
 │   └── refresh_vix.py           # India VIX ingestion refresh cron — wraps src/backtest/vix_ingest.py, resumable gap-fill.
 ├── lookup/               # on-demand queries; called by humans or entry scripts
 │   ├── __init__.py       # Package marker

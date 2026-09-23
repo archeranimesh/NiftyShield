@@ -159,3 +159,113 @@ def test_write_index_to_parquet_idempotent_append(index_bhavcopy_csv, tmp_path):
     write_index_to_parquet([record], month_date, tmp_path)
     table_after = pq.read_table(parquet_path)
     assert table_after.num_rows == 1
+
+
+@patch("scripts.pipeline.equity_bhavcopy_bootstrap.time.sleep")
+@patch("scripts.pipeline.equity_bhavcopy_bootstrap.MVPStore")
+@patch("scripts.pipeline.equity_bhavcopy_bootstrap.get_nse_holidays")
+@patch("scripts.pipeline.equity_bhavcopy_bootstrap.download_index_bhavcopy")
+@patch("scripts.pipeline.equity_bhavcopy_bootstrap.download_equity_bhavcopy")
+def test_bootstrap_main_happy_path(
+    mock_dl_equity,
+    mock_dl_idx,
+    mock_holidays,
+    mock_store_cls,
+    mock_sleep,
+    equity_bhavcopy_zip,
+    index_bhavcopy_csv,
+    tmp_path,
+):
+    from scripts.pipeline.equity_bhavcopy_bootstrap import main
+
+    mock_store_cls.return_value.get_distinct_symbols.return_value = {"UNIPARTS"}
+    mock_holidays.return_value = {date(2026, 6, 12)}  # Friday, holiday
+
+    mock_dl_equity.return_value = equity_bhavcopy_zip
+    mock_dl_idx.return_value = index_bhavcopy_csv
+
+    dest_dir = tmp_path / "offline"
+
+    main(
+        [
+            "--start",
+            "2026-06-11",
+            "--end",
+            "2026-06-15",
+            "--dest",
+            str(dest_dir),
+        ]
+    )
+
+    assert mock_dl_equity.call_count == 2
+    # 12 is skipped (holiday), 13 and 14 are skipped (weekend). Called for 11 and 15.
+    assert mock_dl_equity.call_args_list[0][0][0] == date(2026, 6, 11)
+    assert mock_dl_equity.call_args_list[1][0][0] == date(2026, 6, 15)
+
+    assert mock_dl_idx.call_count == 2
+    assert mock_dl_idx.call_args_list[0][0][0] == date(2026, 6, 11)
+    assert mock_dl_idx.call_args_list[1][0][0] == date(2026, 6, 15)
+
+    # Since the fixture data has TradDt = 2026-06-12 and write functions are idempotent,
+    # the second loop's write is a no-op, resulting in exactly 1 batch of data being written.
+    eq_parquet = dest_dir / "equity_ohlcv" / "2026" / "06" / "equity_2026_06.parquet"
+    assert eq_parquet.exists()
+
+    idx_parquet = dest_dir / "nifty_index" / "2026" / "06" / "index_2026_06.parquet"
+    assert idx_parquet.exists()
+
+    eq_table = pq.read_table(eq_parquet)
+    assert eq_table.num_rows == 1  # 1 record for UNIPARTS
+
+    idx_table = pq.read_table(idx_parquet)
+    assert idx_table.num_rows == 1  # 1 record for Nifty 50
+
+
+@patch("scripts.pipeline.equity_bhavcopy_bootstrap.time.sleep")
+@patch("scripts.pipeline.equity_bhavcopy_bootstrap.MVPStore")
+@patch("scripts.pipeline.equity_bhavcopy_bootstrap.get_nse_holidays")
+@patch("scripts.pipeline.equity_bhavcopy_bootstrap.download_index_bhavcopy")
+@patch("scripts.pipeline.equity_bhavcopy_bootstrap.download_equity_bhavcopy")
+def test_bootstrap_main_filenotfound_error_skip(
+    mock_dl_equity,
+    mock_dl_idx,
+    mock_holidays,
+    mock_store_cls,
+    mock_sleep,
+    equity_bhavcopy_zip,
+    index_bhavcopy_csv,
+    tmp_path,
+):
+    from scripts.pipeline.equity_bhavcopy_bootstrap import main
+
+    mock_store_cls.return_value.get_distinct_symbols.return_value = {"UNIPARTS"}
+    mock_holidays.return_value = set()
+
+    def side_effect_equity(dt, dest_dir):
+        if dt == date(2026, 6, 11):
+            raise FileNotFoundError("404")
+        return equity_bhavcopy_zip
+
+    mock_dl_equity.side_effect = side_effect_equity
+    mock_dl_idx.return_value = index_bhavcopy_csv
+
+    dest_dir = tmp_path / "offline"
+
+    main(
+        [
+            "--start",
+            "2026-06-11",
+            "--end",
+            "2026-06-12",  # Thursday to Friday
+            "--dest",
+            str(dest_dir),
+        ]
+    )
+
+    assert mock_dl_equity.call_count == 2
+    # If equity download raises FileNotFoundError, it logs and skips, so index download is not called for that day
+    assert mock_dl_idx.call_count == 1
+    assert mock_dl_idx.call_args_list[0][0][0] == date(2026, 6, 12)
+
+    eq_parquet = dest_dir / "equity_ohlcv" / "2026" / "06" / "equity_2026_06.parquet"
+    assert eq_parquet.exists()
