@@ -72,13 +72,9 @@ Not yet decided; do not silently resolve these — surface and confirm before pr
 4. **Live-forward branch of the entry rule is unverified against real infra.** The live-forward half of the entry rule (poll `BrokerClient.get_ltp` on the next trading day, enter at first tick above
    `reco_price`) assumes the same live-polling pattern `scripts/mvp_watch.py` already uses will work unchanged for this new use case. Not a known correctness risk, just not yet exercised — worth a
    quick check once M8's live-forward branch is implemented, before relying on it for a real future reco.
-5. **NIFTY 50 index-level historical source — not probed, and scope depends on a decision not yet made.** `benchmark_entry` (design decisions above, 2026-09-18 #3) needs a NIFTY 50 level per pick for
-   alpha (did the pick beat the index?). Live-forward already has a solved path (live spot fetch via the `_fetch_nifty_spot` pattern). For M8 backfill, two sub-questions, unresolved:
-   - **Scope decision first:** does alpha need to be tracked *day-by-day* through the backfill (needs a full historical NIFTY close series, one value per trading day), or only *entry-vs-today/exit*
-     (needs just two spot values, no historical series at all)? This decides whether the index-bhavcopy probe below is even necessary.
-   - **If day-by-day is chosen:** NSE publishes index closes via a separate archive from the CM equity bhavcopy (not bundled in the per-stock zip) — exact current (2026) URL/filename pattern, and
-     whether the same session/auth/header approach used for CM bhavcopy works unchanged, are both unconfirmed. Needs the same kind of spot-check probe as
-     `scratch/2026-09-23_mvp_m0_data_source_probe.py` did for equity closes, cross-checked against an independently known NIFTY 50 close for one date before trusting it.
+5. ~~NIFTY 50 index-level historical source — not probed, and scope depends on a decision not yet made.~~ — **RESOLVED 2026-09-23: day-by-day**, not entry-vs-exit-only. The index-bhavcopy probe this
+   point was waiting on is done (point 1 above). Wired into **M8** (`tasks.md`): `MVPSnapshot.benchmark_close`, populated per trading day during the backfill walk from M0's NIFTY 50 table. Live-watch
+   snapshots (M4.1, already shipped) stay `NULL` for now — extending day-by-day alpha to live picks is a separate follow-on, not part of M8.
 
 ---
 

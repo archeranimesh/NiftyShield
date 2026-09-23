@@ -66,10 +66,14 @@ CREATE TABLE mvp_tranches (
 );
 
 CREATE TABLE mvp_snapshots (
-    snapshot_id   INTEGER PRIMARY KEY AUTOINCREMENT,
-    pick_id       TEXT NOT NULL REFERENCES mvp_recommendations(pick_id),
-    ltp           TEXT NOT NULL,             -- Decimal as TEXT
-    captured_at   TEXT NOT NULL             -- ISO datetime UTC
+    snapshot_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    pick_id         TEXT NOT NULL REFERENCES mvp_recommendations(pick_id),
+    ltp             TEXT NOT NULL,             -- Decimal as TEXT
+    benchmark_close TEXT,                      -- Decimal as TEXT; NIFTY 50 close for day-by-day
+                                                -- alpha (M8 backfill only; NULL for live
+                                                -- watch snapshots until wired, resolved
+                                                -- 2026-09-23 open point 5)
+    captured_at     TEXT NOT NULL             -- ISO datetime UTC
 );
 
 CREATE INDEX idx_mvp_snapshots_pick ON mvp_snapshots (pick_id, captured_at);
