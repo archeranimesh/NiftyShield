@@ -5,8 +5,8 @@ Cron schedule: 0 9-15 * * 1-5
 
 For each open pick with an `instrument_key`, fetches the latest LTP via
 `BrokerClient.get_ltp`, records a snapshot, then auto-closes any pick whose
-target or stop-loss was breached (`check_prices`). Telegram alerts land in
-M4.2 — this pass only logs and persists.
+target or stop-loss was breached (`check_prices`). Sends a per-alert
+Telegram message for each breach, then a consolidated hourly summary.
 """
 
 from __future__ import annotations
@@ -27,9 +27,16 @@ load_dotenv()
 
 from src.client.factory import create_client  # noqa: E402
 from src.config import settings  # noqa: E402
-from src.mvp.models import MVPSnapshot, Pick  # noqa: E402
+from src.mvp.models import MVPSnapshot, Pick, PickStatus  # noqa: E402
 from src.mvp.store import MVPStore  # noqa: E402
-from src.mvp.tracker import check_prices  # noqa: E402
+from src.mvp.tracker import (  # noqa: E402
+    MVPEvent,
+    check_prices,
+    format_telegram_summary,
+)
+from src.notifications.formatting import format_pct  # noqa: E402
+from src.notifications.markdown import escape_markdown  # noqa: E402
+from src.notifications.telegram import build_notifier  # noqa: E402
 from src.utils.logging import setup_logging  # noqa: E402
 
 _SCRIPT_NAME = "scripts.mvp_watch"
@@ -80,6 +87,8 @@ async def run() -> None:
             MVPSnapshot(pick_id=pick.pick_id, ltp=ltp, captured_at=now),
         )
 
+    picks_by_id: dict[str, Pick] = {pick.pick_id: pick for pick in keyed_picks.values()}
+
     events = check_prices(list(keyed_picks.values()), ltp_map)
     for event in events:
         await asyncio.to_thread(
@@ -95,6 +104,64 @@ async def run() -> None:
             event_type=event.event_type.value,
             trigger_price=str(event.trigger_price),
         )
+
+    notifier = build_notifier()
+    if notifier is not None:
+        providers = await asyncio.to_thread(store.list_providers)
+        provider_names = {provider.provider_id: provider.display_name for provider in providers}
+        categories = []
+        for provider in providers:
+            categories.extend(await asyncio.to_thread(store.list_categories, provider.provider_id))
+        joined_category_labels = {
+            category.category_id: (
+                f"{provider_names.get(category.provider_id, category.provider_id)}"
+                f" / {category.display_name}"
+            )
+            for category in categories
+        }
+
+        for event in events:
+            pick = picks_by_id.get(event.pick_id)
+            label = _pick_label(pick, joined_category_labels)
+            await notifier.send(_format_alert_message(event, label))
+
+        open_picks = await asyncio.to_thread(store.get_open_picks)
+        run_time = datetime.now(timezone.utc).astimezone().strftime("%I:%M %p").lstrip("0")
+        summary = format_telegram_summary(
+            open_picks, ltp_map, provider_names, joined_category_labels, run_time
+        )
+        if summary:
+            await notifier.send(summary)
+
+
+def _pick_label(pick: Pick | None, category_labels: dict[str, str]) -> str:
+    """Look up a pick's "Provider / Category" label, or "" if unresolvable."""
+    if pick is None or pick.category_id is None:
+        return ""
+    return category_labels.get(pick.category_id, "")
+
+
+def _format_alert_message(event: MVPEvent, label: str) -> str:
+    """Render a single-pick target/SL breach as a MarkdownV2 alert."""
+    if event.event_type == PickStatus.TARGET_HIT:
+        header = f"\U0001f3af TARGET HIT — {escape_markdown(event.symbol)}"
+    else:
+        header = f"\U0001f6d1 SL HIT — {escape_markdown(event.symbol)}"
+
+    if event.entry_price is not None and event.entry_price != 0:
+        pct = (event.trigger_price - event.entry_price) / event.entry_price * 100
+        pct_str = escape_markdown(format_pct(float(pct)))
+        entry_str = escape_markdown(str(event.entry_price))
+    else:
+        pct_str = escape_markdown("—")
+        entry_str = escape_markdown("—")
+    exit_str = escape_markdown(str(event.trigger_price))
+
+    sep = escape_markdown(" | ")
+    lines = [header, f"Entry: {entry_str}{sep}Exit: {exit_str}{sep}{pct_str}"]
+    if label:
+        lines.append(escape_markdown(label))
+    return "\n".join(lines)
 
 
 if __name__ == "__main__":
