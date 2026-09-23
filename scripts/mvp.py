@@ -157,6 +157,7 @@ def _add(store: MVPStore, args: argparse.Namespace) -> None:
         category_id=category_id,
         symbol=args.symbol,
         instrument_key=instrument_key,
+        reco_price=Decimal(str(args.reco_price)) if args.reco_price is not None else None,
         pick_date=now,
         created_at=now,
         updated_at=now,
@@ -170,6 +171,8 @@ def _update(store: MVPStore, args: argparse.Namespace) -> None:
     fields: dict[str, object] = {}
     if args.price is not None:
         fields["entry_price"] = Decimal(str(args.price))
+    if args.reco_price is not None:
+        fields["reco_price"] = Decimal(str(args.reco_price))
     if args.target is not None:
         fields["target_price"] = Decimal(str(args.target))
     if args.sl is not None:
@@ -271,12 +274,18 @@ def _list(store: MVPStore, args: argparse.Namespace) -> None:
         print("No picks.")
         return
     category_map = _build_category_map(store)
-    print("ID | SYMBOL | STATUS | ENTRY | TARGET | SL | PROVIDER/CATEGORY | DATE")
+    print("ID | SYMBOL | STATUS | RECO | ENTRY | DEV% | TARGET | SL | PROVIDER/CATEGORY | DATE")
     for pick in picks:
         prov_disp, cat_disp = category_map.get(pick.category_id, ("-", "-"))
+        dev_str = "-"
+        if pick.entry_price is not None and pick.reco_price is not None and pick.reco_price != 0:
+            dev_pct = (pick.entry_price - pick.reco_price) / pick.reco_price * 100
+            dev_str = f"{dev_pct:+.2f}%"
         print(
             f"{pick.pick_id[:8]} | {pick.symbol} | {pick.status.value} | "
+            f"{pick.reco_price if pick.reco_price is not None else '-'} | "
             f"{pick.entry_price if pick.entry_price is not None else '-'} | "
+            f"{dev_str} | "
             f"{pick.target_price if pick.target_price is not None else '-'} | "
             f"{pick.stop_loss if pick.stop_loss is not None else '-'} | "
             f"{prov_disp}/{cat_disp} | {pick.pick_date}"
@@ -289,12 +298,18 @@ def _summary_by_symbol(store: MVPStore, symbol: str) -> None:
         print("No picks.")
         return
     category_map = _build_category_map(store)
-    print("PROVIDER | CATEGORY | ENTRY | STATUS | CLOSE_PRICE | DATE")
+    print("PROVIDER | CATEGORY | RECO | ENTRY | DEV% | STATUS | CLOSE_PRICE | DATE")
     for pick in picks:
         prov_disp, cat_disp = category_map.get(pick.category_id, ("-", "-"))
+        dev_str = "-"
+        if pick.entry_price is not None and pick.reco_price is not None and pick.reco_price != 0:
+            dev_pct = (pick.entry_price - pick.reco_price) / pick.reco_price * 100
+            dev_str = f"{dev_pct:+.2f}%"
         print(
             f"{prov_disp} | {cat_disp} | "
+            f"{pick.reco_price if pick.reco_price is not None else '-'} | "
             f"{pick.entry_price if pick.entry_price is not None else '-'} | "
+            f"{dev_str} | "
             f"{pick.status.value} | "
             f"{pick.close_price if pick.close_price is not None else '-'} | {pick.pick_date}"
         )
@@ -312,7 +327,7 @@ def _summary_grouped(store: MVPStore, args: argparse.Namespace) -> None:
         key = category_map.get(pick.category_id, ("-", "-"))
         groups.setdefault(key, []).append(pick)
 
-    print("PROVIDER/CATEGORY | OPEN | TARGET_HIT | SL_HIT | WIN_RATE | CLOSED")
+    print("PROVIDER/CATEGORY | OPEN | TARGET_HIT | SL_HIT | WIN_RATE | CLOSED | AVG_DEV%")
     for (prov_disp, cat_disp), group_picks in sorted(groups.items()):
         open_count = sum(1 for p in group_picks if p.status == PickStatus.OPEN)
         target_hit = sum(1 for p in group_picks if p.status == PickStatus.TARGET_HIT)
@@ -321,9 +336,17 @@ def _summary_grouped(store: MVPStore, args: argparse.Namespace) -> None:
         closed = target_hit + sl_hit + manual_close
         win_denom = target_hit + sl_hit
         win_rate = f"{(target_hit / win_denom * 100):.1f}%" if win_denom else "-"
+
+        devs = [
+            (p.entry_price - p.reco_price) / p.reco_price * 100
+            for p in group_picks
+            if p.entry_price is not None and p.reco_price is not None and p.reco_price != 0
+        ]
+        avg_dev = f"{(sum(devs) / len(devs)):+.2f}%" if devs else "-"
+
         print(
             f"{prov_disp}/{cat_disp} | {open_count} | {target_hit} | {sl_hit} | "
-            f"{win_rate} | {closed}"
+            f"{win_rate} | {closed} | {avg_dev}"
         )
 
 
@@ -371,12 +394,14 @@ def build_parser() -> argparse.ArgumentParser:
     add_parser.add_argument("symbol")
     add_parser.add_argument("-p", "--provider", dest="provider", default=None)
     add_parser.add_argument("-c", "--category", dest="category", default=None)
+    add_parser.add_argument("--reco-price", type=float, default=None)
     add_parser.add_argument("--defer-key", action="store_true", default=False)
     add_parser.set_defaults(func=_add)
 
     update_parser = subparsers.add_parser("update", help="Update a pick.")
     update_parser.add_argument("pick_id")
     update_parser.add_argument("--price", type=float, default=None)
+    update_parser.add_argument("--reco-price", type=float, default=None)
     update_parser.add_argument("--target", type=float, default=None)
     update_parser.add_argument("--sl", type=float, default=None)
     update_parser.add_argument("-p", "--provider", dest="provider", default=None)
