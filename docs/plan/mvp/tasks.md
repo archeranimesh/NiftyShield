@@ -64,7 +64,26 @@
   2026-09-23: manual `--start`/`--end` CLI only, no cron**, mirroring `scripts/pipeline/bhavcopy_bootstrap.py` (which itself has no cron entry — confirmed via `crontab -l`, F&O bhavcopy is backfilled
   by hand today, not scheduled). Nothing in current MVP scope needs daily-fresh closes: live-forward entry/watch use intraday `BrokerClient.get_ltp`, and day-by-day `benchmark_close` is backfill-only
   (open point 5 — live-watch snapshots stay `NULL`). A daily cron only becomes necessary if day-by-day alpha is later extended to live picks (that follow-on, not this task) — noted here so it isn't
-  lost, not drafted as a task. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
+  lost, not drafted as a task. **Broken into M0.1–M0.4 below (2026-09-23), each its own commit — mirrors the M1.1–M1.3/M4.1–M4.2 split.**
+
+- [ ] **M0.1** — `src/mvp/store.py`: `MVPStore.get_distinct_symbols() -> set[str]` (SELECT DISTINCT `symbol` from `mvp_recommendations`) + happy-path test (multiple picks, some duplicate symbols) +
+  edge test (empty table → empty set). Threaded into M0.4's bootstrap CLI as the equity-ingest symbol filter — not queried live inside the parser (decision above). | Owner: Claude | Model:
+  claude-sonnet-5 | Review: code-reviewer | SHA: —
+- [ ] **M0.2** — `src/backtest/equity_bhavcopy_ingest.py` (new module): `EquityBhavRecord` frozen Pydantic (`trade_date`, `symbol`, `close: Decimal`); `download_equity_bhavcopy(trade_date, dest_dir)
+  -> Path` (CM UDiFF zip, same session/cookie pattern as `download_bhavcopy`, `FileNotFoundError` on 404); `parse_equity_bhavcopy(csv_path, symbols: set[str]) -> list[EquityBhavRecord]` (filters to
+  the given symbol set); `write_equity_to_parquet(records, month_date, dest_dir)` (idempotent append, `year/month` partitioning, `decimal128(18,4)` schema for `close`, mirrors `write_to_parquet`). New
+  fixture `tests/fixtures/responses/bhavcopy/synthetic_equity_bhavcopy.csv` (UNIPARTS + 1–2 other symbols). Tests mirror `test_bhavcopy_ingest.py`'s structure (parse happy-path + filter-excludes +
+  Decimal-fields + write idempotency, download mocked via `unittest.mock.patch`). No CLI wiring yet (M0.4). | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
+- [ ] **M0.3** — same module, `src/backtest/equity_bhavcopy_ingest.py`: `IndexBhavRecord` frozen Pydantic (`trade_date`, `close: Decimal`); `download_index_bhavcopy(trade_date, dest_dir) -> Path`
+  (plain unzipped `ind_close_all_DDMMYYYY.csv`, same session pattern); `parse_index_bhavcopy(csv_path) -> IndexBhavRecord | None` (extracts the `Nifty 50` row only, `None` if absent);
+  `write_index_to_parquet(records, month_date, dest_dir)` (`data/offline/nifty_index/`, `decimal128(18,4)` schema). New fixture `tests/fixtures/responses/bhavcopy/synthetic_index_close.csv`. Tests:
+  happy-path parse, no-`Nifty 50`-row edge case, write idempotency. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
+- [ ] **M0.4** — `scripts/pipeline/equity_bhavcopy_bootstrap.py` (new script): manual `--start`/`--end`/`--dest` CLI (default `data/offline`), no cron entry (decision above). Pulls the equity symbol
+  filter via `MVPStore.get_distinct_symbols()` at startup (once, not per-day). Walks calendar days from `--start` to `--end`, skips weekends + `get_nse_holidays()` (same pattern as
+  `bhavcopy_bootstrap.py`), calls `download_equity_bhavcopy`/`parse_equity_bhavcopy`/`write_equity_to_parquet` and `download_index_bhavcopy`/`parse_index_bhavcopy`/`write_index_to_parquet` per trading
+  day, `FileNotFoundError` → log-and-skip (holiday), other exceptions logged not raised (per-day resilience, mirrors `bhavcopy_bootstrap.py`). Tests (in
+  `tests/unit/backtest/test_equity_bhavcopy_ingest.py`, mirroring how `bootstrap_main` is tested alongside `bhavcopy_ingest.py`): happy-path over a 2–3 day mocked range, holiday-skip edge case. M0
+  fully done once this lands — no separate M0 checklist tick needed beyond M0.4's. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
 - [ ] **M6** — see full spec below (Good-to-Have, blocked on M0) | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
 - [ ] **M7** — `src/mvp/models.py` + `src/mvp/store.py`: add `reco_price: Decimal | None` to `Pick` (recommendation-quoted price, distinct from `entry_price`, the price we actually recorded entering
   at). `scripts/mvp.py`: `add` gains `--reco-price` (settable at creation, not only via later `update`, so fresh picks always carry it); `update` also accepts `--reco-price` for correction.

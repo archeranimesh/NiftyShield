@@ -401,6 +401,16 @@ class MVPStore:
                 (now, str(close_price), status.value, now, pick_id),
             )
 
+    def get_distinct_symbols(self) -> set[str]:
+        """List every distinct symbol recorded across all picks.
+
+        Returns:
+            Distinct `mvp_recommendations.symbol` values, empty if no picks exist.
+        """
+        with connect(self.db_path) as conn:
+            rows = conn.execute("SELECT DISTINCT symbol FROM mvp_recommendations").fetchall()
+        return {row["symbol"] for row in rows}
+
     def get_open_picks(self) -> list[Pick]:
         """List all picks with status OPEN.
 

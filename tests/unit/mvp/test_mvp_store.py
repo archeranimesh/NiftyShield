@@ -217,6 +217,23 @@ def test_close_pick_with_non_terminal_status_raises(tmp_path: Path) -> None:
         store.close_pick("pick-1", Decimal("3600"), PickStatus.OPEN)
 
 
+def test_get_distinct_symbols_collapses_duplicates(tmp_path: Path) -> None:
+    store = MVPStore(str(tmp_path / "test.sqlite"))
+    store.init_db()
+    store.add_pick(_make_pick(pick_id="pick-1").model_copy(update={"symbol": "TCS"}))
+    store.add_pick(_make_pick(pick_id="pick-2").model_copy(update={"symbol": "TCS"}))
+    store.add_pick(_make_pick(pick_id="pick-3").model_copy(update={"symbol": "RELIANCE"}))
+
+    assert store.get_distinct_symbols() == {"TCS", "RELIANCE"}
+
+
+def test_get_distinct_symbols_empty_when_no_picks(tmp_path: Path) -> None:
+    store = MVPStore(str(tmp_path / "test.sqlite"))
+    store.init_db()
+
+    assert store.get_distinct_symbols() == set()
+
+
 def test_get_open_picks_excludes_pending_and_terminal(tmp_path: Path) -> None:
     store = MVPStore(str(tmp_path / "test.sqlite"))
     store.init_db()
