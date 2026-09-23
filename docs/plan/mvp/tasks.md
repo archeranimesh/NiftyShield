@@ -73,10 +73,10 @@
   the given symbol set); `write_equity_to_parquet(records, month_date, dest_dir)` (idempotent append, `year/month` partitioning, `decimal128(18,4)` schema for `close`, mirrors `write_to_parquet`). New
   fixture `tests/fixtures/responses/bhavcopy/synthetic_equity_bhavcopy.csv` (UNIPARTS + 1–2 other symbols). Tests mirror `test_bhavcopy_ingest.py`'s structure (parse happy-path + filter-excludes +
   Decimal-fields + write idempotency, download mocked via `unittest.mock.patch`). No CLI wiring yet (M0.4). | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 5322a2d
-- [ ] **M0.3** — same module, `src/backtest/equity_bhavcopy_ingest.py`: `IndexBhavRecord` frozen Pydantic (`trade_date`, `close: Decimal`); `download_index_bhavcopy(trade_date, dest_dir) -> Path`
+- [x] **M0.3** — same module, `src/backtest/equity_bhavcopy_ingest.py`: `IndexBhavRecord` frozen Pydantic (`trade_date`, `close: Decimal`); `download_index_bhavcopy(trade_date, dest_dir) -> Path`
   (plain unzipped `ind_close_all_DDMMYYYY.csv`, same session pattern); `parse_index_bhavcopy(csv_path) -> IndexBhavRecord | None` (extracts the `Nifty 50` row only, `None` if absent);
   `write_index_to_parquet(records, month_date, dest_dir)` (`data/offline/nifty_index/`, `decimal128(18,4)` schema). New fixture `tests/fixtures/responses/bhavcopy/synthetic_index_close.csv`. Tests:
-  happy-path parse, no-`Nifty 50`-row edge case, write idempotency. | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: —
+  happy-path parse, no-`Nifty 50`-row edge case, write idempotency. | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: 27ff5f8
 - [ ] **M0.4** — `scripts/pipeline/equity_bhavcopy_bootstrap.py` (new script): manual `--start`/`--end`/`--dest` CLI (default `data/offline`), no cron entry (decision above). Pulls the equity symbol
   filter via `MVPStore.get_distinct_symbols()` at startup (once, not per-day). Walks calendar days from `--start` to `--end`, skips weekends + `get_nse_holidays()` (same pattern as
   `bhavcopy_bootstrap.py`), calls `download_equity_bhavcopy`/`parse_equity_bhavcopy`/`write_equity_to_parquet` and `download_index_bhavcopy`/`parse_index_bhavcopy`/`write_index_to_parquet` per trading
