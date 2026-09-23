@@ -8,7 +8,7 @@ Usage:
     python -m scripts.mvp add <symbol> [-p <provider_slug>] [-c <category_slug>] [--defer-key]
     python -m scripts.mvp update <pick_id> [--price N] [--target N] [--sl N] [--notes TEXT]
     python -m scripts.mvp close <pick_id> --price N
-    python -m scripts.mvp backfill <pick_id>
+    python -m scripts.mvp backfill <symbol> --reco-date YYYY-MM-DD [--reco-price N] [--target N] [--sl N] [-p <provider_slug>] [-c <category_slug>] [--defer-key]
     python -m scripts.mvp list [--open] [--all] [-p <provider_slug>] [-c <category_slug>]
     python -m scripts.mvp summary [-p <provider_slug>] [-c <category_slug>]
     python -m scripts.mvp summary <SYMBOL>
@@ -28,7 +28,6 @@ from src.instruments.lookup import InstrumentLookup
 from src.mvp.backfill import fetch_historical_closes
 from src.mvp.models import Category, Pick, PickStatus, Provider, ProviderSource
 from src.mvp.store import MVPStore
-from src.mvp.tracker import check_prices
 
 DB_PATH = Path("data/portfolio/portfolio.sqlite")
 
@@ -194,40 +193,48 @@ def _close(store: MVPStore, args: argparse.Namespace) -> None:
 
 
 def _backfill(store: MVPStore, args: argparse.Namespace) -> None:
-    pick = store.get_pick(args.pick_id)
-    if pick is None:
-        print(f"No pick found for id {args.pick_id}.")
-        return
-    if pick.entry_price is None or pick.status != PickStatus.OPEN:
-        print("Backfill requires an OPEN pick with entry_price already set.")
-        return
+    from src.mvp.backfill import fetch_historical_index_closes, run_backfill
 
-    from_date = date.fromisoformat(pick.pick_date[:10])
+    category_id = _resolve_category_id(store, args.provider, args.category)
+    instrument_key = _resolve_instrument_key(args.symbol, args.defer_key)
+
+    pick_date_str = args.reco_date + "T00:00:00Z"
+    pick = Pick(
+        pick_id=str(uuid.uuid4()),
+        category_id=category_id,
+        symbol=args.symbol,
+        instrument_key=instrument_key,
+        reco_price=Decimal(str(args.reco_price)) if args.reco_price is not None else None,
+        pick_date=pick_date_str,
+        target_price=Decimal(str(args.target)) if args.target is not None else None,
+        stop_loss=Decimal(str(args.sl)) if args.sl is not None else None,
+        created_at=_now(),
+        updated_at=_now(),
+        status=PickStatus.PENDING,
+    )
+    store.add_pick(pick)
+    print(
+        f"✓ Pick added for backfill: {pick.pick_id[:8]} — {pick.symbol} (PENDING) on {args.reco_date}"
+    )
+
+    from_date = date.fromisoformat(args.reco_date)
     to_date = date.today()
-    closes = fetch_historical_closes(pick.symbol, from_date, to_date)
-    inserted = store.backfill_snapshots(pick.pick_id, closes)
 
-    if pick.instrument_key is None:
-        print(f"Backfilled {inserted} days. (Breach detection skipped: no instrument_key on pick.)")
-        return
-    if pick.target_price is None and pick.stop_loss is None:
-        print(f"Backfilled {inserted} days. (Breach detection skipped: no target/SL set on pick.)")
-        return
+    closes_list = fetch_historical_closes(pick.symbol, from_date, to_date)
+    equity_closes = dict(closes_list)
+    index_closes = fetch_historical_index_closes(from_date, to_date)
 
-    event = None
-    event_day = None
-    for day, close in closes:
-        events = check_prices([pick], {pick.instrument_key: close})
-        if events:
-            event, event_day = events[0], day
-            break
+    run_backfill(store, pick.pick_id, equity_closes, index_closes, end_date=to_date)
 
-    if event is not None:
-        store.close_pick(pick.pick_id, event.trigger_price, event.event_type)
-        label = "Target" if event.event_type == PickStatus.TARGET_HIT else "SL"
-        print(f"Backfilled {inserted} days. {label} hit on {event_day} at ₹{event.trigger_price}.")
+    updated_pick = store.get_pick(pick.pick_id)
+    if updated_pick:
+        print(f"Backfill complete. Final status: {updated_pick.status.value}")
+        if updated_pick.entry_price:
+            print(f"  Entry Price: {updated_pick.entry_price}")
+        if updated_pick.close_price:
+            print(f"  Close Price: {updated_pick.close_price}")
     else:
-        print(f"Backfilled {inserted} days. No SL/target breach detected.")
+        print("Pick not found after backfill.")
 
 
 def _build_category_map(store: MVPStore) -> dict[str, tuple[str, str]]:
@@ -415,9 +422,16 @@ def build_parser() -> argparse.ArgumentParser:
     close_parser.set_defaults(func=_close)
 
     backfill_parser = subparsers.add_parser(
-        "backfill", help="Backfill snapshot history for an already-entered pick."
+        "backfill", help="Add a past pick and backfill its snapshot history."
     )
-    backfill_parser.add_argument("pick_id")
+    backfill_parser.add_argument("symbol")
+    backfill_parser.add_argument("--reco-date", required=True, help="YYYY-MM-DD")
+    backfill_parser.add_argument("-p", "--provider", dest="provider", default=None)
+    backfill_parser.add_argument("-c", "--category", dest="category", default=None)
+    backfill_parser.add_argument("--reco-price", type=float, default=None)
+    backfill_parser.add_argument("--target", type=float, default=None)
+    backfill_parser.add_argument("--sl", type=float, default=None)
+    backfill_parser.add_argument("--defer-key", action="store_true", default=False)
     backfill_parser.set_defaults(func=_backfill)
 
     list_parser = subparsers.add_parser("list", help="List picks.")
