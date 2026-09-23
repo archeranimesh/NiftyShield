@@ -69,11 +69,11 @@
 - [x] **M0.1** — `src/mvp/store.py`: `MVPStore.get_distinct_symbols() -> set[str]` (SELECT DISTINCT `symbol` from `mvp_recommendations`) + happy-path test (multiple picks, some duplicate symbols) +
   edge test (empty table → empty set). Threaded into M0.4's bootstrap CLI as the equity-ingest symbol filter — not queried live inside the parser (decision above). | Owner: Claude | Model:
   claude-sonnet-5 | Review: code-reviewer | SHA: 86bdd0b
-- [ ] **M0.2** — `src/backtest/equity_bhavcopy_ingest.py` (new module): `EquityBhavRecord` frozen Pydantic (`trade_date`, `symbol`, `close: Decimal`); `download_equity_bhavcopy(trade_date, dest_dir)
+- [x] **M0.2** — `src/backtest/equity_bhavcopy_ingest.py` (new module): `EquityBhavRecord` frozen Pydantic (`trade_date`, `symbol`, `close: Decimal`); `download_equity_bhavcopy(trade_date, dest_dir)
   -> Path` (CM UDiFF zip, same session/cookie pattern as `download_bhavcopy`, `FileNotFoundError` on 404); `parse_equity_bhavcopy(csv_path, symbols: set[str]) -> list[EquityBhavRecord]` (filters to
   the given symbol set); `write_equity_to_parquet(records, month_date, dest_dir)` (idempotent append, `year/month` partitioning, `decimal128(18,4)` schema for `close`, mirrors `write_to_parquet`). New
   fixture `tests/fixtures/responses/bhavcopy/synthetic_equity_bhavcopy.csv` (UNIPARTS + 1–2 other symbols). Tests mirror `test_bhavcopy_ingest.py`'s structure (parse happy-path + filter-excludes +
-  Decimal-fields + write idempotency, download mocked via `unittest.mock.patch`). No CLI wiring yet (M0.4). | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
+  Decimal-fields + write idempotency, download mocked via `unittest.mock.patch`). No CLI wiring yet (M0.4). | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 5322a2d
 - [ ] **M0.3** — same module, `src/backtest/equity_bhavcopy_ingest.py`: `IndexBhavRecord` frozen Pydantic (`trade_date`, `close: Decimal`); `download_index_bhavcopy(trade_date, dest_dir) -> Path`
   (plain unzipped `ind_close_all_DDMMYYYY.csv`, same session pattern); `parse_index_bhavcopy(csv_path) -> IndexBhavRecord | None` (extracts the `Nifty 50` row only, `None` if absent);
   `write_index_to_parquet(records, month_date, dest_dir)` (`data/offline/nifty_index/`, `decimal128(18,4)` schema). New fixture `tests/fixtures/responses/bhavcopy/synthetic_index_close.csv`. Tests:

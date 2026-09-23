@@ -99,6 +99,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 - [2026-09-23] MVP M4.2 — `scripts/mvp_watch.py`: Telegram per-alert + consolidated hourly summary (integration-only, no new tests) — `6ed6aa9`.
 - [2026-09-23] MVP M0.1 — `src/mvp/store.py`: `MVPStore.get_distinct_symbols()` + 2 tests (M0 equity-ingest symbol filter, split from M0 per M0.1-M0.4) — `86bdd0b`.
 - [2026-09-23] MVP open point 1 — resolved M0 NIFTY 50 index data source (NSE index-close bhavcopy, probe run twice) — `2eecd0e`.
+- [2026-09-23] MVP M0.2 — `src/backtest/equity_bhavcopy_ingest.py`: `EquityBhavRecord` + download/parse/write-to-parquet (CM UDiFF, EQ-series only) + 8 tests — `5322a2d`.
 - [2026-09-22] `doc-format-migration/` `enforcement/` DFM-10 done (`fd50a62`) — `scripts/dev/new_plan_folder.py` (`--story`/`--epic`/`--into` CLI) scaffolds a conforming folder from
   `docs/plan/_TEMPLATE/`, stripping guidance comments and substituting slug/title placeholders; refuses an existing target or a `--into` epic that doesn't exist; `.claude/skills/new-story/SKILL.md`
   thin wrapper; `docs/plan/README.md` §Conventions now points at `/new-story` and states the format is enforced, not advisory. This closed `enforcement/` (DFM-6..10 all done) and the whole
