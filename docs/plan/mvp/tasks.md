@@ -48,7 +48,7 @@
 - [x] **M2.2** — `src/mvp/tracker.py`: format_telegram_summary + tests | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 77e9d53
 - [x] **M3.1** — `scripts/mvp.py`: provider + category subcommands | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: e89f205
 - [x] **M3.2** — `scripts/mvp.py`: add + update + close subcommands (with instrument resolution) | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 74b84c8
-- [ ] **M3.3** — `scripts/mvp.py`: list + summary subcommands | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
+- [x] **M3.3** — `scripts/mvp.py`: list + summary subcommands | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 731529b
 - [ ] **M4.1** — `scripts/mvp_watch.py`: LTP fetch + snapshot recording + auto-close | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
 - [ ] **M4.2** — `scripts/mvp_watch.py`: Telegram per-alert + consolidated hourly summary | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
 - [ ] **M5** — Docs close: CONTEXT.md tree, DECISIONS.md entry, TODOS.md session log | Owner: Claude | Model: n/a | Review: none | SHA: —
