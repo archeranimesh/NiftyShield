@@ -66,9 +66,9 @@
   (open point 5 — live-watch snapshots stay `NULL`). A daily cron only becomes necessary if day-by-day alpha is later extended to live picks (that follow-on, not this task) — noted here so it isn't
   lost, not drafted as a task. **Broken into M0.1–M0.4 below (2026-09-23), each its own commit — mirrors the M1.1–M1.3/M4.1–M4.2 split.**
 
-- [ ] **M0.1** — `src/mvp/store.py`: `MVPStore.get_distinct_symbols() -> set[str]` (SELECT DISTINCT `symbol` from `mvp_recommendations`) + happy-path test (multiple picks, some duplicate symbols) +
+- [x] **M0.1** — `src/mvp/store.py`: `MVPStore.get_distinct_symbols() -> set[str]` (SELECT DISTINCT `symbol` from `mvp_recommendations`) + happy-path test (multiple picks, some duplicate symbols) +
   edge test (empty table → empty set). Threaded into M0.4's bootstrap CLI as the equity-ingest symbol filter — not queried live inside the parser (decision above). | Owner: Claude | Model:
-  claude-sonnet-5 | Review: code-reviewer | SHA: —
+  claude-sonnet-5 | Review: code-reviewer | SHA: 86bdd0b
 - [ ] **M0.2** — `src/backtest/equity_bhavcopy_ingest.py` (new module): `EquityBhavRecord` frozen Pydantic (`trade_date`, `symbol`, `close: Decimal`); `download_equity_bhavcopy(trade_date, dest_dir)
   -> Path` (CM UDiFF zip, same session/cookie pattern as `download_bhavcopy`, `FileNotFoundError` on 404); `parse_equity_bhavcopy(csv_path, symbols: set[str]) -> list[EquityBhavRecord]` (filters to
   the given symbol set); `write_equity_to_parquet(records, month_date, dest_dir)` (idempotent append, `year/month` partitioning, `decimal128(18,4)` schema for `close`, mirrors `write_to_parquet`). New
