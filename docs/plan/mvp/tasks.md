@@ -76,19 +76,19 @@
 - [ ] **M0.3** — same module, `src/backtest/equity_bhavcopy_ingest.py`: `IndexBhavRecord` frozen Pydantic (`trade_date`, `close: Decimal`); `download_index_bhavcopy(trade_date, dest_dir) -> Path`
   (plain unzipped `ind_close_all_DDMMYYYY.csv`, same session pattern); `parse_index_bhavcopy(csv_path) -> IndexBhavRecord | None` (extracts the `Nifty 50` row only, `None` if absent);
   `write_index_to_parquet(records, month_date, dest_dir)` (`data/offline/nifty_index/`, `decimal128(18,4)` schema). New fixture `tests/fixtures/responses/bhavcopy/synthetic_index_close.csv`. Tests:
-  happy-path parse, no-`Nifty 50`-row edge case, write idempotency. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
+  happy-path parse, no-`Nifty 50`-row edge case, write idempotency. | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: —
 - [ ] **M0.4** — `scripts/pipeline/equity_bhavcopy_bootstrap.py` (new script): manual `--start`/`--end`/`--dest` CLI (default `data/offline`), no cron entry (decision above). Pulls the equity symbol
   filter via `MVPStore.get_distinct_symbols()` at startup (once, not per-day). Walks calendar days from `--start` to `--end`, skips weekends + `get_nse_holidays()` (same pattern as
   `bhavcopy_bootstrap.py`), calls `download_equity_bhavcopy`/`parse_equity_bhavcopy`/`write_equity_to_parquet` and `download_index_bhavcopy`/`parse_index_bhavcopy`/`write_index_to_parquet` per trading
   day, `FileNotFoundError` → log-and-skip (holiday), other exceptions logged not raised (per-day resilience, mirrors `bhavcopy_bootstrap.py`). Tests (in
   `tests/unit/backtest/test_equity_bhavcopy_ingest.py`, mirroring how `bootstrap_main` is tested alongside `bhavcopy_ingest.py`): happy-path over a 2–3 day mocked range, holiday-skip edge case. M0
-  fully done once this lands — no separate M0 checklist tick needed beyond M0.4's. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
+  fully done once this lands — no separate M0 checklist tick needed beyond M0.4's. | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: —
 - [ ] **M5** — Docs close: CONTEXT.md tree, DECISIONS.md entry, TODOS.md session log | Owner: Claude | Model: n/a | Review: none | SHA: —
-- [ ] **M6** — see full spec below (Good-to-Have, blocked on M0) | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
+- [ ] **M6** — see full spec below (Good-to-Have, blocked on M0) | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: —
 - [ ] **M7** — `src/mvp/models.py` + `src/mvp/store.py`: add `reco_price: Decimal | None` to `Pick` (recommendation-quoted price, distinct from `entry_price`, the price we actually recorded entering
   at). `scripts/mvp.py`: `add` gains `--reco-price` (settable at creation, not only via later `update`, so fresh picks always carry it); `update` also accepts `--reco-price` for correction.
   `summary`/`list` show entry-vs-reco deviation (`(entry_price - reco_price) / reco_price`) computed on read — no stored deviation column. No migration needed — DB is freshly seeded, so every pick
-  from here on is created with both fields. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
+  from here on is created with both fields. | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: —
 - [ ] **M8** — Backfill entry + walk-forward for a past reco (blocked on M0 landing; full spec is the canonical Uniparts worked example above — implement and run that pick end-to-end as this task's
   acceptance test, do not derive a separate one). New `src/mvp/backfill.py`: `enter_backfill_pick(pick, closes)` — the backfill half of the entry rule only (next trading day's close after `reco_date`;
   enter at that close if it's above `reco_price`, else the pick stays unentered, no re-check). `run_backfill(pick, closes)` — walk daily equity closes (M0's ingested table) from entry date to today,
@@ -98,8 +98,8 @@
   existing/live-watch snapshots, populated only by M8's backfill path for now). The live-watch path (M4.1, already shipped) is **not** touched by this task — wiring `benchmark_close` into
   `scripts/mvp_watch.py`'s hourly snapshots is a separate follow-on if day-by-day alpha is wanted for live picks too. The live-forward half of the entry rule (poll `BrokerClient.get_ltp`, enter at
   first tick above `reco_price`) is **not** part of this task — `scripts/mvp_watch.py`'s existing hourly cron already covers live picks once entered; M8 is backfill-only. `scripts/mvp.py` gains a
-  `backfill` subcommand wiring `pick_date` to `reco_date` (not "now", unlike `add`). Depends on M0 (equity daily-close table) and M7 (`reco_price` field). | Owner: Claude | Model: claude-sonnet-5 |
-  Review: code-reviewer | SHA: —
+  `backfill` subcommand wiring `pick_date` to `reco_date` (not "now", unlike `add`). Depends on M0 (equity daily-close table) and M7 (`reco_price` field). | Owner: Antigravity | Model: n/a | Review:
+  code-reviewer | SHA: —
 - [ ] **M9** — M-A lump-sum fill math (resolves stories.md open point 2). `src/mvp/store.py`: `update_pick`'s existing PENDING→OPEN auto-advance (on `entry_price` being set) also computes and persists
   the fill in the same call: `total_qty = floor(capital_allotted / entry_price)`, `deployed_capital = total_qty * entry_price`, `avg_cost = entry_price`, `idle_cash = capital_allotted -
   deployed_capital` (2026-09-18 decision #1 — residual does not roll into a later tranche, M-A has only one fill). Apply the 25 bps round-trip cost knob (decision #2) on this entry fill, capitalized
