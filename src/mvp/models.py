@@ -65,6 +65,7 @@ class Pick(BaseModel):
     instrument_key: str | None = None
     analyst: str | None = None
     entry_price: Decimal | None = None
+    reco_price: Decimal | None = None
     pick_date: str
     target_price: Decimal | None = None
     stop_loss: Decimal | None = None
@@ -86,6 +87,7 @@ class Pick(BaseModel):
 
     @field_validator(
         "entry_price",
+        "reco_price",
         "target_price",
         "stop_loss",
         "close_price",

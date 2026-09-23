@@ -32,6 +32,7 @@ CREATE TABLE mvp_recommendations (
     instrument_key    TEXT,                     -- Upstox key e.g. 'NSE_EQ|INE...'
     analyst           TEXT,
     entry_price       TEXT,                     -- Decimal as TEXT; NULL = PENDING
+    reco_price        TEXT,                     -- Decimal as TEXT; analyst's quoted price at recommendation time
     pick_date         TEXT NOT NULL,            -- ISO datetime UTC
     target_price      TEXT,                     -- Decimal as TEXT; NULL = no target
     stop_loss         TEXT,                     -- Decimal as TEXT; tipster value, recorded

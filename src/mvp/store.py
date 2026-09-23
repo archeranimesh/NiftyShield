@@ -62,6 +62,7 @@ class MVPStore:
                     instrument_key    TEXT,
                     analyst           TEXT,
                     entry_price       TEXT,
+                    reco_price        TEXT,
                     pick_date         TEXT NOT NULL,
                     target_price      TEXT,
                     stop_loss         TEXT,
@@ -267,12 +268,12 @@ class MVPStore:
                 """
                 INSERT INTO mvp_recommendations
                     (pick_id, category_id, symbol, instrument_key, analyst,
-                     entry_price, pick_date, target_price, stop_loss, notes,
+                     entry_price, reco_price, pick_date, target_price, stop_loss, notes,
                      status, closed_at, close_price, capital_allotted,
                      tranche_step_pct, max_drawdown_pct, deployed_capital,
                      total_qty, avg_cost, idle_cash, realized_pnl,
                      benchmark_entry, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     pick.pick_id,
@@ -281,6 +282,7 @@ class MVPStore:
                     pick.instrument_key,
                     pick.analyst,
                     str(pick.entry_price) if pick.entry_price is not None else None,
+                    str(pick.reco_price) if pick.reco_price is not None else None,
                     pick.pick_date,
                     str(pick.target_price) if pick.target_price is not None else None,
                     str(pick.stop_loss) if pick.stop_loss is not None else None,
@@ -328,8 +330,8 @@ class MVPStore:
         Args:
             pick_id: The pick to update.
             **kwargs: Any of ``category_id``, ``symbol``, ``instrument_key``,
-                ``analyst``, ``entry_price``, ``target_price``, ``stop_loss``,
-                ``notes``, ``status``.
+                ``analyst``, ``entry_price``, ``reco_price``, ``target_price``,
+                ``stop_loss``, ``notes``, ``status``.
 
         Note:
             Silently no-ops if ``pick_id`` does not exist.
@@ -340,12 +342,13 @@ class MVPStore:
             "instrument_key",
             "analyst",
             "entry_price",
+            "reco_price",
             "target_price",
             "stop_loss",
             "notes",
             "status",
         }
-        decimal_fields = {"entry_price", "target_price", "stop_loss"}
+        decimal_fields = {"entry_price", "reco_price", "target_price", "stop_loss"}
         fields = {k: v for k, v in kwargs.items() if k in allowed}
 
         with connect(self.db_path) as conn:
@@ -545,6 +548,7 @@ class MVPStore:
             instrument_key=row["instrument_key"],
             analyst=row["analyst"],
             entry_price=row["entry_price"],
+            reco_price=row["reco_price"],
             pick_date=row["pick_date"],
             target_price=row["target_price"],
             stop_loss=row["stop_loss"],
