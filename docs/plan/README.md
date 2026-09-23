@@ -75,7 +75,7 @@ prompt + first unchecked task, hands to `CLAUDE.md` Step 2b.
 
 **`paper-backbone/`** · ✅ Shipped/Archived Strategy Monitor daemon + pluggable strategy backbone (`src/strategy/`, `TelegramGateway`).
 
-**`mvp/`** · 🟡 In progress · next: **M3.1** (CLI provider/category subcommands) Multi-bagger Value Picks Tracker (`src/mvp/`, `scripts/mvp.py`, `scripts/mvp_watch.py`).
+**`mvp/`** · 🟡 In progress · next: **M4.2** (`mvp_watch.py` Telegram alerts) Multi-bagger Value Picks Tracker (`src/mvp/`, `scripts/mvp.py`, `scripts/mvp_watch.py`).
 
 **`options_income/`** · ⬜ Not started · next: **S0** (audit scope) Options-income overlay spec (9 tasks, S0–S8) — no code shipped yet; `src/options_income/` does not exist.
 
