@@ -6,6 +6,82 @@
 
 ---
 
+## ⚠️ Canonical worked example — Uniparts (read before M0/M7/M8)
+
+> Fixed acceptance case, agreed 2026-09-23. Do not re-derive this flow — implement M0/M7/M8 against it, then run it end-to-end as the first real exercise of the pipeline before any other stock or
+> provider is entered. Only once this passes do we fill in other picks.
+
+**Input data:**
+- Provider: `dsij` / "DSIJ", source `other`
+- Category: `value_picks` / "Value Picks" (under `dsij`)
+- Symbol: `UNIPARTS` (NSE, ISIN `INE244O01017`)
+- `reco_date`: 2026-06-11 — DSIJ publishes post-market-hours, so this is a signal date, not an entry date
+- `reco_price`: 640.10 (DSIJ's quoted recommendation price)
+- `entry_price`: determined by the entry rule below, not assumed equal to `reco_price`
+- `target_price`: 828
+- `stop_loss`: none given by DSIJ for this pick — `stop_loss=None` is a valid, expected state (not every provider/pick gives one), not a blocker. `check_prices` already handles this (`if
+  pick.stop_loss is not None`) — a `None` SL simply means the pick can only exit via `target_price` or the M8/M6 time-stop, never an SL breach. M8 must not invent or require a value.
+
+**Entry rule (resolved 2026-09-23):** because the reco lands post-market, the earliest we could act is the next trading day. Two variants, both needed:
+- **Live-forward** (a reco entered in real time, from today onward): poll intraday LTP via `BrokerClient.get_ltp` on the next trading day after the reco (same pattern as `scripts/mvp_watch.py`'s live
+  polling) — enter at the first observed price above `reco_price`. If price never goes above `reco_price` that day, do not enter.
+- **Backfill** (a reco already in the past, like this Uniparts case): we do not have historical intraday data, and M0's bhavcopy ingest is daily-close only — it cannot answer "first tick above
+  640.10." **Fallback for backfill only:** use the next trading day's **close** price. If that close > `reco_price`, enter at that close price on that date. If not, the pick is never entered (no later
+  re-check). This is a documented approximation, distinct from the live-forward rule — do not conflate the two in M8's implementation; the backfill path and the live-forward path are separate code
+  branches with separate tests.
+
+**End-to-end flow this pick must exercise:**
+1. Enter the pick's basic info (provider/category/symbol/reco_price/target/sl/reco_date) — via the M8 backfill entry path, not the "now"-stamping `mvp add`/`update` CLI (`pick_date` must be
+   `reco_date`, not today). `entry_price` is NOT supplied up front — M8 determines and fills it per the backfill entry rule above (next trading day's close, if > reco_price).
+2. If the next-trading-day close was not above `reco_price`, the pick stays `PENDING`/unentered and the flow stops here — no snapshots, no target/SL tracking. (Not expected for Uniparts given ₹659.70
+   was observed on June 12 per the earlier price check, but M8 must implement this branch correctly regardless.)
+3. Once entered, run the M8 backfill: walk daily equity closes (from M0's ingested table) from the entry date to today, recording one `MVPSnapshot` per trading day.
+4. On the first day a close crosses `target_price` (828) or `stop_loss`, auto-exit the pick that day — `status` flips to `TARGET_HIT`/`SL_HIT`, `close_price` = that day's close, `closed_at` = that
+   date. No snapshots recorded past the exit day.
+5. If neither breached through today, leave the pick `OPEN`; `scripts/mvp_watch.py`'s live hourly cron takes over from today forward with no extra wiring.
+6. Verify via `mvp summary UNIPARTS` (per-pick), `mvp summary -p dsij -c value_picks` (Value Picks rollup), `mvp summary -p dsij` (all DSIJ), and `mvp list --all` (whole-portfolio view) — this
+   exercises the individual → category → provider → all-picks rollup the user asked for.
+
+**Sign-off gate:** once M0 + M7 (`reco_price` field) + M8 (backfill) are all implemented and this Uniparts flow runs clean end-to-end with correct data at every level above, tell the user the MVP
+pipeline is ready. They will then run Uniparts themselves as the worked example, inspect every data point, and only after they're satisfied will other stocks/providers be entered.
+
+**M0 data-source decision — RESOLVED 2026-09-23: NSE CM bhavcopy.** `scratch/2026-09-23_mvp_m0_data_source_probe.py` compared NSE CM bhavcopy vs. Yahoo Finance chart API for UNIPARTS daily closes, run
+twice. NSE CM bhavcopy (`https://nsearchives.nseindia.com/content/cm/BhavCopy_NSE_CM_0_0_0_YYYYMMDD_F_0000.csv.zip`, UDiFF format, same session/auth pattern already used in
+`src/backtest/bhavcopy_ingest.py` for F&O) returned ₹659.70 for 2026-06-12 (matching the figure independently found via web search) and ₹851.70 for 2026-09-22, both dates correct on both runs; `None`
+for 2026-07-11 was correctly a non-trading Saturday, not a failure. Yahoo Finance's `query1.finance.yahoo.com` chart endpoint hit a 429 rate limit on both attempts — ruled out as unreliable.
+**Confirmed by user 2026-09-23: NSE CM bhavcopy is M0's data source**, mirroring the existing F&O ingest module's structure.
+
+**M0 NIFTY 50 index-level data-source decision — RESOLVED 2026-09-23: NSE index-close bhavcopy.** `scratch/2026-09-23_mvp_m0_nifty_index_probe.py` probed
+`https://nsearchives.nseindia.com/content/indices/ind_close_all_DDMMYYYY.csv` (plain CSV, not zipped, same host/session pattern as the CM equity bhavcopy) for the `Nifty 50` row's `Closing Index
+Value`, run twice. Both runs returned identical values: ₹23,622.90 for 2026-06-12 and ₹23,329.00 for 2026-09-22; `None` for 2026-07-11 was correctly a non-trading Saturday, matching the equity probe's
+behavior on the same date. Endpoint reachable, response shape stable across runs. **Not independently cross-checked against a second source** (unlike the equity close, which matched an external web
+search) — the run-to-run consistency and correct non-trading-day handling are the only verification here; worth a quick sanity check against a known NIFTY close before relying on this for real alpha
+numbers. Open point 1 below is fully closed.
+
+---
+
+## Open points — carry to next session (raised 2026-09-23)
+
+Not yet decided; do not silently resolve these — surface and confirm before proceeding.
+
+1. ~~M0 data source~~ — **RESOLVED 2026-09-23: NSE CM bhavcopy (equity) + NSE index-close bhavcopy (NIFTY 50)** (see decisions above). Both legs closed.
+2. **P&L math (Issue A) is still fully unscoped.** Deliberately deferred in favor of backfill (Issue B) first. `capital_allotted`/`deployed_capital`/`avg_cost`/`realized_pnl` on `Pick` remain unused
+   schema columns from the 2026-09-18 design decisions above. No task drafted yet — needs its own `tasks.md` entry (fill logic + return% surfaced in `summary`) once M0/M8 land.
+3. **Implementation not yet greenlit.** Everything so far (M7, this worked example, the entry-rule split, the M0 data-source probe) is planning/docs only — no `src/` code written. M0 and M8 are
+   described here in prose but **not yet added to `tasks.md`** as checklist items (unlike M7, which is). Add them as proper checklist entries once the M0 data-source decision (point 1) is confirmed.
+4. **Live-forward branch of the entry rule is unverified against real infra.** The live-forward half of the entry rule (poll `BrokerClient.get_ltp` on the next trading day, enter at first tick above
+   `reco_price`) assumes the same live-polling pattern `scripts/mvp_watch.py` already uses will work unchanged for this new use case. Not a known correctness risk, just not yet exercised — worth a
+   quick check once M8's live-forward branch is implemented, before relying on it for a real future reco.
+5. **NIFTY 50 index-level historical source — not probed, and scope depends on a decision not yet made.** `benchmark_entry` (design decisions above, 2026-09-18 #3) needs a NIFTY 50 level per pick for
+   alpha (did the pick beat the index?). Live-forward already has a solved path (live spot fetch via the `_fetch_nifty_spot` pattern). For M8 backfill, two sub-questions, unresolved:
+   - **Scope decision first:** does alpha need to be tracked *day-by-day* through the backfill (needs a full historical NIFTY close series, one value per trading day), or only *entry-vs-today/exit*
+     (needs just two spot values, no historical series at all)? This decides whether the index-bhavcopy probe below is even necessary.
+   - **If day-by-day is chosen:** NSE publishes index closes via a separate archive from the CM equity bhavcopy (not bundled in the per-stock zip) — exact current (2026) URL/filename pattern, and
+     whether the same session/auth/header approach used for CM bhavcopy works unchanged, are both unconfirmed. Needs the same kind of spot-check probe as
+     `scratch/2026-09-23_mvp_m0_data_source_probe.py` did for equity closes, cross-checked against an independently known NIFTY 50 close for one date before trusting it.
+
+---
+
 ## M1.1 — `src/mvp/models.py`: data models + tests
 
 **Files to change:**
