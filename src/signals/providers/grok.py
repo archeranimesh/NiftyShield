@@ -131,4 +131,6 @@ def _parse_response(snapshot: MarketSnapshot, envelope: dict[str, Any]) -> Signa
             usage=usage,
         )
     except (json.JSONDecodeError, KeyError, ValueError, TypeError, InvalidOperation) as e:
-        raise DataFetchError(f"{_PROVIDER}: could not parse signal JSON: {e}") from e
+        raise DataFetchError(
+            f"{_PROVIDER}: could not parse signal JSON: {e} | content={repr(content)[:500]}"
+        ) from e

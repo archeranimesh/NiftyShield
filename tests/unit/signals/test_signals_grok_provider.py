@@ -160,6 +160,26 @@ async def test_missing_key_raises_datafetcherror(snapshot: MarketSnapshot) -> No
             await GrokSignalProvider(api_key="k").get_signal(snapshot)
 
 
+async def test_non_numeric_premium_error_includes_raw_content(
+    snapshot: MarketSnapshot,
+) -> None:
+    content = json.dumps(
+        {
+            "direction": "BULLISH",
+            "confidence": 3,
+            "recommended_strike": ATM,
+            "entry_premium_low": "N/A",
+            "entry_premium_high": 60,
+            "key_reason": "trend up",
+            "key_risk": "gap down",
+        }
+    )
+    body = json.dumps({"choices": [{"message": {"content": content}}]})
+    with _patch_session(_FakeSession(_FakeResponse(body=body))):
+        with pytest.raises(DataFetchError, match="content='.*N/A.*'"):
+            await GrokSignalProvider(api_key="k").get_signal(snapshot)
+
+
 async def test_timeout_raises_datafetcherror(snapshot: MarketSnapshot) -> None:
     with patch("aiohttp.ClientSession", side_effect=asyncio.TimeoutError):
         with pytest.raises(DataFetchError, match="timed out"):
