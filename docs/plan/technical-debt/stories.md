@@ -96,3 +96,7 @@ slug. If it did **not** recur in 3+ such sessions, tick the box — the hook wor
   lint-sweep + llm-council session, and this NSE-2026-holiday-fix session, an ops/diagnostic task that turns into a `src/`/`scripts/` code change mid-session lands the edit without ever reading
   `CONTEXT.md`, even though Step 1 applies the moment code enters scope. Build a PreToolUse hook that tracks per-session whether `CONTEXT.md` has been read and warns (or blocks) on the first
   `Edit`/`Write` to `src/`/`scripts/` if not, then verify over the next 3 logged sessions. If it still recurs, escalate to a protocol/model discussion. Standalone — no trigger wait.
+- **DEBT-19** — `readme-story-pointer-not-advanced-on-task-close` (Count 5). No remediation exists. `check_checkbox_consistency.py`'s `README_ENTRY_RE` only validates that a `next: **<ID>**` marker is
+  present in the right literal shape; it never cross-checks that ID against the story's own `tasks.md` to see whether that task has since closed. Across S3.1, S5.6, SEC-1, M1.2, and M3.2 (mvp), a task
+  closed with its `tasks.md` checkbox ticked and SHA recorded, yet `docs/plan/README.md`'s pointer for that story kept naming the already-completed task. Extend the guard's resolution to follow the
+  pointer into the story's `tasks.md` and flag a mismatch, then verify over the next 3 logged sessions. If it still recurs, escalate to a protocol/model discussion. Standalone — no trigger wait.

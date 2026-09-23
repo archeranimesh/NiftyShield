@@ -60,3 +60,7 @@ commit — they are proactive verification/reconciliation work, not opportunisti
   triage, "why did this fire") turns into a `src/`/`scripts/` code change mid-session, and `CONTEXT.md` is never read even though Step 1 applies the moment code enters scope, not just at session
   start. Add a PreToolUse hook that tracks whether `CONTEXT.md` has been `Read` this session and warns (or blocks) on the first `Edit`/`Write` to `src/`/`scripts/` if not, then verify against the
   NSE-2026-holiday-fix case (yaml + test edit landed with no `CONTEXT.md` read all session). Trigger: standalone. | Owner: Claude | Model: claude-sonnet-5 | Review: none
+- [ ] **DEBT-19** — `standalone-actionable`. `readme-story-pointer-not-advanced-on-task-close` (Count 5 at escalation, 2026-09-23). `check_checkbox_consistency.py`'s `README_ENTRY_RE` validates that a
+  `next: **<ID>**` marker exists in the right shape, but does not verify the ID still names the actual next unstarted task once earlier tasks close — S3.1, S5.6, SEC-1, M1.2, and M3.2 (mvp) all closed
+  a task in `tasks.md` while leaving `docs/plan/README.md`'s pointer on an already-completed ID. Extend the guard to cross-check the README pointer against the first unchecked box in the story's own
+  `tasks.md`, then verify over the next 3 logged sessions. If it still recurs, escalate to a protocol/model discussion. Trigger: standalone. | Owner: Claude | Model: claude-sonnet-5 | Review: none
