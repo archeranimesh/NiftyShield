@@ -51,7 +51,6 @@
 - [x] **M3.3** — `scripts/mvp.py`: list + summary subcommands | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 731529b
 - [x] **M4.1** — `scripts/mvp_watch.py`: LTP fetch + snapshot recording + auto-close | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 8fbe496
 - [x] **M4.2** — `scripts/mvp_watch.py`: Telegram per-alert + consolidated hourly summary | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 6ed6aa9
-- [ ] **M5** — Docs close: CONTEXT.md tree, DECISIONS.md entry, TODOS.md session log | Owner: Claude | Model: n/a | Review: none | SHA: —
 - [ ] **M0** — Equity + NIFTY index bhavcopy ingest (prerequisite for M6/M8 — not M1–M5). `src/backtest/bhavcopy_ingest.py` is F&O-only today; add equity cash-market daily close + NIFTY 50 index level
   ingest. **Storage — resolved 2026-09-23: Parquet, not portfolio.sqlite** (`equity_ohlcv/` and `nifty_index/` dirs under `data/offline/`, same `write_to_parquet` idempotent-append pattern and
   `year/month` partitioning already used for `options_ohlcv/`/`futures_ohlcv/`), consistent with the existing F&O ingest — bulk historical time-series stays out of the transactional/state SQLite DB.
@@ -84,6 +83,7 @@
   day, `FileNotFoundError` → log-and-skip (holiday), other exceptions logged not raised (per-day resilience, mirrors `bhavcopy_bootstrap.py`). Tests (in
   `tests/unit/backtest/test_equity_bhavcopy_ingest.py`, mirroring how `bootstrap_main` is tested alongside `bhavcopy_ingest.py`): happy-path over a 2–3 day mocked range, holiday-skip edge case. M0
   fully done once this lands — no separate M0 checklist tick needed beyond M0.4's. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
+- [ ] **M5** — Docs close: CONTEXT.md tree, DECISIONS.md entry, TODOS.md session log | Owner: Claude | Model: n/a | Review: none | SHA: —
 - [ ] **M6** — see full spec below (Good-to-Have, blocked on M0) | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
 - [ ] **M7** — `src/mvp/models.py` + `src/mvp/store.py`: add `reco_price: Decimal | None` to `Pick` (recommendation-quoted price, distinct from `entry_price`, the price we actually recorded entering
   at). `scripts/mvp.py`: `add` gains `--reco-price` (settable at creation, not only via later `update`, so fresh picks always carry it); `update` also accepts `--reco-price` for correction.
