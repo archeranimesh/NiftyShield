@@ -95,6 +95,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 - [2026-09-23] MVP M3.1 — `scripts/mvp.py`: provider + category subcommands (CLI, no new tests) — `e89f205`.
 - [2026-09-23] MVP M3.2 — `scripts/mvp.py`: add + update + close subcommands with instrument resolution (CLI, no new tests) — `74b84c8`.
 - [2026-09-23] MVP M3.3 — `scripts/mvp.py`: list + summary subcommands (CLI, no new tests) — `731529b`.
+- [2026-09-23] MVP M4.1 — `scripts/mvp_watch.py`: hourly LTP fetch + snapshot recording + auto-close (integration-only, no new tests) — `8fbe496`.
 - [2026-09-22] `doc-format-migration/` `enforcement/` DFM-10 done (`fd50a62`) — `scripts/dev/new_plan_folder.py` (`--story`/`--epic`/`--into` CLI) scaffolds a conforming folder from
   `docs/plan/_TEMPLATE/`, stripping guidance comments and substituting slug/title placeholders; refuses an existing target or a `--into` epic that doesn't exist; `.claude/skills/new-story/SKILL.md`
   thin wrapper; `docs/plan/README.md` §Conventions now points at `/new-story` and states the format is enforced, not advisory. This closed `enforcement/` (DFM-6..10 all done) and the whole
