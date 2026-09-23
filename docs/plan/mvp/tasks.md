@@ -57,7 +57,11 @@
   `year/month` partitioning already used for `options_ohlcv/`/`futures_ohlcv/`), consistent with the existing F&O ingest — bulk historical time-series stays out of the transactional/state SQLite DB.
   Two new NSE fetchers (mirroring `fetch_bhavcopy`/`download_bhavcopy`): equity daily close from the CM bhavcopy (`scratch/2026-09-23_mvp_m0_data_source_probe.py`,
   `BhavCopy_NSE_CM_0_0_0_YYYYMMDD_F_0000.csv.zip`), NIFTY 50 index daily close from the index-close bhavcopy (`scratch/2026-09-23_mvp_m0_nifty_index_probe.py`, `ind_close_all_DDMMYYYY.csv`). M8 reads
-  these Parquet files directly (not via `MVPStore`) for its backfill walk and `benchmark_close` lookup. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
+  these Parquet files directly (not via `MVPStore`) for its backfill walk and `benchmark_close` lookup. **Scheduling — resolved 2026-09-23: manual `--start`/`--end` CLI only, no cron**, mirroring
+  `scripts/pipeline/bhavcopy_bootstrap.py` (which itself has no cron entry — confirmed via `crontab -l`, F&O bhavcopy is backfilled by hand today, not scheduled). Nothing in current MVP scope needs
+  daily-fresh closes: live-forward entry/watch use intraday `BrokerClient.get_ltp`, and day-by-day `benchmark_close` is backfill-only (open point 5 — live-watch snapshots stay `NULL`). A daily cron
+  only becomes necessary if day-by-day alpha is later extended to live picks (that follow-on, not this task) — noted here so it isn't lost, not drafted as a task. | Owner: Claude | Model:
+  claude-sonnet-5 | Review: code-reviewer | SHA: —
 - [ ] **M6** — see full spec below (Good-to-Have, blocked on M0) | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
 - [ ] **M7** — `src/mvp/models.py` + `src/mvp/store.py`: add `reco_price: Decimal | None` to `Pick` (recommendation-quoted price, distinct from `entry_price`, the price we actually recorded entering
   at). `scripts/mvp.py`: `add` gains `--reco-price` (settable at creation, not only via later `update`, so fresh picks always carry it); `update` also accepts `--reco-price` for correction.
