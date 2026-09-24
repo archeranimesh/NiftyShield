@@ -2,10 +2,97 @@
 
 from decimal import Decimal
 
-from src.mvp.models import Pick, PickStatus
-from src.mvp.tracker import MVPEvent, check_prices, format_hourly_summary
+from src.mvp.models import Category, CategoryStats, Pick, PickStatus
+from src.mvp.tracker import (
+    CategoryRollup,
+    MVPEvent,
+    ProviderRollup,
+    build_category_rollup,
+    build_eod_table,
+    category_short_code,
+    check_prices,
+    compute_overall_inception_pct,
+    format_eod_summary,
+    format_hourly_summary,
+)
 
 _NOW = "2026-09-23T00:00:00"
+
+
+def _make_category(
+    *,
+    category_id: str = "cat-1",
+    provider_id: str = "prov-1",
+    slug: str = "value_picks",
+    display_name: str = "Value Picks",
+) -> Category:
+    return Category(
+        category_id=category_id,
+        provider_id=provider_id,
+        slug=slug,
+        display_name=display_name,
+        created_at=_NOW,
+    )
+
+
+def _make_stats(
+    *,
+    closed_count: int = 3,
+    wins: int = 2,
+    losses: int = 1,
+    win_rate: Decimal | None = Decimal("0.6667"),
+    inception_pnl: Decimal = Decimal("5000"),
+    invested: Decimal = Decimal("100000"),
+    current: Decimal = Decimal("110000"),
+    inception_pct: Decimal | None = Decimal("15"),
+) -> CategoryStats:
+    return CategoryStats(
+        closed_count=closed_count,
+        wins=wins,
+        losses=losses,
+        win_rate=win_rate,
+        avg_win=Decimal("3000"),
+        avg_loss=Decimal("-1000"),
+        inception_pnl=inception_pnl,
+        invested=invested,
+        current=current,
+        inception_pct=inception_pct,
+    )
+
+
+def _make_rollup(
+    *,
+    display_name: str = "Value Picks",
+    short_code: str = "VP",
+    invested: Decimal = Decimal("100000"),
+    current: Decimal = Decimal("110000"),
+    realized_pnl: Decimal = Decimal("5000"),
+    day_chg_pct: Decimal | None = Decimal("1.5"),
+    win_pct: Decimal | None = Decimal("67"),
+    win_closed_count: int = 3,
+    inception_pct: Decimal = Decimal("15"),
+    high_pct: Decimal | None = Decimal("20"),
+    low_pct: Decimal | None = Decimal("-5"),
+    open_count: int = 2,
+    pending_count: int = 1,
+    closed_count: int = 3,
+) -> CategoryRollup:
+    return CategoryRollup(
+        display_name=display_name,
+        short_code=short_code,
+        invested=invested,
+        current=current,
+        realized_pnl=realized_pnl,
+        day_chg_pct=day_chg_pct,
+        win_pct=win_pct,
+        win_closed_count=win_closed_count,
+        inception_pct=inception_pct,
+        high_pct=high_pct,
+        low_pct=low_pct,
+        open_count=open_count,
+        pending_count=pending_count,
+        closed_count=closed_count,
+    )
 
 
 def _make_pick(
@@ -194,3 +281,108 @@ def test_format_hourly_summary_missing_ltp_renders_dashes() -> None:
 
     # no ltp -> current falls back flat to invested, so P&L footer reads ₹0.00
     assert "*P&L:* ₹0\\.00" in summary
+
+
+def test_category_short_code_multi_word_slug_uses_initials() -> None:
+    assert category_short_code("value_picks") == "VP"
+
+
+def test_category_short_code_single_word_slug_truncates() -> None:
+    assert category_short_code("multibagger") == "MUL"
+
+
+def test_category_short_code_hyphen_separated_slug() -> None:
+    assert category_short_code("long-term-picks") == "LTP"
+
+
+def test_category_short_code_single_char_slug() -> None:
+    assert category_short_code("a") == "A"
+
+
+def test_build_eod_table_empty_providers_returns_empty_string() -> None:
+    assert build_eod_table([]) == ""
+    empty_provider = ProviderRollup(provider_name="DSIJ", short_code="DSIJ", categories=[])
+    assert build_eod_table([empty_provider]) == ""
+
+
+def test_build_category_rollup_happy_path() -> None:
+    category = _make_category()
+    stats = _make_stats()
+    rollup = build_category_rollup(
+        category,
+        stats,
+        day_chg_pct=Decimal("1.5"),
+        high_low=(Decimal("20"), Decimal("-5")),
+        open_count=2,
+        pending_count=1,
+        closed_count=3,
+    )
+    assert rollup.short_code == "VP"
+    assert rollup.win_pct == Decimal("66.67")
+    assert rollup.high_pct == Decimal("20")
+    assert rollup.low_pct == Decimal("-5")
+    assert rollup.inception_pct == Decimal("15")
+
+
+def test_build_category_rollup_none_day_change_and_high_low() -> None:
+    category = _make_category()
+    stats = _make_stats(closed_count=0, wins=0, losses=0, win_rate=None, inception_pnl=Decimal("0"))
+    rollup = build_category_rollup(
+        category,
+        stats,
+        day_chg_pct=None,
+        high_low=None,
+        open_count=1,
+        pending_count=0,
+        closed_count=0,
+    )
+    assert rollup.day_chg_pct is None
+    assert rollup.win_pct is None
+    assert rollup.high_pct is None
+    assert rollup.low_pct is None
+
+
+def test_build_eod_table_renders_dashes_for_missing_high_low() -> None:
+    rollup = _make_rollup(win_pct=None, win_closed_count=0, high_pct=None, low_pct=None)
+    table = build_eod_table(
+        [ProviderRollup(provider_name="DSIJ", short_code="DSIJ", categories=[rollup])]
+    )
+    row = table.splitlines()[2]
+    assert "— (0)" in row
+    # win_str's "—" plus one each for the High/Low columns
+    assert row.count("—") == 3
+
+
+def test_format_eod_summary_empty_providers_returns_empty_string() -> None:
+    assert format_eod_summary([], "2026-09-24", Decimal("0")) == ""
+
+
+def test_format_eod_summary_happy_path_includes_table_and_footer() -> None:
+    providers = [
+        ProviderRollup(provider_name="DSIJ", short_code="DSIJ", categories=[_make_rollup()])
+    ]
+    summary = format_eod_summary(providers, "2026-09-24", Decimal("15"))
+    assert "*MVP EOD Summary*" in summary
+    assert "VP" in summary
+    assert "*Since inception:* \\+15\\.0%" in summary
+    assert "Open: 2   Pending: 1   Closed: 3" in summary
+
+
+def test_format_eod_summary_day_chg_none_when_no_category_has_one() -> None:
+    providers = [
+        ProviderRollup(
+            provider_name="DSIJ", short_code="DSIJ", categories=[_make_rollup(day_chg_pct=None)]
+        )
+    ]
+    summary = format_eod_summary(providers, "2026-09-24", Decimal("15"))
+    assert "*Day chg:* —" in summary
+
+
+def test_compute_overall_inception_pct_zero_deployed_returns_zero() -> None:
+    assert compute_overall_inception_pct([_make_rollup()], Decimal("0")) == Decimal("0")
+
+
+def test_compute_overall_inception_pct_happy_path() -> None:
+    # rollup: current-invested + realized = (110000-100000)+5000 = 15000
+    result = compute_overall_inception_pct([_make_rollup()], Decimal("100000"))
+    assert result == Decimal("15")
