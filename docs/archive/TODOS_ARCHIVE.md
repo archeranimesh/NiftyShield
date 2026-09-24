@@ -4,6 +4,14 @@
 
 ---
 
+## 2026-09-24 — `mvp` story archived
+
+Moved to `docs/archive/plan/mvp/`. Multi-bagger Value Picks Tracker: records tipster/analyst picks per provider/category, simulates a fixed ₹1,00,000 lump-sum notional deployment per pick, watches
+live LTP hourly for target/stop-loss breaches, auto-closes with real ₹ P&L, and reports via Telegram (per-alert message, hourly holdings summary, EOD per-category summary with win-rate/inception
+stats). `src/mvp/` (models, store, tracker), `scripts/mvp.py` (CLI), `scripts/mvp_watch.py` (hourly watch cron, live in the crontab since before M5). M1–M13 all shipped (M-A lump-sum fill is the ship
+bar; M-B tranche ladder was never started and is not tracked as a task). Design resolved with Animesh 2026-09-09, refined 2026-09-18. Closing task M5 (docs close) `e7ad872`/`c562344`. Owner: Claude on
+`claude-sonnet-5` throughout.
+
 ## 2026-09-22 — `doc-format-migration` epic archived
 
 Moved to `docs/archive/plan/doc-format-migration/`. Batch-converted every legacy `docs/plan/` folder to the canonical story/epic format, reflowed every other `.md` in the repo to fill-to-≤200, then
@@ -1284,20 +1292,14 @@ itself (cadence question from the original story is now moot except for first-ev
 
 **Confirmed signal set + priority (highest first), all resolving to the SAME terminal action (atomic close both legs → immediate reselect+reopen; no partial-close, unlike IC's
 CLOSE_CALL_SPREAD/CLOSE_PUT_SPREAD split, since Collar is inherently 2-leg):**
-  1. `CRASH_MONETIZE` (put leg, δ≤-0.80 OR value≥5× entry debit) — **net-new for Collar**, mirror
-     `evaluate_pp`'s existing CRASH_MONETIZE logic (`src/strategy/exit_signals.py`), don't invent
-     new thresholds. Operator's own reasoning: the put currently has no independent crash
-     trigger, only the call's signals drive the close — a fast crash could blow the put deep ITM
-     before the call's PROFIT_TARGET catches up.
+  1. `CRASH_MONETIZE` (put leg, δ≤-0.80 OR value≥5× entry debit) — **net-new for Collar**, mirror `evaluate_pp`'s existing CRASH_MONETIZE logic (`src/strategy/exit_signals.py`), don't invent new
+     thresholds. Operator's own reasoning: the put currently has no independent crash trigger, only the call's signals drive the close — a fast crash could blow the put deep ITM before the call's
+     PROFIT_TARGET catches up.
   2. `LOSS_STOP` (call, LTP ≥ 2× entry credit) — already implemented/wired (Collar3a).
   3. `PROFIT_TARGET` (call, LTP ≤ 30% of entry credit) — already implemented/wired.
-  4. `DTE_REVIEW` (DTE≤5) — **operator explicitly rejected reusing CSP/IC's fixed
-     calendar-days-held `TIME_STOP` (21 days)** for this: decoupled from actual DTE-to-expiry, so
-     a quarterly-expiry collar would fire TIME_STOP mid-cycle instead of near expiry. Only
-     DTE≤5-to-expiry drives the new combined action, uniformly, regardless of whether the current
-     cycle is monthly or quarterly. Collar3a's existing `_check_reentry` audit-log trigger tuple
-     may keep TIME_STOP for logging/notification purposes only — it must NOT drive the new
-     close+reenter action.
+  4. `DTE_REVIEW` (DTE≤5) — **operator explicitly rejected reusing CSP/IC's fixed calendar-days-held `TIME_STOP` (21 days)** for this: decoupled from actual DTE-to-expiry, so a quarterly-expiry collar
+     would fire TIME_STOP mid-cycle instead of near expiry. Only DTE≤5-to-expiry drives the new combined action, uniformly, regardless of whether the current cycle is monthly or quarterly. Collar3a's
+     existing `_check_reentry` audit-log trigger tuple may keep TIME_STOP for logging/notification purposes only — it must NOT drive the new close+reenter action.
   5. `DELTA_STOP` (call, δ≥0.55) — already implemented/wired.
 
 Priority-selection pattern (when multiple signals fire same tick) should mirror `IronCondorV1._auto_select_action` (`src/strategy/ic_nifty_v1.py`) — fixed priority tuple, first match wins.

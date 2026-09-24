@@ -16,8 +16,6 @@ starting the next story here; this list only decides *which story is next*. Bugs
 rot them.
 
 2. **Greeks Black-Scholes fallback** — `docs/plan/greeks-bs-fallback/` — next **GF-1** (read-only audit scope).
-4. **MVP: Multi-bagger Value Picks Tracker** — `docs/plan/mvp/` — next **M5** (docs close). M10/M11/M12/M13 all shipped; M6 (historical backfill) remains Good-to-Have, gated on M0 which is done.
-   Independent — blocks nothing.
 5. **Variance gate — CSP v1 deployment gate observation** — `docs/plan/variance-gate/` — next **VG0** (spec reconciliation; the remaining tasks are human checkpoints, not build tasks).
 6. **Options Income strategy** — `docs/plan/options_income/` — next **S0** (data audit).
 7. **Backtest Engine** — `docs/plan/backtest-engine/` (`phase1..4/`) — next **1.3a / 1.4** (parallel, `phase1/`). Four chained phases; each phase's GATE task blocks the next dir. Gated on
