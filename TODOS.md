@@ -88,6 +88,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-24] MVP M13.2 — `MVPStore.get_category_day_change` invested-weighted day-over-day % rollup per category — 1a5d9dd
 - [2026-09-24] MVP M12 — hourly summary rewritten as a flat `[O]`/`[P]`-badged holdings table (`format_hourly_summary`, `build_holdings_table`), OPEN+PENDING picks in one table, Invested/Current/P&L
   footer — 2b8d75d
 - [2026-09-24] MVP M11 — per-category win-rate/inception P&L stats footer (`CategoryStats`, `MVPStore.get_category_stats`, wired into `_format_alert_message`) — 3c331b8
