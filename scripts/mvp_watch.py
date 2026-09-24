@@ -38,7 +38,7 @@ from src.mvp.store import MVPStore  # noqa: E402
 from src.mvp.tracker import (  # noqa: E402
     MVPEvent,
     check_prices,
-    format_telegram_summary,
+    format_hourly_summary,
 )
 from src.notifications.formatting import format_money, format_pct  # noqa: E402
 from src.notifications.markdown import escape_markdown  # noqa: E402
@@ -141,10 +141,9 @@ async def run() -> None:
             await notifier.send(_format_alert_message(event, pick, close, label, stats))
 
         open_picks = await asyncio.to_thread(store.get_open_picks)
+        pending_picks = await asyncio.to_thread(store.list_picks, PickStatus.PENDING)
         run_time = datetime.now(timezone.utc).astimezone().strftime("%I:%M %p").lstrip("0")
-        summary = format_telegram_summary(
-            open_picks, ltp_map, provider_names, joined_category_labels, run_time
-        )
+        summary = format_hourly_summary(open_picks + pending_picks, ltp_map, run_time)
         if summary:
             await notifier.send(summary)
 

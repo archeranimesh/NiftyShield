@@ -1,11 +1,10 @@
 """Pure MVP pick tracking logic: price-breach detection."""
 
-from collections import defaultdict
 from dataclasses import dataclass
 from decimal import Decimal
 
 from src.mvp.models import Pick, PickStatus
-from src.notifications.formatting import format_pct
+from src.notifications.formatting import format_money, format_pct
 from src.notifications.markdown import escape_markdown
 
 
@@ -78,98 +77,167 @@ def _format_num(value: Decimal | None) -> str:
     return text
 
 
-def _format_row(pick: Pick, ltp_map: dict[str, Decimal]) -> str:
-    """One fenced-table row: SYMBOL entry->ltp pct% T:target (away% away) SL:sl."""
-    ltp = ltp_map.get(pick.instrument_key) if pick.instrument_key is not None else None
-
-    parts = [pick.symbol, f"{_format_num(pick.entry_price)}→{_format_num(ltp)}"]
-
-    entry = pick.entry_price
-    if ltp is not None and entry is not None and entry != 0:
-        pct = (ltp - entry) / entry * 100
-        sign = "+" if pct > 0 else ""
-        parts.append(f"{sign}{format_pct(float(pct))}")
-    else:
-        parts.append("—")
-
+def _next_level_str(pick: Pick, ltp: Decimal | None) -> str:
+    """Distance to whichever of target/stop-loss is nearer, e.g. "T +7.1%" or "SL -3.4%"."""
+    if ltp is None or ltp == 0:
+        return "—"
+    candidates = []
     if pick.target_price is not None:
-        if ltp is not None and ltp != 0:
-            away = abs((pick.target_price - ltp) / ltp * 100)
-            away_str = format_pct(float(away))
-            parts.append(f"T:{_format_num(pick.target_price)} ({away_str} away)")
-        else:
-            parts.append(f"T:{_format_num(pick.target_price)}")
-
+        candidates.append(("T", (pick.target_price - ltp) / ltp * 100))
     if pick.stop_loss is not None:
-        parts.append(f"SL:{_format_num(pick.stop_loss)}")
+        candidates.append(("SL", (ltp - pick.stop_loss) / ltp * 100))
+    if not candidates:
+        return "—"
+    label, pct = min(candidates, key=lambda c: abs(c[1]))
+    sign = "+" if pct > 0 else ""
+    return f"{label} {sign}{format_pct(float(pct))}"
 
-    return "  " + "  ".join(parts)
+
+def format_holdings_row(pick: Pick, ltp: Decimal | None) -> tuple[str, str, str, str, str]:
+    """One row's cells: [status badge], Sym, LTP, P&L, Next.
+
+    A PENDING row shows its trigger price (reco_price, prefixed "->") in the
+    LTP cell instead of a bare "—", and "—" for P&L/Next (no fill yet).
+    Only OPEN and PENDING picks are valid inputs (matches format_hourly_summary's
+    filter) — any other status raises ValueError rather than mislabeling.
+    """
+    if pick.status == PickStatus.OPEN:
+        badge = "[O]"
+    elif pick.status == PickStatus.PENDING:
+        badge = "[P]"
+    else:
+        raise ValueError(f"format_holdings_row: unsupported pick status {pick.status!r}")
+
+    if pick.status != PickStatus.OPEN:
+        trigger = f"→{_format_num(pick.reco_price)}" if pick.reco_price is not None else "—"
+        return (badge, pick.symbol, trigger, "—", "—")
+
+    ltp_str = _format_num(ltp)
+    if ltp is not None and pick.avg_cost is not None and pick.total_qty:
+        pnl_val = (ltp - pick.avg_cost) * pick.total_qty
+        sign = "+" if pnl_val > 0 else ""
+        pnl = f"{sign}{_format_num(pnl_val)}"
+    else:
+        pnl = "—"
+    return (badge, pick.symbol, ltp_str, pnl, _next_level_str(pick, ltp))
 
 
-def format_telegram_summary(
+def build_holdings_table(rows: list[tuple[str, str, str, str, str]]) -> str:
+    """Column-aligned fenced table: [badge] Sym LTP P&L Next.
+
+    Per-column max width, same pattern as `build_close_leg_table`
+    (`src/notifications/formatting.py`). `rows` must be non-empty — the sole
+    caller, format_hourly_summary, never calls this with an empty list.
+    """
+    if not rows:
+        raise ValueError("build_holdings_table requires at least one row")
+    headers = ("", "Sym", "LTP", "P&L", "Next")
+    widths = [max(len(headers[i]), *(len(row[i]) for row in rows)) for i in range(len(headers))]
+    aligns = ["<", "<", ">", ">", ">"]
+
+    def _line(cells: tuple[str, ...]) -> str:
+        return "  ".join(f"{cell:{aligns[i]}{widths[i]}}" for i, cell in enumerate(cells))
+
+    lines = [_line(headers), "-" * len(_line(headers))]
+    lines.extend(_line(row) for row in rows)
+    return "\n".join(lines)
+
+
+def _open_positions_totals(
+    open_picks: list[Pick], ltp_map: dict[str, Decimal]
+) -> tuple[Decimal, Decimal, Decimal]:
+    """(invested, current, pnl) across OPEN picks only — unrealized, mark-to-market.
+
+    Deliberately excludes realized_pnl from already-closed picks — this is a
+    live-positions view, not an inception summary.
+    """
+    invested = Decimal("0")
+    current = Decimal("0")
+    for pick in open_picks:
+        if pick.avg_cost is None or not pick.total_qty:
+            continue
+        ltp = ltp_map.get(pick.instrument_key) if pick.instrument_key is not None else None
+        invested += pick.avg_cost * pick.total_qty
+        if ltp is not None:
+            current += ltp * pick.total_qty
+        else:
+            current += pick.avg_cost * pick.total_qty  # no ltp -> flat, not a loss/gain
+    return invested, current, current - invested
+
+
+def _totals_lines(invested: Decimal, current: Decimal, pnl: Decimal) -> list[str]:
+    """Three separate bold-label lines: Invested / Current / P&L, IC-style."""
+    invested_str = escape_markdown(format_money(invested))
+    current_str = escape_markdown(format_money(current))
+    pnl_str = escape_markdown(format_money(pnl, signed=True))
+    if invested != 0:
+        pct = pnl / invested * 100
+        sign = "+" if pct > 0 else ""
+        pct_str = escape_markdown(f"{sign}{format_pct(float(pct))}")
+        pnl_value = f"{pnl_str} \\({pct_str}\\)"
+    else:
+        pnl_value = pnl_str
+    return [
+        f"\U0001f4b0 *Invested:* {invested_str}",
+        f"\U0001f4ca *Current:* {current_str}",
+        f"\U0001f4c8 *P&L:* {pnl_value}",
+    ]
+
+
+def _headline_emoji(pnl: Decimal) -> str:
+    """Net-P&L color signal: green/red/white circle. Sits outside any fence,
+    so FORMATTING.md's fence-width rejection of red-circle doesn't apply."""
+    if pnl > 0:
+        return "\U0001f7e2"
+    if pnl < 0:
+        return "\U0001f534"
+    return "⚪"
+
+
+def format_hourly_summary(
     picks: list[Pick],
     ltp_map: dict[str, Decimal],
-    providers: dict[str, str],
-    categories: dict[str, str],
     run_time: str,
 ) -> str:
     """Build the hourly MVP watch summary as a MarkdownV2 message body.
 
+    Single flat table (no category grouping), OPEN and PENDING picks in one
+    table with a leading [O]/[P] status badge per row.
+
     Args:
-        picks: Picks to consider. OPEN picks with an entry_price and a
-            category are grouped into fenced tables; PENDING picks and any
-            pick missing a category or entry_price fall into the trailing
-            "Unassigned (PENDING)" block, listed by symbol only. Any other
-            status is excluded.
+        picks: Picks to consider. OPEN and PENDING picks are rendered as
+            table rows; any other status is excluded.
         ltp_map: Last traded price keyed by instrument_key. A pick whose
-            instrument_key is absent (or None) renders "—" for ltp and P&L —
-            this pure function has no snapshot history to fall back to.
-        providers: provider_id -> display_name. Not consulted directly:
-            `categories` values are the caller-joined "Provider / Category"
-            label, kept only for interface parity.
-        categories: category_id -> display_name (caller-joined "Provider /
-            Category" label), used as the group header.
+            instrument_key is absent (or None) renders "—" for LTP/P&L/Next.
         run_time: Display string for the run header, e.g. "11:00 AM".
 
     Returns:
-        A MarkdownV2-formatted message body, escaped outside fences per
-        FORMATTING.md §6 (row content sits inside fences and is left
-        verbatim). Empty string if `picks` is empty or nothing qualifies.
-        Pure function: no I/O.
+        A MarkdownV2-formatted message body: colored headline -> fenced
+        [badge]/Sym/LTP/P&L/Next table -> Invested/Current/P&L footer (OPEN
+        picks only, unrealized) -> Open/Pending counts. Empty string if no
+        OPEN or PENDING picks. Pure function: no I/O.
     """
-    del providers
-
-    groups: dict[str, list[Pick]] = defaultdict(list)
-    unassigned: list[Pick] = []
-
-    for pick in picks:
-        if pick.status not in (PickStatus.OPEN, PickStatus.PENDING):
-            continue
-        if (
-            pick.status == PickStatus.PENDING
-            or pick.entry_price is None
-            or pick.category_id is None
-        ):
-            unassigned.append(pick)
-        else:
-            groups[pick.category_id].append(pick)
-
-    if not groups and not unassigned:
+    open_picks = [p for p in picks if p.status == PickStatus.OPEN]
+    pending_picks = [p for p in picks if p.status == PickStatus.PENDING]
+    relevant = open_picks + pending_picks
+    if not relevant:
         return ""
 
-    lines = [f"\U0001f4ca *MVP Watch — {escape_markdown(run_time)}*", ""]
+    rows = [
+        format_holdings_row(
+            pick, ltp_map.get(pick.instrument_key) if pick.instrument_key is not None else None
+        )
+        for pick in relevant
+    ]
+    invested, current, pnl = _open_positions_totals(open_picks, ltp_map)
+    emoji = _headline_emoji(pnl)
+    time_str = escape_markdown(run_time)
 
-    for category_id, group_picks in groups.items():
-        header = categories.get(category_id, category_id)
-        lines.append(f"*{escape_markdown(header)}*")
-        lines.append("```")
-        lines.extend(_format_row(pick, ltp_map) for pick in group_picks)
-        lines.append("```")
-        lines.append("")
-
-    if unassigned:
-        lines.append(f"*{escape_markdown('Unassigned (PENDING)')}*")
-        lines.append(f"  {escape_markdown(', '.join(pick.symbol for pick in unassigned))}")
-        lines.append("")
-
-    return "\n".join(lines).rstrip("\n")
+    lines = [f"{emoji} *MVP Open positions* \\| {time_str}", ""]
+    lines.append("```")
+    lines.append(build_holdings_table(rows))
+    lines.append("```")
+    lines.append("")
+    lines.extend(_totals_lines(invested, current, pnl))
+    lines.append(escape_markdown(f"Open: {len(open_picks)}   Pending: {len(pending_picks)}"))
+    return "\n".join(lines)

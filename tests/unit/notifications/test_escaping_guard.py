@@ -360,7 +360,7 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "removed by UXM-6's migration onto format_exit_message()."
     ),
     ("scripts/mvp_watch.py", 141): ("untracked gap - not named in any MD-*/ROLL-* task"),
-    ("scripts/mvp_watch.py", 149): ("untracked gap - not named in any MD-*/ROLL-* task"),
+    ("scripts/mvp_watch.py", 148): ("untracked gap - not named in any MD-*/ROLL-* task"),
 }
 
 

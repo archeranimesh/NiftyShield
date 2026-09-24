@@ -3,7 +3,7 @@
 from decimal import Decimal
 
 from src.mvp.models import Pick, PickStatus
-from src.mvp.tracker import MVPEvent, check_prices, format_telegram_summary
+from src.mvp.tracker import MVPEvent, check_prices, format_hourly_summary
 
 _NOW = "2026-09-23T00:00:00"
 
@@ -18,17 +18,23 @@ def _make_pick(
     stop_loss: Decimal | None = Decimal("50"),
     entry_price: Decimal | None = Decimal("75"),
     category_id: str | None = None,
+    reco_price: Decimal | None = None,
+    avg_cost: Decimal | None = None,
+    total_qty: int = 0,
 ) -> Pick:
     return Pick(
         pick_id=pick_id,
         symbol=symbol,
         instrument_key=instrument_key,
         entry_price=entry_price,
+        reco_price=reco_price,
         pick_date="2026-09-01",
         target_price=target_price,
         stop_loss=stop_loss,
         status=status,
         category_id=category_id,
+        avg_cost=avg_cost,
+        total_qty=total_qty,
         created_at=_NOW,
         updated_at=_NOW,
     )
@@ -115,83 +121,76 @@ def test_check_prices_null_instrument_key_skipped() -> None:
     assert events == []
 
 
-def test_format_telegram_summary_empty_picks_returns_empty_string() -> None:
-    assert format_telegram_summary([], {}, {}, {}, "11:00 AM") == ""
+def test_format_hourly_summary_empty_picks_returns_empty_string() -> None:
+    assert format_hourly_summary([], {}, "11:00 AM") == ""
 
 
-def test_format_telegram_summary_groups_two_picks_same_category() -> None:
-    pick_a = _make_pick(
-        pick_id="P1", symbol="RELIANCE", instrument_key="NSE_EQ|RELIANCE", category_id="C1"
+def test_format_hourly_summary_open_pick_pnl_and_next_columns() -> None:
+    pick = _make_pick(
+        symbol="RELIANCE",
+        instrument_key="NSE_EQ|RELIANCE",
+        avg_cost=Decimal("1200"),
+        total_qty=83,
+        target_price=Decimal("1500"),
+        stop_loss=Decimal("1100"),
     )
-    pick_b = _make_pick(pick_id="P2", symbol="TCS", instrument_key="NSE_EQ|TCS", category_id="C1")
-    ltp_map = {"NSE_EQ|RELIANCE": Decimal("100"), "NSE_EQ|TCS": Decimal("100")}
-    categories = {"C1": "DSIJ / Value Picks"}
+    ltp_map = {"NSE_EQ|RELIANCE": Decimal("1401")}
 
-    summary = format_telegram_summary([pick_a, pick_b], ltp_map, {}, categories, "11:00 AM")
+    summary = format_hourly_summary([pick], ltp_map, "11:00 AM")
 
-    assert "DSIJ / Value Picks" in summary
+    assert "[O]" in summary
     fence_body = summary.split("```")[1]
     assert "RELIANCE" in fence_body
-    assert "TCS" in fence_body
+    assert "+16683" in fence_body  # (1401-1200)*83
+    assert "Open: 1   Pending: 0" in summary
 
 
-def test_format_telegram_summary_pending_pick_in_unassigned_block() -> None:
-    pick = _make_pick(status=PickStatus.PENDING, entry_price=None, symbol="HDFC")
-
-    summary = format_telegram_summary([pick], {}, {}, {}, "11:00 AM")
-
-    assert "Unassigned" in summary
-    assert "HDFC" in summary
-
-
-def test_format_telegram_summary_positive_pnl_has_plus_prefix() -> None:
-    pick = _make_pick(
-        symbol="TCS", instrument_key="NSE_EQ|TCS", entry_price=Decimal("100"), category_id="C1"
-    )
-    summary = format_telegram_summary(
-        [pick], {"NSE_EQ|TCS": Decimal("120")}, {}, {"C1": "Cat"}, "11:00 AM"
-    )
-
-    assert "+20" in summary
-
-
-def test_format_telegram_summary_negative_pnl_has_minus_prefix() -> None:
-    pick = _make_pick(
-        symbol="TCS", instrument_key="NSE_EQ|TCS", entry_price=Decimal("100"), category_id="C1"
-    )
-    summary = format_telegram_summary(
-        [pick], {"NSE_EQ|TCS": Decimal("80")}, {}, {"C1": "Cat"}, "11:00 AM"
-    )
-
-    assert "-20" in summary
-
-
-def test_format_telegram_summary_pending_with_entry_and_category_still_unassigned() -> None:
+def test_format_hourly_summary_pending_pick_shows_trigger_and_dashes() -> None:
     pick = _make_pick(
         status=PickStatus.PENDING,
-        symbol="HDFC",
-        entry_price=Decimal("100"),
-        category_id="C1",
+        symbol="INFY",
+        entry_price=None,
+        reco_price=Decimal("1750"),
     )
 
-    summary = format_telegram_summary([pick], {}, {}, {"C1": "DSIJ / Value Picks"}, "11:00 AM")
+    summary = format_hourly_summary([pick], {}, "11:00 AM")
 
-    assert "Unassigned" in summary
-    assert "HDFC" in summary
-    assert "DSIJ / Value Picks" not in summary
+    assert "[P]" in summary
+    fence_body = summary.split("```")[1]
+    assert "INFY" in fence_body
+    assert "→1750" in fence_body
+    assert "Open: 0   Pending: 1" in summary
 
 
-def test_format_telegram_summary_null_target_omits_target_line() -> None:
+def test_format_hourly_summary_negative_pnl_shown_unsigned_prefix() -> None:
+    pick = _make_pick(
+        symbol="WIPRO",
+        instrument_key="NSE_EQ|WIPRO",
+        avg_cost=Decimal("468"),
+        total_qty=210,
+    )
+    ltp_map = {"NSE_EQ|WIPRO": Decimal("402.15")}
+
+    summary = format_hourly_summary([pick], ltp_map, "11:00 AM")
+
+    fence_body = summary.split("```")[1]
+    assert "-13828.5" in fence_body  # (402.15-468)*210
+    assert "🔴" in summary
+
+
+def test_format_hourly_summary_missing_ltp_renders_dashes() -> None:
     pick = _make_pick(
         symbol="TCS",
         instrument_key="NSE_EQ|TCS",
-        entry_price=Decimal("100"),
-        target_price=None,
-        stop_loss=None,
-        category_id="C1",
-    )
-    summary = format_telegram_summary(
-        [pick], {"NSE_EQ|TCS": Decimal("100")}, {}, {"C1": "Cat"}, "11:00 AM"
+        avg_cost=Decimal("3408.50"),
+        total_qty=29,
     )
 
-    assert "T:" not in summary
+    summary = format_hourly_summary([pick], {}, "11:00 AM")
+
+    fence_body = summary.split("```")[1]
+    row = [line for line in fence_body.splitlines() if "TCS" in line][0]
+    assert row.count("—") == 3  # LTP, P&L, Next all unresolvable
+
+    # no ltp -> current falls back flat to invested, so P&L footer reads ₹0.00
+    assert "*P&L:* ₹0\\.00" in summary
