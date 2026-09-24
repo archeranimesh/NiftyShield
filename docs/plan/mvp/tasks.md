@@ -112,11 +112,13 @@
   transition. `scripts/mvp.py`: `summary`/`list` surface `deployed_capital`, `avg_cost`, `realized_pnl`, and return% (`realized_pnl / deployed_capital` when closed, unrealized `(ltp - avg_cost) *
   total_qty / deployed_capital` when open — unrealized needs an `ltp_map` param threaded through, same as `check_prices`). Out of scope: `mvp_tranches` table population (M-B), `benchmark_entry`/alpha
   display (separate, decision #3). | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 56f38e2
-- [ ] **M5** — Docs close: CONTEXT.md tree, DECISIONS.md entry, TODOS.md session log. **Reordered 2026-09-23 (Animesh): moved to after M6–M9** so the docs-close reflects the fuller shipped state
+- [x] **M5** — Docs close: CONTEXT.md tree, DECISIONS.md entry, TODOS.md session log. **Reordered 2026-09-23 (Animesh): moved to after M6–M9** so the docs-close reflects the fuller shipped state
   (backfill, `reco_price`, and the M-A fill-math/P&L surfacing) rather than closing docs against the bare M1–M5 ship bar before those land. **2026-09-24 addition to M5's scope:** register the
   already-coded `scripts/mvp_watch.py` hourly cron in the live crontab — M4.1/M4.2 shipped the script (its own docstring documents `Cron schedule: 0 9-15 * * 1-5`) but `crontab -l` was found to have
   no MVP entry at all; the watch loop has never actually run on a schedule. Add the entry (with a comment block matching the style of the other `# NEW`/dated cron comments) and note it in
-  `CONTEXT.md`'s "Live Data" cron list as part of this task's docs update. | Owner: Claude | Model: n/a | Review: none | SHA: —
+  `CONTEXT.md`'s "Live Data" cron list as part of this task's docs update. **2026-09-24, on implementation:** `crontab -l` was re-checked and the MVP watch entry was already present in the live
+  crontab (`0 9-15 * * 1-5 ... scripts.mvp_watch ...`) — it must have been added in an earlier, undocumented session; no crontab edit was needed, only the `CONTEXT.md` note. | Owner: Claude | Model:
+  claude-sonnet-5 | Review: none | SHA: e7ad872
 
 ## Follow-on tasks — surfaced 2026-09-24 reviewing `scripts/mvp_watch.py`'s Telegram messages against `exit_message.py`'s IC-close format
 
