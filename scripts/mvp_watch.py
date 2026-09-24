@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import sys
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import structlog
@@ -27,14 +27,19 @@ load_dotenv()
 
 from src.client.factory import create_client  # noqa: E402
 from src.config import settings  # noqa: E402
-from src.mvp.models import MVPSnapshot, Pick, PickStatus  # noqa: E402
+from src.mvp.models import (  # noqa: E402
+    ClosePickResult,
+    MVPSnapshot,
+    Pick,
+    PickStatus,
+)
 from src.mvp.store import MVPStore  # noqa: E402
 from src.mvp.tracker import (  # noqa: E402
     MVPEvent,
     check_prices,
     format_telegram_summary,
 )
-from src.notifications.formatting import format_pct  # noqa: E402
+from src.notifications.formatting import format_money, format_pct  # noqa: E402
 from src.notifications.markdown import escape_markdown  # noqa: E402
 from src.notifications.telegram import build_notifier  # noqa: E402
 from src.utils.logging import setup_logging  # noqa: E402
@@ -90,8 +95,9 @@ async def run() -> None:
     picks_by_id: dict[str, Pick] = {pick.pick_id: pick for pick in keyed_picks.values()}
 
     events = check_prices(list(keyed_picks.values()), ltp_map)
+    close_results: dict[str, ClosePickResult] = {}
     for event in events:
-        await asyncio.to_thread(
+        close_results[event.pick_id] = await asyncio.to_thread(
             store.close_pick,
             event.pick_id,
             event.trigger_price,
@@ -122,8 +128,11 @@ async def run() -> None:
 
         for event in events:
             pick = picks_by_id.get(event.pick_id)
+            if pick is None:
+                continue
             label = _pick_label(pick, joined_category_labels)
-            await notifier.send(_format_alert_message(event, label))
+            close = close_results[event.pick_id]
+            await notifier.send(_format_alert_message(event, pick, close, label))
 
         open_picks = await asyncio.to_thread(store.get_open_picks)
         run_time = datetime.now(timezone.utc).astimezone().strftime("%I:%M %p").lstrip("0")
@@ -141,26 +150,54 @@ def _pick_label(pick: Pick | None, category_labels: dict[str, str]) -> str:
     return category_labels.get(pick.category_id, "")
 
 
-def _format_alert_message(event: MVPEvent, label: str) -> str:
-    """Render a single-pick target/SL breach as a MarkdownV2 alert."""
-    if event.event_type == PickStatus.TARGET_HIT:
-        header = f"\U0001f3af TARGET HIT — {escape_markdown(event.symbol)}"
-    else:
-        header = f"\U0001f6d1 SL HIT — {escape_markdown(event.symbol)}"
+def _format_alert_message(event: MVPEvent, pick: Pick, close: ClosePickResult, label: str) -> str:
+    """Render a single-pick target/SL breach as a MarkdownV2 close alert.
 
-    if event.entry_price is not None and event.entry_price != 0:
-        pct = (event.trigger_price - event.entry_price) / event.entry_price * 100
-        pct_str = escape_markdown(format_pct(float(pct)))
-        entry_str = escape_markdown(str(event.entry_price))
+    IC exit-message visual language at MVP's smaller scale: headline ->
+    `Provider / Category Held: Nd` kv line -> fenced Entry/Exit/P&L table ->
+    `---` separator -> a footer line with return %, qty, deployed capital.
+    """
+    if event.event_type == PickStatus.TARGET_HIT:
+        header = f"\U0001f3af *TARGET HIT* — {escape_markdown(event.symbol)}"
     else:
-        pct_str = escape_markdown("—")
-        entry_str = escape_markdown("—")
-    exit_str = escape_markdown(str(event.trigger_price))
+        header = f"\U0001f6d1 *SL HIT* — {escape_markdown(event.symbol)}"
+
+    held_days = (date.today() - date.fromisoformat(pick.pick_date)).days
+    kv = f"{label} Held: {held_days}d" if label else f"Held: {held_days}d"
+
+    entry_str = format_money(close.avg_cost) if close.avg_cost is not None else "-"
+    table = "\n".join(
+        [
+            f"Entry : {entry_str}",
+            f"Exit  : {format_money(event.trigger_price)}",
+            f"P&L   : {format_money(close.realized_pnl, signed=True)}",
+        ]
+    )
+
+    if close.deployed_capital > 0:
+        return_pct = close.realized_pnl / close.deployed_capital * 100
+        sign = "+" if return_pct > 0 else ""
+        return_str = f"{sign}{format_pct(float(return_pct))}"
+    else:
+        return_str = "-"
 
     sep = escape_markdown(" | ")
-    lines = [header, f"Entry: {entry_str}{sep}Exit: {exit_str}{sep}{pct_str}"]
-    if label:
-        lines.append(escape_markdown(label))
+    footer = (
+        f"Return: {escape_markdown(return_str)}{sep}"
+        f"Qty: {close.total_qty}{sep}"
+        f"Deployed: {escape_markdown(format_money(close.deployed_capital))}"
+    )
+
+    lines = [
+        header,
+        escape_markdown(kv),
+        "",
+        "```",
+        table,
+        "```",
+        "━━━━━━━━━━━━━━━━━━━━━━━━",
+        footer,
+    ]
     return "\n".join(lines)
 
 

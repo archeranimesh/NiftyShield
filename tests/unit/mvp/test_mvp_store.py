@@ -247,13 +247,17 @@ def test_close_pick_computes_realized_pnl_with_cost(tmp_path: Path) -> None:
     store.add_pick(_make_pick())
     store.update_pick("pick-1", entry_price=Decimal("3500"))
 
-    store.close_pick("pick-1", Decimal("3800"), PickStatus.TARGET_HIT)
+    result = store.close_pick("pick-1", Decimal("3800"), PickStatus.TARGET_HIT)
 
     fetched = store.get_pick("pick-1")
     assert fetched is not None
     avg_cost = Decimal("3500") * Decimal("1.0025")
     expected_pnl = (Decimal("3800") * Decimal("0.9975") - avg_cost) * 28
     assert fetched.realized_pnl == expected_pnl
+    assert result.realized_pnl == expected_pnl
+    assert result.total_qty == 28
+    assert result.deployed_capital == fetched.deployed_capital
+    assert result.avg_cost == avg_cost
 
 
 def test_close_pick_never_entered_has_zero_realized_pnl(tmp_path: Path) -> None:
@@ -261,11 +265,15 @@ def test_close_pick_never_entered_has_zero_realized_pnl(tmp_path: Path) -> None:
     store.init_db()
     store.add_pick(_make_pick())
 
-    store.close_pick("pick-1", Decimal("3600"), PickStatus.MANUAL_CLOSE)
+    result = store.close_pick("pick-1", Decimal("3600"), PickStatus.MANUAL_CLOSE)
 
     fetched = store.get_pick("pick-1")
     assert fetched is not None
     assert fetched.realized_pnl == Decimal("0")
+    assert result.realized_pnl == Decimal("0")
+    assert result.total_qty == 0
+    assert result.deployed_capital == Decimal("0")
+    assert result.avg_cost is None
 
 
 def test_close_pick_with_non_terminal_status_raises(tmp_path: Path) -> None:

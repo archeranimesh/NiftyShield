@@ -147,3 +147,15 @@ class MVPSnapshot(BaseModel):
         if v is None:
             return None
         return Decimal(str(v))
+
+
+class ClosePickResult(BaseModel):
+    """Values computed by ``MVPStore.close_pick``, returned to the caller so
+    it need not re-read the pick row to render a close alert."""
+
+    model_config = ConfigDict(frozen=True)
+
+    realized_pnl: Decimal
+    total_qty: int
+    deployed_capital: Decimal
+    avg_cost: Decimal | None

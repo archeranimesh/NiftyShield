@@ -8,7 +8,14 @@ from decimal import Decimal
 from pathlib import Path
 
 from src.db import connect
-from src.mvp.models import Category, MVPSnapshot, Pick, PickStatus, Provider
+from src.mvp.models import (
+    Category,
+    ClosePickResult,
+    MVPSnapshot,
+    Pick,
+    PickStatus,
+    Provider,
+)
 
 COST_BPS = Decimal("25")  # round-trip cost knob, decision #2 (2026-09-18)
 
@@ -401,7 +408,7 @@ class MVPStore:
                 (*values, pick_id),
             )
 
-    def close_pick(self, pick_id: str, close_price: Decimal, status: PickStatus) -> None:
+    def close_pick(self, pick_id: str, close_price: Decimal, status: PickStatus) -> ClosePickResult:
         """Close a pick, setting ``closed_at``, ``close_price``, ``status``, and
         ``realized_pnl``.
 
@@ -415,6 +422,11 @@ class MVPStore:
             status: The terminal status (``TARGET_HIT``, ``SL_HIT``, or
                 ``MANUAL_CLOSE``).
 
+        Returns:
+            The computed ``realized_pnl`` plus ``total_qty``/``deployed_capital``/
+            ``avg_cost`` already read off the row, so callers can render a close
+            alert without a second read.
+
         Raises:
             ValueError: If ``status`` is not a terminal status.
         """
@@ -425,16 +437,22 @@ class MVPStore:
         now = datetime.now(timezone.utc).isoformat()
         with connect(self.db_path) as conn:
             row = conn.execute(
-                "SELECT avg_cost, total_qty FROM mvp_recommendations WHERE pick_id = ?",
+                "SELECT avg_cost, total_qty, deployed_capital FROM mvp_recommendations"
+                " WHERE pick_id = ?",
                 (pick_id,),
             ).fetchone()
             realized_pnl = Decimal("0")
-            if row is not None and row["avg_cost"] is not None:
-                avg_cost = Decimal(row["avg_cost"])
+            total_qty = 0
+            deployed_capital = Decimal("0")
+            avg_cost: Decimal | None = None
+            if row is not None:
                 total_qty = row["total_qty"]
-                realized_pnl = (
-                    close_price * (1 - COST_BPS / Decimal("10000")) - avg_cost
-                ) * total_qty
+                deployed_capital = Decimal(row["deployed_capital"])
+                if row["avg_cost"] is not None:
+                    avg_cost = Decimal(row["avg_cost"])
+                    realized_pnl = (
+                        close_price * (1 - COST_BPS / Decimal("10000")) - avg_cost
+                    ) * total_qty
             conn.execute(
                 """
                 UPDATE mvp_recommendations
@@ -443,6 +461,12 @@ class MVPStore:
                 WHERE pick_id = ?
                 """,
                 (now, str(close_price), status.value, now, str(realized_pnl), pick_id),
+            )
+            return ClosePickResult(
+                realized_pnl=realized_pnl,
+                total_qty=total_qty,
+                deployed_capital=deployed_capital,
+                avg_cost=avg_cost,
             )
 
     def get_distinct_symbols(self) -> set[str]:
