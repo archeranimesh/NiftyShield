@@ -130,11 +130,12 @@
   `_format_alert_message` to match the IC exit-message visual language at MVP's smaller scale (single instrument, no legs, no cycles): headline → `Provider / Category Held: Nd` kv line → fenced `Entry
   / Exit / P&L` table (use `format_money`/`FORMATTING.md`'s confirmed fence-safe `₹`) → `━━━` separator → a footer line with return %, qty, deployed capital. `held_days` computed from `pick_date` to
   now. No new store aggregate query needed — every value already exists on the `Pick` row at close time. | SHA: b812d82
-- [ ] **M11 (Good-to-Have, blocked on M10 — M10 now signed off, unblocked)** — IC-style stats footer: win-rate and inception P&L per provider/category, appended under M10's alert footer the way
+- [x] **M11 (Good-to-Have, blocked on M10 — M10 now signed off, unblocked)** — IC-style stats footer: win-rate and inception P&L per provider/category, appended under M10's alert footer the way
   `exit_message.py` appends `📈 Inception` / `🎯 Win rate` under its cycle line. Needs a **new** `MVPStore` aggregate query across a category's closed picks (win count / loss count / sum of
   `realized_pnl` / avg win / avg loss) that does not exist today — bigger scope than M10, deliberately not bundled into it. Design open point: whether "inception" scopes to the category, the provider,
-  or all MVP picks combined — not yet decided, surface as a question at the start of that session. **Now also feeds M13's per-category `Win%`/`Incep%` columns** — both were prototyped with fixture
-  placeholder values (2026-09-24) since this query doesn't exist yet; building M11 for real is a prerequisite for M13's table to show live numbers instead of fixtures.
+  or all MVP picks combined — resolved 2026-09-24 with Animesh: **per category** (`CategoryStats`, `MVPStore.get_category_stats(category_id)`), matching M13's planned per-category columns most
+  directly. **Now also feeds M13's per-category `Win%`/`Incep%` columns** — both were prototyped with fixture placeholder values (2026-09-24) since this query doesn't exist yet; building M11 for real
+  is a prerequisite for M13's table to show live numbers instead of fixtures. Gated to categories with >=5 closed picks, matching `exit_message._win_rate_line`'s precedent. | SHA: 3c331b8
 - [ ] **M12 (design re-finalized 2026-09-24 — column set settled and confirmed on-device against the 50-char budget, ready to implement)** — Rewrite of the consolidated hourly summary message.
   Original problem: `_format_row` (`src/mvp/tracker.py:81`) space-joins variable-width parts (symbol, `T:1500 (7.1% away)` as one compound cell) that never line up into columns despite sitting in a
   fence — violates `FORMATTING.md` §2 ("every cell in a column carries the same precision and the same width, or it stops being a column"). It also renders in-fence Chg% via bare `format_pct()`, which

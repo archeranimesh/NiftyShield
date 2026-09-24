@@ -16,8 +16,8 @@ starting the next story here; this list only decides *which story is next*. Bugs
 rot them.
 
 2. **Greeks Black-Scholes fallback** — `docs/plan/greeks-bs-fallback/` — next **GF-1** (read-only audit scope).
-4. **MVP: Multi-bagger Value Picks Tracker** — `docs/plan/mvp/` — next **M11** (Good-to-Have, IC-style win-rate/inception stats footer — unblocked now that M10 shipped). M12 (hourly summary rewrite,
-   design signed off) is also ready and independent of M11. Independent — blocks nothing.
+4. **MVP: Multi-bagger Value Picks Tracker** — `docs/plan/mvp/` — next **M12** (hourly summary rewrite, design signed off, ready to implement). M11 shipped (per-category win-rate/inception stats
+   footer). Independent — blocks nothing.
 5. **Variance gate — CSP v1 deployment gate observation** — `docs/plan/variance-gate/` — next **VG0** (spec reconciliation; the remaining tasks are human checkpoints, not build tasks).
 6. **Options Income strategy** — `docs/plan/options_income/` — next **S0** (data audit).
 7. **Backtest Engine** — `docs/plan/backtest-engine/` (`phase1..4/`) — next **1.3a / 1.4** (parallel, `phase1/`). Four chained phases; each phase's GATE task blocks the next dir. Gated on
@@ -88,6 +88,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-24] MVP M11 — per-category win-rate/inception P&L stats footer (`CategoryStats`, `MVPStore.get_category_stats`, wired into `_format_alert_message`) — 3c331b8
 - [2026-09-24] MVP M10 — real ₹ P&L threaded into the MVP close alert (`ClosePickResult`, `_format_alert_message` redesign) — b812d82
 - [2026-09-24] MVP M12 design closed out (docs only, no `src/` changes — resumed the co-investor-review session). Settled the column set within the confirmed 50-char mobile budget: measured every
   0/1/2-optional-column combination (`Svc`/`Qty`/`Avg cost`/`Chg%`/`Next`) against real fixture data in `scratch/2026-09-24_mvp_telegram_message_survey.py`; `badge`/`Sym`/`LTP`/`P&L`/`Next` (48 chars)
