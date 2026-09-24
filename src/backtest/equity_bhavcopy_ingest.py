@@ -196,15 +196,24 @@ def write_equity_to_parquet(
 
     if parquet_path.exists():
         existing_table = pq.read_table(parquet_path)
-        existing_dates = set(existing_table.column("trade_date").to_pylist())
-        new_dates = set(new_table.column("trade_date").to_pylist())
+        existing_keys = set(
+            zip(
+                existing_table.column("symbol").to_pylist(),
+                existing_table.column("trade_date").to_pylist(),
+                strict=True,
+            )
+        )
 
-        # Note: This batch behavior is conservative — if any date in a batch
-        # overlaps, the whole batch is skipped rather than just the duplicates.
-        # For the bootstrap use case (one day at a time) this is correct.
-        if any(d in existing_dates for d in new_dates):
+        new_symbols = new_table.column("symbol").to_pylist()
+        new_dates = new_table.column("trade_date").to_pylist()
+        keep_mask = [
+            (symbol, trade_date) not in existing_keys
+            for symbol, trade_date in zip(new_symbols, new_dates, strict=True)
+        ]
+        if not any(keep_mask):
             return
 
+        new_table = new_table.filter(pa.array(keep_mask))
         final_table = pa.concat_tables([existing_table, new_table])
         final_table = final_table.replace_schema_metadata(schema.metadata)
     else:

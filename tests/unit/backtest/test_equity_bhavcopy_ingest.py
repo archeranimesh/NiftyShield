@@ -113,6 +113,23 @@ def test_write_equity_to_parquet_idempotent_append(equity_bhavcopy_zip, tmp_path
     assert table_after.num_rows == 2
 
 
+def test_write_equity_to_parquet_new_symbol_same_date_appended(equity_bhavcopy_zip, tmp_path):
+    month_date = date(2026, 6, 1)
+    uniparts_records = parse_equity_bhavcopy(equity_bhavcopy_zip, symbols={"UNIPARTS"})
+    write_equity_to_parquet(uniparts_records, month_date, tmp_path)
+
+    both_records = parse_equity_bhavcopy(equity_bhavcopy_zip, symbols={"UNIPARTS", "RELIANCE"})
+    write_equity_to_parquet(both_records, month_date, tmp_path)
+
+    parquet_path = tmp_path / "2026" / "06" / "equity_2026_06.parquet"
+    table = pq.read_table(parquet_path)
+    assert table.num_rows == 2
+    rows = table.to_pylist()
+    uniparts_rows = [r for r in rows if r["symbol"] == "UNIPARTS"]
+    assert len(uniparts_rows) == 1
+    assert any(r["symbol"] == "RELIANCE" for r in rows)
+
+
 def test_write_equity_to_parquet_empty_records_noop(tmp_path):
     write_equity_to_parquet([], date(2026, 6, 1), tmp_path)
     assert not (tmp_path / "2026").exists()
