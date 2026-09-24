@@ -168,8 +168,8 @@
 - [ ] **M13 — design signed off 2026-09-24** (see "M12 design closed out" note below; M11 shipped, so the Win%/Incep% blocker is cleared). New end-of-day summary message, distinct from M12's hourly
   view. Groups by provider → sub-type category (e.g. DSIJ: Value Picks / Multibagger / TAS; FinnovationZ: Ikashi), one aggregated row per category, plus an all-recommendations footer. **Scoped
   2026-09-24 into four sub-tasks** (all three data gaps below to be shipped in this pass, not deferred):
-  - [ ] **M13.1** — `src/mvp/store.py`: extend the category rollup to produce `inception_pct` (realized + unrealized, since the category's first pick) — combine M11's `get_category_stats` realized P&L
-    with a new invested/current sum over that category's open picks.
+  - [x] **M13.1** — `src/mvp/store.py`: extend the category rollup to produce `inception_pct` (realized + unrealized, since the category's first pick) — combine M11's `get_category_stats` realized P&L
+    with a new invested/current sum over that category's open picks. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: df9001a
   - [ ] **M13.2** — `src/mvp/store.py`: `MVPStore.get_category_day_change(category_id)` — diff each pick's latest snapshot vs. its prior-trading-day snapshot, invested-weighted roll-up per category
     (also feeds the all-recs footer's `Day chg`).
   - [ ] **M13.3** — `src/mvp/store.py`: `MVPStore.get_category_high_low(category_id)` — cumulative-return time series per category from snapshot history, running high-water-mark / max-drawdown →

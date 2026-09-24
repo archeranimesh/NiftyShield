@@ -917,3 +917,7 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
   win-rate/inception footer, needs a new `MVPStore` aggregate query; (4) **M12** — hourly summary redesign, single flat holdings-style table with `[O]`/`[P]` badges, 🟢/🔴/⚪ net-P&L headline color,
   three-line Invested/Current/P&L footer (OPEN picks only) — design converged but discussion continues next session before real implementation. Also found: `FORMATTING.md` documents a
   `format_pct_signed()` formatter that doesn't exist in `src/notifications/formatting.py` (doc/code mismatch, not yet fixed).
+- [2026-09-24] MVP M13.1 shipped (`df9001a`) — `MVPStore.get_category_stats` now accepts an optional `ltp_map` and marks a category's OPEN picks to market, combining that unrealized leg with M11's
+  realized P&L into `inception_pct` (relative to total capital ever deployed in the category). Also fixed a sibling bug from a prior uncommitted session (`7cf7820`) —
+  `date.fromisoformat(pick.pick_date)` crashed on datetime-format `pick_date` strings in `enter_backfill_pick`/`run_backfill`/`mvp_watch.py`'s close-alert `held_days`; sliced to `[:10]` in all three
+  call sites, plus added `fetch_historical_index_closes` for M0-ingested NIFTY index Parquet. `docs/plan/mvp/` next: **M13.2**.
