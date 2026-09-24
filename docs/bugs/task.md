@@ -23,6 +23,13 @@
 
 > BUG-049 closed 2026-09-24 (SHA `a874876`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
+## BUG-052 — `mvp update`/`close` silently no-op on a truncated pick_id instead of erroring
+
+- [ ] **B052.1** — Confirm whether `close_pick` has the identical silent-no-op shape as `update_pick` (trace `src/mvp/store.py::close_pick` + `scripts/mvp.py::_close`).
+- [ ] **B052.2** — Implement prefix-match ID resolution in `scripts/mvp.py` (or switch `list`'s displayed ID to the full UUID) so a truncated/ambiguous/nonexistent pick_id errors clearly instead of
+  silently no-op'ing.
+- [ ] **B052.3** — Add tests: truncated ID on `update`/`close` raises or prints a clear error; full UUID still works; ambiguous prefix (if resolution is chosen) errors with the candidate list.
+
 ## BUG-043 — "Net P&L" in close notifications is inception-cumulative for IC v1/v2, cycle-only for collar, absent for CSP — no stable per-strategy contract
 
 - [x] **B043.1** — Add `reconstruct_cycles()` + `get_last_cycle_realized_pnl()` to `src/paper/` (all-legs-flat cycle boundaries from `paper_trades`); happy-path + open-trailing-cycle +

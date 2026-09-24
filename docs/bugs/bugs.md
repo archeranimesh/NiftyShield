@@ -16,6 +16,36 @@
 
 ---
 
+## BUG-052 — `mvp update`/`close` accept the truncated 8-char pick_id shown by `list`, but silently no-op instead of erroring
+
+| | |
+|---|---|
+| Status | 🔴 Open — found 2026-09-24, not yet fixed. |
+| Discovered | 2026-09-24 — manual session adding a new pick (Dynamic Cables / DYCL) and tagging it with provider/category. |
+| Location | `scripts/mvp.py::_update` (and likely `_close`, same shape) → `src/mvp/store.py::MVPStore.update_pick` / `close_pick`. |
+
+**Symptom:** `python -m scripts.mvp list` displays pick IDs truncated to 8 characters (e.g. `0fa62dca`). Running `python -m scripts.mvp update 0fa62dca -p dsij -c value_picks` with that truncated ID
+prints `✓ Updated.` — no error — but the row is completely unchanged. Confirmed live: `mvp_recommendations.category_id` stayed empty across two separate `update` invocations with the truncated ID,
+each printing success; the fix was to re-run with the full UUID (`0fa62dca-66f0-4135-a9f4-e5b5d4d41119`), which updated correctly and was verified via direct `sqlite3` read.
+
+**Root cause:** `MVPStore.update_pick` (`src/mvp/store.py:335`) does `SELECT status, capital_allotted FROM mvp_recommendations WHERE pick_id = ?` with an **exact-match** `pick_id` and, per its own
+docstring, "Silently no-ops if `pick_id` does not exist" when that row lookup returns `None`. `scripts/mvp.py::_update` (line ~175) never checks `update_pick`'s (lack of) return value or re-fetches
+the pick to confirm the write landed — it unconditionally prints `✓ Updated.` right after calling it. Nothing in `scripts/mvp.py` or `MVPStore` does prefix expansion from the truncated display ID back
+to the full UUID — the truncation is display-only, done in the `list` formatter, but users naturally copy that shorter string back into other commands since it's the only ID shown.
+
+**Suspected same shape in `close`:** `close_pick` (`src/mvp/store.py:412`) was not traced in this session but takes the same `pick_id` exact-match pattern per its signature; likely has the identical
+silent-no-op risk if called with a truncated ID. Needs confirmation before fixing.
+
+**Suggested fix:** Either (a) make `list`'s displayed ID the full UUID (simplest, but hurts terminal readability), or (b) add prefix-match resolution in the CLI layer (`scripts/mvp.py`) that expands a
+short ID to the full UUID before calling into `MVPStore` — erroring clearly if the prefix is ambiguous or matches zero rows — or (c) at minimum, make `update_pick`/`close_pick` return a bool/raise
+when no row matched, and have the CLI check it instead of printing `✓ Updated.` unconditionally. (b) is closest to how git/docker CLIs handle this and avoids ever silently no-op'ing on a real user
+mistake. Any fix should add a test asserting a truncated/non-existent ID surfaces an error rather than a silent success.
+
+**Impact so far:** Low — caught immediately in this session by manually re-querying the DB after an `update` "succeeded" but the `list --all -p -c` filter still didn't show the pick under its
+provider/category. Could otherwise leave a pick permanently untagged (or, for `close`, a position that a user believes is closed but the store still reports as `OPEN`) with no visible error.
+
+---
+
 ## BUG-045 [MOVED] — see `docs/archive/bugs/bugs.md` (closed 2026-09-10, SHA `aa44820`)
 
 ---
