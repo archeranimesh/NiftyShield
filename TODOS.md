@@ -902,3 +902,9 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
   CC/PP/Collar legs under one strategy_name `paper_nifty_overlay` (`STRATEGY_OVERLAY`, `src/paper/constants.py:37`), but `_STRATEGY_META` still mapped the three stale pre-migration names
   (`paper_collar_v1`/`paper_covered_call_v1`/`paper_protective_put_v1`) and lacked the new one. Replaced the three stale keys with `"paper_nifty_overlay": ("Overlay", "Overlay")` — can't split by
   leg_role here (unlike `src/reporting/eod_pt_summary.py`) since `eod_summary.py` only sees strategy-level NAV rows.
+- [2026-09-24] MVP Telegram message design session (docs only, no `src/` changes — everything prototyped in `scratch/2026-09-24_mvp_telegram_message_survey.py`). Found and added to
+  `docs/plan/mvp/tasks.md`: (1) M5's scope now includes registering `scripts/mvp_watch.py`'s hourly cron, which was coded (M4.1/M4.2) but never actually added to the live crontab; (2) new **M10** —
+  wire M9's real ₹ `realized_pnl`/`total_qty`/`deployed_capital` into the per-alert message (currently shows only raw price %, predates M9); (3) new **M11** (Good-to-Have, blocked on M10) — IC-style
+  win-rate/inception footer, needs a new `MVPStore` aggregate query; (4) **M12** — hourly summary redesign, single flat holdings-style table with `[O]`/`[P]` badges, 🟢/🔴/⚪ net-P&L headline color,
+  three-line Invested/Current/P&L footer (OPEN picks only) — design converged but discussion continues next session before real implementation. Also found: `FORMATTING.md` documents a
+  `format_pct_signed()` formatter that doesn't exist in `src/notifications/formatting.py` (doc/code mismatch, not yet fixed).

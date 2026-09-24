@@ -113,4 +113,54 @@
   total_qty / deployed_capital` when open — unrealized needs an `ltp_map` param threaded through, same as `check_prices`). Out of scope: `mvp_tranches` table population (M-B), `benchmark_entry`/alpha
   display (separate, decision #3). | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 56f38e2
 - [ ] **M5** — Docs close: CONTEXT.md tree, DECISIONS.md entry, TODOS.md session log. **Reordered 2026-09-23 (Animesh): moved to after M6–M9** so the docs-close reflects the fuller shipped state
-  (backfill, `reco_price`, and the M-A fill-math/P&L surfacing) rather than closing docs against the bare M1–M5 ship bar before those land. | Owner: Claude | Model: n/a | Review: none | SHA: —
+  (backfill, `reco_price`, and the M-A fill-math/P&L surfacing) rather than closing docs against the bare M1–M5 ship bar before those land. **2026-09-24 addition to M5's scope:** register the
+  already-coded `scripts/mvp_watch.py` hourly cron in the live crontab — M4.1/M4.2 shipped the script (its own docstring documents `Cron schedule: 0 9-15 * * 1-5`) but `crontab -l` was found to have
+  no MVP entry at all; the watch loop has never actually run on a schedule. Add the entry (with a comment block matching the style of the other `# NEW`/dated cron comments) and note it in
+  `CONTEXT.md`'s "Live Data" cron list as part of this task's docs update. | Owner: Claude | Model: n/a | Review: none | SHA: —
+
+## Follow-on tasks — surfaced 2026-09-24 reviewing `scripts/mvp_watch.py`'s Telegram messages against `exit_message.py`'s IC-close format
+
+> Comparing MVP's alert message to the richer IC v2 close message (headline → kv line → fenced Act/Instrument/Entry/Exit/P&L table → `━━━` separator → Inception/win-rate footer,
+> `src/notifications/exit_message.py`) surfaced a real gap, not just a style mismatch: M9 (`SHA: 56f38e2`) added real ₹ P&L math (`realized_pnl`, `total_qty`, `deployed_capital`, `avg_cost`) to
+> `close_pick`/`scripts/mvp.py summary`/`list`, but M4.2's alert message (`SHA: 6ed6aa9`, predates M9) was never updated to use it — `_format_alert_message` in `scripts/mvp_watch.py` still only shows
+> raw entry/exit price and a price-only percent, not the actual rupee P&L the pick realized. Both items below are new, unscoped work — not part of the M1–M9 ship bar already delivered.
+
+- [ ] **M10** — Real ₹ P&L in the MVP alert message. `close_pick` (`src/mvp/store.py`) currently computes `realized_pnl` but discards it (writes to DB, returns `None`) — change it to return the
+  computed `realized_pnl` (and thread back `total_qty`/`deployed_capital`/`avg_cost`, already columns on the row it reads) so `mvp_watch.py` can use them without a second read. Redesign
+  `_format_alert_message` to match the IC exit-message visual language at MVP's smaller scale (single instrument, no legs, no cycles): headline → `Provider / Category Held: Nd` kv line → fenced `Entry
+  / Exit / P&L` table (use `format_money`/`FORMATTING.md`'s confirmed fence-safe `₹`) → `━━━` separator → a footer line with return %, qty, deployed capital. `held_days` computed from `pick_date` to
+  now. No new store aggregate query needed — every value already exists on the `Pick` row at close time.
+- [ ] **M11 (Good-to-Have, blocked on M10)** — IC-style stats footer: win-rate and inception P&L per provider/category, appended under M10's alert footer the way `exit_message.py` appends `📈
+  Inception` / `🎯 Win rate` under its cycle line. Needs a **new** `MVPStore` aggregate query across a category's closed picks (win count / loss count / sum of `realized_pnl` / avg win / avg loss) that
+  does not exist today — bigger scope than M10, deliberately not bundled into it. Design open point: whether "inception" scopes to the category, the provider, or all MVP picks combined — not yet
+  decided, surface as a question at the start of that session.
+- [ ] **M12 (design in progress on Telegram with Animesh — do not start without his final sign-off)** — Rewrite of the consolidated hourly summary message. Original problem: `_format_row`
+  (`src/mvp/tracker.py:81`) space-joins variable-width parts (symbol, `T:1500 (7.1% away)` as one compound cell) that never line up into columns despite sitting in a fence — violates `FORMATTING.md`
+  §2 ("every cell in a column carries the same precision and the same width, or it stops being a column"). It also renders in-fence Chg% via bare `format_pct()`, which drops the trailing `.0` on whole
+  numbers, violating §3's "fenced percent: always 1dp, always signed" rule.
+
+**Design converged 2026-09-24** (still open for final sign-off, discussion continuing in a later session — see resume prompt below) in `scratch/2026-09-24_mvp_telegram_message_survey.py`, function
+`format_hourly_summary` and helpers:
+  - **Single flat table**, no provider/category grouping (Animesh's explicit call over the original per-category-fenced-blocks structure).
+  - **Broker-holdings-style columns**, inspired by a pasted Upstox holdings screenshot: `[badge] Instrument Qty Avg cost LTP Cur val P&L Net chg%`. Column widths computed per-group, same pattern as
+    `build_close_leg_table` (`src/notifications/formatting.py`). **`Day chg%` deliberately excluded** — MVP has no previous-close baseline stored anywhere today (checked: `mvp_snapshots` is hourly
+    ticks only, no day-open row); revisit only if that data need becomes real.
+  - **`[O]`/`[P]` status badge folded into the table itself** (leftmost column) instead of a separate trailing "Unassigned (PENDING)" block — a PENDING row shows `—` for every value column (no fill
+    yet).
+  - **Headline**: `{emoji} *MVP Open positions* | {run_time}` — emoji is a net-P&L color signal (🟢 positive / 🔴 negative / ⚪ zero) computed over OPEN picks only. Fence-width alignment concerns that
+    reject 🔴 elsewhere (`FORMATTING.md` §7, ROLL-2a) don't apply here since this sits outside any fence.
+  - **Footer**: `Invested` / `Current` / `P&L` each on their own bold-labeled line (💰/📊/📈), IC-`exit_message.py`-style bold `*Label:*` prefixes — **explicitly scoped to currently OPEN picks only**
+    (unrealized, mark-to-market). Confirmed 2026-09-24: does **not** fold in `realized_pnl` from already-closed picks — that stays a separate, deferred "Inception" line (folds into **M11** if built,
+    not this task). Trailing plain line: `Open: n Pending: m`.
+  - Two intentional departures from `FORMATTING.md` as currently written, both documented inline in the prototype: (1) `Away%`-style distance metrics (not used in the final v4 shape, but noted for any
+    future column) stay unsigned rather than following §3's fenced "always signed" literally — same exception class §3 already grants IVR; (2) the footer's signed-percent prose value is built with a
+    manual `+`/`-` prefix, not `FORMATTING.md`'s documented `format_pct_signed()` — **that function doesn't exist anywhere in `src/notifications/formatting.py`**, a doc/code mismatch worth fixing
+    separately (either implement it or correct the doc), not blocking this task.
+  - Do not touch `src/mvp/tracker.py`/`scripts/mvp_watch.py` for real until the Telegram-thread discussion lands here as a fully resolved decision (mirror the "Design decisions" block style at the top
+    of this file) — screenshots so far confirm the shape but the discussion isn't closed.
+
+**Resume prompt for the next session:** "Continue the MVP hourly-summary Telegram format discussion from the 2026-09-24 session — pick up in `scratch/2026-09-24_mvp_telegram_message_survey.py`
+(`format_hourly_summary` + `_totals_lines`/`_headline_emoji`/`_open_positions_totals`), review docs/plan/mvp/tasks.md's M12 entry for the design converged so far (single flat table, `[O]`/`[P]` badge
+in-table, holdings-style columns minus Day chg%, 🟢/🔴/⚪ headline color by net P&L, three-line Invested/Current/P&L footer scoped to OPEN picks only), and finalize remaining open points before touching
+`src/mvp/tracker.py` for real: exact emoji/wording sign-off, mobile-width check (current table is ~80 chars — may need trimming for phone rendering), and whether `M10`'s alert redesign should ship in
+the same commit as M12 or separately."
