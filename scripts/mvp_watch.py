@@ -178,7 +178,7 @@ def _format_alert_message(
     else:
         header = f"\U0001f6d1 *SL HIT* — {escape_markdown(event.symbol)}"
 
-    held_days = (date.today() - date.fromisoformat(pick.pick_date)).days
+    held_days = (date.today() - date.fromisoformat(pick.pick_date[:10])).days
     kv = f"{label} Held: {held_days}d" if label else f"Held: {held_days}d"
 
     entry_str = format_money(close.avg_cost) if close.avg_cost is not None else "-"

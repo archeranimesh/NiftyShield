@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 DEFAULT_EQUITY_DIR = Path("data/offline/equity_ohlcv")
+DEFAULT_INDEX_DIR = Path("data/offline/nifty_index")
 
 
 def _month_range(from_date: date, to_date: date) -> list[date]:
@@ -79,6 +80,41 @@ def fetch_historical_closes(
     return sorted(closes, key=lambda pair: pair[0])
 
 
+def fetch_historical_index_closes(
+    from_date: date,
+    to_date: date,
+    *,
+    data_dir: Path = DEFAULT_INDEX_DIR,
+) -> dict[date, Decimal]:
+    """Fetch daily index close prices from M0's ingested Parquet.
+
+    Args:
+        from_date: Start of the date range, inclusive.
+        to_date: End of the date range, inclusive.
+        data_dir: Root of the index Parquet partitions.
+
+    Returns:
+        Mapping of trade date to index close price.
+    """
+    closes: dict[date, Decimal] = {}
+    for month_start in _month_range(from_date, to_date):
+        year = month_start.strftime("%Y")
+        month = month_start.strftime("%m")
+        parquet_path = data_dir / year / month / f"index_{year}_{month}.parquet"
+        if not parquet_path.exists():
+            continue
+        table = pq.read_table(parquet_path)
+        for row in table.to_pylist():
+            trade_date = row["trade_date"]
+            if not (from_date <= trade_date <= to_date):
+                continue
+            closes[trade_date] = Decimal(str(row["close"]))
+
+    if not closes:
+        logger.warning("mvp_backfill_no_index_data", from_date=str(from_date), to_date=str(to_date))
+    return closes
+
+
 def enter_backfill_pick(
     pick: Pick, equity_closes: dict[date, Decimal]
 ) -> tuple[date, Decimal] | None:
@@ -91,7 +127,7 @@ def enter_backfill_pick(
     if pick.reco_price is None:
         return None
 
-    reco_date = date.fromisoformat(pick.pick_date)
+    reco_date = date.fromisoformat(pick.pick_date[:10])
     candidate = reco_date + timedelta(days=1)
 
     while not is_trading_day(candidate):
@@ -150,7 +186,7 @@ def run_backfill(
     existing_snapshots = store.get_snapshots(pick_id, limit=10000)
     existing_dates = {date.fromisoformat(s.captured_at[:10]) for s in existing_snapshots}
 
-    start_date = date.fromisoformat(pick.pick_date) + timedelta(days=1)
+    start_date = date.fromisoformat(pick.pick_date[:10]) + timedelta(days=1)
     current_date = start_date
 
     while current_date <= end_date:
