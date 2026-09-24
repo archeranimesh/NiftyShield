@@ -125,11 +125,11 @@
 > `close_pick`/`scripts/mvp.py summary`/`list`, but M4.2's alert message (`SHA: 6ed6aa9`, predates M9) was never updated to use it — `_format_alert_message` in `scripts/mvp_watch.py` still only shows
 > raw entry/exit price and a price-only percent, not the actual rupee P&L the pick realized. Both items below are new, unscoped work — not part of the M1–M9 ship bar already delivered.
 
-- [ ] **M10** — Real ₹ P&L in the MVP alert message. `close_pick` (`src/mvp/store.py`) currently computes `realized_pnl` but discards it (writes to DB, returns `None`) — change it to return the
+- [x] **M10** — Real ₹ P&L in the MVP alert message. `close_pick` (`src/mvp/store.py`) currently computes `realized_pnl` but discards it (writes to DB, returns `None`) — change it to return the
   computed `realized_pnl` (and thread back `total_qty`/`deployed_capital`/`avg_cost`, already columns on the row it reads) so `mvp_watch.py` can use them without a second read. Redesign
   `_format_alert_message` to match the IC exit-message visual language at MVP's smaller scale (single instrument, no legs, no cycles): headline → `Provider / Category Held: Nd` kv line → fenced `Entry
   / Exit / P&L` table (use `format_money`/`FORMATTING.md`'s confirmed fence-safe `₹`) → `━━━` separator → a footer line with return %, qty, deployed capital. `held_days` computed from `pick_date` to
-  now. No new store aggregate query needed — every value already exists on the `Pick` row at close time.
+  now. No new store aggregate query needed — every value already exists on the `Pick` row at close time. | SHA: b812d82
 - [ ] **M11 (Good-to-Have, blocked on M10 — M10 now signed off, unblocked)** — IC-style stats footer: win-rate and inception P&L per provider/category, appended under M10's alert footer the way
   `exit_message.py` appends `📈 Inception` / `🎯 Win rate` under its cycle line. Needs a **new** `MVPStore` aggregate query across a category's closed picks (win count / loss count / sum of
   `realized_pnl` / avg win / avg loss) that does not exist today — bigger scope than M10, deliberately not bundled into it. Design open point: whether "inception" scopes to the category, the provider,
