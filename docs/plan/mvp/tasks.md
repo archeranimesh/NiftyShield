@@ -165,8 +165,18 @@
     manual `+`/`-` prefix, not `FORMATTING.md`'s documented `format_pct_signed()` — **that function doesn't exist anywhere in `src/notifications/formatting.py`**, a doc/code mismatch worth fixing
     separately (either implement it or correct the doc), not blocking this task.
   - **Ships as its own commit, separate from M10** — confirmed 2026-09-24, per Step 5c's rule against bundling separate-phase changes into one commit.
-- [ ] **M13 (design in progress on Telegram with Animesh — do not start without his final sign-off; blocked on M11 for live Win%/Incep% data)** — New end-of-day summary message, distinct from M12's
-  hourly view. Groups by provider → sub-type category (e.g. DSIJ: Value Picks / Multibagger / TAS; FinnovationZ: Ikashi), one aggregated row per category, plus an all-recommendations footer.
+- [ ] **M13 — design signed off 2026-09-24** (see "M12 design closed out" note below; M11 shipped, so the Win%/Incep% blocker is cleared). New end-of-day summary message, distinct from M12's hourly
+  view. Groups by provider → sub-type category (e.g. DSIJ: Value Picks / Multibagger / TAS; FinnovationZ: Ikashi), one aggregated row per category, plus an all-recommendations footer. **Scoped
+  2026-09-24 into four sub-tasks** (all three data gaps below to be shipped in this pass, not deferred):
+  - [ ] **M13.1** — `src/mvp/store.py`: extend the category rollup to produce `inception_pct` (realized + unrealized, since the category's first pick) — combine M11's `get_category_stats` realized P&L
+    with a new invested/current sum over that category's open picks.
+  - [ ] **M13.2** — `src/mvp/store.py`: `MVPStore.get_category_day_change(category_id)` — diff each pick's latest snapshot vs. its prior-trading-day snapshot, invested-weighted roll-up per category
+    (also feeds the all-recs footer's `Day chg`).
+  - [ ] **M13.3** — `src/mvp/store.py`: `MVPStore.get_category_high_low(category_id)` — cumulative-return time series per category from snapshot history, running high-water-mark / max-drawdown →
+    `high_pct`/`low_pct`.
+  - [ ] **M13.4** — Port `format_eod_summary`/`build_eod_table`/`CategoryRollup`/`ProviderRollup` from `scratch/2026-09-24_mvp_telegram_message_survey.py` into `src/mvp/tracker.py`, wire real data
+    from M13.1–13.3 into `scripts/mvp_watch.py`'s EOD path (new cron entry — `mvp_watch.py` today only runs hourly 9-15, no EOD invocation exists). Each sub-task ships as its own commit (Model → Store
+    → wiring boundary, Step 5c) with its own tests.
 
 **Design finalized 2026-09-24** in `scratch/2026-09-24_mvp_telegram_message_survey.py`, function `format_eod_summary` + `build_eod_table` + `CategoryRollup`/`ProviderRollup`:
   - **Headline**: `{emoji} *MVP EOD Summary* | {date}` — same net-P&L color-emoji convention as M12's headline.
@@ -187,13 +197,11 @@
     once realized capital returned by closed picks is folded in, `total_invested` stops being the right denominator; `Since inception %` is the relative-return figure for this combined scope instead.
   - **`High`/`Low` columns** — the category's since-inception running high-water-mark / max-drawdown return% (Animesh's call: NOT today's best/worst individual pick — a strategy-level equity-curve
     metric).
-  - **Four data gaps, not yet resolvable** — `Win%`/`Incep%`/`realized_pnl`/`High`/`Low` per category and the overall `Day chg`/`Since inception` footer are all prototyped with **fixture placeholder
-    values**, not live data: (1) per-category realized P&L, win rate, and since-inception return all need the same new `MVPStore` aggregate query M11 is scoped to build (closed-picks win/loss +
-    realized `P&L` sum, plus a since-first-pick rollup across open + closed picks) — M13's table stays fixture-driven until M11 ships; (2) day-over-day change needs a yesterday's-EOD-vs-today's-EOD
-    snapshot diff per pick — unlike M12's hourly view (which had no day-open baseline and excluded `Day chg%` entirely), an EOD run *can* support this since `MVPStore.get_snapshots()` already returns
-    consecutive EOD rows, but no aggregate query diffs them across picks/categories yet — this is new store work, scope not yet sized; (3) `High`/`Low` are a bigger gap than M11 — they need a running
-    cumulative-P&L-over-time series per category (high-water-mark / max-drawdown), not just current state, which no snapshot-history rollup computes today. Likely its own task, sequenced after M11,
-    scope not yet sized.
+  - **Three data gaps, now scoped into M13.1–13.3 above (2026-09-24)** — `Win%`/`Incep%`/`realized_pnl`/`High`/`Low` per category and the overall `Day chg`/`Since inception` footer are all prototyped
+    with **fixture placeholder values**, not live data: (1) per-category `win_rate` and realized `P&L` already come from M11's `get_category_stats` (`src/mvp/store.py:496`) — M13.1 adds the missing
+    unrealized leg (open-pick invested/current) to turn that into `inception_pct`; (2) day-over-day change needs a yesterday's-EOD-vs-today's-EOD snapshot diff per pick, invested-weighted per category
+    — `get_snapshots()` returns the raw rows but nothing aggregates the diff yet, hence M13.2; (3) `High`/`Low` need a running cumulative-return time series per category (high-water-mark /
+    max-drawdown), not just current state — the heaviest of the three, hence its own M13.3.
   - **`vs Nifty` alpha line and Open/Pending/Closed counts added** (co-investor review pass, 2026-09-24) — `vs Nifty` is fixture-only: `MVPSnapshot.benchmark_close` exists on the model but
     `scripts/mvp_watch.py` never populates it on a live run today, so no real index-return series exists to diff against; wiring that up is new work, not sized. Open/Pending/Closed counts are pure
     arithmetic over existing `Pick.status` — no new query needed, real whenever M13 is implemented.
