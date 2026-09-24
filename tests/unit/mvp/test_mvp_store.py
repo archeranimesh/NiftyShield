@@ -641,3 +641,29 @@ def test_get_category_high_low_forward_fills_across_picks(tmp_path: Path) -> Non
     high_pct, low_pct = result
     assert high_pct == Decimal("20")
     assert low_pct == Decimal("0")
+
+
+def test_get_category_high_low_forward_fills_unsampled_picks(tmp_path: Path) -> None:
+    store = MVPStore(str(tmp_path / "test.sqlite"))
+    store.init_db()
+    store.add_provider(_make_provider())
+    store.add_category(_make_category())
+
+    # pick-a: entry 100 -> 1000 qty; pick-b: entry 50 -> 2000 qty; both 100000 deployed
+    store.add_pick(_make_pick(pick_id="pick-a", category_id="cat-1"))
+    store.update_pick("pick-a", entry_price=Decimal("100"))
+    store.add_pick(_make_pick(pick_id="pick-b", category_id="cat-1"))
+    store.update_pick("pick-b", entry_price=Decimal("50"))
+    for day, ltp in (("21", "100"), ("22", "120"), ("23", "90")):
+        store.record_snapshot(
+            MVPSnapshot(
+                pick_id="pick-a", ltp=Decimal(ltp), captured_at=f"2026-09-{day}T15:00:00+00:00"
+            )
+        )
+    # pick-b sampled only on the 22nd; its 60 must carry forward to the 23rd
+    store.record_snapshot(
+        MVPSnapshot(pick_id="pick-b", ltp=Decimal("60"), captured_at="2026-09-22T15:00:00+00:00")
+    )
+
+    # 21st: a only, 0%; 22nd: 240000/200000 = +20%; 23rd: (90000+120000)/200000 = +5%
+    assert store.get_category_high_low("cat-1") == (Decimal("20"), Decimal("0"))

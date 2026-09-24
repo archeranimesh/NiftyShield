@@ -100,3 +100,7 @@ slug. If it did **not** recur in 3+ such sessions, tick the box — the hook wor
   present in the right literal shape; it never cross-checks that ID against the story's own `tasks.md` to see whether that task has since closed. Across S3.1, S5.6, SEC-1, M1.2, and M3.2 (mvp), a task
   closed with its `tasks.md` checkbox ticked and SHA recorded, yet `docs/plan/README.md`'s pointer for that story kept naming the already-completed task. Extend the guard's resolution to follow the
   pointer into the story's `tasks.md` and flag a mismatch, then verify over the next 3 logged sessions. If it still recurs, escalate to a protocol/model discussion. Standalone — no trigger wait.
+- **DEBT-20** — `scripts-read-before-graph-query` (Count 5). Remediation already tracked under DEBT-16: the Rule 0 `.claude/hooks/guard_src_reads.sh` PreToolUse hook is warn-only and does not stop a
+  full `Read` of a `src/`/`scripts/` file from landing before a graph query for that specific file's symbols — graph calls made for unrelated symbols elsewhere in the same session do not satisfy Rule
+  0 for this file. Latest case: M13.1 mvp session — `src/mvp/backfill.py` read directly while the session's `search_graph`/`get_code_snippet` calls all targeted `MVPStore`/`CategoryStats`/`Pick`. This
+  is the same hook-effectiveness gap as DEBT-16; do not fix independently. Standalone once DEBT-16 lands a fix — re-verify both slugs together.

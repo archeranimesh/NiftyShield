@@ -661,6 +661,9 @@ class MVPStore:
             if not pick_capital:
                 return None
 
+            # MAX(captured_at) triggers SQLite's bare-column optimization —
+            # ltp comes from the latest row per (pick, day). Closed picks are
+            # included; their last sampled ltp forward-fills past close.
             snap_rows = conn.execute(
                 f"""
                 SELECT pick_id, date(captured_at) AS d, ltp, MAX(captured_at)
