@@ -159,3 +159,21 @@ class ClosePickResult(BaseModel):
     total_qty: int
     deployed_capital: Decimal
     avg_cost: Decimal | None
+
+
+class CategoryStats(BaseModel):
+    """Win-rate / inception P&L stats over a category's closed picks.
+
+    ``inception_pnl`` sums ``realized_pnl`` across all closed picks in the
+    category (does not include unrealized P&L from open picks).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    closed_count: int
+    wins: int
+    losses: int
+    win_rate: Decimal | None
+    avg_win: Decimal
+    avg_loss: Decimal
+    inception_pnl: Decimal

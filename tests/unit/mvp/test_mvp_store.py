@@ -397,3 +397,41 @@ def test_backfill_snapshots_skips_dates_already_present(tmp_path: Path) -> None:
 
     assert inserted == 1
     assert len(store.get_snapshots("pick-1", limit=10)) == 3
+
+
+def test_get_category_stats_aggregates_wins_and_losses(tmp_path: Path) -> None:
+    store = MVPStore(str(tmp_path / "test.sqlite"))
+    store.init_db()
+    store.add_provider(_make_provider())
+    store.add_category(_make_category())
+
+    for i, (entry, close) in enumerate(
+        [
+            (Decimal("100"), Decimal("150")),  # win
+            (Decimal("100"), Decimal("160")),  # win
+            (Decimal("100"), Decimal("50")),  # loss
+        ]
+    ):
+        pick_id = f"pick-{i}"
+        store.add_pick(_make_pick(pick_id=pick_id, category_id="cat-1"))
+        store.update_pick(pick_id, entry_price=entry)
+        store.close_pick(pick_id, close, PickStatus.TARGET_HIT)
+
+    stats = store.get_category_stats("cat-1")
+
+    assert stats.closed_count == 3
+    assert stats.wins == 2
+    assert stats.losses == 1
+    assert stats.win_rate == Decimal("2") / Decimal("3")
+    assert stats.inception_pnl > 0
+
+
+def test_get_category_stats_with_no_closed_picks_returns_none_win_rate(tmp_path: Path) -> None:
+    store = MVPStore(str(tmp_path / "test.sqlite"))
+    store.init_db()
+
+    stats = store.get_category_stats("cat-does-not-exist")
+
+    assert stats.closed_count == 0
+    assert stats.win_rate is None
+    assert stats.inception_pnl == Decimal("0")

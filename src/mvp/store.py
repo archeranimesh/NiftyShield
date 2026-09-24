@@ -10,6 +10,7 @@ from pathlib import Path
 from src.db import connect
 from src.mvp.models import (
     Category,
+    CategoryStats,
     ClosePickResult,
     MVPSnapshot,
     Pick,
@@ -491,6 +492,46 @@ class MVPStore:
                 (PickStatus.OPEN.value,),
             ).fetchall()
         return [self._row_to_pick(row) for row in rows]
+
+    def get_category_stats(self, category_id: str) -> CategoryStats:
+        """Win-rate / inception P&L stats over a category's closed picks.
+
+        Args:
+            category_id: The category to aggregate over.
+
+        Returns:
+            ``CategoryStats`` with ``closed_count=0`` and ``win_rate=None``
+            when the category has no closed picks.
+        """
+        terminal = (
+            PickStatus.TARGET_HIT.value,
+            PickStatus.SL_HIT.value,
+            PickStatus.MANUAL_CLOSE.value,
+        )
+        with connect(self.db_path) as conn:
+            rows = conn.execute(
+                f"""
+                SELECT realized_pnl FROM mvp_recommendations
+                WHERE category_id = ? AND status IN ({",".join("?" * len(terminal))})
+                """,
+                (category_id, *terminal),
+            ).fetchall()
+
+        pnls = [Decimal(row["realized_pnl"]) for row in rows]
+        closed_count = len(pnls)
+        wins_pnls = [pnl for pnl in pnls if pnl > 0]
+        losses_pnls = [pnl for pnl in pnls if pnl <= 0]
+        wins = len(wins_pnls)
+        losses = len(losses_pnls)
+        return CategoryStats(
+            closed_count=closed_count,
+            wins=wins,
+            losses=losses,
+            win_rate=(Decimal(wins) / closed_count) if closed_count else None,
+            avg_win=(sum(wins_pnls, Decimal("0")) / wins) if wins else Decimal("0"),
+            avg_loss=(sum(losses_pnls, Decimal("0")) / losses) if losses else Decimal("0"),
+            inception_pnl=sum(pnls, Decimal("0")),
+        )
 
     def list_picks(
         self,

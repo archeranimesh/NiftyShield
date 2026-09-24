@@ -28,6 +28,7 @@ load_dotenv()
 from src.client.factory import create_client  # noqa: E402
 from src.config import settings  # noqa: E402
 from src.mvp.models import (  # noqa: E402
+    CategoryStats,
     ClosePickResult,
     MVPSnapshot,
     Pick,
@@ -132,7 +133,12 @@ async def run() -> None:
                 continue
             label = _pick_label(pick, joined_category_labels)
             close = close_results[event.pick_id]
-            await notifier.send(_format_alert_message(event, pick, close, label))
+            stats = (
+                await asyncio.to_thread(store.get_category_stats, pick.category_id)
+                if pick.category_id is not None
+                else None
+            )
+            await notifier.send(_format_alert_message(event, pick, close, label, stats))
 
         open_picks = await asyncio.to_thread(store.get_open_picks)
         run_time = datetime.now(timezone.utc).astimezone().strftime("%I:%M %p").lstrip("0")
@@ -150,12 +156,23 @@ def _pick_label(pick: Pick | None, category_labels: dict[str, str]) -> str:
     return category_labels.get(pick.category_id, "")
 
 
-def _format_alert_message(event: MVPEvent, pick: Pick, close: ClosePickResult, label: str) -> str:
+MIN_CLOSED_FOR_STATS = 5  # same threshold as src.notifications.exit_message._win_rate_line
+
+
+def _format_alert_message(
+    event: MVPEvent,
+    pick: Pick,
+    close: ClosePickResult,
+    label: str,
+    stats: CategoryStats | None = None,
+) -> str:
     """Render a single-pick target/SL breach as a MarkdownV2 close alert.
 
     IC exit-message visual language at MVP's smaller scale: headline ->
     `Provider / Category Held: Nd` kv line -> fenced Entry/Exit/P&L table ->
-    `---` separator -> a footer line with return %, qty, deployed capital.
+    `---` separator -> a footer line with return %, qty, deployed capital ->
+    an optional category win-rate/inception stats line (M11), shown only
+    when the category has at least ``MIN_CLOSED_FOR_STATS`` closed picks.
     """
     if event.event_type == PickStatus.TARGET_HIT:
         header = f"\U0001f3af *TARGET HIT* — {escape_markdown(event.symbol)}"
@@ -198,7 +215,31 @@ def _format_alert_message(event: MVPEvent, pick: Pick, close: ClosePickResult, l
         "━━━━━━━━━━━━━━━━━━━━━━━━",
         footer,
     ]
+    stats_line = _category_stats_line(stats)
+    if stats_line:
+        lines.append(stats_line)
     return "\n".join(lines)
+
+
+def _category_stats_line(stats: CategoryStats | None) -> str | None:
+    """``🎯 Win rate: {r}% ({W}W / {L}L)  |  📈 Inception: {pnl}``.
+
+    ``None`` when ``stats`` is missing or the category has fewer than
+    ``MIN_CLOSED_FOR_STATS`` closed picks (same gate as
+    ``exit_message._win_rate_line``).
+    """
+    if stats is None or stats.closed_count < MIN_CLOSED_FOR_STATS or stats.win_rate is None:
+        return None
+
+    rate = escape_markdown(f"{stats.win_rate * 100:.0f}")
+    wins = escape_markdown(str(stats.wins))
+    losses = escape_markdown(str(stats.losses))
+    inception = escape_markdown(format_money(stats.inception_pnl, signed=True))
+    sep = escape_markdown(" | ")
+    return (
+        f"\U0001f3af Win rate: {rate}%  \\({wins}W / {losses}L\\){sep}"
+        f"\U0001f4c8 Inception: {inception}"
+    )
 
 
 if __name__ == "__main__":
