@@ -130,25 +130,32 @@
   `_format_alert_message` to match the IC exit-message visual language at MVP's smaller scale (single instrument, no legs, no cycles): headline → `Provider / Category Held: Nd` kv line → fenced `Entry
   / Exit / P&L` table (use `format_money`/`FORMATTING.md`'s confirmed fence-safe `₹`) → `━━━` separator → a footer line with return %, qty, deployed capital. `held_days` computed from `pick_date` to
   now. No new store aggregate query needed — every value already exists on the `Pick` row at close time.
-- [ ] **M11 (Good-to-Have, blocked on M10)** — IC-style stats footer: win-rate and inception P&L per provider/category, appended under M10's alert footer the way `exit_message.py` appends `📈
-  Inception` / `🎯 Win rate` under its cycle line. Needs a **new** `MVPStore` aggregate query across a category's closed picks (win count / loss count / sum of `realized_pnl` / avg win / avg loss) that
-  does not exist today — bigger scope than M10, deliberately not bundled into it. Design open point: whether "inception" scopes to the category, the provider, or all MVP picks combined — not yet
-  decided, surface as a question at the start of that session.
-- [ ] **M12 (design in progress on Telegram with Animesh — do not start without his final sign-off)** — Rewrite of the consolidated hourly summary message. Original problem: `_format_row`
-  (`src/mvp/tracker.py:81`) space-joins variable-width parts (symbol, `T:1500 (7.1% away)` as one compound cell) that never line up into columns despite sitting in a fence — violates `FORMATTING.md`
-  §2 ("every cell in a column carries the same precision and the same width, or it stops being a column"). It also renders in-fence Chg% via bare `format_pct()`, which drops the trailing `.0` on whole
-  numbers, violating §3's "fenced percent: always 1dp, always signed" rule.
+- [ ] **M11 (Good-to-Have, blocked on M10 — M10 now signed off, unblocked)** — IC-style stats footer: win-rate and inception P&L per provider/category, appended under M10's alert footer the way
+  `exit_message.py` appends `📈 Inception` / `🎯 Win rate` under its cycle line. Needs a **new** `MVPStore` aggregate query across a category's closed picks (win count / loss count / sum of
+  `realized_pnl` / avg win / avg loss) that does not exist today — bigger scope than M10, deliberately not bundled into it. Design open point: whether "inception" scopes to the category, the provider,
+  or all MVP picks combined — not yet decided, surface as a question at the start of that session. **Now also feeds M13's per-category `Win%`/`Incep%` columns** — both were prototyped with fixture
+  placeholder values (2026-09-24) since this query doesn't exist yet; building M11 for real is a prerequisite for M13's table to show live numbers instead of fixtures.
+- [ ] **M12 (design re-finalized 2026-09-24 — column set settled and confirmed on-device against the 50-char budget, ready to implement)** — Rewrite of the consolidated hourly summary message.
+  Original problem: `_format_row` (`src/mvp/tracker.py:81`) space-joins variable-width parts (symbol, `T:1500 (7.1% away)` as one compound cell) that never line up into columns despite sitting in a
+  fence — violates `FORMATTING.md` §2 ("every cell in a column carries the same precision and the same width, or it stops being a column"). It also renders in-fence Chg% via bare `format_pct()`, which
+  drops the trailing `.0` on whole numbers, violating §3's "fenced percent: always 1dp, always signed" rule.
 
-**Design converged 2026-09-24** (still open for final sign-off, discussion continuing in a later session — see resume prompt below) in `scratch/2026-09-24_mvp_telegram_message_survey.py`, function
-`format_hourly_summary` and helpers:
+**Design finalized 2026-09-24** in `scratch/2026-09-24_mvp_telegram_message_survey.py`, function `format_hourly_summary` and helpers:
   - **Single flat table**, no provider/category grouping (Animesh's explicit call over the original per-category-fenced-blocks structure).
-  - **Broker-holdings-style columns**, inspired by a pasted Upstox holdings screenshot: `[badge] Instrument Qty Avg cost LTP Cur val P&L Net chg%`. Column widths computed per-group, same pattern as
+  - **Broker-holdings-style columns**, inspired by a pasted Upstox holdings screenshot: `[badge] Instrument Qty Avg cost LTP P&L Chg%`. Column widths computed per-group, same pattern as
     `build_close_leg_table` (`src/notifications/formatting.py`). **`Day chg%` deliberately excluded** — MVP has no previous-close baseline stored anywhere today (checked: `mvp_snapshots` is hourly
-    ticks only, no day-open row); revisit only if that data need becomes real.
+    ticks only, no day-open row); revisit only if that data need becomes real. **`Cur val` also dropped** (mobile-width sign-off, same session) — it's just Qty × LTP, recoverable from the other
+    columns, and was the single widest cell; cutting it took the table from 80 chars to 65.
+  - **Final column set, re-settled 2026-09-24 against the confirmed 50-char budget**: `[badge] Sym LTP P&L Next` — 48 chars, confirmed rendering correctly on-device via `--send --send-only Hourly`.
+    Core `badge`/`Sym`/`LTP`/`P&L` alone is 38 chars; every 2-optional-column combination that also keeps `Next` (target/SL proximity) — `Svc`+`Next`, `Qty`+`Next` — comes out at 53 chars, over
+    budget, so only one optional column could be kept alongside the core four. Measured every 0/1/2-column combination of `Svc`/`Qty`/`Avg cost`/`Chg%`/`Next` against the real fixture data in
+    `scratch/2026-09-24_mvp_telegram_message_survey.py`; `Next` alone (48 chars) and `Svc`+`Qty` (48 chars) tied for the widest combo that still fit — Animesh chose `Next` alone, since it's the
+    regression-restore column (see the `_next_level_str` note below) rather than a nice-to-have, over `Svc` (provider disambiguation) and `Qty`/`Avg cost`/`Chg%`. `Svc`, `Qty`, `Avg cost`, and `Chg%`
+    are all dropped from the final table.
   - **`[O]`/`[P]` status badge folded into the table itself** (leftmost column) instead of a separate trailing "Unassigned (PENDING)" block — a PENDING row shows `—` for every value column (no fill
     yet).
   - **Headline**: `{emoji} *MVP Open positions* | {run_time}` — emoji is a net-P&L color signal (🟢 positive / 🔴 negative / ⚪ zero) computed over OPEN picks only. Fence-width alignment concerns that
-    reject 🔴 elsewhere (`FORMATTING.md` §7, ROLL-2a) don't apply here since this sits outside any fence.
+    reject 🔴 elsewhere (`FORMATTING.md` §7, ROLL-2a) don't apply here since this sits outside any fence. Emoji/wording set signed off as-is 2026-09-24 — no changes requested.
   - **Footer**: `Invested` / `Current` / `P&L` each on their own bold-labeled line (💰/📊/📈), IC-`exit_message.py`-style bold `*Label:*` prefixes — **explicitly scoped to currently OPEN picks only**
     (unrealized, mark-to-market). Confirmed 2026-09-24: does **not** fold in `realized_pnl` from already-closed picks — that stays a separate, deferred "Inception" line (folds into **M11** if built,
     not this task). Trailing plain line: `Open: n Pending: m`.
@@ -156,11 +163,40 @@
     future column) stay unsigned rather than following §3's fenced "always signed" literally — same exception class §3 already grants IVR; (2) the footer's signed-percent prose value is built with a
     manual `+`/`-` prefix, not `FORMATTING.md`'s documented `format_pct_signed()` — **that function doesn't exist anywhere in `src/notifications/formatting.py`**, a doc/code mismatch worth fixing
     separately (either implement it or correct the doc), not blocking this task.
-  - Do not touch `src/mvp/tracker.py`/`scripts/mvp_watch.py` for real until the Telegram-thread discussion lands here as a fully resolved decision (mirror the "Design decisions" block style at the top
-    of this file) — screenshots so far confirm the shape but the discussion isn't closed.
+  - **Ships as its own commit, separate from M10** — confirmed 2026-09-24, per Step 5c's rule against bundling separate-phase changes into one commit.
+- [ ] **M13 (design in progress on Telegram with Animesh — do not start without his final sign-off; blocked on M11 for live Win%/Incep% data)** — New end-of-day summary message, distinct from M12's
+  hourly view. Groups by provider → sub-type category (e.g. DSIJ: Value Picks / Multibagger / TAS; FinnovationZ: Ikashi), one aggregated row per category, plus an all-recommendations footer.
 
-**Resume prompt for the next session:** "Continue the MVP hourly-summary Telegram format discussion from the 2026-09-24 session — pick up in `scratch/2026-09-24_mvp_telegram_message_survey.py`
-(`format_hourly_summary` + `_totals_lines`/`_headline_emoji`/`_open_positions_totals`), review docs/plan/mvp/tasks.md's M12 entry for the design converged so far (single flat table, `[O]`/`[P]` badge
-in-table, holdings-style columns minus Day chg%, 🟢/🔴/⚪ headline color by net P&L, three-line Invested/Current/P&L footer scoped to OPEN picks only), and finalize remaining open points before touching
-`src/mvp/tracker.py` for real: exact emoji/wording sign-off, mobile-width check (current table is ~80 chars — may need trimming for phone rendering), and whether `M10`'s alert redesign should ship in
-the same commit as M12 or separately."
+**Design finalized 2026-09-24** in `scratch/2026-09-24_mvp_telegram_message_survey.py`, function `format_eod_summary` + `build_eod_table` + `CategoryRollup`/`ProviderRollup`:
+  - **Headline**: `{emoji} *MVP EOD Summary* | {date}` — same net-P&L color-emoji convention as M12's headline.
+  - **One shared fenced table across every provider** (`build_eod_table`), columns `Cat / P&L / Win% / Incep% / High / Low`, no `Prv`/provider column — category short_codes (`VP`/`MB`/`TAS`/`IKA`)
+    don't collide across providers, so a separate provider tag wasn't needed. `Invested`/`Current` deliberately dropped (Animesh's call) — this is a per-service scorecard, not a position-level view
+    (M12 already covers that). `Win%` shows the closed-picks sample size inline (`67% (3)`, or `— (0)` when there are none yet) since a bare percentage/dash hides the sample size behind it.
+  - **Design evolved through two structural changes, both on-device-driven**: first pass used one fenced table *per provider*; Animesh's phone showed a single-category provider's own short 3-line
+    block (header/separator/1 row) rendering in a visibly larger font than a longer multi-row block, wrapping despite having fewer characters per line — looks like Telegram auto-scales very short code
+    blocks. Fix: merged every provider's categories into one shared table (removes the short-block case entirely), then dropped the `Prv` column it briefly needed, closing the remaining gap to the
+    confirmed mobile-safe width. Confirmed rendering correctly on-device 2026-09-24.
+  - **Mobile-safe width empirically confirmed at 50 chars** (not the ~55-65 estimate used earlier this session) via a calibration probe (`_width_ruler()` in the same scratch file, sent with `--send
+    --send-only Width`) — a ruled block from 30 to 80 chars in steps of 5; the longest line that renders without wrapping on the actual device is the real number. The final merged table is 49 chars,
+    under this limit. **M12's hourly table was re-measured against this confirmed 50-char number** (2026-09-24, later same day) — the final column set (`badge`/`Sym`/`LTP`/`P&L`/`Next`) came in at 48
+    chars, confirmed rendering correctly on-device. See M12's entry for the column-selection tradeoff.
+  - **All-recommendations footer**: `💰 All recs P&L` / `📅 Day chg` / `🚀 Since inception`, rolled up across every category row (day-chg is invested-weighted across categories).
+  - **P&L scope confirmed 2026-09-24: realized + unrealized combined**, not M12's open-only scope. Both the per-category `P&L` column and the footer's `All recs P&L` use `_rollup_pnl` = `(current −
+    invested) + realized_pnl` — category rows sum exactly to the footer total. No signed `%` is shown next to `All recs P&L` (unlike M12's open-only P&L, which has a clean `pnl / invested` base) —
+    once realized capital returned by closed picks is folded in, `total_invested` stops being the right denominator; `Since inception %` is the relative-return figure for this combined scope instead.
+  - **`High`/`Low` columns** — the category's since-inception running high-water-mark / max-drawdown return% (Animesh's call: NOT today's best/worst individual pick — a strategy-level equity-curve
+    metric).
+  - **Four data gaps, not yet resolvable** — `Win%`/`Incep%`/`realized_pnl`/`High`/`Low` per category and the overall `Day chg`/`Since inception` footer are all prototyped with **fixture placeholder
+    values**, not live data: (1) per-category realized P&L, win rate, and since-inception return all need the same new `MVPStore` aggregate query M11 is scoped to build (closed-picks win/loss +
+    realized `P&L` sum, plus a since-first-pick rollup across open + closed picks) — M13's table stays fixture-driven until M11 ships; (2) day-over-day change needs a yesterday's-EOD-vs-today's-EOD
+    snapshot diff per pick — unlike M12's hourly view (which had no day-open baseline and excluded `Day chg%` entirely), an EOD run *can* support this since `MVPStore.get_snapshots()` already returns
+    consecutive EOD rows, but no aggregate query diffs them across picks/categories yet — this is new store work, scope not yet sized; (3) `High`/`Low` are a bigger gap than M11 — they need a running
+    cumulative-P&L-over-time series per category (high-water-mark / max-drawdown), not just current state, which no snapshot-history rollup computes today. Likely its own task, sequenced after M11,
+    scope not yet sized.
+  - **`vs Nifty` alpha line and Open/Pending/Closed counts added** (co-investor review pass, 2026-09-24) — `vs Nifty` is fixture-only: `MVPSnapshot.benchmark_close` exists on the model but
+    `scripts/mvp_watch.py` never populates it on a live run today, so no real index-return series exists to diff against; wiring that up is new work, not sized. Open/Pending/Closed counts are pure
+    arithmetic over existing `Pick.status` — no new query needed, real whenever M13 is implemented.
+
+**M12 design closed out 2026-09-24 (resumed session)**: all three of M10/M12/M13 are now fully signed off and confirmed rendering correctly on-device. M12's final column set
+(`badge`/`Sym`/`LTP`/`P&L`/`Next`, 48 chars) is documented in M12's entry above. **Next up: implement M10/M12/M13 for real** — `src/mvp/tracker.py` (`_format_row`) and `scripts/mvp_watch.py` currently
+ship none of this; the scratch prototype functions are the reference shape to port over, per each entry's DoD.
