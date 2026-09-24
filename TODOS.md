@@ -92,6 +92,10 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 - [2026-09-24] BUG-050 fixed — `write_equity_to_parquet` dedup now keys on `(symbol, trade_date)` pairs instead of `trade_date` alone, filtering only genuinely-duplicate rows rather than skipping the
   whole batch. Backfilled `ENGINERSIN`'s 9 missing trading days (2026-09-10..2026-09-23). `@code-reviewer` clean; full suite 3688/3693 (3 pre-existing failures in
   `test_escaping_guard.py`/`scripts/mvp_watch.py`, unrelated, verified via `git stash`). Both `bugs.md`/`task.md` sections archived. SHA `125032a`.
+- [2026-09-24] BUG-049 fixed — `_resolve_instrument_key` now returns `(instrument_key, trading_symbol)` instead of a bare key; `_add`/`_backfill` set `Pick.symbol` from the resolved trading symbol on
+  a successful match, falling back to the typed CLI string when resolution is deferred/skipped/no-match. 3 new tests added; full `tests/unit/mvp/` + `tests/unit/scripts/test_mvp.py` suite green (89
+  passed). `@code-reviewer` clean (0 CRITICAL/ERROR, 4 minor WARNINGs, 2 applied). The already-filed `ENGINERSIN` (`b08f6661…`) pick's `symbol` was confirmed already correct — no DB fix needed.
+  `bugs.md`/`task.md` sections archived. SHA `a874876`.
 - [2026-09-24] Bugs filed — `BUG-049` (MVP `Pick.symbol` stored as raw CLI input, not the resolved NSE trading symbol; breaks `fetch_historical_closes`/bootstrap symbol filtering) and `BUG-050`
   (`write_equity_to_parquet`'s per-day dedup skips a whole day, including a genuinely-new symbol's row, if any other tracked symbol already covers that date) — found while adding an Engineers India
   (`ENGINERSIN`) MVP pick and trying to backfill its history like `UNIPARTS`. Both `docs/bugs/bugs.md`/`task.md`, not yet fixed.

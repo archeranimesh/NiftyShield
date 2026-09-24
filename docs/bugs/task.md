@@ -21,16 +21,7 @@
 
 > BUG-044 closed 2026-09-15 (SHA `7c255fd`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
-## BUG-049 — MVP pick `symbol` stored as raw CLI input instead of the resolved NSE trading symbol
-
-- [ ] **B049.1** — Have `_resolve_instrument_key` (`scripts/mvp.py`) return the resolved `trading_symbol` alongside `instrument_key`; thread it into `_add`/`_backfill` so `Pick.symbol` is set from the
-  resolved value on a successful match, not `args.symbol`.
-- [ ] **B049.2** — Decide the no-match/`--defer-key` fallback behavior (keep typed string vs. flag for manual correction); no `update --symbol` CLI path exists today — note in `bugs.md`/task if one is
-  needed as a follow-up.
-- [ ] **B049.3** — Tests: `_add`/`_backfill` set `pick.symbol` to the resolved trading symbol on a successful (single-match and picker-selected) resolution; unchanged behavior on no-match/deferred.
-- [ ] **B049.4** — Fix the already-filed `b08f6661…` Engineers India pick's stored `symbol` (direct DB correction, same as done ad hoc this session) if not already superseded by a clean re-add.
-- [ ] **B049.5** — Suite green + real `@code-reviewer` clean.
-- [ ] **B049.6** — Flip `bugs.md` BUG-049 status to ✅ Fixed + SHA; move both sections to `docs/archive/bugs/{bugs,task}.md`; `TODOS.md` session-log line.
+> BUG-049 closed 2026-09-24 (SHA `a874876`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
 ## BUG-043 — "Net P&L" in close notifications is inception-cumulative for IC v1/v2, cycle-only for collar, absent for CSP — no stable per-strategy contract
 

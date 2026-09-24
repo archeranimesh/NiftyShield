@@ -5,6 +5,17 @@
 
 ---
 
+## BUG-049 — MVP pick `symbol` stored as raw CLI input instead of the resolved NSE trading symbol
+
+- [x] **B049.1** — Have `_resolve_instrument_key` (`scripts/mvp.py`) return the resolved `trading_symbol` alongside `instrument_key`; thread it into `_add`/`_backfill` so `Pick.symbol` is set from the
+  resolved value on a successful match, not `args.symbol`. | SHA `a874876`
+- [x] **B049.2** — Decide the no-match/`--defer-key` fallback behavior (keep typed string vs. flag for manual correction); no `update --symbol` CLI path exists today — note in `bugs.md`/task if one is
+  needed as a follow-up. | Decided: keep typed string as fallback (no manual-correction CLI path exists to flag toward). | SHA `a874876`
+- [x] **B049.3** — Tests: `_add`/`_backfill` set `pick.symbol` to the resolved trading symbol on a successful (single-match and picker-selected) resolution; unchanged behavior on no-match/deferred. | SHA `a874876`
+- [x] **B049.4** — Fix the already-filed `b08f6661…` Engineers India pick's stored `symbol` (direct DB correction, same as done ad hoc this session) if not already superseded by a clean re-add. | Verified already `ENGINERSIN` in `data/portfolio/portfolio.sqlite` — superseded by the ad hoc fix done earlier this session, no further action needed.
+- [x] **B049.5** — Suite green + real `@code-reviewer` clean. | 89/89 `tests/unit/mvp/` + `tests/unit/scripts/test_mvp.py` pass; code-reviewer: 0 CRITICAL/ERROR, 4 minor WARNINGs (docstring + type-hint nits), 2 addressed inline, 2 accepted as domain-correct.
+- [x] **B049.6** — Flip `bugs.md` BUG-049 status to ✅ Fixed + SHA; move both sections to `docs/archive/bugs/{bugs,task}.md`; `TODOS.md` session-log line. | SHA `a874876`
+
 ## BUG-002 — Delta sign/magnitude corrupted by put-call misclassification
 
 - [x] **B002.1** — Root-cause confirmed: `_position_delta` substring-matches `"PE"`/`"CE"` against numeric `instrument_key`, dead code, all options priced as full-delta futures | Confirmed 2026-07-02

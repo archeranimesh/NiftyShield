@@ -7,6 +7,37 @@
 
 ---
 
+## BUG-049 — MVP pick `symbol` is stored as the raw CLI-typed string, not the resolved NSE trading symbol — breaks historical-close lookups
+
+**Status:** ✅ Fixed, SHA `a874876`, closed 2026-09-24.
+
+| Field | Value |
+|---|---|
+| Severity | Medium — forward tracking still works (`instrument_key` resolves correctly); backfill/analytics silently got zero data if the typed string wasn't the exact trading symbol |
+| Location | `scripts/mvp.py::_add`/`_backfill`; consumed by `src/mvp/backfill.py::fetch_historical_closes` and `MVPStore.get_distinct_symbols` (via `equity_bhavcopy_bootstrap.main`) |
+
+**Symptom:** running `python -m scripts.mvp backfill "ENGINEERS INDIA" --reco-date 2026-09-10 --reco-price 273 --target 355 -p dsij -c value_picks` correctly resolved `instrument_key` via the
+interactive fuzzy-match picker (`NSE_EQ|INE510A01028`, trading symbol `ENGINERSIN`), but the pick's `symbol` column was set to `"ENGINEERS INDIA"` — the literal string typed at the CLI.
+`fetch_historical_closes(pick.symbol, ...)` then filtered the equity parquet on `"ENGINEERS INDIA"` instead of `"ENGINERSIN"`, matched zero rows, logged `mvp_backfill_no_data`, and the pick stayed
+`PENDING` with no way to tell whether the entry rule (next-day close above reco price) would actually have fired.
+
+**Root cause:** `_add`/`_backfill` built `Pick(symbol=args.symbol, ...)` directly from `args.symbol` — the raw CLI argument — never from the resolved instrument row returned by
+`_resolve_instrument_key`/`InstrumentLookup.search_equity`. `instrument_key` was correctly backfilled from that resolved row (fuzzy search + interactive picker when ambiguous), but `symbol` was not.
+
+**Fix:** `_resolve_instrument_key` now returns `tuple[str | None, str | None]` (`instrument_key`, `trading_symbol`) instead of a bare key. `_add`/`_backfill` set
+`symbol=trading_symbol or args.symbol` — using the resolved canonical trading symbol on a successful match, falling back to the typed string when resolution is deferred/skipped/no-match (decision:
+no `update --symbol` CLI path exists to flag toward manual correction, so a silent typed-string fallback was kept as the simplest correct behavior).
+
+**Implementation progress:** 3 new tests added to `tests/unit/scripts/test_mvp.py` — resolved-symbol path for `_add`, deferred-fallback path for `_add`, resolved-symbol path for `_backfill`. Full
+`tests/unit/mvp/` + `tests/unit/scripts/test_mvp.py` suite green (89 passed). Real `@code-reviewer` subagent run against `git diff HEAD`: 0 CRITICAL/ERROR, 4 WARNINGs (missing docstring on
+`_resolve_instrument_key`, bare `dict` type hints in the test fake, `trading_symbol or args.symbol` treating empty-string as falsy, test fake's unused constructor flexibility) — docstring and
+type-hint findings applied, the other two accepted as domain-correct/non-blocking. The already-filed `b08f6661…` Engineers India pick's `symbol` was confirmed already `ENGINERSIN` in
+`data/portfolio/portfolio.sqlite` (superseded by an ad hoc fix earlier in the discovery session) — no further DB correction needed.
+
+**Related:** BUG-050 — found while working around this bug; fixing this one alone did not fix BUG-050's separate dedup defect.
+
+---
+
 ## BUG-047 — `signal_track_v1` paper entries and Telegram messages never sent (`PaperStore.init_db` AttributeError)
 
 **Status:** ✅ Fixed, SHA `e8d91c1`, closed 2026-09-15.

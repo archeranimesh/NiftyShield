@@ -12,30 +12,7 @@
 
 ---
 
-## BUG-049 — MVP pick `symbol` is stored as the raw CLI-typed string, not the resolved NSE trading symbol — breaks historical-close lookups
-
-| Field | Value |
-|---|---|
-| Severity | **Medium** — forward tracking still works (`instrument_key` resolves correctly); backfill/analytics silently gets zero data if the typed string isn't the exact trading symbol |
-| Status | 🔴 Open |
-| Discovered | 2026-09-24 |
-| Location | `scripts/mvp.py::_add`/`_backfill`; consumed by `src/mvp/backfill.py::fetch_historical_closes` and `MVPStore.get_distinct_symbols` (via `equity_bhavcopy_bootstrap.main`) |
-
-**Symptom:** running `python -m scripts.mvp backfill "ENGINEERS INDIA" --reco-date 2026-09-10 --reco-price 273 --target 355 -p dsij -c value_picks` correctly resolved `instrument_key` via the
-interactive fuzzy-match picker (`NSE_EQ|INE510A01028`, trading symbol `ENGINERSIN`), but the pick's `symbol` column was set to `"ENGINEERS INDIA"` — the literal string typed at the CLI.
-`fetch_historical_closes(pick.symbol, ...)` then filtered the equity parquet on `"ENGINEERS INDIA"` instead of `"ENGINERSIN"`, matched zero rows, logged `mvp_backfill_no_data`, and the pick stayed
-`PENDING` with no way to tell whether the entry rule (next-day close above reco price) would actually have fired.
-
-**Root cause:** `_add`/`_backfill` build `Pick(symbol=args.symbol, ...)` directly from `args.symbol` — the raw CLI argument — never from the resolved instrument row returned by
-`_resolve_instrument_key`/`InstrumentLookup.search_equity`. `instrument_key` is correctly backfilled from that resolved row (fuzzy search + interactive picker when ambiguous), but `symbol` is not, so
-anything keyed on `Pick.symbol` (`fetch_historical_closes`, and `equity_bhavcopy_bootstrap.main`'s `store.get_distinct_symbols()` filter) silently misses unless the user happens to type the exact NSE
-trading symbol at the CLI.
-
-**Suggested fix:** have `_resolve_instrument_key` return (or a sibling call expose) the resolved `trading_symbol` alongside `instrument_key`, and set `pick.symbol` from that resolved value when
-resolution succeeds — falling back to the typed string only when resolution is skipped/deferred (`--defer-key`) or found no match. Needs a decision at fix time on what `symbol` should be in the
-no-match/deferred case (typed string vs. left for a later manual correction — no `update --symbol` CLI path exists today either).
-
-**Related:** BUG-050 (above) — found while working around this bug; fixing this one alone does not fix BUG-050's separate dedup defect.
+## BUG-049 [MOVED] — see `docs/archive/bugs/bugs.md` (closed 2026-09-24, SHA `a874876`)
 
 ---
 
