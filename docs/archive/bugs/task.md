@@ -808,3 +808,12 @@ Fix was tracked as plan tasks, not here — `docs/plan/telegram-message-unificat
 - [x] **B050.3** — Backfill: re-run `equity_bhavcopy_bootstrap` for `ENGINERSIN`'s missing range (2026-09-10..2026-09-23) once the fix lands, to recover the data this bug dropped for BUG-049's pick.
 - [x] **B050.4** — Suite green + real `@code-reviewer` clean.
 - [x] **B050.5** — Flip `bugs.md` BUG-050 status to ✅ Fixed + SHA; move both sections to `docs/archive/bugs/{bugs,task}.md`; `TODOS.md` session-log line. | SHA `125032a`
+
+## BUG-051 — `enter_backfill_pick` only checks day+1 after reco_date; a pick that misses that day stays PENDING forever
+
+- [x] **B051.1** — Rewrite `enter_backfill_pick` (`src/mvp/backfill.py`) to scan every trading day after `reco_date` ascending and enter at the first day's close exceeding `reco_price`, instead of
+  only checking day+1. | SHA `61b18ee`
+- [x] **B051.2** — Tests: entry on a later day when day+1 misses; existing day+1-entry and stays-pending cases unchanged. | SHA `61b18ee`
+- [x] **B051.3** — Re-run the entry check for the existing `ENGINERSIN` pick (`b08f6661…`) once the fix lands, so it advances out of PENDING if warranted.
+- [x] **B051.4** — Suite green + real `@code-reviewer` clean.
+- [x] **B051.5** — Flip `bugs.md` BUG-051 status to ✅ Fixed + SHA; move both sections to `docs/archive/bugs/{bugs,task}.md`; `TODOS.md` session-log line. | SHA `61b18ee`

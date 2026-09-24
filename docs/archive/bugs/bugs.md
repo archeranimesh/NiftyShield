@@ -2111,3 +2111,35 @@ failures are pre-existing on `main` (verified via `git stash`), in `tests/unit/n
 `symbol` column (single Nifty 50 series), but same class of bug if a multi-index batch is ever introduced. Flagged for a future hardening pass, not fixed here.
 
 ---
+
+## BUG-051 — `enter_backfill_pick` only checks the day right after `reco_date` — a pick that misses entry on day+1 stays `PENDING` forever even if price later closes above reco
+
+| Field | Value |
+|---|---|
+| Severity | **Medium** — no data loss, but a pick can silently miss a valid entry and sit `PENDING` indefinitely even after the reco price is comfortably cleared on a later day |
+| Status | ✅ Fixed |
+| Discovered | 2026-09-24 |
+| Location | `src/mvp/backfill.py::enter_backfill_pick`, `run_backfill` |
+| SHA | `61b18ee` |
+
+**Symptom:** `ENGINERSIN` (reco 2026-09-10 @ ₹273.0) stayed `PENDING` even after `BUG-050`'s dedup fix backfilled its full OHLCV history (09-10..09-24) and it later closed at ₹306.20 on 09-23 — well
+above reco. `enter_backfill_pick` only ever evaluates the single next trading day (09-11, close ₹268.95, below reco) and gives up.
+
+**Root cause:** the function computed `reco_date + 1` (skipping non-trading days) and looked up exactly that one date in `equity_closes`; if the close there didn't beat `reco_price` it returned
+`None` permanently, with no later day ever re-checked.
+
+**Decision (Animesh, 2026-09-24):** widen the entry window — scan every trading day after `reco_date` in ascending order (not just day+1) and enter at the first day's close that exceeds
+`reco_price`, unbounded forward to `to_date`.
+
+**Suggested fix:** rewrite to iterate `sorted(d for d in equity_closes if d > reco_date)` and return the first `(date, close)` where `close > reco_price`, instead of a single day+1 lookup.
+
+**Implementation progress (SHA `61b18ee`):** rewrote `enter_backfill_pick` to scan `sorted(d for d in equity_closes if d > reco_date)` and enter at the first day whose close exceeds `reco_price`.
+Round-1 `@code-reviewer` (real subagent) caught a CRITICAL this surfaced in the same file: `run_backfill`'s snapshot walk still started at `reco_date + 1` unconditionally, which — once entry could
+land on a later day than day+1 — would record phantom snapshots for days the pick was still `PENDING`. Fixed by tracking the actual `entry_date` from the PENDING→OPEN transition and using it as
+`start_date`. Round-2 review caught a follow-on ERROR: the `entry_date is None` fallback (an already-OPEN pick resumed with no known entry date — currently dead code, no caller hits it) still
+guessed `reco_date + 1`. Fixed by making that path an explicit no-op — logs `mvp_backfill_resume_unsupported` and skips the walk rather than guessing a start date; `Pick` has no `entry_date` field to
+reconstruct the real value, and adding one was out of scope for this fix. Round-3 review: 0 CRITICAL/ERROR/WARNING, clean. Tests added: later-day entry, delayed-entry walk skips pre-entry
+snapshots, already-OPEN pick skips the walk entirely. Full suite: `tests/unit/mvp/test_mvp_backfill.py` 13/13 green each round. Applied to the existing `ENGINERSIN` pick (`b08f6661…`) post-fix: it
+advanced `PENDING` → `OPEN`, entered at ₹285.25 on 2026-09-21 (first day after reco where close beat ₹273.0).
+
+---

@@ -86,6 +86,9 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-24] BUG-051 fixed — `enter_backfill_pick` widened to scan forward for the first day whose close beats `reco_price`, instead of only checking `reco_date + 1` (a pick that missed day+1 stayed
+  `PENDING` forever). `@code-reviewer` caught two follow-on issues in `run_backfill` in review rounds 1-2 (phantom pre-entry snapshots from the old `reco_date+1` walk-start; an unsafe fallback for the
+  already-OPEN-pick resume path) — both fixed, round 3 clean. Applied to `ENGINERSIN` (`b08f6661…`): advanced `PENDING` → `OPEN`, entered ₹285.25 on 2026-09-21. SHA `61b18ee`.
 - [2026-09-24] BUG-050 fixed — `write_equity_to_parquet` dedup now keys on `(symbol, trade_date)` pairs instead of `trade_date` alone, filtering only genuinely-duplicate rows rather than skipping the
   whole batch. Backfilled `ENGINERSIN`'s 9 missing trading days (2026-09-10..2026-09-23). `@code-reviewer` clean; full suite 3688/3693 (3 pre-existing failures in
   `test_escaping_guard.py`/`scripts/mvp_watch.py`, unrelated, verified via `git stash`). Both `bugs.md`/`task.md` sections archived. SHA `125032a`.
