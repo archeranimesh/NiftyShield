@@ -798,3 +798,13 @@ P&L whenever an overlay role has two open positions
 Fix was tracked as plan tasks, not here — `docs/plan/telegram-message-unification/overlay-recovery-digest/tasks.md` **ORD-1** (investigate + decide the grouping, SHA `9883981`) and **ORD-2**
 (implement, SHA `7c255fd`). Full detail in `docs/archive/bugs/bugs.md`. ORD-4 flipped this bug to ✅ Fixed and moved both entries here.
 
+
+## BUG-050 — `write_equity_to_parquet` per-day dedup drops a newly-added symbol's history when another tracked symbol already covers that date
+
+- [x] **B050.1** — Rewrite the dedup in `write_equity_to_parquet` (`src/backtest/equity_bhavcopy_ingest.py`) to filter on `(symbol, trade_date)` pairs instead of `trade_date` alone; append only the
+  genuinely-new rows rather than skipping the whole batch. | SHA `125032a`
+- [x] **B050.2** — Tests: a batch containing one symbol already covered for a date and a second symbol new for that same date — assert the new symbol's row is appended and the existing symbol's row is
+  untouched (no duplicate). | SHA `125032a`
+- [x] **B050.3** — Backfill: re-run `equity_bhavcopy_bootstrap` for `ENGINERSIN`'s missing range (2026-09-10..2026-09-23) once the fix lands, to recover the data this bug dropped for BUG-049's pick.
+- [x] **B050.4** — Suite green + real `@code-reviewer` clean.
+- [x] **B050.5** — Flip `bugs.md` BUG-050 status to ✅ Fixed + SHA; move both sections to `docs/archive/bugs/{bugs,task}.md`; `TODOS.md` session-log line. | SHA `125032a`

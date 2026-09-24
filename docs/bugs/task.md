@@ -21,16 +21,6 @@
 
 > BUG-044 closed 2026-09-15 (SHA `7c255fd`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
-## BUG-050 — `write_equity_to_parquet` per-day dedup drops a newly-added symbol's history when another tracked symbol already covers that date
-
-- [ ] **B050.1** — Rewrite the dedup in `write_equity_to_parquet` (`src/backtest/equity_bhavcopy_ingest.py`) to filter on `(symbol, trade_date)` pairs instead of `trade_date` alone; append only the
-  genuinely-new rows rather than skipping the whole batch.
-- [ ] **B050.2** — Tests: a batch containing one symbol already covered for a date and a second symbol new for that same date — assert the new symbol's row is appended and the existing symbol's row is
-  untouched (no duplicate).
-- [ ] **B050.3** — Backfill: re-run `equity_bhavcopy_bootstrap` for `ENGINERSIN`'s missing range (2026-09-10..2026-09-23) once the fix lands, to recover the data this bug dropped for BUG-049's pick.
-- [ ] **B050.4** — Suite green + real `@code-reviewer` clean.
-- [ ] **B050.5** — Flip `bugs.md` BUG-050 status to ✅ Fixed + SHA; move both sections to `docs/archive/bugs/{bugs,task}.md`; `TODOS.md` session-log line.
-
 ## BUG-049 — MVP pick `symbol` stored as raw CLI input instead of the resolved NSE trading symbol
 
 - [ ] **B049.1** — Have `_resolve_instrument_key` (`scripts/mvp.py`) return the resolved `trading_symbol` alongside `instrument_key`; thread it into `_add`/`_backfill` so `Pick.symbol` is set from the

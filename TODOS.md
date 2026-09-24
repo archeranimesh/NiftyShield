@@ -86,6 +86,9 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-24] BUG-050 fixed — `write_equity_to_parquet` dedup now keys on `(symbol, trade_date)` pairs instead of `trade_date` alone, filtering only genuinely-duplicate rows rather than skipping the
+  whole batch. Backfilled `ENGINERSIN`'s 9 missing trading days (2026-09-10..2026-09-23). `@code-reviewer` clean; full suite 3688/3693 (3 pre-existing failures in
+  `test_escaping_guard.py`/`scripts/mvp_watch.py`, unrelated, verified via `git stash`). Both `bugs.md`/`task.md` sections archived. SHA `125032a`.
 - [2026-09-24] Bugs filed — `BUG-049` (MVP `Pick.symbol` stored as raw CLI input, not the resolved NSE trading symbol; breaks `fetch_historical_closes`/bootstrap symbol filtering) and `BUG-050`
   (`write_equity_to_parquet`'s per-day dedup skips a whole day, including a genuinely-new symbol's row, if any other tracked symbol already covers that date) — found while adding an Engineers India
   (`ENGINERSIN`) MVP pick and trying to backfill its history like `UNIPARTS`. Both `docs/bugs/bugs.md`/`task.md`, not yet fixed.

@@ -2067,3 +2067,47 @@ longer sums the CC leg, without regressing BUG-030's own test (revised to reflec
 block and fixed its BUG-042 send path. Both sections moved to `docs/archive/bugs/` at the `overlay-recovery-digest/` ORD-4 epic close.
 
 ---
+
+## BUG-050 — `write_equity_to_parquet`'s per-day dedup skips the whole day (all symbols) if any symbol/date pair already exists — silently drops history for newly-added symbols
+
+| Field | Value |
+|---|---|
+| Severity | **High** — silent data loss for backtest/MVP historical tracking; no error or warning names the dropped symbol |
+| Status | ✅ Fixed |
+| Discovered | 2026-09-24 |
+| Location | `src/backtest/equity_bhavcopy_ingest.py::write_equity_to_parquet` (~L161-213) |
+| SHA | `125032a` |
+
+**Symptom:** after adding a new MVP-tracked symbol (`ENGINERSIN`) alongside an already-tracked one (`UNIPARTS`), running `python -m scripts.pipeline.equity_bhavcopy_bootstrap --start 2026-09-10 --end
+2026-09-24` downloaded and logged all 10 trading days successfully (`[2026-09] downloaded 10/11 trading days`), but the resulting parquet only gained **1** new `ENGINERSIN` row (`2026-09-24`) — the
+other 9 trading days (09-10..09-23) never got written for the new symbol, despite parsing successfully from each day's bhavcopy.
+
+**Root cause:** the idempotent-append dedup check is keyed on `trade_date` alone, not `(symbol, trade_date)`:
+
+```python
+if any(d in existing_dates for d in new_dates):
+    return
+```
+
+`equity_bhavcopy_bootstrap.main` calls this once per trading day with that day's records across **all** tracked symbols in one batch. Since `UNIPARTS` already had a row for every date in 09-10..09-23
+from a prior run, `existing_dates` already contained those dates — so the **entire day's batch was skipped**, including the new `ENGINERSIN` row, not just the `UNIPARTS` duplicate. The function's own
+docstring comment acknowledges the batch-skip design ("if any date in a batch overlaps, the whole batch is skipped rather than just the duplicates ... conservative ... for the bootstrap use case (one
+day at a time) this is correct") — but that assumption only holds when exactly one symbol is ever tracked, or when every tracked symbol is added at the same time. MVP picks are added on an ongoing
+basis, so this is the normal case, not an edge case.
+
+**Suggested fix:** dedupe on `(symbol, trade_date)` pairs, not `trade_date` alone — filter `new_table` down to just the rows whose `(symbol, date)` aren't already present in the existing table, and
+always append those, instead of an all-or-nothing per-day skip.
+
+**Related:** BUG-049 (below) surfaced first in the same session — the pick's mis-stored `symbol` was the initial blocker; this dedup bug was found once that was fixed and the bootstrap still didn't
+backfill history.
+
+**Implementation progress (SHA `125032a`):** rewrote the dedup to build `(symbol, trade_date)` keys from the existing table and filter `new_table` down to only rows whose pair isn't already present
+(`pa.Table.filter` on a boolean mask), instead of skipping the whole batch when any date overlapped. Added `test_write_equity_to_parquet_new_symbol_same_date_appended` — writes `UNIPARTS` alone for a
+date, then writes `UNIPARTS`+`RELIANCE` for the same date, asserts `RELIANCE`'s row is appended and `UNIPARTS`'s existing row isn't duplicated; existing idempotent/empty-batch tests still pass.
+`@code-reviewer` (real subagent) ran clean — 0 CRITICAL/ERROR, 2 cosmetic WARNINGs (`zip(..., strict=True)` on same-length Arrow columns) which were applied. Full unit suite: 3688/3693 passed — the 3
+failures are pre-existing on `main` (verified via `git stash`), in `tests/unit/notifications/test_escaping_guard.py`, unrelated to this fix. Backfill (B050.3) re-ran
+`equity_bhavcopy_bootstrap --start 2026-09-10 --end 2026-09-23` and confirmed all 9 missing `ENGINERSIN` rows (09-10..09-23, excluding the 09-14 holiday) landed in
+`data/offline/equity_ohlcv/2026/09/equity_2026_09.parquet`. **Note:** `write_index_to_parquet` (~L308-312) still has the old date-only batch-skip dedup — safe today since `IndexBhavRecord` has no
+`symbol` column (single Nifty 50 series), but same class of bug if a multi-index batch is ever introduced. Flagged for a future hardening pass, not fixed here.
+
+---

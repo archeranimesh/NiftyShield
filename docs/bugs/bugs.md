@@ -12,40 +12,6 @@
 
 ---
 
-## BUG-050 — `write_equity_to_parquet`'s per-day dedup skips the whole day (all symbols) if any symbol/date pair already exists — silently drops history for newly-added symbols
-
-| Field | Value |
-|---|---|
-| Severity | **High** — silent data loss for backtest/MVP historical tracking; no error or warning names the dropped symbol |
-| Status | 🔴 Open |
-| Discovered | 2026-09-24 |
-| Location | `src/backtest/equity_bhavcopy_ingest.py::write_equity_to_parquet` (~L161-213) |
-
-**Symptom:** after adding a new MVP-tracked symbol (`ENGINERSIN`) alongside an already-tracked one (`UNIPARTS`), running `python -m scripts.pipeline.equity_bhavcopy_bootstrap --start 2026-09-10 --end
-2026-09-24` downloaded and logged all 10 trading days successfully (`[2026-09] downloaded 10/11 trading days`), but the resulting parquet only gained **1** new `ENGINERSIN` row (`2026-09-24`) — the
-other 9 trading days (09-10..09-23) never got written for the new symbol, despite parsing successfully from each day's bhavcopy.
-
-**Root cause:** the idempotent-append dedup check is keyed on `trade_date` alone, not `(symbol, trade_date)`:
-
-```python
-if any(d in existing_dates for d in new_dates):
-    return
-```
-
-`equity_bhavcopy_bootstrap.main` calls this once per trading day with that day's records across **all** tracked symbols in one batch. Since `UNIPARTS` already had a row for every date in 09-10..09-23
-from a prior run, `existing_dates` already contained those dates — so the **entire day's batch was skipped**, including the new `ENGINERSIN` row, not just the `UNIPARTS` duplicate. The function's own
-docstring comment acknowledges the batch-skip design ("if any date in a batch overlaps, the whole batch is skipped rather than just the duplicates ... conservative ... for the bootstrap use case (one
-day at a time) this is correct") — but that assumption only holds when exactly one symbol is ever tracked, or when every tracked symbol is added at the same time. MVP picks are added on an ongoing
-basis, so this is the normal case, not an edge case.
-
-**Suggested fix:** dedupe on `(symbol, trade_date)` pairs, not `trade_date` alone — filter `new_table` down to just the rows whose `(symbol, date)` aren't already present in the existing table, and
-always append those, instead of an all-or-nothing per-day skip.
-
-**Related:** BUG-049 (below) surfaced first in the same session — the pick's mis-stored `symbol` was the initial blocker; this dedup bug was found once that was fixed and the bootstrap still didn't
-backfill history.
-
----
-
 ## BUG-049 — MVP pick `symbol` is stored as the raw CLI-typed string, not the resolved NSE trading symbol — breaks historical-close lookups
 
 | Field | Value |
