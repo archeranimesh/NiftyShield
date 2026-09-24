@@ -577,6 +577,59 @@ class MVPStore:
             inception_pct=inception_pct,
         )
 
+    def get_category_day_change(self, category_id: str) -> Decimal | None:
+        """Invested-weighted day-over-day % change across a category's open
+        picks.
+
+        For each OPEN pick in the category, diffs the latest snapshot date's
+        closing ltp against the prior distinct snapshot date's closing ltp,
+        then rolls up across picks weighted by ``deployed_capital``. A pick
+        with fewer than two distinct snapshot dates contributes nothing.
+
+        Args:
+            category_id: The category to aggregate over.
+
+        Returns:
+            The invested-weighted day change as a percent, or ``None`` when
+            no pick in the category has at least two distinct snapshot dates.
+        """
+        with connect(self.db_path) as conn:
+            open_picks = conn.execute(
+                "SELECT pick_id, deployed_capital FROM mvp_recommendations "
+                "WHERE category_id = ? AND status = ?",
+                (category_id, PickStatus.OPEN.value),
+            ).fetchall()
+
+            weighted_sum = Decimal("0")
+            total_weight = Decimal("0")
+            for row in open_picks:
+                # MAX(captured_at) is selected (not read) to trigger SQLite's
+                # bare-column optimization — ltp comes from the row with the
+                # latest timestamp per date group. Do not remove.
+                day_rows = conn.execute(
+                    """
+                    SELECT date(captured_at) AS d, ltp, MAX(captured_at)
+                    FROM mvp_snapshots
+                    WHERE pick_id = ?
+                    GROUP BY d
+                    ORDER BY d DESC
+                    LIMIT 2
+                    """,
+                    (row["pick_id"],),
+                ).fetchall()
+                if len(day_rows) < 2:
+                    continue
+                latest_ltp = Decimal(day_rows[0]["ltp"])
+                prior_ltp = Decimal(day_rows[1]["ltp"])
+                if prior_ltp == 0:
+                    continue
+                pct_change = (latest_ltp - prior_ltp) / prior_ltp * 100
+                weight = Decimal(row["deployed_capital"])
+                weighted_sum += pct_change * weight
+                total_weight += weight
+
+        return (weighted_sum / total_weight) if total_weight else None
+
     def list_picks(
         self,
         status: PickStatus | None = None,

@@ -499,3 +499,69 @@ def test_get_category_stats_open_pick_without_ltp_uses_deployed_capital(
 
     assert stats.invested == stats.current
     assert stats.inception_pct == Decimal("0")
+
+
+def test_category_day_change_weights_by_capital(tmp_path: Path) -> None:
+    store = MVPStore(str(tmp_path / "test.sqlite"))
+    store.init_db()
+    store.add_provider(_make_provider())
+    store.add_category(_make_category())
+
+    # pick-a: deployed_capital 100000, +10% day change
+    store.add_pick(_make_pick(pick_id="pick-a", category_id="cat-1"))
+    store.update_pick("pick-a", entry_price=Decimal("100"))
+    store.record_snapshot(
+        MVPSnapshot(
+            pick_id="pick-a",
+            ltp=Decimal("100"),
+            captured_at="2026-09-22T15:00:00+00:00",
+        )
+    )
+    store.record_snapshot(
+        MVPSnapshot(
+            pick_id="pick-a",
+            ltp=Decimal("110"),
+            captured_at="2026-09-23T15:00:00+00:00",
+        )
+    )
+
+    # pick-b: deployed_capital 100000, -20% day change
+    store.add_pick(_make_pick(pick_id="pick-b", category_id="cat-1"))
+    store.update_pick("pick-b", entry_price=Decimal("200"))
+    store.record_snapshot(
+        MVPSnapshot(
+            pick_id="pick-b",
+            ltp=Decimal("50"),
+            captured_at="2026-09-22T15:00:00+00:00",
+        )
+    )
+    store.record_snapshot(
+        MVPSnapshot(
+            pick_id="pick-b",
+            ltp=Decimal("40"),
+            captured_at="2026-09-23T15:00:00+00:00",
+        )
+    )
+
+    day_change = store.get_category_day_change("cat-1")
+
+    weight = Decimal("100000")
+    expected = (Decimal("10") * weight + Decimal("-20") * weight) / (weight + weight)
+    assert day_change == expected
+
+
+def test_get_category_day_change_returns_none_without_two_snapshot_days(
+    tmp_path: Path,
+) -> None:
+    store = MVPStore(str(tmp_path / "test.sqlite"))
+    store.init_db()
+    store.add_provider(_make_provider())
+    store.add_category(_make_category())
+
+    store.add_pick(_make_pick(pick_id="pick-a", category_id="cat-1"))
+    store.update_pick("pick-a", entry_price=Decimal("100"))
+    # single snapshot day only
+    store.record_snapshot(_make_snapshot(pick_id="pick-a"))
+
+    assert store.get_category_day_change("cat-1") is None
+    assert store.get_category_day_change("no-such-category") is None
