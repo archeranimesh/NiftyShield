@@ -62,5 +62,11 @@ commit — they are proactive verification/reconciliation work, not opportunisti
   NSE-2026-holiday-fix case (yaml + test edit landed with no `CONTEXT.md` read all session). Trigger: standalone. | Owner: Claude | Model: claude-sonnet-5 | Review: none
 - [ ] **DEBT-19** — `standalone-actionable`. `readme-story-pointer-not-advanced-on-task-close` (Count 5 at escalation, 2026-09-23). `check_checkbox_consistency.py`'s `README_ENTRY_RE` validates that a
   `next: **<ID>**` marker exists in the right shape, but does not verify the ID still names the actual next unstarted task once earlier tasks close — S3.1, S5.6, SEC-1, M1.2, and M3.2 (mvp) all closed
-  a task in `tasks.md` while leaving `docs/plan/README.md`'s pointer on an already-completed ID. Extend the guard to cross-check the README pointer against the first unchecked box in the story's own
-  `tasks.md`, then verify over the next 3 logged sessions. If it still recurs, escalate to a protocol/model discussion. Trigger: standalone. | Owner: Claude | Model: claude-sonnet-5 | Review: none
+  a task in `tasks.md` while leaving `docs/plan/README.md`'s pointer on an already-completed ID. M13.2 (mvp) recurred again 2026-09-24 (`README.md:78` still reads `next: **M4.2**`). Extend the guard
+  to cross-check the README pointer against the first unchecked box in the story's own `tasks.md`, then verify over the next 3 logged sessions. If it still recurs, escalate to a protocol/model
+  discussion. Trigger: standalone. | Owner: Claude | Model: claude-sonnet-5 | Review: none
+- [ ] **DEBT-20** — `standalone-actionable`. `scripts-read-before-graph-query` (Count 5 at escalation, 2026-09-24). Overlaps `DEBT-16`'s `rule0-read-over-graph-hook-ignored` remediation: the Rule 0
+  `.claude/hooks/guard_src_reads.sh` PreToolUse hook is warn-only and a full `Read` of a `src/`/`scripts/` file still lands before any `search_graph`/`get_code_snippet`/`trace_path` call for that
+  file's own symbols (graph calls for *other* symbols in the same session do not satisfy Rule 0 for this file). Latest case: M13.1 mvp session — `src/mvp/backfill.py` read directly while graph calls
+  that session targeted `MVPStore`/`CategoryStats`/`Pick` only. Fold into DEBT-16's verification rather than re-deciding independently — same hook, same warn-only gap. Trigger: standalone once DEBT-16
+  lands a fix. | Owner: Claude | Model: claude-sonnet-5 | Review: none
