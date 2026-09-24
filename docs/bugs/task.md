@@ -23,6 +23,14 @@
 
 > BUG-049 closed 2026-09-24 (SHA `a874876`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
+## BUG-053 — no way to resume a PENDING `mvp backfill` pick into OPEN + full history without duplicating it
+
+- [x] **B053.1** — Add a resume path (`mvp backfill --resume <pick_id>` or equivalent) that looks up an existing PENDING pick by `pick_id` and calls `run_backfill(store, pick_id, equity_closes,
+  index_closes)` directly, skipping `Pick(...)`/`add_pick()` entirely so no duplicate row is created. | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer (0 CRITICAL/ERROR, 7 WARNING —
+  line-length false positive at 80 vs repo's configured 100, `ruff check` clean; type-hint-on-test-mock warnings deferred as stylistically consistent with existing test) | SHA: pending
+- [ ] **B053.2** — Guard `_backfill`'s create path against inserting a duplicate for a symbol/reco_date that already has a PENDING pick — error or warn instead of silently duplicating.
+- [ ] **B053.3** — Add tests: resuming a PENDING pick transitions to OPEN with snapshot history populated and never calls `add_pick`; the create-path duplicate guard rejects/warns as expected.
+
 ## BUG-052 — `mvp update`/`close` silently no-op on a truncated pick_id instead of erroring
 
 - [ ] **B052.1** — Confirm whether `close_pick` has the identical silent-no-op shape as `update_pick` (trace `src/mvp/store.py::close_pick` + `scripts/mvp.py::_close`).

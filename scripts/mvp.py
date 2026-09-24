@@ -9,6 +9,7 @@ Usage:
     python -m scripts.mvp update <pick_id> [--price N] [--target N] [--sl N] [--notes TEXT]
     python -m scripts.mvp close <pick_id> --price N
     python -m scripts.mvp backfill <symbol> --reco-date YYYY-MM-DD [--reco-price N] [--target N] [--sl N] [-p <provider_slug>] [-c <category_slug>] [--defer-key]
+    python -m scripts.mvp backfill --resume <pick_id>
     python -m scripts.mvp list [--open] [--all] [-p <provider_slug>] [-c <category_slug>]
     python -m scripts.mvp summary [-p <provider_slug>] [-c <category_slug>]
     python -m scripts.mvp summary <SYMBOL>
@@ -201,6 +202,40 @@ def _close(store: MVPStore, args: argparse.Namespace) -> None:
 
 def _backfill(store: MVPStore, args: argparse.Namespace) -> None:
     from src.mvp.backfill import fetch_historical_index_closes, run_backfill
+
+    resume_id = getattr(args, "resume", None)
+    if resume_id is not None:
+        pick = store.get_pick(resume_id)
+        if pick is None:
+            print(f"No pick found for id {resume_id}.")
+            return
+        if pick.status != PickStatus.PENDING:
+            print(f"Pick {resume_id[:8]} is not PENDING (status: {pick.status.value}).")
+            return
+
+        from_date = date.fromisoformat(pick.pick_date[:10])
+        to_date = date.today()
+
+        closes_list = fetch_historical_closes(pick.symbol, from_date, to_date)
+        equity_closes = dict(closes_list)
+        index_closes = fetch_historical_index_closes(from_date, to_date)
+
+        run_backfill(store, pick.pick_id, equity_closes, index_closes, end_date=to_date)
+
+        updated_pick = store.get_pick(pick.pick_id)
+        if updated_pick:
+            print(f"Backfill resumed. Final status: {updated_pick.status.value}")
+            if updated_pick.entry_price:
+                print(f"  Entry Price: {updated_pick.entry_price}")
+            if updated_pick.close_price:
+                print(f"  Close Price: {updated_pick.close_price}")
+        else:
+            print("Pick not found after backfill.")
+        return
+
+    if args.symbol is None or args.reco_date is None:
+        print("symbol and --reco-date are required unless --resume is given.")
+        return
 
     category_id = _resolve_category_id(store, args.provider, args.category)
     instrument_key, trading_symbol = _resolve_instrument_key(args.symbol, args.defer_key)
@@ -470,8 +505,11 @@ def build_parser() -> argparse.ArgumentParser:
     backfill_parser = subparsers.add_parser(
         "backfill", help="Add a past pick and backfill its snapshot history."
     )
-    backfill_parser.add_argument("symbol")
-    backfill_parser.add_argument("--reco-date", required=True, help="YYYY-MM-DD")
+    backfill_parser.add_argument("symbol", nargs="?", default=None)
+    backfill_parser.add_argument("--reco-date", default=None, help="YYYY-MM-DD")
+    backfill_parser.add_argument(
+        "--resume", dest="resume", default=None, help="Resume an existing PENDING pick_id."
+    )
     backfill_parser.add_argument("-p", "--provider", dest="provider", default=None)
     backfill_parser.add_argument("-c", "--category", dest="category", default=None)
     backfill_parser.add_argument("--reco-price", type=float, default=None)

@@ -16,6 +16,39 @@
 
 ---
 
+## BUG-053 — no way to transition a `backfill`-created pick from PENDING to OPEN with full snapshot history, without duplicating the pick
+
+| | |
+|---|---|
+| Status | 🟡 Fix in progress — found 2026-09-24; B053.1 landed 2026-09-24. B053.2/B053.3 remainder still open. |
+| Discovered | 2026-09-24 — advisory session walking `mvp backfill` → `equity_bhavcopy_bootstrap` → re-`backfill` for a new pick (JK Tyre & Industries Ltd) with un-bootstrapped OHLCV history. |
+| Location | `scripts/mvp.py::_backfill` → `src/mvp/store.py::MVPStore.add_pick`; `src/mvp/backfill.py::run_backfill`/`enter_backfill_pick`; `scripts/mvp_watch.py::run`. |
+
+**Symptom:** `mvp backfill SYMBOL --reco-date ...` run before `scripts/pipeline/equity_bhavcopy_bootstrap` has that symbol's OHLCV parquet on disk finds zero closes and leaves the new pick PENDING (no
+`entry_price`, no snapshots). There is no CLI path to complete that pick once the OHLCV data exists: re-running `mvp backfill` with the same symbol/reco-date does **not** resume the existing pick —
+`_backfill` always constructs a new `Pick(pick_id=str(uuid.uuid4()), ...)` and calls `store.add_pick()`, which is an unconditional `INSERT` with no uniqueness check on symbol/reco_date
+(`src/mvp/store.py:271-316`). The result is a second, independent PENDING row for the same symbol; `mvp summary SYMBOL` then shows two entries.
+
+Separately, a pick stuck PENDING has no path to OPEN other than backfill's own `enter_backfill_pick`, or a manual `mvp update <pick_id> --price <value>`. `mvp_watch.run()` (the hourly live cron) only
+calls `store.get_open_picks()` — PENDING picks are pulled in solely for the hourly Telegram summary display (`store.list_picks(PickStatus.PENDING)`), never for live-price entry. So a PENDING pick that
+a duplicate `backfill` run doesn't resolve sits stuck indefinitely, invisible to the automated tracking the whole module exists for.
+
+**Root cause:** `_backfill`/`add_pick` were designed for the single-shot "symbol's history is already bootstrapped" case and never accounted for the ordering dependency with
+`equity_bhavcopy_bootstrap` (which filters bhavcopy rows to `MVPStore.get_distinct_symbols()` — i.e. the symbol has to already be in `mvp_recommendations` *before* bootstrap runs, or its rows are
+silently dropped). There is no `resume`/`retry` verb in the CLI (`scripts/mvp.py::build_parser`, subcommands: `provider`, `category`, `add`, `update`, `close`, `backfill`, `list`, `summary`) that
+re-invokes `run_backfill` against an *existing* `pick_id`, and `update_pick` (used to set `entry_price` manually) only flips status to OPEN — it does not walk `equity_closes`/`index_closes` to
+populate `MVPSnapshot` history the way `run_backfill` does.
+
+**Suggested fix:** Add a `mvp backfill --resume <pick_id>` (or similar) path that looks up the existing PENDING pick by `pick_id`, re-fetches `equity_closes`/`index_closes` for its `reco_date` → today
+window, and calls `run_backfill(store, pick_id, equity_closes, index_closes)` directly — skipping the `Pick(...)`/`add_pick()` construction entirely so no duplicate row is created. Add a test
+asserting a resumed PENDING pick transitions to OPEN with snapshot history populated, and that `add_pick` is never called on the resume path. Consider also guarding `_backfill`'s create path with a
+check against `store.get_distinct_symbols()` / an existing PENDING pick for the same symbol+reco_date, erroring or warning instead of silently inserting a duplicate.
+
+**Impact so far:** Low — caught before any duplicate pick was actually created; this is a workflow/UX gap, not a data-corruption bug. But it blocks the intended use case (backfilling a pick whose
+OHLCV history isn't bootstrapped yet) without manual DB surgery or a bespoke script calling `run_backfill` directly.
+
+---
+
 ## BUG-052 — `mvp update`/`close` accept the truncated 8-char pick_id shown by `list`, but silently no-op instead of erroring
 
 | | |

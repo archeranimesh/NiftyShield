@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 
 from scripts.mvp import _add, _backfill, _list, _summary_by_symbol, _summary_grouped
-from src.mvp.models import Category, Pick, Provider, ProviderSource
+from src.mvp.models import Category, Pick, PickStatus, Provider, ProviderSource
 from src.mvp.store import MVPStore
 
 
@@ -474,3 +474,88 @@ def test_backfill_sets_symbol_to_resolved_trading_symbol(tmp_path: Path, monkeyp
     assert len(picks) == 1
     assert picks[0].symbol == "ENGINERSIN"
     assert picks[0].instrument_key == "NSE_EQ|INE510A01028"
+
+
+def test_backfill_resume_transitions_pending_pick_without_add_pick(
+    tmp_path: Path, monkeypatch
+) -> None:
+    db_path = tmp_path / "test.db"
+    store = MVPStore(db_path)
+    store.init_db()
+
+    pick = Pick(
+        pick_id="pending-pick-1",
+        category_id=None,
+        symbol="JKTYRE",
+        instrument_key="NSE_EQ|INE1234",
+        reco_price=Decimal("100.0"),
+        pick_date="2023-01-01T00:00:00Z",
+        target_price=None,
+        stop_loss=None,
+        created_at="2023-01-01T00:00:00Z",
+        updated_at="2023-01-01T00:00:00Z",
+        status=PickStatus.PENDING,
+    )
+    store.add_pick(pick)
+
+    called_run_backfill = False
+
+    def mock_run_backfill(store_arg, pick_id, eq_closes, idx_closes, end_date):
+        nonlocal called_run_backfill
+        called_run_backfill = True
+        assert pick_id == "pending-pick-1"
+        store_arg.update_pick(pick_id, status=PickStatus.OPEN, entry_price=Decimal("101.0"))
+
+    add_pick_calls = 0
+    original_add_pick = MVPStore.add_pick
+
+    def counting_add_pick(self, *args, **kwargs):
+        nonlocal add_pick_calls
+        add_pick_calls += 1
+        return original_add_pick(self, *args, **kwargs)
+
+    monkeypatch.setattr("src.mvp.backfill.run_backfill", mock_run_backfill)
+    monkeypatch.setattr("scripts.mvp.fetch_historical_closes", lambda *args, **kwargs: [])
+    monkeypatch.setattr(
+        "src.mvp.backfill.fetch_historical_index_closes", lambda *args, **kwargs: {}
+    )
+    monkeypatch.setattr(MVPStore, "add_pick", counting_add_pick)
+
+    args = argparse.Namespace(resume="pending-pick-1", symbol=None, reco_date=None)
+
+    _backfill(store, args)
+
+    assert called_run_backfill
+    assert add_pick_calls == 0
+    updated = store.get_pick("pending-pick-1")
+    assert updated is not None
+    assert updated.status == PickStatus.OPEN
+    assert updated.entry_price == Decimal("101.0")
+
+
+def test_backfill_resume_rejects_non_pending_pick(tmp_path: Path, capsys) -> None:
+    db_path = tmp_path / "test.db"
+    store = MVPStore(db_path)
+    store.init_db()
+
+    pick = Pick(
+        pick_id="open-pick-1",
+        category_id=None,
+        symbol="JKTYRE",
+        instrument_key="NSE_EQ|INE1234",
+        reco_price=Decimal("100.0"),
+        pick_date="2023-01-01T00:00:00Z",
+        target_price=None,
+        stop_loss=None,
+        created_at="2023-01-01T00:00:00Z",
+        updated_at="2023-01-01T00:00:00Z",
+        status=PickStatus.OPEN,
+    )
+    store.add_pick(pick)
+
+    args = argparse.Namespace(resume="open-pick-1", symbol=None, reco_date=None)
+
+    _backfill(store, args)
+
+    captured = capsys.readouterr()
+    assert "not PENDING" in captured.out
