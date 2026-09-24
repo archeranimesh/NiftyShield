@@ -1109,6 +1109,13 @@ workshop, not a blocker.
 
 ---
 
+## MVP — Multi-bagger Value Picks Tracker (2026-09-24)
+
+MVP module added (`src/mvp/`, `scripts/mvp.py`, `scripts/mvp_watch.py`, `docs/plan/mvp/`): `instrument_key` resolved at add-time via `InstrumentLookup`; monetary fields hold the TEXT/`Decimal`
+invariant (`schema.md`). Standalone — reads/writes only the `mvp_*` tables in `portfolio.sqlite`, no `BrokerClient` execution path, no shared pool across picks (independent ₹1L notional per pick).
+
+---
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/` (except 0.6c), `src/streaming/` — all empty

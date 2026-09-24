@@ -65,6 +65,10 @@ Top-level `src/` packages, one line each (detail → `CONTEXT_TREE.md`):
   `equity_bhavcopy_ingest.py` (NSE CM equity daily-close ingest — `EquityBhavRecord`, download/parse/write-to-parquet, EQ-series only; index-level counterpart for NIFTY 50 via `IndexBhavRecord`; MVP
   M0 prerequisite, no CLI wiring yet).
 - `src/gamma/` — Near-Expiry Gamma Buy scaffolding: frozen models + `GammaStore`.
+- `src/mvp/` — Multi-bagger Value Picks Tracker: tipster/analyst pick tracking, independent of all other strategy modules. Frozen Pydantic models (`Pick`, `MVPSnapshot`, `CategoryStats`,
+  `ClosePickResult`, …), `MVPStore` (own `mvp_*` tables in `portfolio.sqlite` — providers/categories/recommendations/tranches/snapshots), pure `tracker.py` (`check_prices`, hourly/EOD Telegram summary
+  builders), `scripts/mvp.py` CLI (provider/category/add/update/close/list/summary/backfill) and `scripts/mvp_watch.py` (hourly LTP watch + auto-close + Telegram alerts; `--eod` for the end-of-day
+  summary). `docs/plan/mvp/` — story docs.
 - `src/council/` — AI council infra: `RapidCouncil` (parallel Stage-1 fan-out + chairman synthesis), request/response models.
 - `src/utils/` — `setup_logging(*, json, level)` (structlog, canonical entrypoint — see `LOGGING.md`), `fmt_inr` Indian-numbering formatter.
 - `src/config.py` — `Settings(BaseSettings)` singleton; declares every env var. `src/db.py` — shared SQLite context manager (WAL, FK, auto commit/rollback).
@@ -95,6 +99,8 @@ Developer + research tooling (`pyproject.toml`, `Makefile`, `.pre-commit-config.
   leg live. See REFERENCES.md strategy tables + TODOS.md session log for per-leg detail.
 - `nuvama_intraday_snapshots` logging active on 2026-04-17 (30-day retention loop engaged automatically).
 - Cron jobs set up: `45 15 * * 1-5` for daily EOD options recording, plus `*/5 9-15 * * 1-5` for intraday extremes monitoring.
+- MVP watch cron live: `0 9-15 * * 1-5 python -m scripts.mvp_watch >> logs/mvp_watch.log 2>&1` — hourly LTP fetch, snapshot recording, target/stop-loss auto-close + Telegram alerts for tracked
+  tipster/analyst picks. The `--eod` end-of-day summary path (M13.4) is coded but has no cron entry yet.
 
 ---
 

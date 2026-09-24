@@ -88,6 +88,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-24] MVP M5 — docs close (`CONTEXT.md` module tree + Live Data cron note, `DECISIONS.md` MVP entry, this log). MVP watch hourly cron was already live in the crontab (`0 9-15 * * 1-5
+  scripts.mvp_watch`) — no crontab change needed, just documented. M1–M9/M10–M13 ship bar now fully docs-closed.
 - [2026-09-24] MVP fix — `get_category_high_low` forward-fills a pick with no day-1 snapshot into later days instead of dropping it from the day's aggregate (leftover from the M13.3 session, committed
   this session) — `0bd3c20`
 - [2026-09-24] MVP M13.4 — EOD summary builders ported to `src/mvp/tracker.py` (`CategoryRollup`/`ProviderRollup`/`build_eod_table`/`format_eod_summary`) — `71bca0a`; wired into
