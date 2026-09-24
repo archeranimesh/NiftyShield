@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import sys
 from datetime import date, datetime, timezone
+from decimal import Decimal
 from pathlib import Path
 
 import structlog
@@ -36,8 +37,14 @@ from src.mvp.models import (  # noqa: E402
 )
 from src.mvp.store import MVPStore  # noqa: E402
 from src.mvp.tracker import (  # noqa: E402
+    CategoryRollup,
     MVPEvent,
+    ProviderRollup,
+    build_category_rollup,
+    category_short_code,
     check_prices,
+    compute_overall_inception_pct,
+    format_eod_summary,
     format_hourly_summary,
 )
 from src.notifications.formatting import format_money, format_pct  # noqa: E402
@@ -148,6 +155,81 @@ async def run() -> None:
             await notifier.send(summary)
 
 
+_TERMINAL_STATUSES = (PickStatus.TARGET_HIT, PickStatus.SL_HIT, PickStatus.MANUAL_CLOSE)
+
+
+async def run_eod() -> None:
+    """End-of-day per-category P&L/win-rate/high-low rollup across every
+    provider, sent once daily after market close.
+
+    Cron schedule: 45 15 * * 1-5 (after the last hourly ``run()`` invocation
+    so the day's final snapshot is already recorded).
+    """
+    store = MVPStore(settings.db_path)
+    providers = await asyncio.to_thread(store.list_providers)
+    all_picks = await asyncio.to_thread(store.list_picks)
+    if not providers or not all_picks:
+        logger.info("mvp_watch.eod_no_picks")
+        return
+
+    open_picks = [p for p in all_picks if p.status == PickStatus.OPEN]
+    keyed_open = {p.instrument_key: p for p in open_picks if p.instrument_key is not None}
+    ltp_map: dict[str, Decimal] = {}
+    if keyed_open:
+        broker = create_client(settings.upstox_env)
+        ltp_map = await broker.get_ltp(list(keyed_open))
+
+    total_deployed = sum((pick.deployed_capital for pick in all_picks), Decimal("0"))
+
+    provider_rollups: list[ProviderRollup] = []
+    for provider in providers:
+        categories = await asyncio.to_thread(store.list_categories, provider.provider_id)
+        category_rollups: list[CategoryRollup] = []
+        for category in categories:
+            cat_picks = [p for p in all_picks if p.category_id == category.category_id]
+            if not cat_picks:
+                continue
+            stats = await asyncio.to_thread(store.get_category_stats, category.category_id, ltp_map)
+            day_chg_pct = await asyncio.to_thread(
+                store.get_category_day_change, category.category_id
+            )
+            high_low = await asyncio.to_thread(store.get_category_high_low, category.category_id)
+            category_rollups.append(
+                build_category_rollup(
+                    category,
+                    stats,
+                    day_chg_pct,
+                    high_low,
+                    open_count=sum(1 for p in cat_picks if p.status == PickStatus.OPEN),
+                    pending_count=sum(1 for p in cat_picks if p.status == PickStatus.PENDING),
+                    closed_count=sum(1 for p in cat_picks if p.status in _TERMINAL_STATUSES),
+                )
+            )
+        if category_rollups:
+            provider_rollups.append(
+                ProviderRollup(
+                    provider_name=provider.display_name,
+                    short_code=category_short_code(provider.slug),
+                    categories=category_rollups,
+                )
+            )
+
+    if not provider_rollups:
+        logger.info("mvp_watch.eod_no_category_picks")
+        return
+
+    all_categories = [cat for p in provider_rollups for cat in p.categories]
+    inception_pct = compute_overall_inception_pct(all_categories, total_deployed)
+    run_date = date.today().isoformat()
+    message = format_eod_summary(provider_rollups, run_date, inception_pct)
+    if not message:
+        return
+
+    notifier = build_notifier()
+    if notifier is not None:
+        await notifier.send(message)
+
+
 def _pick_label(pick: Pick | None, category_labels: dict[str, str]) -> str:
     """Look up a pick's "Provider / Category" label, or "" if unresolvable."""
     if pick is None or pick.category_id is None:
@@ -243,4 +325,7 @@ def _category_stats_line(stats: CategoryStats | None) -> str | None:
 
 if __name__ == "__main__":
     setup_logging()
-    asyncio.run(run())
+    if "--eod" in sys.argv:
+        asyncio.run(run_eod())
+    else:
+        asyncio.run(run())
