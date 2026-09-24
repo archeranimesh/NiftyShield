@@ -182,6 +182,38 @@ def test_update_pick_with_entry_price_advances_pending_to_open(tmp_path: Path) -
     assert fetched.entry_price == Decimal("3500")
 
 
+def test_update_pick_with_entry_price_computes_lump_sum_fill(tmp_path: Path) -> None:
+    store = MVPStore(str(tmp_path / "test.sqlite"))
+    store.init_db()
+    store.add_pick(_make_pick())
+
+    store.update_pick("pick-1", entry_price=Decimal("3500"))
+
+    fetched = store.get_pick("pick-1")
+    assert fetched is not None
+    assert fetched.total_qty == 28  # floor(100000 / 3500)
+    assert fetched.deployed_capital == Decimal("98000")  # 28 * 3500
+    assert fetched.idle_cash == Decimal("2000")  # 100000 - 98000
+    assert fetched.avg_cost == Decimal("3500") * Decimal("1.0025")  # 25 bps knob
+
+
+def test_update_pick_entry_price_on_already_open_pick_does_not_recompute_fill(
+    tmp_path: Path,
+) -> None:
+    store = MVPStore(str(tmp_path / "test.sqlite"))
+    store.init_db()
+    store.add_pick(_make_pick())
+    store.update_pick("pick-1", entry_price=Decimal("3500"))
+
+    store.update_pick("pick-1", entry_price=Decimal("3600"))
+
+    fetched = store.get_pick("pick-1")
+    assert fetched is not None
+    assert fetched.entry_price == Decimal("3600")
+    assert fetched.total_qty == 28
+    assert fetched.deployed_capital == Decimal("98000")
+
+
 def test_update_pick_without_entry_price_stays_pending(tmp_path: Path) -> None:
     store = MVPStore(str(tmp_path / "test.sqlite"))
     store.init_db()
@@ -207,6 +239,33 @@ def test_close_pick_with_manual_close_sets_closed_at_and_price(tmp_path: Path) -
     assert fetched.status == PickStatus.MANUAL_CLOSE
     assert fetched.close_price == Decimal("3600")
     assert fetched.closed_at is not None
+
+
+def test_close_pick_computes_realized_pnl_with_cost(tmp_path: Path) -> None:
+    store = MVPStore(str(tmp_path / "test.sqlite"))
+    store.init_db()
+    store.add_pick(_make_pick())
+    store.update_pick("pick-1", entry_price=Decimal("3500"))
+
+    store.close_pick("pick-1", Decimal("3800"), PickStatus.TARGET_HIT)
+
+    fetched = store.get_pick("pick-1")
+    assert fetched is not None
+    avg_cost = Decimal("3500") * Decimal("1.0025")
+    expected_pnl = (Decimal("3800") * Decimal("0.9975") - avg_cost) * 28
+    assert fetched.realized_pnl == expected_pnl
+
+
+def test_close_pick_never_entered_has_zero_realized_pnl(tmp_path: Path) -> None:
+    store = MVPStore(str(tmp_path / "test.sqlite"))
+    store.init_db()
+    store.add_pick(_make_pick())
+
+    store.close_pick("pick-1", Decimal("3600"), PickStatus.MANUAL_CLOSE)
+
+    fetched = store.get_pick("pick-1")
+    assert fetched is not None
+    assert fetched.realized_pnl == Decimal("0")
 
 
 def test_close_pick_with_non_terminal_status_raises(tmp_path: Path) -> None:

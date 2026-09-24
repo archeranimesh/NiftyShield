@@ -237,6 +237,27 @@ def _backfill(store: MVPStore, args: argparse.Namespace) -> None:
         print("Pick not found after backfill.")
 
 
+def _pnl_and_return(pick: Pick, ltp_map: dict[str, Decimal] | None = None) -> tuple[str, str]:
+    """Compute display strings for P&L and return% on a pick.
+
+    Realized P&L/return use ``pick.realized_pnl`` for a closed pick.
+    Unrealized return for an OPEN pick needs ``ltp_map`` (instrument_key ->
+    ltp); without a matching entry it is shown as ``-``.
+    """
+    ltp_map = ltp_map or {}
+    if pick.status != PickStatus.OPEN and pick.status != PickStatus.PENDING:
+        if pick.deployed_capital == 0:
+            return str(pick.realized_pnl), "-"
+        return_pct = pick.realized_pnl / pick.deployed_capital * 100
+        return str(pick.realized_pnl), f"{return_pct:+.2f}%"
+    ltp = ltp_map.get(pick.instrument_key) if pick.instrument_key else None
+    if ltp is None or pick.avg_cost is None or pick.deployed_capital == 0:
+        return "-", "-"
+    unrealized_pnl = (ltp - pick.avg_cost) * pick.total_qty
+    return_pct = unrealized_pnl / pick.deployed_capital * 100
+    return str(unrealized_pnl), f"{return_pct:+.2f}%"
+
+
 def _build_category_map(store: MVPStore) -> dict[str, tuple[str, str]]:
     mapping: dict[str, tuple[str, str]] = {}
     for provider in store.list_providers():
@@ -281,13 +302,17 @@ def _list(store: MVPStore, args: argparse.Namespace) -> None:
         print("No picks.")
         return
     category_map = _build_category_map(store)
-    print("ID | SYMBOL | STATUS | RECO | ENTRY | DEV% | TARGET | SL | PROVIDER/CATEGORY | DATE")
+    print(
+        "ID | SYMBOL | STATUS | RECO | ENTRY | DEV% | TARGET | SL | DEPLOYED | "
+        "AVG_COST | P&L | RETURN% | PROVIDER/CATEGORY | DATE"
+    )
     for pick in picks:
         prov_disp, cat_disp = category_map.get(pick.category_id, ("-", "-"))
         dev_str = "-"
         if pick.entry_price is not None and pick.reco_price is not None and pick.reco_price != 0:
             dev_pct = (pick.entry_price - pick.reco_price) / pick.reco_price * 100
             dev_str = f"{dev_pct:+.2f}%"
+        pnl_str, return_str = _pnl_and_return(pick)
         print(
             f"{pick.pick_id[:8]} | {pick.symbol} | {pick.status.value} | "
             f"{pick.reco_price if pick.reco_price is not None else '-'} | "
@@ -295,6 +320,9 @@ def _list(store: MVPStore, args: argparse.Namespace) -> None:
             f"{dev_str} | "
             f"{pick.target_price if pick.target_price is not None else '-'} | "
             f"{pick.stop_loss if pick.stop_loss is not None else '-'} | "
+            f"{pick.deployed_capital} | "
+            f"{pick.avg_cost if pick.avg_cost is not None else '-'} | "
+            f"{pnl_str} | {return_str} | "
             f"{prov_disp}/{cat_disp} | {pick.pick_date}"
         )
 
@@ -305,20 +333,27 @@ def _summary_by_symbol(store: MVPStore, symbol: str) -> None:
         print("No picks.")
         return
     category_map = _build_category_map(store)
-    print("PROVIDER | CATEGORY | RECO | ENTRY | DEV% | STATUS | CLOSE_PRICE | DATE")
+    print(
+        "PROVIDER | CATEGORY | RECO | ENTRY | DEV% | STATUS | CLOSE_PRICE | "
+        "DEPLOYED | AVG_COST | P&L | RETURN% | DATE"
+    )
     for pick in picks:
         prov_disp, cat_disp = category_map.get(pick.category_id, ("-", "-"))
         dev_str = "-"
         if pick.entry_price is not None and pick.reco_price is not None and pick.reco_price != 0:
             dev_pct = (pick.entry_price - pick.reco_price) / pick.reco_price * 100
             dev_str = f"{dev_pct:+.2f}%"
+        pnl_str, return_str = _pnl_and_return(pick)
         print(
             f"{prov_disp} | {cat_disp} | "
             f"{pick.reco_price if pick.reco_price is not None else '-'} | "
             f"{pick.entry_price if pick.entry_price is not None else '-'} | "
             f"{dev_str} | "
             f"{pick.status.value} | "
-            f"{pick.close_price if pick.close_price is not None else '-'} | {pick.pick_date}"
+            f"{pick.close_price if pick.close_price is not None else '-'} | "
+            f"{pick.deployed_capital} | "
+            f"{pick.avg_cost if pick.avg_cost is not None else '-'} | "
+            f"{pnl_str} | {return_str} | {pick.pick_date}"
         )
 
 
@@ -334,7 +369,10 @@ def _summary_grouped(store: MVPStore, args: argparse.Namespace) -> None:
         key = category_map.get(pick.category_id, ("-", "-"))
         groups.setdefault(key, []).append(pick)
 
-    print("PROVIDER/CATEGORY | OPEN | TARGET_HIT | SL_HIT | WIN_RATE | CLOSED | AVG_DEV%")
+    print(
+        "PROVIDER/CATEGORY | OPEN | TARGET_HIT | SL_HIT | WIN_RATE | CLOSED | "
+        "AVG_DEV% | REALIZED_PNL"
+    )
     for (prov_disp, cat_disp), group_picks in sorted(groups.items()):
         open_count = sum(1 for p in group_picks if p.status == PickStatus.OPEN)
         target_hit = sum(1 for p in group_picks if p.status == PickStatus.TARGET_HIT)
@@ -350,10 +388,11 @@ def _summary_grouped(store: MVPStore, args: argparse.Namespace) -> None:
             if p.entry_price is not None and p.reco_price is not None and p.reco_price != 0
         ]
         avg_dev = f"{(sum(devs) / len(devs)):+.2f}%" if devs else "-"
+        realized_pnl = sum((p.realized_pnl for p in group_picks), Decimal("0"))
 
         print(
             f"{prov_disp}/{cat_disp} | {open_count} | {target_hit} | {sl_hit} | "
-            f"{win_rate} | {closed} | {avg_dev}"
+            f"{win_rate} | {closed} | {avg_dev} | {realized_pnl}"
         )
 
 

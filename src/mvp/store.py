@@ -10,6 +10,8 @@ from pathlib import Path
 from src.db import connect
 from src.mvp.models import Category, MVPSnapshot, Pick, PickStatus, Provider
 
+COST_BPS = Decimal("25")  # round-trip cost knob, decision #2 (2026-09-18)
+
 
 class MVPStore:
     """SQLite-backed store for MVP providers, categories, picks, and snapshots."""
@@ -326,7 +328,11 @@ class MVPStore:
         """Update the given fields of a pick and bump ``updated_at``.
 
         If ``entry_price`` is set and the pick is currently PENDING, the
-        status auto-advances to OPEN.
+        status auto-advances to OPEN and the M-A lump-sum fill is computed:
+        ``total_qty = floor(capital_allotted / entry_price)``,
+        ``deployed_capital = total_qty * entry_price``, ``idle_cash =
+        capital_allotted - deployed_capital``, and ``avg_cost = entry_price``
+        capitalized with the round-trip cost knob (``COST_BPS``).
 
         Args:
             pick_id: The pick to update.
@@ -349,18 +355,35 @@ class MVPStore:
             "notes",
             "status",
         }
-        decimal_fields = {"entry_price", "reco_price", "target_price", "stop_loss"}
+        decimal_fields = {
+            "entry_price",
+            "reco_price",
+            "target_price",
+            "stop_loss",
+            "deployed_capital",
+            "avg_cost",
+            "idle_cash",
+        }
         fields = {k: v for k, v in kwargs.items() if k in allowed}
 
         with connect(self.db_path) as conn:
             row = conn.execute(
-                "SELECT status FROM mvp_recommendations WHERE pick_id = ?", (pick_id,)
+                "SELECT status, capital_allotted FROM mvp_recommendations WHERE pick_id = ?",
+                (pick_id,),
             ).fetchone()
             if row is None:
                 return
 
             if "entry_price" in fields and row["status"] == PickStatus.PENDING.value:
                 fields["status"] = PickStatus.OPEN.value
+                entry_price = Decimal(str(fields["entry_price"]))
+                capital_allotted = Decimal(row["capital_allotted"])
+                total_qty = int(capital_allotted // entry_price)
+                deployed_capital = entry_price * total_qty
+                fields["total_qty"] = total_qty
+                fields["deployed_capital"] = deployed_capital
+                fields["idle_cash"] = capital_allotted - deployed_capital
+                fields["avg_cost"] = entry_price * (1 + COST_BPS / Decimal("10000"))
 
             fields["updated_at"] = datetime.now(timezone.utc).isoformat()
 
@@ -379,7 +402,12 @@ class MVPStore:
             )
 
     def close_pick(self, pick_id: str, close_price: Decimal, status: PickStatus) -> None:
-        """Close a pick, setting ``closed_at``, ``close_price``, and ``status``.
+        """Close a pick, setting ``closed_at``, ``close_price``, ``status``, and
+        ``realized_pnl``.
+
+        ``realized_pnl = (close_price * (1 - COST_BPS/10000) - avg_cost) *
+        total_qty`` when the pick has a fill (``avg_cost`` set); ``0``
+        otherwise (e.g. closing a pick that was never entered).
 
         Args:
             pick_id: The pick to close.
@@ -396,13 +424,25 @@ class MVPStore:
 
         now = datetime.now(timezone.utc).isoformat()
         with connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT avg_cost, total_qty FROM mvp_recommendations WHERE pick_id = ?",
+                (pick_id,),
+            ).fetchone()
+            realized_pnl = Decimal("0")
+            if row is not None and row["avg_cost"] is not None:
+                avg_cost = Decimal(row["avg_cost"])
+                total_qty = row["total_qty"]
+                realized_pnl = (
+                    close_price * (1 - COST_BPS / Decimal("10000")) - avg_cost
+                ) * total_qty
             conn.execute(
                 """
                 UPDATE mvp_recommendations
-                SET closed_at = ?, close_price = ?, status = ?, updated_at = ?
+                SET closed_at = ?, close_price = ?, status = ?, updated_at = ?,
+                    realized_pnl = ?
                 WHERE pick_id = ?
                 """,
-                (now, str(close_price), status.value, now, pick_id),
+                (now, str(close_price), status.value, now, str(realized_pnl), pick_id),
             )
 
     def get_distinct_symbols(self) -> set[str]:
