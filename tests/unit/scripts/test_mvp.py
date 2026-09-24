@@ -559,3 +559,70 @@ def test_backfill_resume_rejects_non_pending_pick(tmp_path: Path, capsys) -> Non
 
     captured = capsys.readouterr()
     assert "not PENDING" in captured.out
+
+
+def test_backfill_create_path_guards_duplicate_pending(tmp_path: Path, monkeypatch, capsys) -> None:
+    db_path = tmp_path / "test.db"
+    store = MVPStore(db_path)
+    store.init_db()
+
+    provider = Provider(
+        provider_id="prov_1",
+        slug="prov",
+        display_name="Prov",
+        source_type=ProviderSource.OTHER,
+        created_at="2024-01-01",
+    )
+    store.add_provider(provider)
+    category = Category(
+        category_id="cat_1",
+        provider_id="prov_1",
+        slug="cat",
+        display_name="Cat",
+        created_at="2024-01-01",
+    )
+    store.add_category(category)
+
+    existing = Pick(
+        pick_id="existing-pending-1",
+        category_id="cat_1",
+        symbol="UNIPARTS",
+        instrument_key=None,
+        reco_price=Decimal("100.0"),
+        pick_date="2023-01-01T00:00:00Z",
+        target_price=None,
+        stop_loss=None,
+        created_at="2023-01-01T00:00:00Z",
+        updated_at="2023-01-01T00:00:00Z",
+        status=PickStatus.PENDING,
+    )
+    store.add_pick(existing)
+
+    monkeypatch.setattr("scripts.mvp.fetch_historical_closes", lambda *args, **kwargs: [])
+    monkeypatch.setattr(
+        "src.mvp.backfill.fetch_historical_index_closes", lambda *args, **kwargs: {}
+    )
+
+    def fail_run_backfill(*args, **kwargs):
+        raise AssertionError("run_backfill must not be called on a rejected duplicate")
+
+    monkeypatch.setattr("src.mvp.backfill.run_backfill", fail_run_backfill)
+
+    args = argparse.Namespace(
+        symbol="UNIPARTS",
+        reco_date="2023-01-01",
+        provider="prov",
+        category="cat",
+        reco_price=100.0,
+        target=None,
+        sl=None,
+        defer_key=True,
+    )
+
+    _backfill(store, args)
+
+    captured = capsys.readouterr()
+    assert "already exists" in captured.out
+    assert "--resume existing-pending-1" in captured.out
+    picks = store.list_picks()
+    assert len(picks) == 1

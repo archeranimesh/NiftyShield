@@ -5,15 +5,28 @@
 
 ---
 
+## BUG-053 — no way to resume a PENDING `mvp backfill` pick into OPEN + full history without duplicating it
+
+- [x] **B053.1** — Add a resume path (`mvp backfill --resume <pick_id>` or equivalent) that looks up an existing PENDING pick by `pick_id` and calls `run_backfill(store, pick_id, equity_closes,
+  index_closes)` directly, skipping `Pick(...)`/`add_pick()` entirely so no duplicate row is created. | SHA `3540577`
+- [x] **B053.2** — Guard `_backfill`'s create path against inserting a duplicate for a symbol/reco_date that already has a PENDING pick — error or warn instead of silently duplicating. | SHA pending
+- [x] **B053.3** — Add tests: resuming a PENDING pick transitions to OPEN with snapshot history populated and never calls `add_pick`; the create-path duplicate guard rejects/warns as expected. | SHA
+  pending
+
+---
+
 ## BUG-049 — MVP pick `symbol` stored as raw CLI input instead of the resolved NSE trading symbol
 
 - [x] **B049.1** — Have `_resolve_instrument_key` (`scripts/mvp.py`) return the resolved `trading_symbol` alongside `instrument_key`; thread it into `_add`/`_backfill` so `Pick.symbol` is set from the
   resolved value on a successful match, not `args.symbol`. | SHA `a874876`
 - [x] **B049.2** — Decide the no-match/`--defer-key` fallback behavior (keep typed string vs. flag for manual correction); no `update --symbol` CLI path exists today — note in `bugs.md`/task if one is
   needed as a follow-up. | Decided: keep typed string as fallback (no manual-correction CLI path exists to flag toward). | SHA `a874876`
-- [x] **B049.3** — Tests: `_add`/`_backfill` set `pick.symbol` to the resolved trading symbol on a successful (single-match and picker-selected) resolution; unchanged behavior on no-match/deferred. | SHA `a874876`
-- [x] **B049.4** — Fix the already-filed `b08f6661…` Engineers India pick's stored `symbol` (direct DB correction, same as done ad hoc this session) if not already superseded by a clean re-add. | Verified already `ENGINERSIN` in `data/portfolio/portfolio.sqlite` — superseded by the ad hoc fix done earlier this session, no further action needed.
-- [x] **B049.5** — Suite green + real `@code-reviewer` clean. | 89/89 `tests/unit/mvp/` + `tests/unit/scripts/test_mvp.py` pass; code-reviewer: 0 CRITICAL/ERROR, 4 minor WARNINGs (docstring + type-hint nits), 2 addressed inline, 2 accepted as domain-correct.
+- [x] **B049.3** — Tests: `_add`/`_backfill` set `pick.symbol` to the resolved trading symbol on a successful (single-match and picker-selected) resolution; unchanged behavior on no-match/deferred. |
+  SHA `a874876`
+- [x] **B049.4** — Fix the already-filed `b08f6661…` Engineers India pick's stored `symbol` (direct DB correction, same as done ad hoc this session) if not already superseded by a clean re-add. |
+  Verified already `ENGINERSIN` in `data/portfolio/portfolio.sqlite` — superseded by the ad hoc fix done earlier this session, no further action needed.
+- [x] **B049.5** — Suite green + real `@code-reviewer` clean. | 89/89 `tests/unit/mvp/` + `tests/unit/scripts/test_mvp.py` pass; code-reviewer: 0 CRITICAL/ERROR, 4 minor WARNINGs (docstring +
+  type-hint nits), 2 addressed inline, 2 accepted as domain-correct.
 - [x] **B049.6** — Flip `bugs.md` BUG-049 status to ✅ Fixed + SHA; move both sections to `docs/archive/bugs/{bugs,task}.md`; `TODOS.md` session-log line. | SHA `a874876`
 
 ## BUG-002 — Delta sign/magnitude corrupted by put-call misclassification
@@ -38,8 +51,8 @@ Rejected alternatives and why:
 
 **Implementation spec:**
   1. `src/paper/models.py` — add to `PaperPosition` (frozen dataclass, `strategy_name`/`leg_role`/`net_qty`/`avg_cost`/`avg_sell_price`/`instrument_key`/`entry_date: date | None = None` are the
-     existing fields, lines 115–138):
-     `option_type: Literal["PE", "CE", "FUT", "EQ"] | None = None` — appended AFTER `entry_date` (must stay last / keep a default; existing constructor call in `store.py` uses keyword args so field order doesn't matter there, but any positional test construction depends on it being last).
+     existing fields, lines 115–138): `option_type: Literal["PE", "CE", "FUT", "EQ"] | None = None` — appended AFTER `entry_date` (must stay last / keep a default; existing constructor call in
+     `store.py` uses keyword args so field order doesn't matter there, but any positional test construction depends on it being last).
   2. `src/paper/store.py` — in `get_position` (lines 579–609) and `get_positions` (lines 499–577), resolve `option_type` per position via `InstrumentLookup.get_by_key(instrument_key)`:
      - `NIFTYBEES_KEY` (`NSE_EQ|INF204KB14I2`, from `src.paper.constants`) → `"EQ"` (no lookup needed, short-circuit).
      - Else call `InstrumentLookup.get_by_key(instrument_key)` → dict with `"instrument_type"` key (values `"CE"` / `"PE"` confirmed via `search_options`, `src/instruments/lookup.py` lines 188–233; `get_by_key` impl at lines 270–275, currently O(n) linear scan over `self._instruments` — acceptable at current position counts, don't over-engineer an index for this task).

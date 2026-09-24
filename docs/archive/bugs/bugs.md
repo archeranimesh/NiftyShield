@@ -7,6 +7,47 @@
 
 ---
 
+## BUG-053 — no way to transition a `backfill`-created pick from PENDING to OPEN with full snapshot history, without duplicating the pick
+
+**Status:** ✅ Fixed, SHA `pending` (this session's B053.1 commit `3540577` + a follow-on commit closing B053.2/B053.3), closed 2026-09-24.
+
+| | |
+|---|---|
+| Discovered | 2026-09-24 — advisory session walking `mvp backfill` → `equity_bhavcopy_bootstrap` → re-`backfill` for a new pick (JK Tyre & Industries Ltd) with un-bootstrapped OHLCV history. |
+| Location | `scripts/mvp.py::_backfill` → `src/mvp/store.py::MVPStore.add_pick`; `src/mvp/backfill.py::run_backfill`/`enter_backfill_pick`; `scripts/mvp_watch.py::run`. |
+
+**Symptom:** `mvp backfill SYMBOL --reco-date ...` run before `scripts/pipeline/equity_bhavcopy_bootstrap` has that symbol's OHLCV parquet on disk finds zero closes and leaves the new pick PENDING (no
+`entry_price`, no snapshots). There is no CLI path to complete that pick once the OHLCV data exists: re-running `mvp backfill` with the same symbol/reco-date does **not** resume the existing pick —
+`_backfill` always constructs a new `Pick(pick_id=str(uuid.uuid4()), ...)` and calls `store.add_pick()`, which is an unconditional `INSERT` with no uniqueness check on symbol/reco_date
+(`src/mvp/store.py:271-316`). The result is a second, independent PENDING row for the same symbol; `mvp summary SYMBOL` then shows two entries.
+
+Separately, a pick stuck PENDING has no path to OPEN other than backfill's own `enter_backfill_pick`, or a manual `mvp update <pick_id> --price <value>`. `mvp_watch.run()` (the hourly live cron) only
+calls `store.get_open_picks()` — PENDING picks are pulled in solely for the hourly Telegram summary display (`store.list_picks(PickStatus.PENDING)`), never for live-price entry. So a PENDING pick that
+a duplicate `backfill` run doesn't resolve sits stuck indefinitely, invisible to the automated tracking the whole module exists for.
+
+**Root cause:** `_backfill`/`add_pick` were designed for the single-shot "symbol's history is already bootstrapped" case and never accounted for the ordering dependency with
+`equity_bhavcopy_bootstrap` (which filters bhavcopy rows to `MVPStore.get_distinct_symbols()` — i.e. the symbol has to already be in `mvp_recommendations` *before* bootstrap runs, or its rows are
+silently dropped). There is no `resume`/`retry` verb in the CLI (`scripts/mvp.py::build_parser`, subcommands: `provider`, `category`, `add`, `update`, `close`, `backfill`, `list`, `summary`) that
+re-invokes `run_backfill` against an *existing* `pick_id`, and `update_pick` (used to set `entry_price` manually) only flips status to OPEN — it does not walk `equity_closes`/`index_closes` to
+populate `MVPSnapshot` history the way `run_backfill` does.
+
+**Suggested fix:** Add a `mvp backfill --resume <pick_id>` (or similar) path that looks up the existing PENDING pick by `pick_id`, re-fetches `equity_closes`/`index_closes` for its `reco_date` → today
+window, and calls `run_backfill(store, pick_id, equity_closes, index_closes)` directly — skipping the `Pick(...)`/`add_pick()` construction entirely so no duplicate row is created. Add a test
+asserting a resumed PENDING pick transitions to OPEN with snapshot history populated, and that `add_pick` is never called on the resume path. Consider also guarding `_backfill`'s create path with a
+check against `store.get_distinct_symbols()` / an existing PENDING pick for the same symbol+reco_date, erroring or warning instead of silently inserting a duplicate.
+
+**Impact so far:** Low — caught before any duplicate pick was actually created; this is a workflow/UX gap, not a data-corruption bug. But it blocks the intended use case (backfilling a pick whose
+OHLCV history isn't bootstrapped yet) without manual DB surgery or a bespoke script calling `run_backfill` directly.
+
+**Implementation progress:** B053.1 added `mvp backfill --resume <pick_id>` — looks up the PENDING pick by id and calls `run_backfill` directly, skipping `Pick(...)`/`add_pick()` entirely; guards
+resuming a non-PENDING pick with an error. B053.2 added a duplicate guard on the create path — before constructing a new `Pick`, `_backfill` now scans `store.list_picks(PickStatus.PENDING)` for an
+existing pick matching the resolved symbol + `pick_date`, and if found, errors naming the existing `pick_id` and pointing at `--resume` instead of inserting a duplicate. B053.3 tests: resume
+transitions PENDING→OPEN without ever calling `add_pick`; resume rejects a non-PENDING pick; the create-path guard rejects a duplicate symbol/reco_date and leaves `store.list_picks()` at 1 row. Both
+code-reviewer passes came back 0 CRITICAL/ERROR (informational WARNINGs only, no action needed).
+
+
+---
+
 ## BUG-049 — MVP pick `symbol` is stored as the raw CLI-typed string, not the resolved NSE trading symbol — breaks historical-close lookups
 
 **Status:** ✅ Fixed, SHA `a874876`, closed 2026-09-24.
@@ -24,9 +65,9 @@ interactive fuzzy-match picker (`NSE_EQ|INE510A01028`, trading symbol `ENGINERSI
 **Root cause:** `_add`/`_backfill` built `Pick(symbol=args.symbol, ...)` directly from `args.symbol` — the raw CLI argument — never from the resolved instrument row returned by
 `_resolve_instrument_key`/`InstrumentLookup.search_equity`. `instrument_key` was correctly backfilled from that resolved row (fuzzy search + interactive picker when ambiguous), but `symbol` was not.
 
-**Fix:** `_resolve_instrument_key` now returns `tuple[str | None, str | None]` (`instrument_key`, `trading_symbol`) instead of a bare key. `_add`/`_backfill` set
-`symbol=trading_symbol or args.symbol` — using the resolved canonical trading symbol on a successful match, falling back to the typed string when resolution is deferred/skipped/no-match (decision:
-no `update --symbol` CLI path exists to flag toward manual correction, so a silent typed-string fallback was kept as the simplest correct behavior).
+**Fix:** `_resolve_instrument_key` now returns `tuple[str | None, str | None]` (`instrument_key`, `trading_symbol`) instead of a bare key. `_add`/`_backfill` set `symbol=trading_symbol or args.symbol`
+— using the resolved canonical trading symbol on a successful match, falling back to the typed string when resolution is deferred/skipped/no-match (decision: no `update --symbol` CLI path exists to
+flag toward manual correction, so a silent typed-string fallback was kept as the simplest correct behavior).
 
 **Implementation progress:** 3 new tests added to `tests/unit/scripts/test_mvp.py` — resolved-symbol path for `_add`, deferred-fallback path for `_add`, resolved-symbol path for `_backfill`. Full
 `tests/unit/mvp/` + `tests/unit/scripts/test_mvp.py` suite green (89 passed). Real `@code-reviewer` subagent run against `git diff HEAD`: 0 CRITICAL/ERROR, 4 WARNINGs (missing docstring on
@@ -42,26 +83,18 @@ type-hint findings applied, the other two accepted as domain-correct/non-blockin
 
 **Status:** ✅ Fixed, SHA `e8d91c1`, closed 2026-09-15.
 
-**Symptom:** Every morning-signal run computed and stored the consensus in `daily_signals`, but
-`paper_signal_entries` stayed empty (0 rows, all-time) and no signal-track entry confirmation
-ever reached Telegram — confirmed missing for 2026-09-14 and 2026-09-15's BULLISH/23450
-consensus.
+**Symptom:** Every morning-signal run computed and stored the consensus in `daily_signals`, but `paper_signal_entries` stayed empty (0 rows, all-time) and no signal-track entry confirmation ever
+reached Telegram — confirmed missing for 2026-09-14 and 2026-09-15's BULLISH/23450 consensus.
 
-**Root cause:** `src/signals/pipeline.py`'s SPT-6 tail-call constructed a `PaperStore` then
-called `await asyncio.to_thread(paper_store.init_db)` before `open_signal_paper_entry(...)`.
-`PaperStore` has no `init_db` method — its `__init__` already runs `_SCHEMA` on construction
-(`src/paper/store.py`). The call raised `AttributeError` on every invocation, caught and
-logged as `morning_signal.paper_entry_failed` by the surrounding cron-boundary `except
-Exception`, which silently skipped `open_signal_paper_entry` (and therefore the Telegram
-send) on every run since the line was introduced.
+**Root cause:** `src/signals/pipeline.py`'s SPT-6 tail-call constructed a `PaperStore` then called `await asyncio.to_thread(paper_store.init_db)` before `open_signal_paper_entry(...)`. `PaperStore`
+has no `init_db` method — its `__init__` already runs `_SCHEMA` on construction (`src/paper/store.py`). The call raised `AttributeError` on every invocation, caught and logged as
+`morning_signal.paper_entry_failed` by the surrounding cron-boundary `except Exception`, which silently skipped `open_signal_paper_entry` (and therefore the Telegram send) on every run since the line
+was introduced.
 
-**Fix:** deleted the stray `init_db` call; `PaperStore(settings.db_path)` already leaves the
-store fully initialized.
+**Fix:** deleted the stray `init_db` call; `PaperStore(settings.db_path)` already leaves the store fully initialized.
 
-**Scope check:** isolated to the signal-track paper-entry path — CC/PP/Collar/IC use
-`PaperStore` instances constructed the normal way (never call `init_db`); only two `init_db`
-call sites existed repo-wide, the other being on the unrelated `SignalStore`
-(`scripts/morning_signal.py`), which is correct.
+**Scope check:** isolated to the signal-track paper-entry path — CC/PP/Collar/IC use `PaperStore` instances constructed the normal way (never call `init_db`); only two `init_db` call sites existed
+repo-wide, the other being on the unrelated `SignalStore` (`scripts/morning_signal.py`), which is correct.
 
 ---
 
@@ -69,26 +102,19 @@ call sites existed repo-wide, the other being on the unrelated `SignalStore`
 
 **Status:** ✅ Fixed, SHA `674ca65`, closed 2026-09-15.
 
-**Symptom:** `SignalOutcome` for 2026-09-15 was recorded with `executed=False`,
-`pnl_per_lot=None`, even though `paper_signal_entries` had a live row (`trade_id` 295,
-`signal_date` 2026-09-15, entered 10:27:50 IST via `signal_paper_entry.py` right after
-BUG-047's fix landed) — BUY_CALL, NIFTY 23450 29-SEP-26 CE, qty 65 @ ₹210.025.
+**Symptom:** `SignalOutcome` for 2026-09-15 was recorded with `executed=False`, `pnl_per_lot=None`, even though `paper_signal_entries` had a live row (`trade_id` 295, `signal_date` 2026-09-15, entered
+10:27:50 IST via `signal_paper_entry.py` right after BUG-047's fix landed) — BUY_CALL, NIFTY 23450 29-SEP-26 CE, qty 65 @ ₹210.025.
 
-**Root cause:** `run_record_phase()` in `scripts/signal_eod.py` set `executed = args.executed`
-— purely from the `--executed` CLI flag (`action="store_true"`, default `False`). The 16:00
-cron entry never passes `--executed`, so every cron-driven run recorded `executed=False`
-regardless of whether `paper_signal_entries` actually had a matching row for that trade date.
-Discovered as a same-day downstream consequence of BUG-047: BUG-047 blocked entries entirely
-(so `executed=False` was accidentally correct until fixed); once entries started landing,
-`signal_eod`'s flag-only logic became actively wrong.
+**Root cause:** `run_record_phase()` in `scripts/signal_eod.py` set `executed = args.executed` — purely from the `--executed` CLI flag (`action="store_true"`, default `False`). The 16:00 cron entry
+never passes `--executed`, so every cron-driven run recorded `executed=False` regardless of whether `paper_signal_entries` actually had a matching row for that trade date. Discovered as a same-day
+downstream consequence of BUG-047: BUG-047 blocked entries entirely (so `executed=False` was accidentally correct until fixed); once entries started landing, `signal_eod`'s flag-only logic became
+actively wrong.
 
-**Fix:** before falling back to the flag, `run_record_phase` now queries
-`PaperStore.get_entries(trade_date, trade_date)`; if a live entry exists it sets
-`executed = True` and backfills `entry_premium` from the entry when not explicitly passed.
+**Fix:** before falling back to the flag, `run_record_phase` now queries `PaperStore.get_entries(trade_date, trade_date)`; if a live entry exists it sets `executed = True` and backfills
+`entry_premium` from the entry when not explicitly passed.
 
-**Scope check:** isolated to `scripts/signal_eod.py`'s record phase; `get_entries` already
-existed on `PaperStore` (used elsewhere for `cumulative_pnl`). No changes to `paper_signal_entries`
-writes or the entry path itself (BUG-047's fix).
+**Scope check:** isolated to `scripts/signal_eod.py`'s record phase; `get_entries` already existed on `PaperStore` (used elsewhere for `cumulative_pnl`). No changes to `paper_signal_entries` writes or
+the entry path itself (BUG-047's fix).
 
 ---
 
@@ -2093,9 +2119,9 @@ does not exist, and the merge's failure mode (silently misattributing an unrelat
 case (freshly entered, not yet rolled) — both figures still show correctly, just as separate `CC` / `Collar (put only)` lines instead of one merged `Collar` line. That labeling ambiguity for the true
 dedup-exempted case is the open question flagged in `prompt.md`'s "Perspectives not covered" — worth a workshop, not a blocker for ORD-2.
 
-**Fix (ORD-2, SHA `7c255fd`):** implemented heuristic (a) — dropped the merge branch, always split `cc` and `collar` groups — and updated `_compute_overlay_pnl_snapshots` so the collar total no
-longer sums the CC leg, without regressing BUG-030's own test (revised to reflect the no-merge behaviour). ORD-3 (SHA `8f0e8e4`) then migrated `_build_recovery_digest` to a single MarkdownV2 fenced
-block and fixed its BUG-042 send path. Both sections moved to `docs/archive/bugs/` at the `overlay-recovery-digest/` ORD-4 epic close.
+**Fix (ORD-2, SHA `7c255fd`):** implemented heuristic (a) — dropped the merge branch, always split `cc` and `collar` groups — and updated `_compute_overlay_pnl_snapshots` so the collar total no longer
+sums the CC leg, without regressing BUG-030's own test (revised to reflect the no-merge behaviour). ORD-3 (SHA `8f0e8e4`) then migrated `_build_recovery_digest` to a single MarkdownV2 fenced block and
+fixed its BUG-042 send path. Both sections moved to `docs/archive/bugs/` at the `overlay-recovery-digest/` ORD-4 epic close.
 
 ---
 
@@ -2136,10 +2162,10 @@ backfill history.
 (`pa.Table.filter` on a boolean mask), instead of skipping the whole batch when any date overlapped. Added `test_write_equity_to_parquet_new_symbol_same_date_appended` — writes `UNIPARTS` alone for a
 date, then writes `UNIPARTS`+`RELIANCE` for the same date, asserts `RELIANCE`'s row is appended and `UNIPARTS`'s existing row isn't duplicated; existing idempotent/empty-batch tests still pass.
 `@code-reviewer` (real subagent) ran clean — 0 CRITICAL/ERROR, 2 cosmetic WARNINGs (`zip(..., strict=True)` on same-length Arrow columns) which were applied. Full unit suite: 3688/3693 passed — the 3
-failures are pre-existing on `main` (verified via `git stash`), in `tests/unit/notifications/test_escaping_guard.py`, unrelated to this fix. Backfill (B050.3) re-ran
-`equity_bhavcopy_bootstrap --start 2026-09-10 --end 2026-09-23` and confirmed all 9 missing `ENGINERSIN` rows (09-10..09-23, excluding the 09-14 holiday) landed in
-`data/offline/equity_ohlcv/2026/09/equity_2026_09.parquet`. **Note:** `write_index_to_parquet` (~L308-312) still has the old date-only batch-skip dedup — safe today since `IndexBhavRecord` has no
-`symbol` column (single Nifty 50 series), but same class of bug if a multi-index batch is ever introduced. Flagged for a future hardening pass, not fixed here.
+failures are pre-existing on `main` (verified via `git stash`), in `tests/unit/notifications/test_escaping_guard.py`, unrelated to this fix. Backfill (B050.3) re-ran `equity_bhavcopy_bootstrap --start
+2026-09-10 --end 2026-09-23` and confirmed all 9 missing `ENGINERSIN` rows (09-10..09-23, excluding the 09-14 holiday) landed in `data/offline/equity_ohlcv/2026/09/equity_2026_09.parquet`. **Note:**
+`write_index_to_parquet` (~L308-312) still has the old date-only batch-skip dedup — safe today since `IndexBhavRecord` has no `symbol` column (single Nifty 50 series), but same class of bug if a
+multi-index batch is ever introduced. Flagged for a future hardening pass, not fixed here.
 
 ---
 
@@ -2156,21 +2182,21 @@ failures are pre-existing on `main` (verified via `git stash`), in `tests/unit/n
 **Symptom:** `ENGINERSIN` (reco 2026-09-10 @ ₹273.0) stayed `PENDING` even after `BUG-050`'s dedup fix backfilled its full OHLCV history (09-10..09-24) and it later closed at ₹306.20 on 09-23 — well
 above reco. `enter_backfill_pick` only ever evaluates the single next trading day (09-11, close ₹268.95, below reco) and gives up.
 
-**Root cause:** the function computed `reco_date + 1` (skipping non-trading days) and looked up exactly that one date in `equity_closes`; if the close there didn't beat `reco_price` it returned
-`None` permanently, with no later day ever re-checked.
+**Root cause:** the function computed `reco_date + 1` (skipping non-trading days) and looked up exactly that one date in `equity_closes`; if the close there didn't beat `reco_price` it returned `None`
+permanently, with no later day ever re-checked.
 
-**Decision (Animesh, 2026-09-24):** widen the entry window — scan every trading day after `reco_date` in ascending order (not just day+1) and enter at the first day's close that exceeds
-`reco_price`, unbounded forward to `to_date`.
+**Decision (Animesh, 2026-09-24):** widen the entry window — scan every trading day after `reco_date` in ascending order (not just day+1) and enter at the first day's close that exceeds `reco_price`,
+unbounded forward to `to_date`.
 
 **Suggested fix:** rewrite to iterate `sorted(d for d in equity_closes if d > reco_date)` and return the first `(date, close)` where `close > reco_price`, instead of a single day+1 lookup.
 
 **Implementation progress (SHA `61b18ee`):** rewrote `enter_backfill_pick` to scan `sorted(d for d in equity_closes if d > reco_date)` and enter at the first day whose close exceeds `reco_price`.
 Round-1 `@code-reviewer` (real subagent) caught a CRITICAL this surfaced in the same file: `run_backfill`'s snapshot walk still started at `reco_date + 1` unconditionally, which — once entry could
 land on a later day than day+1 — would record phantom snapshots for days the pick was still `PENDING`. Fixed by tracking the actual `entry_date` from the PENDING→OPEN transition and using it as
-`start_date`. Round-2 review caught a follow-on ERROR: the `entry_date is None` fallback (an already-OPEN pick resumed with no known entry date — currently dead code, no caller hits it) still
-guessed `reco_date + 1`. Fixed by making that path an explicit no-op — logs `mvp_backfill_resume_unsupported` and skips the walk rather than guessing a start date; `Pick` has no `entry_date` field to
-reconstruct the real value, and adding one was out of scope for this fix. Round-3 review: 0 CRITICAL/ERROR/WARNING, clean. Tests added: later-day entry, delayed-entry walk skips pre-entry
-snapshots, already-OPEN pick skips the walk entirely. Full suite: `tests/unit/mvp/test_mvp_backfill.py` 13/13 green each round. Applied to the existing `ENGINERSIN` pick (`b08f6661…`) post-fix: it
-advanced `PENDING` → `OPEN`, entered at ₹285.25 on 2026-09-21 (first day after reco where close beat ₹273.0).
+`start_date`. Round-2 review caught a follow-on ERROR: the `entry_date is None` fallback (an already-OPEN pick resumed with no known entry date — currently dead code, no caller hits it) still guessed
+`reco_date + 1`. Fixed by making that path an explicit no-op — logs `mvp_backfill_resume_unsupported` and skips the walk rather than guessing a start date; `Pick` has no `entry_date` field to
+reconstruct the real value, and adding one was out of scope for this fix. Round-3 review: 0 CRITICAL/ERROR/WARNING, clean. Tests added: later-day entry, delayed-entry walk skips pre-entry snapshots,
+already-OPEN pick skips the walk entirely. Full suite: `tests/unit/mvp/test_mvp_backfill.py` 13/13 green each round. Applied to the existing `ENGINERSIN` pick (`b08f6661…`) post-fix: it advanced
+`PENDING` → `OPEN`, entered at ₹285.25 on 2026-09-21 (first day after reco where close beat ₹273.0).
 
 ---

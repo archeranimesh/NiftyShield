@@ -241,6 +241,22 @@ def _backfill(store: MVPStore, args: argparse.Namespace) -> None:
     instrument_key, trading_symbol = _resolve_instrument_key(args.symbol, args.defer_key)
 
     pick_date_str = args.reco_date + "T00:00:00Z"
+    resolved_symbol = trading_symbol or args.symbol
+    duplicate = next(
+        (
+            p
+            for p in store.list_picks(PickStatus.PENDING)
+            if p.symbol == resolved_symbol and p.pick_date == pick_date_str
+        ),
+        None,
+    )
+    if duplicate is not None:
+        print(
+            f"A PENDING pick already exists for {resolved_symbol} on {args.reco_date} "
+            f"(pick_id {duplicate.pick_id[:8]}). Use --resume {duplicate.pick_id} instead."
+        )
+        return
+
     pick = Pick(
         pick_id=str(uuid.uuid4()),
         category_id=category_id,
