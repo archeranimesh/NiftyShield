@@ -121,6 +121,17 @@ def test_enter_backfill_pick_stays_pending() -> None:
     assert result is None
 
 
+def test_enter_backfill_pick_enters_on_later_day_if_next_day_misses() -> None:
+    pick = _make_test_pick(reco_price=Decimal("100"))
+    closes = {
+        date(2026, 6, 12): Decimal("99.00"),  # next day: below reco, no entry yet
+        date(2026, 6, 15): Decimal("98.50"),  # still below
+        date(2026, 6, 16): Decimal("101.50"),  # first day above reco
+    }
+    result = enter_backfill_pick(pick, closes)
+    assert result == (date(2026, 6, 16), Decimal("101.50"))
+
+
 def test_enter_backfill_pick_handles_datetime_pick_date() -> None:
     pick = _make_test_pick(reco_price=Decimal("100")).model_copy(
         update={"pick_date": "2026-06-11T00:00:00Z"}
@@ -170,6 +181,42 @@ def test_run_backfill_never_enters(mem_store: MVPStore) -> None:
     assert pick is not None
     assert pick.status == PickStatus.PENDING
     assert len(mem_store.get_snapshots("p1")) == 0
+
+
+def test_run_backfill_delayed_entry_skips_pre_entry_snapshots(mem_store: MVPStore) -> None:
+    mem_store.add_pick(_make_test_pick())
+
+    equity_closes = {
+        date(2026, 6, 12): Decimal("99"),  # below reco 100 — no entry yet
+        date(2026, 6, 15): Decimal("98"),  # still below — no entry yet
+        date(2026, 6, 16): Decimal("101"),  # first close above reco — entry here
+        date(2026, 6, 17): Decimal("102"),
+    }
+
+    run_backfill(mem_store, "p1", equity_closes, {}, end_date=date(2026, 6, 17))
+
+    pick = mem_store.get_pick("p1")
+    assert pick is not None
+    assert pick.entry_price == Decimal("101")
+
+    snaps = mem_store.get_snapshots("p1")
+    snap_dates = {s.captured_at[:10] for s in snaps}
+    assert snap_dates == {"2026-06-16", "2026-06-17"}
+    assert "2026-06-12" not in snap_dates
+    assert "2026-06-15" not in snap_dates
+
+
+def test_run_backfill_already_open_pick_skips_walk(mem_store: MVPStore) -> None:
+    pick = _make_test_pick().model_copy(
+        update={"status": PickStatus.OPEN, "entry_price": Decimal("105")}
+    )
+    mem_store.add_pick(pick)
+
+    equity_closes = {date(2026, 6, 16): Decimal("110")}
+
+    run_backfill(mem_store, "p1", equity_closes, {}, end_date=date(2026, 6, 17))
+
+    assert mem_store.get_snapshots("p1") == []
 
 
 def test_run_backfill_stop_loss_hit(mem_store: MVPStore) -> None:

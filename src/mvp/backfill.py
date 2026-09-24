@@ -120,28 +120,19 @@ def enter_backfill_pick(
 ) -> tuple[date, Decimal] | None:
     """Determine the entry date and price for a past backfilled pick.
 
-    The rule: use the NEXT trading day's daily CLOSE after reco_date.
-    If close > reco_price, enter at that close on that date.
-    Else the pick stays PENDING (returns None).
+    The rule: scan trading days after reco_date in ascending order and enter
+    at the first day's CLOSE that exceeds reco_price. If no such day exists
+    in the provided equity_closes, the pick stays PENDING (returns None).
     """
     if pick.reco_price is None:
         return None
 
     reco_date = date.fromisoformat(pick.pick_date[:10])
-    candidate = reco_date + timedelta(days=1)
 
-    while not is_trading_day(candidate):
-        candidate += timedelta(days=1)
-
-    next_trading_day = candidate
-
-    if next_trading_day not in equity_closes:
-        return None
-
-    next_close = equity_closes[next_trading_day]
-
-    if next_close > pick.reco_price:
-        return (next_trading_day, next_close)
+    for candidate_date in sorted(d for d in equity_closes if d > reco_date):
+        close = equity_closes[candidate_date]
+        if close > pick.reco_price:
+            return (candidate_date, close)
 
     return None
 
@@ -158,15 +149,18 @@ def run_backfill(
     Records one MVPSnapshot per trading day.
     Auto-exits if target_price or stop_loss is hit.
 
-    WARNING: The walk-start-date invariant here is that starting from `reco_date + 1`
-    is safe because there are zero trading days between `reco_date` and `entry_date`
-    that we could accidentally snapshot while still PENDING. If adapting this function
-    to resume an already-OPEN pick from arbitrary dates, the start logic must be hardened.
+    The walk starts at the actual entry_date returned by enter_backfill_pick when
+    transitioning from PENDING — entry can now land on any day after reco_date, not
+    just reco_date + 1, so the walk must not start before the pick was genuinely OPEN.
+    If this function is called on a pick that is already OPEN (no PENDING transition
+    this call), the true entry_date is unknown — Pick has no entry_date field — so the
+    walk is skipped entirely rather than guessing a start date.
     """
     pick = store.get_pick(pick_id)
     if not pick:
         return
 
+    entry_date: date | None = None
     if pick.status == PickStatus.PENDING:
         entry = enter_backfill_pick(pick, equity_closes)
         if not entry:
@@ -183,11 +177,22 @@ def run_backfill(
     if end_date is None:
         end_date = datetime.now(timezone.utc).date()
 
+    if entry_date is None:
+        logger.warning(
+            "mvp_backfill_resume_unsupported",
+            pick_id=pick_id,
+            reason=(
+                "cannot determine the actual entry_date for a pick already OPEN on "
+                "entry to run_backfill — Pick has no entry_date field, and reco_date + 1 "
+                "is unsafe now that entry can land on any later day; skipping snapshot walk"
+            ),
+        )
+        return
+
     existing_snapshots = store.get_snapshots(pick_id, limit=10000)
     existing_dates = {date.fromisoformat(s.captured_at[:10]) for s in existing_snapshots}
 
-    start_date = date.fromisoformat(pick.pick_date[:10]) + timedelta(days=1)
-    current_date = start_date
+    current_date = entry_date
 
     while current_date <= end_date:
         if not is_trading_day(current_date):
