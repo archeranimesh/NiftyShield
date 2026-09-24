@@ -9,9 +9,9 @@
 
 - [x] **B053.1** — Add a resume path (`mvp backfill --resume <pick_id>` or equivalent) that looks up an existing PENDING pick by `pick_id` and calls `run_backfill(store, pick_id, equity_closes,
   index_closes)` directly, skipping `Pick(...)`/`add_pick()` entirely so no duplicate row is created. | SHA `3540577`
-- [x] **B053.2** — Guard `_backfill`'s create path against inserting a duplicate for a symbol/reco_date that already has a PENDING pick — error or warn instead of silently duplicating. | SHA pending
+- [x] **B053.2** — Guard `_backfill`'s create path against inserting a duplicate for a symbol/reco_date that already has a PENDING pick — error or warn instead of silently duplicating. | SHA `1042312`
 - [x] **B053.3** — Add tests: resuming a PENDING pick transitions to OPEN with snapshot history populated and never calls `add_pick`; the create-path duplicate guard rejects/warns as expected. | SHA
-  pending
+  `1042312`
 
 ---
 

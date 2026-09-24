@@ -23,7 +23,7 @@
 
 > BUG-049 closed 2026-09-24 (SHA `a874876`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
-> BUG-053 closed 2026-09-24 (SHA pending) — section moved to `docs/archive/bugs/{bugs,task}.md`.
+> BUG-053 closed 2026-09-24 (SHA `1042312`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
 ## BUG-052 — `mvp update`/`close` silently no-op on a truncated pick_id instead of erroring
 

@@ -88,7 +88,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ## Session Log
 - [2026-09-24] BUG-053 fixed — `mvp backfill --resume <pick_id>` resumes an existing PENDING pick straight into `run_backfill()`, skipping `Pick(...)`/`add_pick()` entirely (B053.1, SHA `3540577`);
   the create path now guards against a duplicate PENDING row for the same symbol+reco_date, erroring and pointing at `--resume` instead of inserting a second row (B053.2); both paths covered by new
-  tests (B053.3). `@code-reviewer` clean both rounds (0 CRITICAL/ERROR). `bugs.md`/`task.md` sections archived. SHA pending (backfilled next commit).
+  tests (B053.3). `@code-reviewer` clean both rounds (0 CRITICAL/ERROR). `bugs.md`/`task.md` sections archived. SHA `1042312`.
 - [2026-09-24] Bug filed — `BUG-053` (`mvp backfill` has no resume path: re-running it on an OHLCV-not-yet-bootstrapped PENDING pick inserts a duplicate row instead of completing the existing one, and
   PENDING picks have no live-price entry path via `mvp_watch` either). Found while walking through the `backfill` → `equity_bhavcopy_bootstrap` → re-`backfill` command sequence for a new pick (JK Tyre
   & Industries Ltd). `docs/bugs/bugs.md`/`task.md`, not yet fixed.

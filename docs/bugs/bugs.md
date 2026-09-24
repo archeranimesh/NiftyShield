@@ -16,7 +16,7 @@
 
 ---
 
-## BUG-053 [MOVED] — see `docs/archive/bugs/bugs.md` (closed 2026-09-24, SHA `pending`)
+## BUG-053 [MOVED] — see `docs/archive/bugs/bugs.md` (closed 2026-09-24, SHA `1042312`)
 
 ---
 

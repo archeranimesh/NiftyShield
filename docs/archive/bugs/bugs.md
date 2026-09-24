@@ -9,7 +9,7 @@
 
 ## BUG-053 — no way to transition a `backfill`-created pick from PENDING to OPEN with full snapshot history, without duplicating the pick
 
-**Status:** ✅ Fixed, SHA `pending` (this session's B053.1 commit `3540577` + a follow-on commit closing B053.2/B053.3), closed 2026-09-24.
+**Status:** ✅ Fixed, SHA `3540577` (B053.1) + SHA `1042312` (B053.2/B053.3, closing commit), closed 2026-09-24.
 
 | | |
 |---|---|
