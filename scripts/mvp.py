@@ -88,22 +88,27 @@ def _category_list(store: MVPStore, args: argparse.Namespace) -> None:
         print(f"{c.slug} | {c.display_name}")
 
 
-def _resolve_instrument_key(symbol: str, defer_key: bool) -> str | None:
+def _resolve_instrument_key(symbol: str, defer_key: bool) -> tuple[str | None, str | None]:
+    """Resolve instrument_key and canonical trading_symbol from BOD lookup.
+
+    Returns (None, None) when deferred, BOD file missing, or no match.
+    """
     if defer_key:
-        return None
+        return None, None
     if not DEFAULT_BOD_PATH.exists():
         print(f"⚠ BOD file not found at {DEFAULT_BOD_PATH}; skipping instrument resolution.")
-        return None
+        return None, None
     lookup = InstrumentLookup.from_file(DEFAULT_BOD_PATH)
     results = lookup.search_equity(symbol)
     if not results:
         print(f"⚠ No instrument match for '{symbol}'; skipping resolution.")
-        return None
+        return None, None
     if len(results) == 1:
         inst = results[0]
         key = inst["instrument_key"]
+        trading_symbol = inst.get("trading_symbol")
         print(f" → instrument_key: {key}")
-        return key
+        return key, trading_symbol
 
     print("#  SYMBOL  NAME  KEY")
     for i, inst in enumerate(results, start=1):
@@ -112,7 +117,7 @@ def _resolve_instrument_key(symbol: str, defer_key: bool) -> str | None:
         )
     choice = input("Select [1-N / s=skip / q=quit]: ").strip().lower()
     if choice == "s":
-        return None
+        return None, None
     if choice == "q":
         print("Aborted.")
         sys.exit(0)
@@ -122,10 +127,12 @@ def _resolve_instrument_key(symbol: str, defer_key: bool) -> str | None:
             raise ValueError
     except ValueError:
         print("Invalid selection; skipping resolution.")
-        return None
-    key = results[idx - 1]["instrument_key"]
+        return None, None
+    chosen = results[idx - 1]
+    key = chosen["instrument_key"]
+    trading_symbol = chosen.get("trading_symbol")
     print(f" → instrument_key: {key}")
-    return key
+    return key, trading_symbol
 
 
 def _resolve_category_id(
@@ -149,12 +156,12 @@ def _resolve_category_id(
 
 def _add(store: MVPStore, args: argparse.Namespace) -> None:
     category_id = _resolve_category_id(store, args.provider, args.category)
-    instrument_key = _resolve_instrument_key(args.symbol, args.defer_key)
+    instrument_key, trading_symbol = _resolve_instrument_key(args.symbol, args.defer_key)
     now = _now()
     pick = Pick(
         pick_id=str(uuid.uuid4()),
         category_id=category_id,
-        symbol=args.symbol,
+        symbol=trading_symbol or args.symbol,
         instrument_key=instrument_key,
         reco_price=Decimal(str(args.reco_price)) if args.reco_price is not None else None,
         pick_date=now,
@@ -196,13 +203,13 @@ def _backfill(store: MVPStore, args: argparse.Namespace) -> None:
     from src.mvp.backfill import fetch_historical_index_closes, run_backfill
 
     category_id = _resolve_category_id(store, args.provider, args.category)
-    instrument_key = _resolve_instrument_key(args.symbol, args.defer_key)
+    instrument_key, trading_symbol = _resolve_instrument_key(args.symbol, args.defer_key)
 
     pick_date_str = args.reco_date + "T00:00:00Z"
     pick = Pick(
         pick_id=str(uuid.uuid4()),
         category_id=category_id,
-        symbol=args.symbol,
+        symbol=trading_symbol or args.symbol,
         instrument_key=instrument_key,
         reco_price=Decimal(str(args.reco_price)) if args.reco_price is not None else None,
         pick_date=pick_date_str,

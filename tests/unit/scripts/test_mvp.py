@@ -1,10 +1,11 @@
 import argparse
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
 import pytest
 
-from scripts.mvp import _list, _summary_by_symbol, _summary_grouped
+from scripts.mvp import _add, _backfill, _list, _summary_by_symbol, _summary_grouped
 from src.mvp.models import Category, Pick, Provider, ProviderSource
 from src.mvp.store import MVPStore
 
@@ -326,3 +327,150 @@ def test_backfill_missing_provider(tmp_path: Path, capsys) -> None:
 
     captured = capsys.readouterr().out
     assert "Provider 'missing' not found" in captured
+
+
+class _FakeLookup:
+    def __init__(self, results: list[dict[str, Any]]) -> None:
+        self._results = results
+
+    def search_equity(self, symbol: str) -> list[dict[str, Any]]:
+        return self._results
+
+    @classmethod
+    def from_file(cls, path: Path) -> "_FakeLookup":
+        return cls([{"instrument_key": "NSE_EQ|INE510A01028", "trading_symbol": "ENGINERSIN"}])
+
+
+def test_add_sets_symbol_to_resolved_trading_symbol(tmp_path: Path, monkeypatch) -> None:
+    db_path = tmp_path / "test.db"
+    store = MVPStore(db_path)
+    store.init_db()
+    store.add_provider(
+        Provider(
+            provider_id="prov_1",
+            slug="prov",
+            display_name="Prov",
+            source_type=ProviderSource.OTHER,
+            created_at="2024-01-01",
+        )
+    )
+    store.add_category(
+        Category(
+            category_id="cat_1",
+            provider_id="prov_1",
+            slug="cat",
+            display_name="Cat",
+            created_at="2024-01-01",
+        )
+    )
+
+    bod_path = tmp_path / "bod.csv"
+    bod_path.write_text("")
+    monkeypatch.setattr("scripts.mvp.DEFAULT_BOD_PATH", bod_path)
+    monkeypatch.setattr("scripts.mvp.InstrumentLookup", _FakeLookup)
+
+    args = argparse.Namespace(
+        symbol="ENGINEERS INDIA",
+        provider="prov",
+        category="cat",
+        reco_price=None,
+        defer_key=False,
+    )
+
+    _add(store, args)
+
+    picks = store.list_picks()
+    assert len(picks) == 1
+    assert picks[0].symbol == "ENGINERSIN"
+    assert picks[0].instrument_key == "NSE_EQ|INE510A01028"
+
+
+def test_add_keeps_typed_symbol_when_deferred(tmp_path: Path) -> None:
+    db_path = tmp_path / "test.db"
+    store = MVPStore(db_path)
+    store.init_db()
+    store.add_provider(
+        Provider(
+            provider_id="prov_1",
+            slug="prov",
+            display_name="Prov",
+            source_type=ProviderSource.OTHER,
+            created_at="2024-01-01",
+        )
+    )
+    store.add_category(
+        Category(
+            category_id="cat_1",
+            provider_id="prov_1",
+            slug="cat",
+            display_name="Cat",
+            created_at="2024-01-01",
+        )
+    )
+
+    args = argparse.Namespace(
+        symbol="ENGINEERS INDIA",
+        provider="prov",
+        category="cat",
+        reco_price=None,
+        defer_key=True,
+    )
+
+    _add(store, args)
+
+    picks = store.list_picks()
+    assert len(picks) == 1
+    assert picks[0].symbol == "ENGINEERS INDIA"
+    assert picks[0].instrument_key is None
+
+
+def test_backfill_sets_symbol_to_resolved_trading_symbol(tmp_path: Path, monkeypatch) -> None:
+    db_path = tmp_path / "test.db"
+    store = MVPStore(db_path)
+    store.init_db()
+    store.add_provider(
+        Provider(
+            provider_id="prov_1",
+            slug="prov",
+            display_name="Prov",
+            source_type=ProviderSource.OTHER,
+            created_at="2024-01-01",
+        )
+    )
+    store.add_category(
+        Category(
+            category_id="cat_1",
+            provider_id="prov_1",
+            slug="cat",
+            display_name="Cat",
+            created_at="2024-01-01",
+        )
+    )
+
+    bod_path = tmp_path / "bod.csv"
+    bod_path.write_text("")
+    monkeypatch.setattr("scripts.mvp.DEFAULT_BOD_PATH", bod_path)
+    monkeypatch.setattr("scripts.mvp.InstrumentLookup", _FakeLookup)
+    monkeypatch.setattr("src.mvp.backfill.run_backfill", lambda *a, **k: None)
+    monkeypatch.setattr("scripts.mvp.fetch_historical_closes", lambda *args, **kwargs: [])
+    monkeypatch.setattr(
+        "src.mvp.backfill.fetch_historical_index_closes", lambda *args, **kwargs: {}
+    )
+
+    args = argparse.Namespace(
+        symbol="ENGINEERS INDIA",
+        reco_date="2023-01-01",
+        provider="prov",
+        category="cat",
+        reco_price=None,
+        target=None,
+        sl=None,
+        defer_key=False,
+    )
+
+    _backfill(store, args)
+
+    picks = store.list_picks()
+    assert len(picks) == 1
+    assert picks[0].symbol == "ENGINERSIN"
+    assert picks[0].instrument_key == "NSE_EQ|INE510A01028"
