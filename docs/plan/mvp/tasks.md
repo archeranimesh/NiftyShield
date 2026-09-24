@@ -165,7 +165,7 @@
     manual `+`/`-` prefix, not `FORMATTING.md`'s documented `format_pct_signed()` — **that function doesn't exist anywhere in `src/notifications/formatting.py`**, a doc/code mismatch worth fixing
     separately (either implement it or correct the doc), not blocking this task.
   - **Ships as its own commit, separate from M10** — confirmed 2026-09-24, per Step 5c's rule against bundling separate-phase changes into one commit.
-- [ ] **M13 — design signed off 2026-09-24** (see "M12 design closed out" note below; M11 shipped, so the Win%/Incep% blocker is cleared). New end-of-day summary message, distinct from M12's hourly
+- [x] **M13 — design signed off 2026-09-24** (see "M12 design closed out" note below; M11 shipped, so the Win%/Incep% blocker is cleared). New end-of-day summary message, distinct from M12's hourly
   view. Groups by provider → sub-type category (e.g. DSIJ: Value Picks / Multibagger / TAS; FinnovationZ: Ikashi), one aggregated row per category, plus an all-recommendations footer. **Scoped
   2026-09-24 into four sub-tasks** (all three data gaps below to be shipped in this pass, not deferred):
   - [x] **M13.1** — `src/mvp/store.py`: extend the category rollup to produce `inception_pct` (realized + unrealized, since the category's first pick) — combine M11's `get_category_stats` realized P&L
@@ -174,9 +174,12 @@
     (also feeds the all-recs footer's `Day chg`). | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 1a5d9dd
   - [x] **M13.3** — `src/mvp/store.py`: `MVPStore.get_category_high_low(category_id)` — cumulative-return time series per category from snapshot history, running high-water-mark / max-drawdown →
     `high_pct`/`low_pct`. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 0b63904
-  - [ ] **M13.4** — Port `format_eod_summary`/`build_eod_table`/`CategoryRollup`/`ProviderRollup` from `scratch/2026-09-24_mvp_telegram_message_survey.py` into `src/mvp/tracker.py`, wire real data
+  - [x] **M13.4** — Port `format_eod_summary`/`build_eod_table`/`CategoryRollup`/`ProviderRollup` from `scratch/2026-09-24_mvp_telegram_message_survey.py` into `src/mvp/tracker.py`, wire real data
     from M13.1–13.3 into `scripts/mvp_watch.py`'s EOD path (new cron entry — `mvp_watch.py` today only runs hourly 9-15, no EOD invocation exists). Each sub-task ships as its own commit (Model → Store
-    → wiring boundary, Step 5c) with its own tests.
+    → wiring boundary, Step 5c) with its own tests. `Category.slug` has no dedicated short-code column — `category_short_code()` derives one (multi-word initials / single-word 3-char truncation, not
+    guaranteed unique — Animesh's call, 2026-09-24) rather than adding a schema migration. `run_eod()` itself is integration-only, untested (same precedent as `run()`, M4.1); the pure builders it
+    calls are fully unit-tested. New cron entry (`45 15 * * 1-5`, `mvp_watch.py --eod`) not yet added to the actual crontab — code-only this session. | Owner: Claude | Model: claude-sonnet-5 | Review:
+    code-reviewer | SHA: 71bca0a, e7cdda0
 
 **Design finalized 2026-09-24** in `scratch/2026-09-24_mvp_telegram_message_survey.py`, function `format_eod_summary` + `build_eod_table` + `CategoryRollup`/`ProviderRollup`:
   - **Headline**: `{emoji} *MVP EOD Summary* | {date}` — same net-P&L color-emoji convention as M12's headline.

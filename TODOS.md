@@ -16,8 +16,8 @@ starting the next story here; this list only decides *which story is next*. Bugs
 rot them.
 
 2. **Greeks Black-Scholes fallback** — `docs/plan/greeks-bs-fallback/` — next **GF-1** (read-only audit scope).
-4. **MVP: Multi-bagger Value Picks Tracker** — `docs/plan/mvp/` — next **M12** (hourly summary rewrite, design signed off, ready to implement). M11 shipped (per-category win-rate/inception stats
-   footer). Independent — blocks nothing.
+4. **MVP: Multi-bagger Value Picks Tracker** — `docs/plan/mvp/` — next **M5** (docs close). M10/M11/M12/M13 all shipped; M6 (historical backfill) remains Good-to-Have, gated on M0 which is done.
+   Independent — blocks nothing.
 5. **Variance gate — CSP v1 deployment gate observation** — `docs/plan/variance-gate/` — next **VG0** (spec reconciliation; the remaining tasks are human checkpoints, not build tasks).
 6. **Options Income strategy** — `docs/plan/options_income/` — next **S0** (data audit).
 7. **Backtest Engine** — `docs/plan/backtest-engine/` (`phase1..4/`) — next **1.3a / 1.4** (parallel, `phase1/`). Four chained phases; each phase's GATE task blocks the next dir. Gated on
@@ -88,6 +88,11 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-24] MVP fix — `get_category_high_low` forward-fills a pick with no day-1 snapshot into later days instead of dropping it from the day's aggregate (leftover from the M13.3 session, committed
+  this session) — `0bd3c20`
+- [2026-09-24] MVP M13.4 — EOD summary builders ported to `src/mvp/tracker.py` (`CategoryRollup`/`ProviderRollup`/`build_eod_table`/`format_eod_summary`) — `71bca0a`; wired into
+  `scripts/mvp_watch.py`'s new `run_eod()` / `--eod` flag — `e7cdda0`. `category_short_code()` derives the Cat-column code from `Category.slug` (no schema column — Animesh's call). New cron entry (`45
+  15 * * 1-5 mvp_watch.py --eod`) is code-only — not yet added to the actual crontab. M13 is now fully shipped (M13.1-M13.4).
 - [2026-09-24] MVP M13.3 — `MVPStore.get_category_high_low` since-inception high-water-mark/max-drawdown return% per category — 0b63904
 - [2026-09-24] MVP M13.2 — `MVPStore.get_category_day_change` invested-weighted day-over-day % rollup per category — 1a5d9dd
 - [2026-09-24] MVP M12 — hourly summary rewritten as a flat `[O]`/`[P]`-badged holdings table (`format_hourly_summary`, `build_holdings_table`), OPEN+PENDING picks in one table, Invested/Current/P&L
