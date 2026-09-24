@@ -88,6 +88,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-24] MVP M12 — hourly summary rewritten as a flat `[O]`/`[P]`-badged holdings table (`format_hourly_summary`, `build_holdings_table`), OPEN+PENDING picks in one table, Invested/Current/P&L
+  footer — 2b8d75d
 - [2026-09-24] MVP M11 — per-category win-rate/inception P&L stats footer (`CategoryStats`, `MVPStore.get_category_stats`, wired into `_format_alert_message`) — 3c331b8
 - [2026-09-24] MVP M10 — real ₹ P&L threaded into the MVP close alert (`ClosePickResult`, `_format_alert_message` redesign) — b812d82
 - [2026-09-24] MVP M12 design closed out (docs only, no `src/` changes — resumed the co-investor-review session). Settled the column set within the confirmed 50-char mobile budget: measured every

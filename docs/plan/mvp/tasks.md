@@ -136,10 +136,10 @@
   or all MVP picks combined — resolved 2026-09-24 with Animesh: **per category** (`CategoryStats`, `MVPStore.get_category_stats(category_id)`), matching M13's planned per-category columns most
   directly. **Now also feeds M13's per-category `Win%`/`Incep%` columns** — both were prototyped with fixture placeholder values (2026-09-24) since this query doesn't exist yet; building M11 for real
   is a prerequisite for M13's table to show live numbers instead of fixtures. Gated to categories with >=5 closed picks, matching `exit_message._win_rate_line`'s precedent. | SHA: 3c331b8
-- [ ] **M12 (design re-finalized 2026-09-24 — column set settled and confirmed on-device against the 50-char budget, ready to implement)** — Rewrite of the consolidated hourly summary message.
-  Original problem: `_format_row` (`src/mvp/tracker.py:81`) space-joins variable-width parts (symbol, `T:1500 (7.1% away)` as one compound cell) that never line up into columns despite sitting in a
-  fence — violates `FORMATTING.md` §2 ("every cell in a column carries the same precision and the same width, or it stops being a column"). It also renders in-fence Chg% via bare `format_pct()`, which
-  drops the trailing `.0` on whole numbers, violating §3's "fenced percent: always 1dp, always signed" rule.
+- [x] **M12 (design re-finalized 2026-09-24 — column set settled and confirmed on-device against the 50-char budget, ready to implement)** — Rewrite of the consolidated hourly summary message. |
+  Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 2b8d75d Original problem: `_format_row` (`src/mvp/tracker.py:81`) space-joins variable-width parts (symbol, `T:1500 (7.1% away)`
+  as one compound cell) that never line up into columns despite sitting in a fence — violates `FORMATTING.md` §2 ("every cell in a column carries the same precision and the same width, or it stops
+  being a column"). It also renders in-fence Chg% via bare `format_pct()`, which drops the trailing `.0` on whole numbers, violating §3's "fenced percent: always 1dp, always signed" rule.
 
 **Design finalized 2026-09-24** in `scratch/2026-09-24_mvp_telegram_message_survey.py`, function `format_hourly_summary` and helpers:
   - **Single flat table**, no provider/category grouping (Animesh's explicit call over the original per-category-fenced-blocks structure).
