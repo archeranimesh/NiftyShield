@@ -424,6 +424,10 @@ def test_get_category_stats_aggregates_wins_and_losses(tmp_path: Path) -> None:
     assert stats.losses == 1
     assert stats.win_rate == Decimal("2") / Decimal("3")
     assert stats.inception_pnl > 0
+    assert stats.invested == Decimal("0")
+    assert stats.current == Decimal("0")
+    total_deployed = Decimal("100000") * 3
+    assert stats.inception_pct == stats.inception_pnl / total_deployed * 100
 
 
 def test_get_category_stats_with_no_closed_picks_returns_none_win_rate(tmp_path: Path) -> None:
@@ -435,3 +439,63 @@ def test_get_category_stats_with_no_closed_picks_returns_none_win_rate(tmp_path:
     assert stats.closed_count == 0
     assert stats.win_rate is None
     assert stats.inception_pnl == Decimal("0")
+    assert stats.inception_pct is None
+
+
+def test_get_category_stats_inception_pct_combines_realized_and_unrealized(
+    tmp_path: Path,
+) -> None:
+    store = MVPStore(str(tmp_path / "test.sqlite"))
+    store.init_db()
+    store.add_provider(_make_provider())
+    store.add_category(_make_category())
+
+    # Closed pick: entry 100, close 150, qty = floor(100000/100) = 1000 ->
+    # deployed_capital = 100000, realized_pnl > 0.
+    store.add_pick(_make_pick(pick_id="closed-1", category_id="cat-1"))
+    store.update_pick("closed-1", entry_price=Decimal("100"))
+    store.close_pick("closed-1", Decimal("150"), PickStatus.TARGET_HIT)
+
+    # Open pick: entry 100 (same fill math), marked to market at 120 via ltp_map.
+    store.add_pick(_make_pick(pick_id="open-1", category_id="cat-1"))
+    store.update_pick(
+        "open-1",
+        entry_price=Decimal("100"),
+        instrument_key="NSE_EQ|TCS",
+    )
+
+    open_pick = store.get_pick("open-1")
+    assert open_pick is not None
+    ltp_map = {"NSE_EQ|TCS": Decimal("120")}
+
+    stats = store.get_category_stats("cat-1", ltp_map=ltp_map)
+
+    assert stats.closed_count == 1
+    assert stats.invested == open_pick.deployed_capital
+    assert stats.current == Decimal("120") * open_pick.total_qty
+    unrealized_pnl = stats.current - stats.invested
+    combined_pnl = stats.inception_pnl + unrealized_pnl
+    # Both picks filled identically, so total_deployed is double one fill.
+    total_deployed = open_pick.deployed_capital * 2
+    assert stats.inception_pct == combined_pnl / total_deployed * 100
+
+
+def test_get_category_stats_open_pick_without_ltp_uses_deployed_capital(
+    tmp_path: Path,
+) -> None:
+    store = MVPStore(str(tmp_path / "test.sqlite"))
+    store.init_db()
+    store.add_provider(_make_provider())
+    store.add_category(_make_category())
+
+    store.add_pick(_make_pick(pick_id="open-1", category_id="cat-1"))
+    store.update_pick(
+        "open-1",
+        entry_price=Decimal("100"),
+        instrument_key="NSE_EQ|TCS",
+    )
+
+    stats = store.get_category_stats("cat-1")  # no ltp_map
+
+    assert stats.invested == stats.current
+    assert stats.inception_pct == Decimal("0")

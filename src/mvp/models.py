@@ -162,10 +162,14 @@ class ClosePickResult(BaseModel):
 
 
 class CategoryStats(BaseModel):
-    """Win-rate / inception P&L stats over a category's closed picks.
+    """Win-rate / inception P&L stats over a category's picks.
 
     ``inception_pnl`` sums ``realized_pnl`` across all closed picks in the
-    category (does not include unrealized P&L from open picks).
+    category. ``invested``/``current`` are the mark-to-market sum over the
+    category's OPEN picks only (zero when no ``ltp_map`` was supplied or no
+    picks are open). ``inception_pct`` is the combined realized + unrealized
+    return since the category's first pick, relative to total capital ever
+    deployed in the category (``None`` when nothing has been deployed yet).
     """
 
     model_config = ConfigDict(frozen=True)
@@ -177,3 +181,6 @@ class CategoryStats(BaseModel):
     avg_win: Decimal
     avg_loss: Decimal
     inception_pnl: Decimal
+    invested: Decimal = Decimal("0")
+    current: Decimal = Decimal("0")
+    inception_pct: Decimal | None = None

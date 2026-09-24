@@ -493,36 +493,77 @@ class MVPStore:
             ).fetchall()
         return [self._row_to_pick(row) for row in rows]
 
-    def get_category_stats(self, category_id: str) -> CategoryStats:
-        """Win-rate / inception P&L stats over a category's closed picks.
+    def get_category_stats(
+        self, category_id: str, ltp_map: dict[str, Decimal] | None = None
+    ) -> CategoryStats:
+        """Win-rate / inception P&L stats over a category's picks.
 
         Args:
             category_id: The category to aggregate over.
+            ltp_map: Last traded price keyed by instrument_key, used to
+                mark the category's OPEN picks to market for the unrealized
+                leg of ``inception_pct``. An open pick without a live price
+                in this map falls back to its deployed capital (zero
+                unrealized contribution).
 
         Returns:
             ``CategoryStats`` with ``closed_count=0`` and ``win_rate=None``
-            when the category has no closed picks.
+            when the category has no closed picks, and ``inception_pct=None``
+            when the category has no capital deployed at all.
         """
+        ltp_map = ltp_map or {}
         terminal = (
             PickStatus.TARGET_HIT.value,
             PickStatus.SL_HIT.value,
             PickStatus.MANUAL_CLOSE.value,
         )
         with connect(self.db_path) as conn:
-            rows = conn.execute(
+            closed_rows = conn.execute(
                 f"""
                 SELECT realized_pnl FROM mvp_recommendations
                 WHERE category_id = ? AND status IN ({",".join("?" * len(terminal))})
                 """,
                 (category_id, *terminal),
             ).fetchall()
+            all_rows = conn.execute(
+                """
+                SELECT status, deployed_capital, avg_cost, total_qty, instrument_key
+                FROM mvp_recommendations WHERE category_id = ?
+                """,
+                (category_id,),
+            ).fetchall()
 
-        pnls = [Decimal(row["realized_pnl"]) for row in rows]
+        pnls = [Decimal(row["realized_pnl"]) for row in closed_rows]
         closed_count = len(pnls)
         wins_pnls = [pnl for pnl in pnls if pnl > 0]
         losses_pnls = [pnl for pnl in pnls if pnl <= 0]
         wins = len(wins_pnls)
         losses = len(losses_pnls)
+        inception_pnl = sum(pnls, Decimal("0"))
+
+        total_deployed = Decimal("0")
+        invested = Decimal("0")
+        current = Decimal("0")
+        for row in all_rows:
+            deployed_capital = Decimal(row["deployed_capital"])
+            total_deployed += deployed_capital
+            if row["status"] != PickStatus.OPEN.value:
+                continue
+            invested += deployed_capital
+            ltp: Decimal | None = None
+            if row["instrument_key"]:
+                ltp = ltp_map.get(row["instrument_key"])
+            if ltp is not None and row["avg_cost"] is not None:
+                current += ltp * row["total_qty"]
+            else:
+                current += deployed_capital
+
+        unrealized_pnl = current - invested
+        combined_pnl = inception_pnl + unrealized_pnl
+        inception_pct: Decimal | None = None
+        if total_deployed:
+            inception_pct = combined_pnl / total_deployed * 100
+
         return CategoryStats(
             closed_count=closed_count,
             wins=wins,
@@ -530,7 +571,10 @@ class MVPStore:
             win_rate=(Decimal(wins) / closed_count) if closed_count else None,
             avg_win=(sum(wins_pnls, Decimal("0")) / wins) if wins else Decimal("0"),
             avg_loss=(sum(losses_pnls, Decimal("0")) / losses) if losses else Decimal("0"),
-            inception_pnl=sum(pnls, Decimal("0")),
+            inception_pnl=inception_pnl,
+            invested=invested,
+            current=current,
+            inception_pct=inception_pct,
         )
 
     def list_picks(
