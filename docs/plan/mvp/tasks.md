@@ -172,8 +172,8 @@
     with a new invested/current sum over that category's open picks. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: df9001a
   - [x] **M13.2** — `src/mvp/store.py`: `MVPStore.get_category_day_change(category_id)` — diff each pick's latest snapshot vs. its prior-trading-day snapshot, invested-weighted roll-up per category
     (also feeds the all-recs footer's `Day chg`). | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 1a5d9dd
-  - [ ] **M13.3** — `src/mvp/store.py`: `MVPStore.get_category_high_low(category_id)` — cumulative-return time series per category from snapshot history, running high-water-mark / max-drawdown →
-    `high_pct`/`low_pct`.
+  - [x] **M13.3** — `src/mvp/store.py`: `MVPStore.get_category_high_low(category_id)` — cumulative-return time series per category from snapshot history, running high-water-mark / max-drawdown →
+    `high_pct`/`low_pct`. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 0b63904
   - [ ] **M13.4** — Port `format_eod_summary`/`build_eod_table`/`CategoryRollup`/`ProviderRollup` from `scratch/2026-09-24_mvp_telegram_message_survey.py` into `src/mvp/tracker.py`, wire real data
     from M13.1–13.3 into `scripts/mvp_watch.py`'s EOD path (new cron entry — `mvp_watch.py` today only runs hourly 9-15, no EOD invocation exists). Each sub-task ships as its own commit (Model → Store
     → wiring boundary, Step 5c) with its own tests.
