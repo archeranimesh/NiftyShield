@@ -565,3 +565,79 @@ def test_get_category_day_change_returns_none_without_two_snapshot_days(
 
     assert store.get_category_day_change("cat-1") is None
     assert store.get_category_day_change("no-such-category") is None
+
+
+def test_get_category_high_low_tracks_running_max_and_min(tmp_path: Path) -> None:
+    store = MVPStore(str(tmp_path / "test.sqlite"))
+    store.init_db()
+    store.add_provider(_make_provider())
+    store.add_category(_make_category())
+
+    # entry_price 100 -> total_qty 1000, deployed_capital 100000
+    store.add_pick(_make_pick(pick_id="pick-a", category_id="cat-1"))
+    store.update_pick("pick-a", entry_price=Decimal("100"))
+    store.record_snapshot(
+        MVPSnapshot(pick_id="pick-a", ltp=Decimal("100"), captured_at="2026-09-21T15:00:00+00:00")
+    )
+    store.record_snapshot(
+        MVPSnapshot(pick_id="pick-a", ltp=Decimal("120"), captured_at="2026-09-22T15:00:00+00:00")
+    )
+    store.record_snapshot(
+        MVPSnapshot(pick_id="pick-a", ltp=Decimal("90"), captured_at="2026-09-23T15:00:00+00:00")
+    )
+
+    result = store.get_category_high_low("cat-1")
+
+    assert result is not None
+    high_pct, low_pct = result
+    assert high_pct == Decimal("20")
+    assert low_pct == Decimal("-10")
+
+
+def test_get_category_high_low_returns_none_without_snapshots(tmp_path: Path) -> None:
+    store = MVPStore(str(tmp_path / "test.sqlite"))
+    store.init_db()
+    store.add_provider(_make_provider())
+    store.add_category(_make_category())
+    store.add_pick(_make_pick(pick_id="pick-a", category_id="cat-1"))
+
+    assert store.get_category_high_low("cat-1") is None
+    assert store.get_category_high_low("no-such-category") is None
+
+
+def test_get_category_high_low_forward_fills_across_picks(tmp_path: Path) -> None:
+    store = MVPStore(str(tmp_path / "test.sqlite"))
+    store.init_db()
+    store.add_provider(_make_provider())
+    store.add_category(_make_category())
+
+    # pick-a: entry 100 -> total_qty 1000, deployed_capital 100000; sampled all 3 days
+    store.add_pick(_make_pick(pick_id="pick-a", category_id="cat-1"))
+    store.update_pick("pick-a", entry_price=Decimal("100"))
+    for day, ltp in (("21", "100"), ("22", "100"), ("23", "100")):
+        store.record_snapshot(
+            MVPSnapshot(
+                pick_id="pick-a",
+                ltp=Decimal(ltp),
+                captured_at=f"2026-09-{day}T15:00:00+00:00",
+            )
+        )
+
+    # pick-b: entry 100 -> total_qty 1000, deployed_capital 100000; sampled day 1 and 3 only
+    store.add_pick(_make_pick(pick_id="pick-b", category_id="cat-1"))
+    store.update_pick("pick-b", entry_price=Decimal("100"))
+    store.record_snapshot(
+        MVPSnapshot(pick_id="pick-b", ltp=Decimal("100"), captured_at="2026-09-21T15:00:00+00:00")
+    )
+    store.record_snapshot(
+        MVPSnapshot(pick_id="pick-b", ltp=Decimal("140"), captured_at="2026-09-23T15:00:00+00:00")
+    )
+
+    # day 2: pick-a at 100 (sampled), pick-b forward-filled at 100 (from day 1) -> pct 0
+    # day 3: pick-a at 100, pick-b at 140 -> current 240000, invested 200000 -> pct +20
+    result = store.get_category_high_low("cat-1")
+
+    assert result is not None
+    high_pct, low_pct = result
+    assert high_pct == Decimal("20")
+    assert low_pct == Decimal("0")

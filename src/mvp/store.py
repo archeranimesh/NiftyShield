@@ -630,6 +630,79 @@ class MVPStore:
 
         return (weighted_sum / total_weight) if total_weight else None
 
+    def get_category_high_low(self, category_id: str) -> tuple[Decimal, Decimal] | None:
+        """Running high-water-mark / max-drawdown return% since a category's
+        first snapshot.
+
+        Builds a daily cumulative-return series across every pick in the
+        category that has ever recorded a snapshot — each day's value is
+        ``sum(ltp * total_qty)`` against ``sum(deployed_capital)`` for every
+        pick sampled on or before that day (forward-filling a pick's last
+        known ltp on days it wasn't itself sampled) — then takes the running
+        max/min of that series.
+
+        Args:
+            category_id: The category to aggregate over.
+
+        Returns:
+            ``(high_pct, low_pct)`` as percents, or ``None`` when no pick in
+            the category has any snapshot yet.
+        """
+        with connect(self.db_path) as conn:
+            picks = conn.execute(
+                "SELECT pick_id, deployed_capital, total_qty FROM mvp_recommendations "
+                "WHERE category_id = ?",
+                (category_id,),
+            ).fetchall()
+            pick_capital = {
+                row["pick_id"]: (Decimal(row["deployed_capital"]), row["total_qty"])
+                for row in picks
+            }
+            if not pick_capital:
+                return None
+
+            snap_rows = conn.execute(
+                f"""
+                SELECT pick_id, date(captured_at) AS d, ltp, MAX(captured_at)
+                FROM mvp_snapshots
+                WHERE pick_id IN ({",".join("?" * len(pick_capital))})
+                GROUP BY pick_id, d
+                ORDER BY d ASC
+                """,
+                tuple(pick_capital),
+            ).fetchall()
+
+        if not snap_rows:
+            return None
+
+        dates = sorted({row["d"] for row in snap_rows})
+        by_pick_day: dict[str, dict[str, Decimal]] = {}
+        for row in snap_rows:
+            by_pick_day.setdefault(row["pick_id"], {})[row["d"]] = Decimal(row["ltp"])
+
+        last_ltp: dict[str, Decimal] = {}
+        high_pct: Decimal | None = None
+        low_pct: Decimal | None = None
+        for d in dates:
+            invested = Decimal("0")
+            current = Decimal("0")
+            for pick_id, (deployed_capital, total_qty) in pick_capital.items():
+                if d in by_pick_day.get(pick_id, {}):
+                    last_ltp[pick_id] = by_pick_day[pick_id][d]
+                if pick_id not in last_ltp:
+                    continue
+                invested += deployed_capital
+                current += last_ltp[pick_id] * total_qty
+            if invested == 0:
+                continue
+            pct = (current - invested) / invested * 100
+            high_pct = pct if high_pct is None else max(high_pct, pct)
+            low_pct = pct if low_pct is None else min(low_pct, pct)
+
+        if high_pct is None or low_pct is None:
+            return None
+        return (high_pct, low_pct)
+
     def list_picks(
         self,
         status: PickStatus | None = None,
