@@ -87,6 +87,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-24] MVP M9 — M-A lump-sum fill math: total_qty/deployed_capital/avg_cost/idle_cash on entry fill, realized_pnl with 25bps cost on close, CLI P&L/return% surfacing — 56f38e2
 - [2026-09-23] MVP M7 — feat(mvp): add reco_price, surface deviation via CLI — d2f60d2
 - [2026-09-23] MVP M6 — historical backfill primitives (`backfill_snapshots`, `fetch_historical_closes`, `mvp.py backfill`); spec rewritten against M0's Parquet layout, scoped apart from M8 —
   `499d382`
