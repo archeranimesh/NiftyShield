@@ -86,6 +86,9 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-24] Bugs filed — `BUG-049` (MVP `Pick.symbol` stored as raw CLI input, not the resolved NSE trading symbol; breaks `fetch_historical_closes`/bootstrap symbol filtering) and `BUG-050`
+  (`write_equity_to_parquet`'s per-day dedup skips a whole day, including a genuinely-new symbol's row, if any other tracked symbol already covers that date) — found while adding an Engineers India
+  (`ENGINERSIN`) MVP pick and trying to backfill its history like `UNIPARTS`. Both `docs/bugs/bugs.md`/`task.md`, not yet fixed.
 - [2026-09-24] MVP M5 — docs close (`CONTEXT.md` module tree + Live Data cron note, `DECISIONS.md` MVP entry, this log). MVP watch hourly cron was already live in the crontab (`0 9-15 * * 1-5
   scripts.mvp_watch`) — no crontab change needed, just documented. M1–M9/M10–M13 ship bar now fully docs-closed.
 - [2026-09-24] MVP fix — `get_category_high_low` forward-fills a pick with no day-1 snapshot into later days instead of dropping it from the day's aggregate (leftover from the M13.3 session, committed

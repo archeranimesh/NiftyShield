@@ -12,6 +12,67 @@
 
 ---
 
+## BUG-050 — `write_equity_to_parquet`'s per-day dedup skips the whole day (all symbols) if any symbol/date pair already exists — silently drops history for newly-added symbols
+
+| Field | Value |
+|---|---|
+| Severity | **High** — silent data loss for backtest/MVP historical tracking; no error or warning names the dropped symbol |
+| Status | 🔴 Open |
+| Discovered | 2026-09-24 |
+| Location | `src/backtest/equity_bhavcopy_ingest.py::write_equity_to_parquet` (~L161-213) |
+
+**Symptom:** after adding a new MVP-tracked symbol (`ENGINERSIN`) alongside an already-tracked one (`UNIPARTS`), running `python -m scripts.pipeline.equity_bhavcopy_bootstrap --start 2026-09-10 --end
+2026-09-24` downloaded and logged all 10 trading days successfully (`[2026-09] downloaded 10/11 trading days`), but the resulting parquet only gained **1** new `ENGINERSIN` row (`2026-09-24`) — the
+other 9 trading days (09-10..09-23) never got written for the new symbol, despite parsing successfully from each day's bhavcopy.
+
+**Root cause:** the idempotent-append dedup check is keyed on `trade_date` alone, not `(symbol, trade_date)`:
+
+```python
+if any(d in existing_dates for d in new_dates):
+    return
+```
+
+`equity_bhavcopy_bootstrap.main` calls this once per trading day with that day's records across **all** tracked symbols in one batch. Since `UNIPARTS` already had a row for every date in 09-10..09-23
+from a prior run, `existing_dates` already contained those dates — so the **entire day's batch was skipped**, including the new `ENGINERSIN` row, not just the `UNIPARTS` duplicate. The function's own
+docstring comment acknowledges the batch-skip design ("if any date in a batch overlaps, the whole batch is skipped rather than just the duplicates ... conservative ... for the bootstrap use case (one
+day at a time) this is correct") — but that assumption only holds when exactly one symbol is ever tracked, or when every tracked symbol is added at the same time. MVP picks are added on an ongoing
+basis, so this is the normal case, not an edge case.
+
+**Suggested fix:** dedupe on `(symbol, trade_date)` pairs, not `trade_date` alone — filter `new_table` down to just the rows whose `(symbol, date)` aren't already present in the existing table, and
+always append those, instead of an all-or-nothing per-day skip.
+
+**Related:** BUG-049 (below) surfaced first in the same session — the pick's mis-stored `symbol` was the initial blocker; this dedup bug was found once that was fixed and the bootstrap still didn't
+backfill history.
+
+---
+
+## BUG-049 — MVP pick `symbol` is stored as the raw CLI-typed string, not the resolved NSE trading symbol — breaks historical-close lookups
+
+| Field | Value |
+|---|---|
+| Severity | **Medium** — forward tracking still works (`instrument_key` resolves correctly); backfill/analytics silently gets zero data if the typed string isn't the exact trading symbol |
+| Status | 🔴 Open |
+| Discovered | 2026-09-24 |
+| Location | `scripts/mvp.py::_add`/`_backfill`; consumed by `src/mvp/backfill.py::fetch_historical_closes` and `MVPStore.get_distinct_symbols` (via `equity_bhavcopy_bootstrap.main`) |
+
+**Symptom:** running `python -m scripts.mvp backfill "ENGINEERS INDIA" --reco-date 2026-09-10 --reco-price 273 --target 355 -p dsij -c value_picks` correctly resolved `instrument_key` via the
+interactive fuzzy-match picker (`NSE_EQ|INE510A01028`, trading symbol `ENGINERSIN`), but the pick's `symbol` column was set to `"ENGINEERS INDIA"` — the literal string typed at the CLI.
+`fetch_historical_closes(pick.symbol, ...)` then filtered the equity parquet on `"ENGINEERS INDIA"` instead of `"ENGINERSIN"`, matched zero rows, logged `mvp_backfill_no_data`, and the pick stayed
+`PENDING` with no way to tell whether the entry rule (next-day close above reco price) would actually have fired.
+
+**Root cause:** `_add`/`_backfill` build `Pick(symbol=args.symbol, ...)` directly from `args.symbol` — the raw CLI argument — never from the resolved instrument row returned by
+`_resolve_instrument_key`/`InstrumentLookup.search_equity`. `instrument_key` is correctly backfilled from that resolved row (fuzzy search + interactive picker when ambiguous), but `symbol` is not, so
+anything keyed on `Pick.symbol` (`fetch_historical_closes`, and `equity_bhavcopy_bootstrap.main`'s `store.get_distinct_symbols()` filter) silently misses unless the user happens to type the exact NSE
+trading symbol at the CLI.
+
+**Suggested fix:** have `_resolve_instrument_key` return (or a sibling call expose) the resolved `trading_symbol` alongside `instrument_key`, and set `pick.symbol` from that resolved value when
+resolution succeeds — falling back to the typed string only when resolution is skipped/deferred (`--defer-key`) or found no match. Needs a decision at fix time on what `symbol` should be in the
+no-match/deferred case (typed string vs. left for a later manual correction — no `update --symbol` CLI path exists today either).
+
+**Related:** BUG-050 (above) — found while working around this bug; fixing this one alone does not fix BUG-050's separate dedup defect.
+
+---
+
 ## BUG-045 [MOVED] — see `docs/archive/bugs/bugs.md` (closed 2026-09-10, SHA `aa44820`)
 
 ---

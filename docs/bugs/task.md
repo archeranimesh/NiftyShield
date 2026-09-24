@@ -21,6 +21,27 @@
 
 > BUG-044 closed 2026-09-15 (SHA `7c255fd`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
+## BUG-050 — `write_equity_to_parquet` per-day dedup drops a newly-added symbol's history when another tracked symbol already covers that date
+
+- [ ] **B050.1** — Rewrite the dedup in `write_equity_to_parquet` (`src/backtest/equity_bhavcopy_ingest.py`) to filter on `(symbol, trade_date)` pairs instead of `trade_date` alone; append only the
+  genuinely-new rows rather than skipping the whole batch.
+- [ ] **B050.2** — Tests: a batch containing one symbol already covered for a date and a second symbol new for that same date — assert the new symbol's row is appended and the existing symbol's row is
+  untouched (no duplicate).
+- [ ] **B050.3** — Backfill: re-run `equity_bhavcopy_bootstrap` for `ENGINERSIN`'s missing range (2026-09-10..2026-09-23) once the fix lands, to recover the data this bug dropped for BUG-049's pick.
+- [ ] **B050.4** — Suite green + real `@code-reviewer` clean.
+- [ ] **B050.5** — Flip `bugs.md` BUG-050 status to ✅ Fixed + SHA; move both sections to `docs/archive/bugs/{bugs,task}.md`; `TODOS.md` session-log line.
+
+## BUG-049 — MVP pick `symbol` stored as raw CLI input instead of the resolved NSE trading symbol
+
+- [ ] **B049.1** — Have `_resolve_instrument_key` (`scripts/mvp.py`) return the resolved `trading_symbol` alongside `instrument_key`; thread it into `_add`/`_backfill` so `Pick.symbol` is set from the
+  resolved value on a successful match, not `args.symbol`.
+- [ ] **B049.2** — Decide the no-match/`--defer-key` fallback behavior (keep typed string vs. flag for manual correction); no `update --symbol` CLI path exists today — note in `bugs.md`/task if one is
+  needed as a follow-up.
+- [ ] **B049.3** — Tests: `_add`/`_backfill` set `pick.symbol` to the resolved trading symbol on a successful (single-match and picker-selected) resolution; unchanged behavior on no-match/deferred.
+- [ ] **B049.4** — Fix the already-filed `b08f6661…` Engineers India pick's stored `symbol` (direct DB correction, same as done ad hoc this session) if not already superseded by a clean re-add.
+- [ ] **B049.5** — Suite green + real `@code-reviewer` clean.
+- [ ] **B049.6** — Flip `bugs.md` BUG-049 status to ✅ Fixed + SHA; move both sections to `docs/archive/bugs/{bugs,task}.md`; `TODOS.md` session-log line.
+
 ## BUG-043 — "Net P&L" in close notifications is inception-cumulative for IC v1/v2, cycle-only for collar, absent for CSP — no stable per-strategy contract
 
 - [x] **B043.1** — Add `reconstruct_cycles()` + `get_last_cycle_realized_pnl()` to `src/paper/` (all-legs-flat cycle boundaries from `paper_trades`); happy-path + open-trailing-cycle +
