@@ -25,6 +25,12 @@
 
 > BUG-053 closed 2026-09-24 (SHA `1042312`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
+## BUG-054 — MVP tracker has no stock-split/corporate-action adjustment for entry/target/SL prices
+
+- [ ] **B054.1** — Decide adjustment approach (manual split-ratio rebase command vs. a corporate-actions table) — needs its own scoping/council discussion before implementation.
+- [ ] **B054.2** — Implement chosen approach in `src/mvp/models.py`/`store.py`/`tracker.py`.
+- [ ] **B054.3** — Manually rebase pick `e30d0a11` (BECTORFOOD, 1:5 split) once the mechanism exists; add tests covering split-adjusted trigger comparisons.
+
 ## BUG-052 — `mvp update`/`close` silently no-op on a truncated pick_id instead of erroring
 
 - [ ] **B052.1** — Confirm whether `close_pick` has the identical silent-no-op shape as `update_pick` (trace `src/mvp/store.py::close_pick` + `scripts/mvp.py::_close`).

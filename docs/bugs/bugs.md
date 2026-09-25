@@ -20,6 +20,37 @@
 
 ---
 
+## BUG-054 — MVP tracker has no stock-split/corporate-action adjustment; pre-split entry/target/SL prices go stale post-split
+
+| | |
+|---|---|
+| Status | 🔴 Open — found 2026-09-25, not yet fixed. |
+| Discovered | 2026-09-25 — pick `e30d0a11` (BECTORFOOD), `PENDING` since 2025-09-08, had a 1:5 split (record date 2025-12-12) — see Symptom below |
+| Location | `src/mvp/models.py` (`Pick`, `PickStatus`), `src/mvp/tracker.py::check_prices`, `src/mvp/store.py::update_pick` (PENDING→OPEN side effect) |
+
+**Symptom:** BECTORFOOD pick `e30d0a11` carries pre-split absolute levels (`entry_price=1418.0`, `target_price=2836.0`) from 2025-09-08. The underlying did a 1:5 split (record date 2025-12-12,
+https://www.angelone.in/news/stocks/mrs-bectors-food-specialities-1-5-stock-split-record-date-on-dec-12-what-you-need-to-know), so post-split LTP is ~1/5 of these levels. There is no mechanism
+anywhere in `src/mvp/` to detect or adjust for this.
+
+**Root cause (confirmed via grep + read, not speculative):** `grep -ni "split|corporate action|adjust"` across `src/mvp/*.py` and `scripts/mvp*.py` returns zero relevant hits (only an unrelated
+`re.split()` call in `tracker.py:256`). `Pick` (`src/mvp/models.py:53-108`) has no split-ratio/adjustment-factor field; all price fields (`entry_price`, `reco_price`, `target_price`, `stop_loss`,
+`close_price`) are plain absolute `Decimal` levels. The model docstring (line 57) calls out dividends as explicitly out-of-scope but doesn't mention splits at all — this was never scoped, not deferred
+by decision. `docs/archive/plan/mvp/{tasks,stories,schema}.md`, `DECISIONS.md`, and this bug registry have no prior mention of splits/bonuses/corporate actions for MVP.
+
+**Mechanics of the failure:**
+- PENDING→OPEN is not price-driven: `src/mvp/store.py:385-386` flips status to `OPEN` only as a side effect of someone setting `entry_price` via `scripts/mvp.py update`. So a `PENDING` pick sitting
+  through a split isn't mechanically broken yet — it just hasn't had an entry fill confirmed.
+- Once `OPEN`, `tracker.check_prices` (`src/mvp/tracker.py:22-64`) does a raw comparison against stored absolute levels: line 44 `ltp >= pick.target_price` → `TARGET_HIT`; line 54 `ltp <=
+  pick.stop_loss` → `SL_HIT`. Only `OPEN` picks are evaluated (line 38 filter) — `PENDING` picks are skipped entirely by `check_prices`.
+- Consequence if a pre-split pick is (or becomes) `OPEN` without correcting its levels: a pre-split `target_price` becomes numerically unreachable post-split (`TARGET_HIT` never fires), while a
+  pre-split `stop_loss` would likely already be below post-split LTP and falsely fire `SL_HIT` the moment the pick goes `OPEN`.
+
+**Suggested fix (not yet designed/implemented):** needs its own scoping session — options include a manual split-ratio adjustment command/flow (divide `entry_price`/`target_price`/`stop_loss` by the
+ratio before flipping `PENDING`→`OPEN` or while `OPEN`), or a corporate-actions table joined at read time. Immediate workaround for `e30d0a11`: keep it `PENDING` (don't set `entry_price`) until levels
+are manually rebased by the 1:5 ratio.
+
+---
+
 ## BUG-052 — `mvp update`/`close` accept the truncated 8-char pick_id shown by `list`, but silently no-op instead of erroring
 
 | | |
