@@ -29,12 +29,12 @@ def _run(db_path: Path, *, dry_run: bool) -> None:
         column_names = [col["name"] for col in columns]
 
         if "counterfactual_dte_marks" in column_names:
-            logger.info("migrate.skip", msg="Column counterfactual_dte_marks already exists")
+            logger.info("migrate.skip", detail="Column counterfactual_dte_marks already exists")
             return
 
         logger.info("migrate.start")
         conn.execute(statement)
-        logger.info("migrate.complete", msg="Added counterfactual_dte_marks column")
+        logger.info("migrate.complete", detail="Added counterfactual_dte_marks column")
 
 
 def main() -> None:

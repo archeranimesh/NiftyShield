@@ -359,8 +359,15 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "MD-3-audited line 359 it replaced — that hand-built, pre-escaped string was "
         "removed by UXM-6's migration onto format_exit_message()."
     ),
-    ("scripts/mvp_watch.py", 141): ("untracked gap - not named in any MD-*/ROLL-* task"),
     ("scripts/mvp_watch.py", 148): ("untracked gap - not named in any MD-*/ROLL-* task"),
+    ("scripts/mvp_watch.py", 155): (
+        "untracked gap - not named in any MD-*/ROLL-* task. New call site from "
+        "e7cdda0's live EOD summary wiring."
+    ),
+    ("scripts/mvp_watch.py", 230): (
+        "untracked gap - not named in any MD-*/ROLL-* task. New call site from "
+        "e7cdda0's live EOD summary wiring."
+    ),
 }
 
 
