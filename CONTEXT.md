@@ -67,8 +67,9 @@ Top-level `src/` packages, one line each (detail → `CONTEXT_TREE.md`):
 - `src/gamma/` — Near-Expiry Gamma Buy scaffolding: frozen models + `GammaStore`.
 - `src/mvp/` — Multi-bagger Value Picks Tracker: tipster/analyst pick tracking, independent of all other strategy modules. Frozen Pydantic models (`Pick`, `MVPSnapshot`, `CategoryStats`,
   `ClosePickResult`, …), `MVPStore` (own `mvp_*` tables in `portfolio.sqlite` — providers/categories/recommendations/tranches/snapshots), pure `tracker.py` (`check_prices`, hourly/EOD Telegram summary
-  builders), `scripts/mvp.py` CLI (provider/category/add/update/close/list/summary/backfill) and `scripts/mvp_watch.py` (hourly LTP watch + auto-close + Telegram alerts; `--eod` for the end-of-day
-  summary). `docs/plan/mvp/` — story docs.
+  builders), `analytics.py` (`compute_category_returns` — blended realized + unrealized return per provider/category; `compute_category_volatility` — capital-weighted, inflow-corrected daily
+  volatility/Sharpe/max-drawdown, avoids counting new tranche capital as a price move), `scripts/mvp.py` CLI (provider/category/add/update/close/list/summary/backfill/**stats**) and
+  `scripts/mvp_watch.py` (hourly LTP watch + auto-close + Telegram alerts; `--eod` for the end-of-day summary). `docs/plan/mvp/` — story docs.
 - `src/council/` — AI council infra: `RapidCouncil` (parallel Stage-1 fan-out + chairman synthesis), request/response models.
 - `src/utils/` — `setup_logging(*, json, level)` (structlog, canonical entrypoint — see `LOGGING.md`), `fmt_inr` Indian-numbering formatter.
 - `src/config.py` — `Settings(BaseSettings)` singleton; declares every env var. `src/db.py` — shared SQLite context manager (WAL, FK, auto commit/rollback).

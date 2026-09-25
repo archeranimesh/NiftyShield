@@ -13,6 +13,7 @@ Usage:
     python -m scripts.mvp list [--open] [--all] [-p <provider_slug>] [-c <category_slug>]
     python -m scripts.mvp summary [-p <provider_slug>] [-c <category_slug>]
     python -m scripts.mvp summary <SYMBOL>
+    python -m scripts.mvp stats
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ from pathlib import Path
 
 from scripts.lookup.instrument_lookup import DEFAULT_BOD_PATH
 from src.instruments.lookup import InstrumentLookup
+from src.mvp.analytics import compute_category_returns, compute_category_volatility
 from src.mvp.backfill import fetch_historical_closes
 from src.mvp.models import Category, Pick, PickStatus, Provider, ProviderSource
 from src.mvp.store import MVPStore
@@ -461,6 +463,24 @@ def _summary(store: MVPStore, args: argparse.Namespace) -> None:
         _summary_grouped(store, args)
 
 
+def _stats(store: MVPStore, args: argparse.Namespace) -> None:
+    returns = compute_category_returns(store)
+    print("PROVIDER/CATEGORY | N | DEPLOYED | CURRENT | TOTAL_RETURN%")
+    for r in returns:
+        ret = f"{r.total_return_pct:+.2f}%" if r.total_return_pct is not None else "-"
+        print(f"{r.provider}/{r.category} | {r.n_picks} | {r.deployed} | {r.current_value} | {ret}")
+
+    print()
+    print("Volatility (ranked least -> most volatile):")
+    print("PROVIDER/CATEGORY | DAYS | ANN_STDEV% | ANN_MEAN% | SHARPE* | MAX_DD%")
+    for v in compute_category_volatility(store):
+        sharpe = f"{v.sharpe:.2f}" if v.sharpe is not None else "-"
+        print(
+            f"{v.provider}/{v.category} | {v.n_days} | {v.annualized_stdev_pct:.2f} | "
+            f"{v.annualized_mean_pct:.2f} | {sharpe} | {v.max_drawdown_pct:.2f}"
+        )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="mvp")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -546,6 +566,11 @@ def build_parser() -> argparse.ArgumentParser:
     summary_parser.add_argument("-p", "--provider", dest="provider", default=None)
     summary_parser.add_argument("-c", "--category", dest="category", default=None)
     summary_parser.set_defaults(func=_summary)
+
+    stats_parser = subparsers.add_parser(
+        "stats", help="Blended return + inflow-corrected volatility per provider/category."
+    )
+    stats_parser.set_defaults(func=_stats)
 
     return parser
 
