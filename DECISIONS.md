@@ -1116,6 +1116,22 @@ invariant (`schema.md`). Standalone — reads/writes only the `mvp_*` tables in 
 
 ---
 
+## MVP — corporate-action (stock split) adjustment: read-time event ledger, not in-place rebase (2026-09-25, council)
+
+Council ruling (`docs/council/2026-09-25_mvp-corporate-actions.md`, unanimous Stage 3 + all 4 panelists ranked this #1 in Stage 2 peer review), resolving `BUG-054` (`docs/bugs/bugs.md`): `Pick`
+(`src/mvp/models.py`) stays frozen/absolute and `mvp_snapshots` is never rewritten. A new `mvp_corporate_actions` table (`symbol`, `ex_date`, `action_type`, `new_shares`, `old_shares`, unique on
+`symbol, ex_date, action_type`) is populated manually (no automated NSE feed — the existing `data/offline/equity_ohlcv/` Parquet series is the detector for historical candidates, confirmed by the
+operator against the announcement/bhavcopy gap). A pure `cumulative_multiplier(actions, from_date, as_of)` function is the single conversion point; `tracker.check_prices`, `enter_backfill_pick`, and
+`run_backfill` all read through it rather than comparing raw stored levels. Rejected the in-place-rebase alternative (dividing `entry_price`/`target_price`/`stop_loss` by the split ratio directly on
+the `Pick` row): `run_backfill` re-walks raw historical bhavcopy closes against stored levels, so a rebased pick whose split sits inside its own backfill history (confirmed case: `BECTORFOOD` pick
+`e30d0a11`, still `PENDING` through a 1:5 split) would false-enter/false-exit, and the rebase is not idempotent against a second correction or a tranche filled after the split. Tranche
+`qty`/`fill_price` are adjusted per-tranche from each `filled_at` date, never as a blanket multiply on the aggregate; `deployed_capital`/`idle_cash`/`realized_pnl`/`benchmark_entry` are untouched (a
+split doesn't multiply invested rupees). Detection is a once-daily ratio-match interlock in `scripts/mvp_watch.py` (first tick of the day, before `check_prices`) — not a percentage-drop threshold,
+which the council rejected as too noisy against these stocks' normal earnings/circuit volatility. Not yet implemented; this entry records the ruled design only. `UCOBANK` was flagged during this
+session (−27.25% over 11 months on a live `gtf`/`diwali-picks` pick) but the council explicitly ruled it a candidate requiring external confirmation, not a proven split.
+
+---
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/` (except 0.6c), `src/streaming/` — all empty

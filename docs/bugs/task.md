@@ -27,9 +27,25 @@
 
 ## BUG-054 — MVP tracker has no stock-split/corporate-action adjustment for entry/target/SL prices
 
-- [ ] **B054.1** — Decide adjustment approach (manual split-ratio rebase command vs. a corporate-actions table) — needs its own scoping/council discussion before implementation.
-- [ ] **B054.2** — Implement chosen approach in `src/mvp/models.py`/`store.py`/`tracker.py`.
-- [ ] **B054.3** — Manually rebase pick `e30d0a11` (BECTORFOOD, 1:5 split) once the mechanism exists; add tests covering split-adjusted trigger comparisons.
+Design ruled by council 2026-09-25 (`docs/council/2026-09-25_mvp-corporate-actions.md`, unanimous): read-time `mvp_corporate_actions` event ledger, not in-place rebase. Full detail:
+`docs/bugs/bugs.md` BUG-054 "Fix Design" section; architecture summary: `DECISIONS.md` "MVP — corporate-action (stock split) adjustment" (2026-09-25).
+
+- [ ] **B054.1** — Schema + CLI: add `mvp_corporate_actions` table (`src/mvp/store.py` init) and `Pick`-adjacent model; `scripts/mvp.py corporate-action add|list` (reject bare `--ratio` strings,
+  enforce the `symbol, ex_date, action_type` unique constraint as the idempotency guard). Tests: add/list round-trip, duplicate insert rejected, invalid `new_shares`/`old_shares` rejected.
+- [ ] **B054.2** — Pure adjustment function: `cumulative_multiplier(actions, from_date, as_of)` in `src/mvp/` (no I/O, `Decimal` throughout). Tests: no actions → `1`; single/compounding actions;
+  `from_date < ex_date <= as_of` boundary; the `price_old / M == price_new` and `qty_old * M == qty_new` invariant.
+- [ ] **B054.3** — Wire into live tracking: `tracker.check_prices` loads actions per pick's symbol and compares LTP against `target_price / M` / `stop_loss / M` (not raw stored levels). Tests: breach
+  detection identical to today when no actions exist; correct post-split breach when one does.
+- [ ] **B054.4** — Wire into the historical walk: `enter_backfill_pick` and `run_backfill` (`src/mvp/backfill.py`) compare each day's raw close against levels adjusted by `M(pick_date, D)` for that
+  day `D`. Tests: a split mid-PENDING does not false-enter; a split mid-OPEN does not false-fire SL/target on the wrong side of the ex-date (BECTORFOOD-shaped case).
+- [ ] **B054.5** — Detection interlock: once-daily ratio-match check in `scripts/mvp_watch.py`, first tick of the day, before `check_prices` — suppress SL/target eval + Telegram-warn on an overnight
+  gap within ~3% of a standard split/bonus factor; never auto-inserts an action row. Tests: gap matching a factor suppresses + warns; a non-matching (organic) drop does not suppress.
+- [ ] **B054.6** — Update display/aggregation call sites to read the adjusted view (not raw `Pick` fields): `format_holdings_row`/`format_hourly_summary` (`src/mvp/tracker.py`), `get_category_stats`
+  (`src/mvp/store.py`). Tranche recompute: `avg_cost` as `sum(adjusted_fill_price × adjusted_qty) / sum(adjusted_qty)`, never a blanket scale of the aggregate;
+  `deployed_capital`/`idle_cash`/`realized_pnl`/`benchmark_entry` untouched. Tests: P&L/`avg_cost` render correctly pre- and post-split for a pick with tranches on both sides of an ex-date.
+- [ ] **B054.7** — Retrofit: one-time audit script scanning `data/offline/equity_ohlcv/` day-over-day for every `OPEN`/`PENDING` pick for gaps matching a standard factor (candidates only, not
+  auto-applied). Manually confirm and insert action rows for real splits found (BECTORFOOD `e30d0a11` 1:5 pending confirmation of exact ex-date; UCOBANK is a candidate only, per council ruling — do
+  not insert its action row without external confirmation of an actual split).
 
 ## BUG-052 — `mvp update`/`close` silently no-op on a truncated pick_id instead of erroring
 

@@ -24,9 +24,10 @@
 
 | | |
 |---|---|
-| Status | 🔴 Open — found 2026-09-25, not yet fixed. |
+| Status | 🟡 Fix in progress — design ruled by council 2026-09-25, not yet implemented. |
 | Discovered | 2026-09-25 — pick `e30d0a11` (BECTORFOOD), `PENDING` since 2025-09-08, had a 1:5 split (record date 2025-12-12) — see Symptom below |
 | Location | `src/mvp/models.py` (`Pick`, `PickStatus`), `src/mvp/tracker.py::check_prices`, `src/mvp/store.py::update_pick` (PENDING→OPEN side effect) |
+| Council decision | [`docs/council/2026-09-25_mvp-corporate-actions.md`](../council/2026-09-25_mvp-corporate-actions.md) — see **Fix Design (council-ruled)** below |
 
 **Symptom:** BECTORFOOD pick `e30d0a11` carries pre-split absolute levels (`entry_price=1418.0`, `target_price=2836.0`) from 2025-09-08. The underlying did a 1:5 split (record date 2025-12-12,
 https://www.angelone.in/news/stocks/mrs-bectors-food-specialities-1-5-stock-split-record-date-on-dec-12-what-you-need-to-know), so post-split LTP is ~1/5 of these levels. There is no mechanism
@@ -45,9 +46,32 @@ by decision. `docs/archive/plan/mvp/{tasks,stories,schema}.md`, `DECISIONS.md`, 
 - Consequence if a pre-split pick is (or becomes) `OPEN` without correcting its levels: a pre-split `target_price` becomes numerically unreachable post-split (`TARGET_HIT` never fires), while a
   pre-split `stop_loss` would likely already be below post-split LTP and falsely fire `SL_HIT` the moment the pick goes `OPEN`.
 
-**Suggested fix (not yet designed/implemented):** needs its own scoping session — options include a manual split-ratio adjustment command/flow (divide `entry_price`/`target_price`/`stop_loss` by the
-ratio before flipping `PENDING`→`OPEN` or while `OPEN`), or a corporate-actions table joined at read time. Immediate workaround for `e30d0a11`: keep it `PENDING` (don't set `entry_price`) until levels
-are manually rebased by the 1:5 ratio.
+**Fix Design (council-ruled 2026-09-25, unanimous Stage 3 chairman synthesis + all 4 panelists ranked this #1 in Stage 2 — see
+[`docs/council/2026-09-25_mvp-corporate-actions.md`](../council/2026-09-25_mvp-corporate-actions.md)):**
+
+**Option B — symbol-scoped `mvp_corporate_actions` event ledger, read-time adjustment.** `Pick` stays frozen/absolute, `mvp_snapshots` is never mutated. A new table (`action_id`, `symbol`, `ex_date`,
+`action_type` SPLIT|BONUS|CONSOLIDATION, `new_shares`, `old_shares`, `source`, `notes`, `created_at`, unique on `symbol, ex_date, action_type`) is populated manually via `python -m scripts.mvp
+corporate-action add <SYMBOL> --ex-date ... --type ... --new N --old N --source ...`. A pure `cumulative_multiplier(actions, from_date, as_of)` function converts price/qty to the correct basis for any
+evaluation date; `tracker.check_prices`, `enter_backfill_pick`, and `run_backfill` all divide/multiply through this function rather than comparing raw stored levels. Option A (in-place rebase) was
+rejected — `run_backfill` re-walks raw pre-split bhavcopy closes against stored levels, so mutating `reco_price`/`target_price`/`stop_loss` in place would false-enter/false-exit picks whose split sits
+inside their own backfill history (BECTORFOOD is exactly this case) and is not idempotent.
+
+**Tranche scope:** each tranche's `qty`/`fill_price` is adjusted from its own `filled_at` date (never a blanket multiply on the aggregate); `avg_cost` is recomputed as `sum(adjusted_fill_price ×
+adjusted_qty) / sum(adjusted_qty)`. `deployed_capital`, `idle_cash`, `realized_pnl`, `benchmark_entry` are **not** touched — a split doesn't multiply invested rupees.
+
+**Detection:** a once-daily ratio-match interlock in `scripts/mvp_watch.py`, on the first tick of the day, before `check_prices` — compares today's opening LTP to the prior session's close; if the
+ratio lands within ~3% of a standard split/bonus factor (2, 3, 4, 5, 10, 1.5, 2.5 or inverses), suppresses `SL_HIT`/`TARGET_HIT` for that pick that day and sends a Telegram warning. Does not
+auto-insert the action row — ratio match only shortlists for manual confirmation.
+
+**Retrofit required before the adjustment code is trusted:** one-time audit scanning `data/offline/equity_ohlcv/` day-over-day for every `OPEN`/`PENDING` pick for gaps matching a standard factor, then
+manual confirmation against NSE announcements (store the bhavcopy gap date as `ex_date`, not the news article's record date) before inserting action rows.
+
+- **BECTORFOOD `e30d0a11`:** stays `PENDING`, do not set `entry_price`, do not manually divide `1418` by `5` — insert the action row once the exact ex-date is confirmed against bhavcopy, then let
+  `enter_backfill_pick` find the correct post-split entry day naturally.
+- **UCOBANK** (flagged this session via the live `gtf`/`diwali-picks` pick, −27.25% over 11 months): council explicitly ruled this is a **candidate, not confirmed** — a PSU bank can organically lose
+  27% without a split; only a confirmed single-session gap near a standard factor justifies an action row.
+
+Not yet implemented — this entry records the ruled design; implementation is a separate task.
 
 ---
 
