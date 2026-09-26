@@ -3,9 +3,9 @@
 
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task spec.
 
-**Open: PTB-1, PTB-2, PTB-3, PTB-4, PTB-5.**
+**Open: PTB-2, PTB-3, PTB-4, PTB-5.**
 
-- [ ] **PTB-1** — Write up 2026-09-26 discussion as `plan.md` draft (tier table + open questions) | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <—>
+- [x] **PTB-1** — Write up 2026-09-26 discussion as `plan.md` draft (tier table + open questions) | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <pending>
 - [ ] **PTB-2** — Concretize Tier 0 (Bootstrap) file skeletons | Owner: Animesh | Model: n/a | Review: none | SHA: <—>
 - [ ] **PTB-3** — Concretize Tier 1 (Recurring work) skill/doc genericization | Owner: Animesh | Model: n/a | Review: none | SHA: <—>
 - [ ] **PTB-4** — Concretize Tier 2/3 gating criteria + generalized model-routing buckets | Owner: Claude | Model: claude-opus-5-5 | Review: none | SHA: <—>

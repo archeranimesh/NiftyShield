@@ -46,7 +46,7 @@ rot them.
 23. **Strategy module refactor & AI-collaboration blueprint** — `docs/plan/strategy-refactor-blueprint/` — next **BP-1** (`/md-organize` run). Planning-only across several sessions: safe,
     golden-test-gated decomposition of `ic_nifty_v1.py`/`ic_nifty_v2.py` (14,255 LOC `src/strategy/` total, these two files ~30% of it) without disturbing live paper-trading cycles, plus a generalized
     Claude/Antigravity/council routing blueprint drawn from the case study. Requested by Animesh 2026-09-26. 24a. **Cross-project Claude template blueprint** — `docs/plan/project-template-blueprint/`
-    — next **PTB-1** (write up discussion as `plan.md`). Discussion-only across several sessions: abstract NiftyShield's Python conventions + Claude-Code harness (skills/hooks/agents) + `docs/plan/`
+    — next **PTB-2** (concretize Tier 0 file skeletons). Discussion-only across several sessions: abstract NiftyShield's Python conventions + Claude-Code harness (skills/hooks/agents) + `docs/plan/`
     scaffolding into a trigger-gated tier system (Bootstrap / Recurring work / Correctness-critical / Scale) other future projects (CardLedger, TaxCalculation) can selectively inherit. Requested by
     Animesh 2026-09-26.
 24. **Portfolio snapshot slimdown** — `docs/plan/portfolio-snapshot-slimdown/` — next **FD-1** (pre-delete audit). Epic, two sequenced sub-stories that both rework `_build_portfolio_summary` +
@@ -92,6 +92,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-26] `project-template-blueprint/` PTB-1 done — `plan.md` written, capturing the four-tier table (Bootstrap / Recurring work / Correctness-critical or multi-surface / Scale), the scratch/tmp
+  distinction, the architecture-doc trio, the generalized model-routing buckets, and the draft template-repo distribution decision, plus all open questions carried forward for PTB-2..PTB-5.
 - [2026-09-26] `project-template-blueprint/` scaffolded (docs-only, no code) — captures a separate discussion session abstracting NiftyShield's Python conventions, Claude-Code harness
   (skills/hooks/agents), and `docs/plan/` scaffolding into a trigger-gated tier system (Bootstrap / Recurring work / Correctness-critical or multi-surface / Scale) that future projects (a credit-card
   statement parser "CardLedger" and a family tax calculator "TaxCalculation") can selectively inherit, without over-transplanting NiftyShield's live-trading-grade process onto small projects.
