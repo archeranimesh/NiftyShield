@@ -77,6 +77,34 @@ Genuinely reusable **code** (e.g. `setup_logging()`, a statement-parsing plugin 
 on a second real consumer existing to validate the boundary, per the earlier conclusion in discussion: building a shared library speculatively risks guessing the API wrong and having to break it on
 the first real consumer anyway.
 
+### Tier 0 output, concretely (answered ahead of PTB-5, scoped to Tier 0 only)
+
+The output is a git repo, not a loose folder of files floating around — a small one, mostly markdown plus a few real config files, version-controlled itself so the template can be iterated on and
+diffed over time. A canonical location, e.g. `~/myWork/myCode/_templates/py-project-tier0/`, holding:
+
+- `CLAUDE.md` (Step 1–5 skeleton, no NiftyShield-specific references)
+- `CONTEXT.md` skeleton, `README.md` skeleton
+- `scratch/` (with `SCRATCH.md`'s naming + convergence rules) and `tmp/` (gitignored)
+- `.claude/skills/commit/SKILL.md` and `.claude/skills/session-close/SKILL.md`
+- `pyproject.toml` (ruff/mypy/pytest config), `.pre-commit-config.yaml`, `.gitignore`
+- an empty `session_audit.jsonl` + `suggestions.md` seed
+
+Notably little actual Python code — Tier 0 is almost entirely markdown + config, which is exactly why "git repo to copy from" beats "installable package" here: there is no runtime code to
+version-bump, just a starting shape to copy.
+
+**How a new project gets it — two viable mechanisms, either works, pick per-project:**
+
+1. **GitHub template repository** — mark the repo as a template in its settings, then `gh repo create <new-project> --template <you>/py-project-tier0` creates a brand-new repo seeded with those files
+   and fresh git history (not a fork, no linkage back). Clean, but assumes the new project is pushed to GitHub.
+2. **A local scaffold script** — `python -m scripts.dev.new_project_from_tier0 <target-path>` copies the file set into a fresh directory and runs `git init`. Purely local, no GitHub dependency — fits
+   a project that starts as a local-only folder (e.g. `/Users/abhadra/myWork/myCode/AI/TaxCalculation`) before any decision to push it anywhere is made.
+
+**Explicit tradeoff, either mechanism:** this is copy-once, not sync-forever. Improving the Tier 0 template later does not propagate to projects already scaffolded from it — the same conclusion as the
+earlier submodule rejection (a live pointer isn't worth the coupling cost for static config). The template repo becomes something deliberately revisited and selectively backported from, not something
+that auto-updates.
+
+Tier 1–3 distribution (does a project add these by editing its own copy of the same files, or is there a second template layer?) stays open for PTB-5 — this section only concretizes Tier 0.
+
 ## Open questions (carried from `prompt.md` §"Perspectives not covered" — not resolved here)
 
 - Whether TaxCalculation's correctness stakes actually warrant Tier 2 (council) despite its small size — needs Animesh's judgment on how costly a tax-calc mistake actually is versus the overhead of a
