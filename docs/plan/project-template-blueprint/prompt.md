@@ -57,8 +57,8 @@ covers has actually converged.
   independent verification).
 - **PTB-5** — Decide and document the distribution mechanism (template repo shape, how a new project pulls updates if ever) and hand off to a new, separate story that actually scaffolds the template
   repo.
-- **PTB-6** — Concretize `python-addon/` (deferred at PTB-2): the Python-specific overlay — `pyproject.toml`, pre-commit config, ruff/mypy/pytest — most future projects will actually need, since a
-  majority of Animesh's planned projects are Python.
+- **PTB-6** — Concretize the `python/` overlay (renamed from the earlier `python-addon/` concept, deferred at PTB-2): `src`/`scripts`/`tests`/`logs` structure, `pyproject.toml` + requirements files,
+  pre-commit config — most future projects will actually need this, since a majority of Animesh's planned projects are Python.
 
 Task order above is a starting guess, not a commitment — expect renumbering, merging, or new tasks as the discussion continues. `stories.md` intentionally leaves later tasks under-specified until
 earlier ones converge.

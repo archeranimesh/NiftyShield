@@ -124,8 +124,14 @@ building Python-specific tooling into it now is premature. Do **not** create `py
 identifies `project-scaffold` — or the tier-0-derived output — as needing Python tooling. When that trigger fires, decide then whether it lives inside `tier0/`, as a sibling at the `project-scaffold/`
 root, or elsewhere; that placement question is explicitly not resolved by this note.
 
-**Trigger fired (2026-09-26, this session):** Animesh confirmed a majority of planned projects (CardLedger, TaxCalculation, and future ones) are Python. **PTB-6** now owns concretizing `python-addon/`
-— see `tasks.md`/`stories.md` for the task spec. This note stays as the historical record of why it was deferred in the first place; do not re-derive that reasoning in PTB-6, just read it.
+**Trigger fired (2026-09-26, this session):** Animesh confirmed a majority of planned projects (CardLedger, TaxCalculation, and future ones) are Python. **PTB-6** now owns concretizing this overlay —
+see `tasks.md`/`stories.md` for the task spec. This note stays as the historical record of why it was deferred in the first place; do not re-derive that reasoning in PTB-6, just read it.
+
+**Renamed to `python/` (2026-09-26, same session):** "`python-addon/`" implied a bolt-on; Animesh's framing is that a Python project's actual code structure (`src/`, `scripts/`, `tests/`, `logs/`)
+belongs in this overlay too, not just tooling config — so it's the base Python project shape, not an addon. Confirmed via discussion, four concrete decisions locked in ahead of PTB-6 doing the work:
+dependency management stays `requirements.txt` + `requirements-dev.txt` (matches NiftyShield, not a `pyproject.toml`-only model); `logs/` ships with a minimal `setup_logging()` stub, not just an empty
+folder; `data/` is conditional on the project's actual input/output shape, not scaffolded by default; pre-commit hooks are `ruff`/`ruff-format`/`mypy`/`detect-secrets` plus a generic `pytest`
+test-gate hook — the domain-agnostic five, no NiftyShield-specific local hooks.
 
 **PTB-2 closed (2026-09-26):** Animesh confirmed the final file set. Corrections made during review before sign-off: `python-addon/` removed entirely (deferred — see below, not universal Tier 0);
 `.gitignore` stripped of Python-specific entries (`__pycache__/`, `*.pyc`, `.venv/`) and fixed so `tmp/README.md` isn't silently excluded by the `tmp/` ignore rule (`tmp/*` + `!tmp/README.md`);
@@ -170,11 +176,11 @@ Tier 1–3 distribution (does a project add these by editing its own copy of the
 ### Flatten-at-copy-time semantics (clarified in the PTB-2 session, input for PTB-5's scaffold script)
 
 Confirmed via `TradeResearch` (`/Users/abhadra/myWork/myCode/AI/TradeResearch/`) as a worked example: a real consuming project is **always one flat directory at its own root** —
-`TradeResearch/CLAUDE.md`, `TradeResearch/CONTEXT.md`, and `TradeResearch/scripts/*.py` all sit directly at root, with no `tier0/` or `python-addon/`-named subfolder anywhere inside it. This settles a
+`TradeResearch/CLAUDE.md`, `TradeResearch/CONTEXT.md`, and `TradeResearch/scripts/*.py` all sit directly at root, with no `tier0/` or `python/`-named subfolder anywhere inside it. This settles a
 question raised in discussion: the template repo's `tier0/`/`tier1/`/`tier2/`/`tier3/` subfolders are **source-only** — a place to copy *from* — and never appear as structure *inside* a scaffolded
 project. There is no "promote a file from tier1 up into tier0" step, because tiers are never merged with each other inside `project-scaffold/` itself; they are each independently overlaid onto a real
-project's root, once, at scaffold time. The same flattening applies to `python-addon/` once it exists (deferred, see above) — its files land directly in the consuming project's root (`pyproject.toml`,
-`.pre-commit-config.yaml`, `src/`), never inside a folder literally named `python-addon/` in the real project.
+project's root, once, at scaffold time. The same flattening applies to `python/` once it exists (see PTB-6 above) — its files land directly in the consuming project's root (`pyproject.toml`, `src/`,
+`.pre-commit-config.yaml`), never inside a folder literally named `python/` in the real project.
 
 **Idea floated for the PTB-5 scaffold script, not yet built (Animesh, this session):** make the local scaffold-script option interactive and repeatable rather than a static copy — run it once against
 a target path, have it ask a handful of yes/no questions (is this a Python project? does a backlog exist yet? etc.), and have it copy `tier0/*` plus whichever tier/addon deltas the answers select,

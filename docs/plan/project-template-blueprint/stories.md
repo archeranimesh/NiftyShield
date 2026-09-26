@@ -122,27 +122,42 @@ mechanism. (`commit` and `session-close` moved to PTB-2, 2026-09-26 — both are
 
 ---
 
-## PTB-6 — Concretize `python-addon/`
+## PTB-6 — Concretize the `python/` overlay
 
 **Files to change / create:**
-- `docs/plan/project-template-blueprint/plan.md` — new "Python addon" section, replacing the "deferred, not built yet" note.
-- `/Users/abhadra/myWork/myCode/AI/project-scaffold/python-addon/` (or wherever this task decides it belongs) — the actual file set.
-- `project-scaffold/scaffold.sh` — extend to overlay the addon when selected, if placement makes that necessary.
+- `docs/plan/project-template-blueprint/plan.md` — new "Python overlay" section, replacing the "`python-addon/` deferred" note.
+- `/Users/abhadra/myWork/myCode/AI/project-scaffold/python/` — the actual file set (renamed from the earlier `python-addon/` concept — not a bolt-on, it's the base Python project shape).
+- `project-scaffold/scaffold.sh` — extend to overlay `python/` when selected, if placement makes that necessary.
 
-**Before any code:** re-read `plan.md`'s "`python-addon/` deferred, not built yet" note in full — it records why this was pulled out of Tier 0 (language-agnostic day one) and exactly what was in the
-earlier draft (`pyproject.toml`, `.pre-commit-config.yaml`, ruff/mypy/pytest config) before Animesh's correction.
+**Before any code:** re-read `plan.md`'s "`python-addon/` deferred, not built yet" note (historical record of why this was pulled out of Tier 0) — do not re-derive that reasoning, just read it. Also
+re-read NiftyShield's own current top-level layout as the worked example this generalizes from: `src/` (151 files, the production package), `scripts/` (106 files, entrypoints/CLIs), `tests/` (238
+files), `data/`, `logs/`, `config/`, `.venv/` (gitignored, never committed), `pyproject.toml` + `requirements.txt` + `requirements-dev.txt`, `.pre-commit-config.yaml` (hooks: `ruff`, `ruff-format`,
+`mypy`, `detect-secrets`, plus NiftyShield-specific local hooks that stay out of this overlay — those are Tier 1+ content already covered elsewhere in `plan.md`).
+
+**Decisions already confirmed with Animesh (2026-09-26), do not re-litigate:**
+- Dependency management: `requirements.txt` + `requirements-dev.txt`, matching NiftyShield's own convention — not a `pyproject.toml`-only dependency model.
+- `logs/`: ships with a minimal `setup_logging()` stub (not just an empty gitignored folder), so every Python project starts with consistent log formatting from day one.
+- `data/`: **conditional, not default** — only added when a project actually consumes/produces files (true for CardLedger's statement parsing; decide per-project otherwise). Do not ship it empty in
+  every project.
+- `src/`, `scripts/`, `tests/` — always ship, empty-but-present with a seeded `__init__.py` each (mirrors the "new Python package directory must include `__init__.py`" rule from NiftyShield's own
+  `CLAUDE.md`).
+- Pre-commit hooks: `ruff`, `ruff-format`, `mypy`, `detect-secrets`, **plus a generic test-gate hook** that runs `pytest` — so tests can't be skipped even without an agent enforcing it. No
+  NiftyShield-specific local hooks (logging-convention checks, markdown/story-structure checks — those stay Tier 1+ and are not part of this overlay).
 
 **What to implement:**
 
-1. Decide placement: inside `tier0/` as a Python-specific sibling set, a fourth `python-addon/` folder at `project-scaffold/` root layered on top of whichever tier is chosen, or something else — state
-   the reasoning, don't just restate the open question.
-2. Write the concrete file set: `pyproject.toml`, `.pre-commit-config.yaml` (ruff/mypy at minimum), a `pytest` config, and anything from NiftyShield's own Python-hygiene table in `plan.md` (type
-   hints, `(str, Enum)`, `Decimal`-for-money as an opt-in note since it's domain-conditional, not universal) worth carrying as a default.
-3. State whether/how `scaffold.sh` selects this addon (a flag, an interactive question per the PTB-5 scaffold-script idea, or manual copy) — do not block this task on PTB-5's interactive-script design
+1. Decide placement: inside `tier0/` as a Python-specific sibling set, a separate `python/` folder at `project-scaffold/` root layered on top of whichever tier is chosen, or something else — state the
+   reasoning, don't just restate the open question. (Given `python/` is orthogonal to the tier axis — a Tier 0 project can be Python or not — a root-level sibling overlay, not nested inside a tier, is
+   the likely answer; confirm or override this with reasoning.)
+2. Write the concrete file set per the confirmed decisions above: `src/`, `scripts/`, `tests/` (each with a seeded `__init__.py`), `logs/` + a minimal `setup_logging()` stub, `pyproject.toml`,
+   `requirements.txt` + `requirements-dev.txt`, `.pre-commit-config.yaml` (the five hooks above), and a `.gitignore` addition for `.venv/`. `data/` is documented as an optional add-on, not scaffolded
+   by default. Carry NiftyShield's own Python-hygiene defaults where universal (type hints, `(str, Enum)` — never `StrEnum`) and flag `Decimal`-for-money as an opt-in note since it's
+   domain-conditional, not universal.
+3. State whether/how `scaffold.sh` selects `python/` (a flag, an interactive question per the PTB-5 scaffold-script idea, or manual copy) — do not block this task on PTB-5's interactive-script design
    landing first; a manual "copy this folder in too" instruction is an acceptable interim answer.
 4. Validate: run `scaffold.sh` (or the manual copy) against a scratch destination and confirm the result is a working `pyproject.toml`-rooted Python project layout with no leftover placeholder folder
    names, mirroring the flatten-at-copy-time semantics already established for tier0/tier1.
 
 **Tests:** none (docs/config only; no NiftyShield `src/`/`scripts/` code changes).
 
-**Commit:** `docs(plan): concretize python-addon overlay`
+**Commit:** `docs(plan): concretize python overlay`
