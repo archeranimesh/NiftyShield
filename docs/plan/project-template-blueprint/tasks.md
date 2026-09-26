@@ -23,8 +23,9 @@ Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task
 - **PTB-4** — Tier 2/3 trigger conditions are concrete enough to apply to a real project (not just "correctness-critical," but a checklist), and the three model-routing buckets are named with what
   actually goes in each.
 - **PTB-5** — A distribution-mechanism decision is recorded in `DECISIONS.md`, and a new `docs/plan/` story exists (linked from here) scoped to building the actual template repo.
-- **PTB-6** — `python/`'s exact file set (contents, not just names) is written to `project-scaffold/`, its placement decided (inside a tier, sibling at root, or its own opt-in overlay) and stated, and
-  Animesh has confirmed it's what a brand-new Python project should start with beyond Tier 0's language-agnostic baseline.
+- **PTB-6** — `python/`'s exact file set (contents, not just names) is written to `project-scaffold/`, its placement decided (inside a tier, sibling at root, or its own opt-in overlay) and stated,
+  Animesh has confirmed it's what a brand-new Python project should start with beyond Tier 0's language-agnostic baseline, and `scaffold.sh` asks "is this a Python project?" and overlays `python/`
+  flattened when the answer is yes.
 
 ## After each task
 

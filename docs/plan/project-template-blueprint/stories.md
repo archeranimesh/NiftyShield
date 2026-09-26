@@ -153,10 +153,15 @@ files), `data/`, `logs/`, `config/`, `.venv/` (gitignored, never committed), `py
    `requirements.txt` + `requirements-dev.txt`, `.pre-commit-config.yaml` (the five hooks above), and a `.gitignore` addition for `.venv/`. `data/` is documented as an optional add-on, not scaffolded
    by default. Carry NiftyShield's own Python-hygiene defaults where universal (type hints, `(str, Enum)` — never `StrEnum`) and flag `Decimal`-for-money as an opt-in note since it's
    domain-conditional, not universal.
-3. State whether/how `scaffold.sh` selects `python/` (a flag, an interactive question per the PTB-5 scaffold-script idea, or manual copy) — do not block this task on PTB-5's interactive-script design
-   landing first; a manual "copy this folder in too" instruction is an acceptable interim answer.
-4. Validate: run `scaffold.sh` (or the manual copy) against a scratch destination and confirm the result is a working `pyproject.toml`-rooted Python project layout with no leftover placeholder folder
-   names, mirroring the flatten-at-copy-time semantics already established for tier0/tier1.
+3. Validate the `python/` file set on its own: run `scaffold.sh` with a manual copy of `python/` (no interactive question yet) against a scratch destination and confirm the result is a working
+   `pyproject.toml`-rooted Python project layout with no leftover placeholder folder names, mirroring the flatten-at-copy-time semantics already established for tier0/tier1. Do this **before** step 4
+   — the file set must be right before wiring a question around it.
+4. **Only once step 3 validates cleanly:** extend `scaffold.sh` to ask "Is this a Python project?" and, on yes, overlay `python/` (flattened, same semantics as the tier overlays) in addition to
+   whichever tier is selected. This is scoped to PTB-6, not PTB-5 — PTB-5's own interactive-script work covers language-agnostic questions (e.g. does a backlog exist yet); the Python question is gated
+   on `python/` existing, so it belongs here. If PTB-5 hasn't yet built the interactive-script scaffolding this question would hang off of, add the minimal flag/prompt needed to ask it standalone
+   (e.g. a `--python` flag or a single `y/n` prompt) rather than blocking on PTB-5 landing first.
+5. Re-validate: run the updated `scaffold.sh` end-to-end (tier selection + Python question) against a fresh scratch destination and confirm a clean, flat, correctly-conditional result (`data/` absent
+   unless something in the answers calls for it).
 
 **Tests:** none (docs/config only; no NiftyShield `src/`/`scripts/` code changes).
 

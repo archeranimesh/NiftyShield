@@ -183,9 +183,13 @@ project's root, once, at scaffold time. The same flattening applies to `python/`
 `.pre-commit-config.yaml`), never inside a folder literally named `python/` in the real project.
 
 **Idea floated for the PTB-5 scaffold script, not yet built (Animesh, this session):** make the local scaffold-script option interactive and repeatable rather than a static copy — run it once against
-a target path, have it ask a handful of yes/no questions (is this a Python project? does a backlog exist yet? etc.), and have it copy `tier0/*` plus whichever tier/addon deltas the answers select,
-flattened directly into the target root. Repeatable means re-running it against an existing project only adds files that don't already exist — it never overwrites what's already there. This is
-explicitly PTB-5 scope to design and build, not something to implement mid-PTB-2 — captured here so PTB-5 starts from it instead of re-deriving it from scratch.
+a target path, have it ask a handful of yes/no questions (does a backlog exist yet? etc.), and have it copy `tier0/*` plus whichever tier deltas the answers select, flattened directly into the target
+root. Repeatable means re-running it against an existing project only adds files that don't already exist — it never overwrites what's already there. This is explicitly PTB-5 scope to design and
+build, not something to implement mid-PTB-2 — captured here so PTB-5 starts from it instead of re-deriving it from scratch.
+
+**"Is this a Python project?" question re-scoped to PTB-6 (2026-09-26, this session):** the Python-specific question in the interactive scaffold script is gated on `python/` actually existing, so it
+belongs to PTB-6 as a final step once the `python/` file set and placement are finalized, not to PTB-5's more general interactive-script work. PTB-6 adds the question and the conditional `python/`
+overlay to `scaffold.sh`; PTB-5's own interactive-script scope narrows to the tier-selection questions (backlog exists yet, etc.) that apply regardless of language.
 
 **Refined further (Animesh, PTB-2 session, after `project-scaffold` was `git init`'d):**
 
