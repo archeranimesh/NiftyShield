@@ -43,6 +43,9 @@ rot them.
 22. **IC payoff charts on Telegram** — `docs/plan/ic-payoff-charts/` — next **PC-2** (`src/strategy/payoff.py` — `ICPayoff` + `compute_ic_payoff`). Epic: `chart-core/` (expiry payoff PNG + `sendPhoto`
     plumbing + wire into entry / EOD audit / close, one chart per IC variation — no option model, ships now) → `chart-model-overlay/` (T+0 curve + ±1σ/±2σ bands + POP — blocked on
     `greeks-bs-fallback/` GF-2 + GF-3). Priority relative to items 13–21 is Animesh's call.
+23. **Strategy module refactor & AI-collaboration blueprint** — `docs/plan/strategy-refactor-blueprint/` — next **BP-1** (`/md-organize` run). Planning-only across several sessions: safe,
+    golden-test-gated decomposition of `ic_nifty_v1.py`/`ic_nifty_v2.py` (14,255 LOC `src/strategy/` total, these two files ~30% of it) without disturbing live paper-trading cycles, plus a generalized
+    Claude/Antigravity/council routing blueprint drawn from the case study. Requested by Animesh 2026-09-26.
 24. **Portfolio snapshot slimdown** — `docs/plan/portfolio-snapshot-slimdown/` — next **FD-1** (pre-delete audit). Epic, two sequenced sub-stories that both rework `_build_portfolio_summary` +
     `_format_combined_summary`: `finideas-decommission/` (FD-1..7 — full removal of `finideas_ilts` + `finrakshak`: the `src/portfolio/strategies/` provider layer, the options / hedge / ETF snapshot
     terms, and every Finideas row in `strategies` / `legs` / `trades` / `daily_snapshots` via a `scripts/dev/decommission_finideas.py` CLI — history option A, hard delete) → `dhan-holdings-removal/`
@@ -86,6 +89,10 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-26] `strategy-refactor-blueprint/` scaffolded (docs-only, no code) — captures a discussion session's finding that `src/strategy/` (14,255 LOC) is dominated by `ic_nifty_v2.py` (2,935
+  lines) + `ic_nifty_v1.py` (1,409 lines), ~30% of the package with no existing `DEBT-*` tracking it, and lays out a golden-test-gated, council-ruled, one-extraction-per-commit approach to decomposing
+  it without disturbing live paper-trading cycles. Also confirmed `md-organize` already covers the doc-growth (`TODOS.md`/`DECISIONS.md`) side of the same discussion — BP-1 just needs to run it, not
+  design it. Multi-session planning story; BP-5 will draft a generalized Claude/Antigravity/council routing blueprint once the case study has a real result.
 - [2026-09-24] BUG-053 fixed — `mvp backfill --resume <pick_id>` resumes an existing PENDING pick straight into `run_backfill()`, skipping `Pick(...)`/`add_pick()` entirely (B053.1, SHA `3540577`);
   the create path now guards against a duplicate PENDING row for the same symbol+reco_date, erroring and pointing at `--resume` instead of inserting a second row (B053.2); both paths covered by new
   tests (B053.3). `@code-reviewer` clean both rounds (0 CRITICAL/ERROR). `bugs.md`/`task.md` sections archived. SHA `1042312`.
