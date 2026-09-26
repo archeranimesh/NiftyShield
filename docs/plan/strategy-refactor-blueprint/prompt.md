@@ -25,6 +25,10 @@ load-bearing refactor in a long-running production codebase — something to gen
 This story is **planning and discussion only** until a task explicitly says otherwise. No `src/strategy/` file is edited under this story. When a task graduates to actual extraction work, it spins off
 its own story (or epic sub-story, if `ic_nifty_v1`+`v2` end up needing separately sequenced tracks) — this file only tracks the decision trail and hands off cleanly at that point.
 
+**Standing instruction (Animesh, 2026-09-27):** this story is expected to run across several future sessions as pure discussion — extending `tasks.md`/`stories.md` with new findings, open questions,
+and decisions as they come up. Do not implement BP-1..BP-5 (or any task added later) on the strength of a session simply reaching them in sequence; each still needs its own explicit go-ahead. Planning
+is not complete — and no task under this story starts real work — until Animesh says so.
+
 ## Session-start load hints
 
 - `docs/plan/technical-debt/tasks.md` — confirm no `DEBT-*` has since been filed for this (checked clean on 2026-09-26; recheck if time has passed).
