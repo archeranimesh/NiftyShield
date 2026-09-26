@@ -78,6 +78,7 @@ chat history — CONTEXT.md is the single source of truth. Module tree (file-lev
 | Authoring or reviewing any task/story/spec mentioning expiry, DTE, or calendar logic | `REFERENCES.md` — expiry day changed Thursday→Tuesday, April 2026 |
 | New entrypoint script, any `logger.*()` call, or touching `src/utils/logging.py` | `LOGGING.md` — canonical logging standard (see `BUG-010` in `docs/bugs/bugs.md`) |
 | Building or editing any Telegram/notification message text | `src/notifications/CLAUDE.md` §"Instrument Label Formatting" |
+| Writing a new script in `scratch/` | `SCRATCH.md` — naming, the convergence rule, and when to extract/promote instead of re-deriving |
 | Formatting any value into a Telegram message (money, Greeks, strikes, %, expiries, tables) | `FORMATTING.md` — per-parameter-type standard + the escaping-boundary contract |
 | Reviewing or building on Antigravity's work | `ANTIGRAVITY.md` |
 
