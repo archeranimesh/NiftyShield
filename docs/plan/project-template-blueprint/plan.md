@@ -182,6 +182,24 @@ explicitly PTB-5 scope to design and build, not something to implement mid-PTB-2
 - **Script scope stops at "files written."** It does not `git init` or make any commit in the new project — that stays a deliberate, separate step the operator takes afterward. Matches the `commit`
   skill's own philosophy (a commit is explicitly executed, never done silently on the operator's behalf).
 
+### Validation script (built ahead of PTB-5, interim non-interactive version)
+
+`/Users/abhadra/myWork/myCode/AI/project-scaffold/scaffold.sh` exists now — a simpler, non-interactive precursor to the PTB-5 idea above (no questions asked, no project-name prompt yet; just an
+explicit tier level + destination path). It overlays `tier0/` through `tierN/` (in that order, so a higher tier's files can add to or override a lower tier's) flat onto the destination root, matching
+the flatten-at-copy-time semantics confirmed above. Usage: `./scaffold.sh [--force] <tier-level 0-3> <destination-path>`; refuses a non-empty destination unless `--force` is passed; does not `git
+init` or commit, per the "script scope stops at files written" principle above.
+
+**Run this after every change to `tier0/`–`tier3/` to validate the overlay still produces a clean flat tree:**
+
+```
+/Users/abhadra/myWork/myCode/AI/project-scaffold/scaffold.sh --force 0 /Users/abhadra/myWork/myCode/AI/_scratch_to_delete
+```
+
+Source: `project-scaffold/tier0/` (raise the tier-level arg as tier1+ get populated by PTB-3 onward). Destination: `/Users/abhadra/myWork/myCode/AI/_scratch_to_delete` — a disposable scratch folder
+outside `project-scaffold/`, not committed anywhere, safe to `rm -rf` and re-run against. After running, `find` the destination and confirm: no `tier0/`-named subfolder appears, `.claude/skills/`
+holds one flat set of skill folders, and no duplicate/stale files remain from a prior run (re-run with `--force` after `rm -rf`ing the destination first if in doubt, since the script does not prune
+files a later run no longer produces).
+
 ## Open questions (carried from `prompt.md` §"Perspectives not covered" — not resolved here)
 
 - Whether TaxCalculation's correctness stakes actually warrant Tier 2 (council) despite its small size — needs Animesh's judgment on how costly a tax-calc mistake actually is versus the overhead of a
@@ -337,5 +355,6 @@ setup/maintenance cost for savings that only exceed that cost once the codebase 
 ## Status
 
 PTB-1 and PTB-2 done. Tier 0 file set confirmed and written to `/Users/abhadra/myWork/myCode/AI/project-scaffold/tier0/` (see "Tier 0 output, concretely" above) — `scratch/` subfolder-timing question
-resolved (stay flat until ~50 files), `commit`/`session-close` skills written and re-scoped in from PTB-3. Not yet `git init`'d in `project-scaffold/` (Animesh's call, deferred without a hard trigger
-stated — revisit next session). Next: PTB-3 — `work`/`new-story` skill genericization only.
+resolved (stay flat until ~50 files), `commit`/`session-close` skills written and re-scoped in from PTB-3. `project-scaffold/scaffold.sh` written and verified against tier0 (see "Validation script"
+above) — run it after every tier-content change. Not yet `git init`'d in `project-scaffold/` (Animesh's call, deferred without a hard trigger stated — revisit next session). Next: PTB-3 — `work`/
+`new-story` skill genericization only.
