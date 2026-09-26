@@ -3,7 +3,7 @@
 
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task spec.
 
-**Open: PTB-5, PTB-6, PTB-7, PTB-8, PTB-9.**
+**Open: PTB-6, PTB-7, PTB-8, PTB-9.**
 
 **Re-planned 2026-09-26 (after PTB-4):** the story's end state is now a self-contained `project-scaffold` — every tier's files, the `python/` overlay, a per-item `scaffold.sh`, and the tier/trigger
 guide itself all live there, so nothing a consuming project needs is left behind in NiftyShield. PTB-5 no longer hands off to a separate build story (the repo already exists, Tier 0/1 are committed in
@@ -14,8 +14,8 @@ it); PTB-7..PTB-9 added. SHAs below are NiftyShield commits; `project-scaffold` 
   | Owner: Animesh | Model: n/a | Review: none | SHA: f28959d
 - [x] **PTB-3** — Concretize Tier 1 (Recurring work): `work` + `new-story` skill genericization only (narrowed from PTB-2, 2026-09-26) | Owner: Animesh | Model: n/a | Review: none | SHA: cf515b5
 - [x] **PTB-4** — Concretize Tier 2/3 gating criteria + generalized model-routing buckets | Owner: Claude | Model: claude-opus-5-5 | Review: none | SHA: 783a68e
-- [ ] **PTB-5** — Distribution decision + `scaffold.sh` per-item selection and merge mechanics (re-scoped 2026-09-26: was "hand off template-repo build to a new story") | Owner: Claude | Model:
-  claude-opus-5-5 | Review: none | SHA: <—>
+- [x] **PTB-5** — Distribution decision + `scaffold.sh` per-item selection and merge mechanics (re-scoped 2026-09-26: was "hand off template-repo build to a new story") | Owner: Claude | Model:
+  claude-opus-5-5 | Review: none | SHA: 5110b0a
 - [ ] **PTB-6** — Concretize the `python/` overlay (renamed from the earlier `python-addon/` concept, deferred at PTB-2, 2026-09-26 — now in scope: most future projects, CardLedger and TaxCalculation
   included, are Python) | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <—>
 - [ ] **PTB-7** — Write Tier 2 (`stakes/`, `test-runner/`, `multi-surface/`) into `project-scaffold`, genericized, in PTB-5's fragment shape | Owner: Claude | Model: claude-sonnet-5 | Review: none
