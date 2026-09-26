@@ -46,7 +46,7 @@ rot them.
 23. **Strategy module refactor & AI-collaboration blueprint** — `docs/plan/strategy-refactor-blueprint/` — next **BP-1** (`/md-organize` run). Planning-only across several sessions: safe,
     golden-test-gated decomposition of `ic_nifty_v1.py`/`ic_nifty_v2.py` (14,255 LOC `src/strategy/` total, these two files ~30% of it) without disturbing live paper-trading cycles, plus a generalized
     Claude/Antigravity/council routing blueprint drawn from the case study. Requested by Animesh 2026-09-26. 24a. **Cross-project Claude template blueprint** — `docs/plan/project-template-blueprint/`
-    — next **PTB-4** (Tier 2/3 gating criteria + model-routing buckets). Discussion-only across several sessions: abstract NiftyShield's Python conventions + Claude-Code harness
+    — next **PTB-5** (distribution mechanism + hand off template-repo build). Discussion-only across several sessions: abstract NiftyShield's Python conventions + Claude-Code harness
     (skills/hooks/agents) + `docs/plan/` scaffolding into a trigger-gated tier system (Bootstrap / Recurring work / Correctness-critical / Scale) other future projects (CardLedger, TaxCalculation) can
     selectively inherit. Requested by Animesh 2026-09-26.
 24. **Portfolio snapshot slimdown** — `docs/plan/portfolio-snapshot-slimdown/` — next **FD-1** (pre-delete audit). Epic, two sequenced sub-stories that both rework `_build_portfolio_summary` +
@@ -110,6 +110,10 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
   names generalized. `work`'s bug branch made optional-and-detected (only offered if `docs/bugs/` exists) rather than assumed. `DECISIONS.md`/`TODOS.md` triggers sharpened to one testable fact each
   (see `plan.md` Tier 1 row) — confirmed with Animesh. `scaffold.sh` needed no code change (already loops generically over tiers); validated clean via `--force 1` against
   `/Users/abhadra/myWork/myCode/AI/_scratch_to_delete`. Docs-only, no NiftyShield `src/`/`scripts/` code touched. Next: PTB-4.
+- [2026-09-26] `project-template-blueprint/` PTB-4 done — Tier 2/3 gating + model routing concretized in `plan.md`. Tier 2 split into 2a stakes (two-box project check, four-box per-decision council
+  check, TaxCalculation qualifies) and 2b multi-surface; Tier 3 thresholds anchored to NiftyShield's own history (Rule 0 at ~10K LOC / 69 files, `a1aca07`); three routing buckets by reasoning demand ×
+  cost of error, Tier 0/1 single-model. Governing rule from `docs/archive/process/2026-05-08_workflow-improvements.md`: a gate ships with its at-the-moment hook or not at all. Two scaffold problems
+  flagged for PTB-5 (per-item selection; `settings.json`/`CLAUDE.md` merge). Docs-only. Next: PTB-5.
 - [2026-09-26] `strategy-refactor-blueprint/` scaffolded (docs-only, no code) — captures a discussion session's finding that `src/strategy/` (14,255 LOC) is dominated by `ic_nifty_v2.py` (2,935
   lines) + `ic_nifty_v1.py` (1,409 lines), ~30% of the package with no existing `DEBT-*` tracking it, and lays out a golden-test-gated, council-ruled, one-extraction-per-commit approach to decomposing
   it without disturbing live paper-trading cycles. Also confirmed `md-organize` already covers the doc-growth (`TODOS.md`/`DECISIONS.md`) side of the same discussion — BP-1 just needs to run it, not

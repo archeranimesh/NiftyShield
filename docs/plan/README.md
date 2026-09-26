@@ -63,7 +63,7 @@ Requested by Animesh 2026-09-10.
 `src/strategy/`'s 14,255 LOC) without disturbing live paper-trading cycles — golden-test-gated extraction, council-ruled decomposition boundary, then a generalized Claude/Antigravity/council routing
 blueprint drawn from the case study. No `src/` code touched under this story. Requested by Animesh 2026-09-26.
 
-**`project-template-blueprint/`** · 🔄 In progress · next: **PTB-4** (Tier 2/3 gating criteria + model-routing buckets) Discussion-only, multi-session: abstract NiftyShield's Python conventions,
+**`project-template-blueprint/`** · 🔄 In progress · next: **PTB-5** (distribution mechanism + hand off template-repo build) Discussion-only, multi-session: abstract NiftyShield's Python conventions,
 Claude-Code harness (skills/hooks/agents), and `docs/plan/` scaffolding into a trigger-gated tier system future projects (CardLedger, TaxCalculation) can selectively inherit. No template repo built
 under this story — that's a follow-on story PTB-5 hands off to. Requested by Animesh 2026-09-26.
 

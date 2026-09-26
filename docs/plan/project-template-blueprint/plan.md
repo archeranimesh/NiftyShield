@@ -29,6 +29,9 @@ tier" mechanism if what it computes is load-bearing (TaxCalculation's bracket/de
 <!-- lint-ignore-length -->
 | **3 — Scale** | Codebase big enough that "where is X" beats "just read the file" (rough heuristic: multiple thousands of LOC across many files), or a doc keeps getting reread wholesale | Rule 0 graph-tooling (`codebase-memory-mcp` indexing + the graph-before-read hook) — resist copying this into small projects; it's dead weight below a real size threshold. `CONTEXT_TREE.md` (module-tree survey, once `CONTEXT.md`'s flat list stops being enough). `md-organize` + `docs/archive/` (doc-growth housekeeping, once a doc crosses roughly 500–1000 lines). `weekly-audit` cadence skill. |
 
+Rows 2 and 3 are the original sketch. They are concretized into checklists and thresholds under "Tier 2 — gating, concretely" and "Tier 3 — gating, concretely" below (PTB-4); where the two differ,
+those sections win — notably, Tier 2 is split into two independent triggers (2a stakes, 2b multi-surface).
+
 ## The `scratch/` vs `tmp/` distinction
 
 These are not the same kind of thing, and the template must keep them separate:
@@ -52,18 +55,127 @@ Three documents, three different mutability contracts — this shape is the reus
   Created the moment a decision between genuinely viable approaches needs justifying to a future reader (Tier 1) — see the concrete test in the tier table above, not before.
 - **`CONTEXT_TREE.md`** — a derived index (file → one-line purpose). Exists only once `CONTEXT.md`'s inline "What Exists" listing gets too flat to navigate (Tier 3).
 
-## Model routing (generalized, draft)
+## The enforcement lesson that shapes Tiers 2 and 3 (from NiftyShield's own history)
 
-NiftyShield's `Owner | Model | Review` task-line format only earns its complexity once there's real variety of recurring task types (Tier 1+). Generalized into three buckets, to be applied instead of
-copying NiftyShield's specific model names:
+Source: `docs/archive/process/2026-05-08_workflow-improvements.md`. When NiftyShield first added its AutoTrigger agent table and council checkpoint, both lived only as `CLAUDE.md` text marked "not
+optional." Under task pressure neither fired: the IVR task (`3ed90fe`) ran 11 tests, committed, and confirmed its SHA without ever spawning `test-runner` or `code-reviewer`. A `UserPromptSubmit`
+checklist injection did not fix it either — text read at task start gets overridden by the time the action happens. What actually worked was a hook that fires **at the moment of the action**:
+`council_check.sh` on the first `Edit`/`Write`, `inline_full_suite.sh` on a Bash `pytest` call, `guard_src_reads.sh` on a `Read` of `src/`/`scripts/`.
 
-- **Mechanical/bulk** — well-specified, low-ambiguity work. A fast/cheap model, or Antigravity if that surface is wired in (Tier 2+).
-- **Design/judgment** — anything with an open design question or domain nuance. The primary strong model for the session.
-- **Independent verification** — a fresh subagent context (even the same model), used where outside review matters: code review before commit, or council for the rarer cross-discipline calls (Tier 2).
+The portable rule this yields: **a Tier 2/3 gate ships together with its at-the-moment hook, or it does not ship.** A gate that exists only as protocol prose is worse than no gate — it costs resident
+tokens every session and gives false assurance. Every gate below names the hook it travels with. Hooks stay warn-only (exit 0) by default, matching NiftyShield's own choice; promote one to blocking
+only after it has been observed being ignored on a real task.
 
-For a Tier 0/1 project, one model doing everything is correct, not a gap — don't build the routing table before Tier 2 is actually warranted. This story's own tasks already use the pattern as a worked
-example: PTB-1 (discussion capture) stayed on the interactive session's model; PTB-4 (final Tier-2/3 synthesis write-up) is routed to a stronger model, mirroring `strategy-refactor-blueprint`'s own
-BP-4/BP-5 convention of routing final-synthesis tasks to Opus rather than the model used for iterative back-and-forth.
+## Tier 2 — gating, concretely (PTB-4)
+
+Tier 2 has two independent triggers that were fused in the draft tier table. They adopt different file sets and are evaluated separately — a project can hit one without the other.
+
+### 2a. Stakes trigger — council protocol + review agents
+
+**Project-level check (run once, and again whenever a new domain area is added).** Adopt 2a when you can answer yes to both:
+
+- [ ] Can you name a specific computation whose wrong output lands **outside the code** — money moved or owed, a legal/tax filing, data destroyed or irreversibly migrated?
+- [ ] Is there **no downstream check** that would catch the error before it lands (a human reviewing every output, a reconciliation against an external source, a reversible preview step)?
+
+Project size is not an input. Worked examples, answered against the checklist:
+
+- **TaxCalculation** — bracket/deduction/regime-choice logic → a filed return → penalty and interest if wrong; the filing *is* the output, so nothing downstream catches it. **Passes both boxes.**
+  Whether Animesh actually wants to pay council overhead for it stays an open question (below) — the checklist says it qualifies, not that it must be used.
+- **CardLedger statement parser** — a mis-parsed or miscategorized transaction surfaces in a report Animesh reads before acting on any rewards suggestion, and nothing irreversible happens. **Fails box
+  2** as long as that stays true. It flips if CardLedger ever auto-acts (pays, files, moves money).
+- **NiftyShield** — live capital, orders, P&L. Passes trivially; the reference implementation.
+
+**Per-decision council checklist (only once 2a is adopted).** Convene a council only when every box is ticked. This is NiftyShield's Step 2b three-condition test with its first condition split in two,
+because "load-bearing" and "costly to reverse" fail independently in practice:
+
+- [ ] **Load-bearing** — being wrong changes an output someone acts on (the 2a computation, or something feeding it).
+- [ ] **Costly to reverse** — undoing it after it ships takes more than one session: a data migration, re-processing history, a re-filing, or unwinding positions.
+- [ ] **Two defensible approaches** — you can write the strongest one-paragraph case for each without strawmanning either. If one is obviously right, just pick it.
+- [ ] **Spans ≥2 disciplines** — e.g. tax law + data modelling, options math + risk + engineering. A pure-engineering fork, however costly, is a `DECISIONS.md` entry, not a council.
+
+Fallbacks when not every box is ticked: boxes 1–3 without 4 → write a `DECISIONS.md` entry that records both options and why one won (Tier 1 already covers this). Fewer than that → just decide and
+move on.
+
+**Ships with 2a:** `docs/council/README.md` + `_TEMPLATE`; the Step 2b block in `CLAUDE.md`; `council_check.sh` (PreToolUse `Edit|Write`, warn-only, prints the four boxes); a generic `code-reviewer`
+agent (type hints, error handling, hygiene — no domain checks) plus a `REVIEW.md` skeleton for the project to fill; the AutoTrigger **table mechanism** in `CLAUDE.md` with only the generic rows
+populated.
+
+**Domain reviewer agents are per-project, never portable.** NiftyShield's `greeks-analyst`, `roll-validator`, and `options-strategist` stay behind — only the mechanism travels: one agent per named
+correctness-risk surface, triggered by a path or topic, blocking. The rule for adding one is: **each ticked 2a project-level check names a computation; that computation's module gets a reviewer agent
+with a path trigger.** For TaxCalculation, that would be a `tax-rule-reviewer` firing on changes to the bracket/deduction module. No surface named → no domain agent.
+
+**`test-runner` agent — separate, context-cost trigger, not stakes.** Its value is keeping full-suite output out of the main context, not independent judgment. Adopt it (together with its
+`inline_full_suite.sh` hook, which is what actually makes it fire) the first time a full `pytest -q` run's output is long enough that you trim it by hand, or you catch a session running the full suite
+inline more than once per task. Before that, the Tier 0 rule "tests pass before commit" run inline is correct.
+
+### 2b. Multi-surface trigger — cross-agent routing
+
+Adopt only when a **second implementing surface (Antigravity or similar) has actually done at least one real task** on the project — not speculatively because it might. Ships: the Step 3b
+Claude-vs-other-surface routing table; `handoff-antigravity` (content injected inline, not by path reference — the 2026-05-08 consultation measured ~3–5K tokens saved per handoff); `ANTIGRAVITY.md`;
+`AGENTS.md` as a full mirror of `CLAUDE.md`, never a stub. The standing caveat from NiftyShield carries over unchanged: the second surface cannot spawn `.claude/agents/*`, so if 2a is also adopted,
+every 2a review gate still runs in Claude Code, and the Phase Completion Output SHA check is Claude's job.
+
+Hook-surface caveat: gates here only enforce where hooks fire. Per FR-8 (`docs/plan/full-repo-review/findings/FR-8_practitioner-devex.md` §2), Claude Code runs `.claude/hooks/*` and Cowork was
+assessed as not — a claim FR-8 itself flagged as unverified. Until verified, run Tier 2+ gated work in Claude Code.
+
+## Tier 3 — gating, concretely (PTB-4)
+
+Tier 3 items are pure scale/cost optimizations — none of them affect correctness, so each has its own threshold and can be adopted one at a time. Numbers are anchored to when NiftyShield actually
+needed them, not guessed.
+
+| Item | Adopt when (first to fire wins) | Ships with it |
+|---|---|---|
+<!-- lint-ignore-length -->
+| **Rule 0 enforcement** (graph-before-read) | **Numeric:** production code (`src/` + `scripts/` or equivalent) reaches ~10K LOC or ~70 source files — NiftyShield added `guard_src_reads.sh` at 10,247 LOC / 69 `.py` files (`a1aca07`, 2026-04-24); it is 68K / 257 now. **Behavioral (overrides the number in either direction):** over a typical session, most of your source `Read`s are to find *where* something is or *who calls* it, rather than to understand a file you already located. | `guard_src_reads.sh` + `repeat_read.sh` (PreToolUse `Read`), the `graph_snippet` fingerprint-stripping wrapper, the Rule 0 block in `CLAUDE.md`. Indexing itself is already Tier 0. |
+<!-- lint-ignore-length -->
+| **`CONTEXT_TREE.md`** | Same event as Rule 0 in practice — NiftyShield split it out of `CONTEXT.md` in that same `a1aca07` commit. Standalone test: `CONTEXT.md`'s "What Exists" section needs more than one line per top-level package to stay navigable. | `CONTEXT_TREE.md` skeleton; `CONTEXT.md` keeps one line per package plus a pointer. |
+<!-- lint-ignore-length -->
+| **`wide_grep.sh`** | Adopted with Rule 0 — an unscoped grep only becomes expensive at the same scale where the graph starts beating `Read`. | `wide_grep.sh` hook (PreToolUse `Bash`). |
+<!-- lint-ignore-length -->
+| **`md-organize` + `docs/archive/`** | Any root doc passes ~400 lines (the `md-organize` skill's own `CONTEXT.md ≤ 400 lines` check), or a doc gets read in full each session when only its latest section is used. | `md-organize` skill; `docs/archive/` with a dated-snapshot naming convention. |
+<!-- lint-ignore-length -->
+| **`state_doc_freshness.sh`** | Commit volume is high enough that state docs silently drift — the first time a session acts on a stale `CONTEXT.md`/`DECISIONS.md` claim. NiftyShield's per-doc thresholds (15–60 src commits) are a starting point to tune, not constants. | SessionStart hook + per-doc threshold list. |
+<!-- lint-ignore-length -->
+| **`weekly-audit`** | `session_audit.jsonl` (Tier 0) has enough rows that reading it by hand stops being quick — rough guide: a few dozen sessions. Stays on-demand, never cron, exactly as NiftyShield runs it. | `weekly-audit` skill. |
+
+## Model routing (converged, PTB-4)
+
+**Tier 0/1: one model for everything, and that is correct, not a gap.** The `Model:` field on task lines (free text since PTB-3) may be left `n/a`. Routing only starts paying for itself when Tier 2a
+fires, because that is when an independent-verification context first earns its cost.
+
+Once Tier 2 applies, route by **reasoning demand × cost of an error**, not by task size. NiftyShield's own 2026-05-08 rationale is the seed: Haiku for pass/fail test runs (no reasoning needed), Sonnet
+for orchestration, planning and graph queries, Opus for code review, roll validation, and strategy design — the decisions with financial consequence. Generalized into three buckets:
+
+<!-- lint-ignore-length -->
+| Bucket | What goes in it | Model / surface |
+|---|---|---|
+<!-- lint-ignore-length -->
+| **Mechanical / bulk** | Spec fully determined **and** correctness machine-checkable (tests, linters, a hook). Pass/fail test runs; pattern migrations across N files; applying an already-decided spec; doc reflow; close-out bookkeeping (SHA backfills, status rows, session-log lines). | Smallest model that follows the spec reliably — Haiku-class for pass/fail, Sonnet-class for multi-file edits — or the second surface if 2b is adopted. |
+<!-- lint-ignore-length -->
+| **Design / judgment** | An open question, domain nuance, or a spec that may change as it's written. Planning and story authoring; debugging; design-gate specs every downstream task depends on (NiftyShield's `FMT-1` was routed to Opus "for the spec-writing pass itself, not just a post-hoc review"); final-synthesis write-ups (this task, `strategy-refactor-blueprint` BP-4/BP-5). | Strongest available model; normally the interactive session itself. Iterative back-and-forth can run a tier lower, with the converging synthesis step escalated. |
+<!-- lint-ignore-length -->
+| **Independent verification** | Any check whose value comes from **not** sharing the author's context: pre-commit code review, domain reviewer agents, council. | A fresh subagent context with its checklist (`REVIEW.md`) actually loaded — the 2026-05-08 consultation found same-context persona review reliably misses the hygiene rules it wasn't given. Strong model where 2a applies (errors are consequential); the same model is acceptable otherwise, since the fresh context is the point. |
+
+Escalation rule carried from FR-8 §3 (job type 5): a task starts in the bucket its shape suggests and **moves up** the moment it turns out to touch a 2a computation — a routine debugging session that
+finds the bug is in the tax/P&L path becomes design/judgment work, and its fix goes through independent verification.
+
+## What `tier2/` and `tier3/` will hold (input for the PTB-5 build story)
+
+Not written to `project-scaffold/` under PTB-4 — this task's scope is `plan.md` only. Listed so the build story starts from a file list rather than re-deriving it:
+
+- `tier2/stakes/` (2a): `docs/council/README.md` + `_TEMPLATE/`, `.claude/agents/code-reviewer.md` (generic), `REVIEW.md` skeleton, `.claude/hooks/council_check.sh`, `CLAUDE.md` Step 2b + AutoTrigger
+  table fragments. `test-runner.md` + `inline_full_suite.sh` as a separately selectable piece (its trigger is context cost, not stakes).
+- `tier2/multi-surface/` (2b): `.claude/skills/handoff-antigravity/`, `ANTIGRAVITY.md`, `AGENTS.md` template, `CLAUDE.md` Step 3b fragment.
+- `tier3/`: `.claude/hooks/{guard_src_reads,repeat_read,wide_grep,state_doc_freshness}.sh`, the `graph_snippet` wrapper, `.claude/skills/{md-organize,weekly-audit}/`, `CONTEXT_TREE.md` skeleton,
+  `CLAUDE.md` Rule 0 fragment.
+
+**Two structural problems this list exposes for PTB-5:**
+
+1. `scaffold.sh` overlays tiers in whole-level order (`tier0` … `tierN`), but Tier 2 is now two independently selectable halves and Tier 3 is six independently triggered items. A single numeric tier
+   level can no longer express "2a yes, 2b no, Rule 0 yes, weekly-audit not yet." The interactive-question design PTB-5 already owns needs to be per-item, not per-level.
+2. `.claude/settings.json` and `CLAUDE.md` are **merged**, not copied: every Tier 2/3 hook needs a registration in the same `settings.json`, and every gate adds a fragment to the same `CLAUDE.md`. The
+   current overlay semantics (a higher tier's file overwrites a lower tier's) would drop earlier tiers' hook registrations. PTB-5 needs a merge step for these two files (for example, fragment files
+   appended in tier order, and a JSON merge on `hooks` arrays), or it ships a broken `settings.json` the first time two tiers both register hooks.
 
 ## Distribution mechanism (draft, not yet decided — PTB-5)
 
@@ -220,7 +332,7 @@ files a later run no longer produces).
 ## Open questions (carried from `prompt.md` §"Perspectives not covered" — not resolved here)
 
 - Whether TaxCalculation's correctness stakes actually warrant Tier 2 (council) despite its small size — needs Animesh's judgment on how costly a tax-calc mistake actually is versus the overhead of a
-  council question.
+  council question. **PTB-4 update:** against the Tier 2a project-level checklist it qualifies (output lands outside the code, nothing downstream catches it). What stays open is whether to use it.
 - Whether CardLedger's statement-parser and rewards-optimizer are truly one system or two — changes whether "twin projects" reasoning applies to it or to TaxCalculation.
 - Antigravity's actual fit for a small, single-operator project — the handoff pattern was designed for NiftyShield's scale; untested whether it's worth the overhead below Tier 2.
 - `scratch/` subfolder timing for a new project (see above, under the scratch/tmp section) — open for PTB-2.
@@ -385,3 +497,9 @@ project carries no bug-tracking overhead until a bug is actually worth tracking 
 target project has no scaffold script yet, so it doesn't hard-depend on `scripts/dev/new_plan_folder.py` existing elsewhere. `DECISIONS.md`/`TODOS.md` triggers sharpened from session-count language to
 a single testable fact each (see tier table above) — confirmed with Animesh. Validated: `scaffold.sh --force 1 <scratch-dest>` overlays clean — no NiftyShield references, no `tier0`/`tier1`-named
 subfolders in the output, `.gitignore`'s `tmp/README.md` exemption still holds. Next: PTB-4 — Tier 2/3 gating criteria + generalized model-routing buckets.
+
+**PTB-4 closed (2026-09-26):** Tier 2 split into two independent triggers — 2a stakes (council + review agents, with a two-box project-level check and a four-box per-decision check) and 2b
+multi-surface (Antigravity routing, adopted only after a real task has run there). Tier 3 thresholds anchored to NiftyShield's own adoption history (Rule 0 + `CONTEXT_TREE.md` at ~10K LOC / 69 files,
+`a1aca07`). Model routing converged into three buckets routed by reasoning demand × cost of error, with Tier 0/1 explicitly single-model. The governing rule, drawn from
+`docs/archive/process/2026-05-08_workflow-improvements.md`: a gate ships with its at-the-moment hook or not at all. `tier2/`/`tier3/` file lists written as PTB-5 input, not built; two scaffold
+problems flagged for PTB-5 (per-item rather than per-level selection; `settings.json`/`CLAUDE.md` need merging, not overwriting). Next: PTB-5.
