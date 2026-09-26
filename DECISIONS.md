@@ -1155,6 +1155,10 @@ Validated against `/Users/abhadra/myWork/myCode/AI/_scratch_to_delete` (tier0-on
 confirmed valid merged JSON, both fragments landed at their markers, and a second run against the same destination produced zero diff. The dummy Tier 2/3 fragments were built in the session
 scratchpad, not committed — `tier2/`/`tier3/` ship as empty per-piece placeholder folders; content is PTB-7/PTB-8.
 
+**Post-close fix (2026-09-26, same day, found by Animesh's own validation run):** selecting an empty `tier2/`/`tier3/` piece (e.g. `--piece tier2/stakes` before PTB-7 fills it) leaked that piece's
+`.gitkeep` placeholder into the scaffolded project's root as a stray file. `copy_piece_files`'s skip-list didn't exclude `.gitkeep`. Fixed by adding `.gitkeep` and `*/.gitkeep` to the exclusion case
+in `scaffold.sh` (`project-scaffold` SHA `70d3762`); re-validated — no `.gitkeep` in destination, re-run still zero-diff.
+
 ---
 
 ## Deferred / Not Yet Built

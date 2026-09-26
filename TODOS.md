@@ -123,6 +123,9 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
   hook-array merge per event/matcher via python3 (chosen over `jq`/bash — see `DECISIONS.md`), `.gitignore` append-with-dedup. Validated tier0-only, tier0+tier1, and
   tier0+tier1+dummy-tier2+dummy-tier3 against `_scratch_to_delete`: valid merged JSON, fragments landed at markers, second run zero-diff. `project-scaffold` SHAs `84357d8` (baseline commit) +
   `d433ba0` (rewrite). Next: PTB-6.
+- [2026-09-26] `project-template-blueprint/` PTB-5 post-close fix — Animesh's own validation run (`--piece tier1 --piece tier2/stakes --piece tier3/rule0`) surfaced a stray `.gitkeep` leaking into the
+  scaffolded project's root whenever an empty tier2/tier3 piece was selected. Fixed in `scaffold.sh`'s `copy_piece_files` skip-list; re-validated clean and still zero-diff on re-run.
+  `project-scaffold` SHA `70d3762`.
 - [2026-09-26] `strategy-refactor-blueprint/` scaffolded (docs-only, no code) — captures a discussion session's finding that `src/strategy/` (14,255 LOC) is dominated by `ic_nifty_v2.py` (2,935
   lines) + `ic_nifty_v1.py` (1,409 lines), ~30% of the package with no existing `DEBT-*` tracking it, and lays out a golden-test-gated, council-ruled, one-extraction-per-commit approach to decomposing
   it without disturbing live paper-trading cycles. Also confirmed `md-organize` already covers the doc-growth (`TODOS.md`/`DECISIONS.md`) side of the same discussion — BP-1 just needs to run it, not
