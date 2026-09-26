@@ -20,7 +20,7 @@ docs).
 `LOGGING.md` is discovered (a `CLAUDE.md` pointer + a `docs/plan/` prompt-time check), not a section nested inside a module doc most `ROLL-*`/`FMT-*` sessions never open. See `FORMATTING.md` itself
 for the full spec — the table immediately below is FMT-1's original draft and is superseded wherever it disagrees with that file.
 
-**Rules** (derived from what was actually validated interactively in `scratch/2026-08-07_ic_eod_audit_telegram_format.py` across several rounds of user feedback — not invented fresh; confirm against
+**Rules** (derived from what was actually validated interactively in `scratch/telegram_formats/2026-08-07_ic_eod_audit_telegram_format.py` across several rounds of user feedback — not invented fresh; confirm against
 that script's final version):
 
 | Parameter type | Format | Example |
@@ -51,11 +51,11 @@ that script's final version):
 - **DTE, Open legs, quantities:** Whole units, no formatting needed.
 - **IVR:** Matches how it's already displayed in existing option-chain analysis.
 - **Percentages (Captured %, ROI %):** One decimal is enough precision for a percentage-of-credit figure; 2dp reads as false precision on numbers this small. Resolves the ambiguity FMT-2's original
-  docstring flagged ("4" -> "4%" vs "4.0%") — whole-number inputs print bare, fractional inputs get 1dp. Confirmed via `format_pct` in `scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py`.
-- **Money — negative values (loss states):** **Added 2026-08-07** (ROLL-1 scratch iteration, `scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py`). A naive `f"₹{value:,.2f}"` puts Python's sign
+  docstring flagged ("4" -> "4%" vs "4.0%") — whole-number inputs print bare, fractional inputs get 1dp. Confirmed via `format_pct` in `scratch/telegram_formats/2026-08-07_ic_eod_audit_v2_telegram_format.py`.
+- **Money — negative values (loss states):** **Added 2026-08-07** (ROLL-1 scratch iteration, `scratch/telegram_formats/2026-08-07_ic_eod_audit_v2_telegram_format.py`). A naive `f"₹{value:,.2f}"` puts Python's sign
   after the literal `₹` prefix for negative `Decimal`s, which reads wrong typographically. FMT-1's original table only had positive examples, so this case was unspecified — worth locking in now,
   before any message actually shows a loss state, so FMT-2's real `format_money` doesn't ship the naive version and need a follow-up fix.
-- **Expiry date — `format_expiry`:** **Added 2026-08-07** (ROLL-1, `scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py`) — expiry was previously resolved (for DTE) but never displayed anywhere.
+- **Expiry date — `format_expiry`:** **Added 2026-08-07** (ROLL-1, `scratch/telegram_formats/2026-08-07_ic_eod_audit_v2_telegram_format.py`) — expiry was previously resolved (for DTE) but never displayed anywhere.
   `strftime("%d %b %y").lstrip("0")`, not `%-d` (platform-dependent, fails on some Windows builds). Source is the `expiry` date object `process_variant()` already resolves via the BOD instrument
   lookup — DTE is derived FROM it, so never reconstruct expiry from DTE in the real implementation.
 
@@ -76,7 +76,7 @@ that script's final version):
 ## FMT-1f — Signed Money Override + Curve/Premium Spread Labels (confirmed 2026-08-10,
 `ROLL-9` workshop session)
 
-**Not in the original FMT-1 table.** Surfaced during the three-track base-leg roll notification workshop (`message-format-workshop.md`, `scratch/2026-08-10_3track_roll_notification_format.py`).
+**Not in the original FMT-1 table.** Surfaced during the three-track base-leg roll notification workshop (`message-format-workshop.md`, `scratch/telegram_formats/2026-08-10_3track_roll_notification_format.py`).
 
 | Parameter type | Format | Example |
 |---|---|---|
@@ -101,7 +101,7 @@ that script's final version):
 
 ## FMT-1d — Money — Multi-Strategy Summary Table Exception (confirmed 2026-08-08, revised v2)
 
-**Not in the original FMT-1 table.** Surfaced during the EOD Paper Summary workshop session (`message-format-workshop.md`, `scratch/2026-08-08_eod_paper_summary_format.py`) — the same class of
+**Not in the original FMT-1 table.** Surfaced during the EOD Paper Summary workshop session (`message-format-workshop.md`, `scratch/telegram_formats/2026-08-08_eod_paper_summary_format.py`) — the same class of
 override `build_leg_table`'s 1dp exception already established (FMT-1's LTP/Entry row), applied to money instead of decimal precision.
 
 | Context | Format | Example |
@@ -130,7 +130,7 @@ document); do not assume it generalizes to other tables in this epic without ask
 bucket's own total row already establishes context, and it doubles as the section label, so no separate `-- BUCKET --` header row is needed. A double rule (`====`) separates the table header from the
 first bucket; a single rule (`----`) separates buckets from each other.
 
-**Commit (when promoted):** fold into whichever commit promotes `scratch/2026-08-08_eod_paper_summary_format.py`'s table builder into `src/notifications/formatting.py` (see `strategy-rollout/`
+**Commit (when promoted):** fold into whichever commit promotes `scratch/telegram_formats/2026-08-08_eod_paper_summary_format.py`'s table builder into `src/notifications/formatting.py` (see `strategy-rollout/`
 ROLL-6).
 
 ---
@@ -138,7 +138,7 @@ ROLL-6).
 ## FMT-1e — Monospace-Table Safety: Emoji-Presentation Glyphs, Not Just Emoji (confirmed 2026-08-08)
 
 **Extends FMT-3's existing emoji-breaks-alignment warning** (`build_leg_table`'s `[S]`/`[B]` plain-text badges) — that warning was scoped to literal emoji characters. On-device testing during the EOD
-Paper Summary workshop (`scratch/2026-08-08_eod_paper_summary_format.py`) surfaced a wider version of the same risk: **`▶` (U+25B6 BLACK RIGHT-POINTING TRIANGLE) is not an emoji character, but
+Paper Summary workshop (`scratch/telegram_formats/2026-08-08_eod_paper_summary_format.py`) surfaced a wider version of the same risk: **`▶` (U+25B6 BLACK RIGHT-POINTING TRIANGLE) is not an emoji character, but
 Telegram renders it using its emoji-presentation glyph** (an automatically-appended variation selector) even inside a fenced code block — double-width, breaks column alignment identically to a real
 emoji.
 
@@ -158,7 +158,7 @@ monospace-table emoji-presentation risk` if not otherwise touching that code.
 ## FMT-1b — Dynamic Status Emojis (confirmed 2026-08-07, surfaced during ROLL-1 scratch iteration)
 
 **Not in the original FMT-1 scope** — added after a Cowork session workshopped the IC EOD audit message and wanted P&L/alert state reflected visually, not just as static emoji baked into the template
-(the original prototype hardcoded `✅`/`⚠️` regardless of the actual data). Two small helper functions, promoted from `scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py`:
+(the original prototype hardcoded `✅`/`⚠️` regardless of the actual data). Two small helper functions, promoted from `scratch/telegram_formats/2026-08-07_ic_eod_audit_v2_telegram_format.py`:
 
 ```python
 def pnl_emoji(amount: Decimal) -> str:
@@ -189,7 +189,7 @@ explicitly if `ROLL-1`'s real implementation turns out not to have that severity
 
 **Problem:** running all five active IC EOD audit variants (V1 weekly/monthly/leaps/yearly + V2 monthly) side by side in one Telegram chat, they were visually near-identical — same `📊` emoji, same
 generic header shape — creating real alert-fatigue risk during a busy session (easy to misread which variant a message belongs to at a glance). Surfaced and confirmed via `message-format-workshop.md`,
-built and iterated in `scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py`, **hashtag auto-detection confirmed working live on-device 2026-08-07** (the one previously-flagged unverified assumption
+built and iterated in `scratch/telegram_formats/2026-08-07_ic_eod_audit_v2_telegram_format.py`, **hashtag auto-detection confirmed working live on-device 2026-08-07** (the one previously-flagged unverified assumption
 — MarkdownV2 escaping the `#`/`_` in the hashtag's source text does not prevent Telegram's own hashtag auto-detection from firing on the de-escaped rendered text).
 
 **Design decision — color/emoji encode TIMEFRAME only, never version.** An external suggestion proposed 4 distinct colors for 4 example variants, one of which (purple) was assigned specifically to "v2
@@ -327,7 +327,7 @@ def format_pct(value: float) -> str:
 - `src/notifications/formatting.py` — extend with table builders
 - `tests/unit/notifications/test_formatting.py` — extend
 
-**Before any code:** read the final versions of `_kv_table`, `_side_by_side_kv`, and `_leg_table` in `scratch/2026-08-07_ic_eod_audit_telegram_format.py` — these are working, user-validated reference
+**Before any code:** read the final versions of `_kv_table`, `_side_by_side_kv`, and `_leg_table` in `scratch/telegram_formats/2026-08-07_ic_eod_audit_telegram_format.py` — these are working, user-validated reference
 implementations (went through several rounds of feedback: dynamic width computation, blank-row padding for mismatched row counts, plain-text `[S]`/`[B]` badges instead of emoji because colour-circle
 emoji are double-width and break monospace alignment). Port and generalize, do not redesign.
 

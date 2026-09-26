@@ -28,7 +28,7 @@ confirmations), read it in full now and flag anything that changes its place in 
 ## Step 2 — Build the scratch script
 
 Path: `scratch/YYYY-MM-DD_<message-name>_format.py` (today's date, kebab-case name matching the
-message). Structure: mirror `scratch/2026-08-07_ic_eod_audit_telegram_format.py` — sample data
+message). Structure: mirror `scratch/telegram_formats/2026-08-07_ic_eod_audit_telegram_format.py` — sample data
 dict, pure `build_message(d)` function, a `main()` that prints then sends via real Telegram
 credentials from `src.config.settings`, non-fatal error handling that surfaces Telegram's actual
 `description` field on a 400 (don't let `raise_for_status()` swallow it).

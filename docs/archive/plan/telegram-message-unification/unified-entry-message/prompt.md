@@ -37,7 +37,7 @@ Changes `src/` and `scripts/` behaviour: IC entry output is byte-identical after
 
 - `src/notifications/CLAUDE.md` — auto-loads; §"Instrument Label Formatting" governs the leg label.
 - `FORMATTING.md` §3 — the `build_leg_table` 1-dp LTP/Entry exception and the escaping-boundary contract.
-- `docs/archive/plan/telegram-markdown-migration/strategy-rollout/stories.md` — ROLL-17, the IC-entry design this generalizes; `scratch/2026-09-06_ic_entry_confirmation_format.py` is its reference
+- `docs/archive/plan/telegram-markdown-migration/strategy-rollout/stories.md` — ROLL-17, the IC-entry design this generalizes; `scratch/telegram_formats/2026-09-06_ic_entry_confirmation_format.py` is its reference
   impl.
 - TODOS.md session log 2026-09-06 ROLL-17 — note `ivr`/`dte`/`spot`/`net_credit` were made **required** by `@code-reviewer`; UEM-1 keeps `dte`/`spot`/`net_credit` required and relaxes only `ivr` (+
   `mode`, `expiry_type`) to optional, since CSP and CC have no IVR in the recorder's scope. Record the reversal rationale.

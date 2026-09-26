@@ -5,7 +5,7 @@ Cron: 35 15 * * 1-5
 Fetches today's paper NAV snapshots and sends the EOD Paper Summary via Telegram
 in the confirmed bucketed Flt/Bkd MarkdownV2 format (ROLL-6,
 docs/plan/telegram-markdown-migration/strategy-rollout/stories.md; reference
-scratch/2026-08-08_eod_paper_summary_format.py).
+scratch/telegram_formats/2026-08-08_eod_paper_summary_format.py).
 
 `Bkd` (realized) is sourced since-inception from get_strategy_realized_pnl() —
 NOT paper_nav_snapshots.realized_pnl's latest row, which resets to 0 on a full

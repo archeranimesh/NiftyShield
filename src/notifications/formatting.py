@@ -331,7 +331,7 @@ def build_close_leg_table(rows: list[CloseLegRow]) -> str:
 
 
 # --- ROLL-2a: display-width-aware comparison table (FMT-3 promotion of
-# scratch/2026-08-07_ic_monthly_comparison_telegram_format.py's
+# scratch/telegram_formats/2026-08-07_ic_monthly_comparison_telegram_format.py's
 # build_compare_table, see FORMATTING.md §7 and strategy-rollout/stories.md
 # ROLL-2a) ---
 
@@ -436,7 +436,7 @@ def build_compare_table(groups: list[list[tuple[str, str, str]]], columns: tuple
 
 
 # --- ROLL-6: multi-strategy summary table (FMT-1d, FORMATTING.md §§ 5 / 12 —
-# promotion of scratch/2026-08-08_eod_paper_summary_format.py's build_strategy_table
+# promotion of scratch/telegram_formats/2026-08-08_eod_paper_summary_format.py's build_strategy_table
 # and format_summary_money) ---
 
 
@@ -563,7 +563,7 @@ def build_strategy_table(rows: list[StrategyPnLRow], bucket_order: list[str]) ->
 
 # --- ROLL-7: display labels for standalone message headlines
 # (docs/plan/telegram-markdown-migration/strategy-rollout/stories.md ROLL-7;
-# reference scratch/2026-08-08_reentry_notice_format.py) ---
+# reference scratch/telegram_formats/2026-08-08_reentry_notice_format.py) ---
 
 # strategy_id -> fuller-form human label. DELIBERATELY SEPARATE from
 # scripts/eod_summary.py's _STRATEGY_META, whose labels ("V1 Mth", "Fut") are

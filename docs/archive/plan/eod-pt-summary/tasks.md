@@ -5,7 +5,7 @@
 
 - [x] **PT-1** — Document/formalize the 3-message Telegram split (open positions / closed
       today / strategy P&L + Ann.% summary) already implemented and validated in
-      `scratch/2026-08-13_eod_pt_summary.py` (`build_summary_parts()`, `_PART_EMOJI`,
+      `scratch/telegram_formats/2026-08-13_eod_pt_summary.py` (`build_summary_parts()`, `_PART_EMOJI`,
       `_send_telegram_markdown()`). No behavior change — this task is about capturing the
       confirmed spec (column layout, CE/PE-last instrument label, per-message emoji headers,
       MarkdownV2 fencing, non-fatal send contract) as the reference for PT-2. | SHA: d1ae760

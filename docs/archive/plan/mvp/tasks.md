@@ -54,8 +54,8 @@
 - [x] **M0** — Equity + NIFTY index bhavcopy ingest (prerequisite for M6/M8 — not M1–M5). `src/backtest/bhavcopy_ingest.py` is F&O-only today; add equity cash-market daily close + NIFTY 50 index level
   ingest. **Storage — resolved 2026-09-23: Parquet, not portfolio.sqlite** (`equity_ohlcv/` and `nifty_index/` dirs under `data/offline/`, same `write_to_parquet` idempotent-append pattern and
   `year/month` partitioning already used for `options_ohlcv/`/`futures_ohlcv/`), consistent with the existing F&O ingest — bulk historical time-series stays out of the transactional/state SQLite DB.
-  Two new NSE fetchers (mirroring `fetch_bhavcopy`/`download_bhavcopy`): equity daily close from the CM bhavcopy (`scratch/2026-09-23_mvp_m0_data_source_probe.py`,
-  `BhavCopy_NSE_CM_0_0_0_YYYYMMDD_F_0000.csv.zip`), NIFTY 50 index daily close from the index-close bhavcopy (`scratch/2026-09-23_mvp_m0_nifty_index_probe.py`, `ind_close_all_DDMMYYYY.csv`). **Equity
+  Two new NSE fetchers (mirroring `fetch_bhavcopy`/`download_bhavcopy`): equity daily close from the CM bhavcopy (`scratch/data_probes/2026-09-23_mvp_m0_data_source_probe.py`,
+  `BhavCopy_NSE_CM_0_0_0_YYYYMMDD_F_0000.csv.zip`), NIFTY 50 index daily close from the index-close bhavcopy (`scratch/data_probes/2026-09-23_mvp_m0_nifty_index_probe.py`, `ind_close_all_DDMMYYYY.csv`). **Equity
   scope — resolved 2026-09-23: watchlist-filtered, not the full NSE universe.** Mirrors the F&O ingest's own `underlying="NIFTY"` filter in `parse_bhavcopy` — parse each day's CM CSV but keep only
   rows whose symbol is in `MVPStore`'s distinct `mvp_recommendations.symbol` set at ingest time (a `symbols: set[str]` param threaded from the CLI, not a live query inside the parser). Keeps the
   Parquet tiny; adding a new tipster pick later just means re-running the backfill CLI for that one symbol's date range, same manual-CLI shape as M0 itself. The NIFTY 50 index file has no equivalent
@@ -143,7 +143,7 @@
   as one compound cell) that never line up into columns despite sitting in a fence — violates `FORMATTING.md` §2 ("every cell in a column carries the same precision and the same width, or it stops
   being a column"). It also renders in-fence Chg% via bare `format_pct()`, which drops the trailing `.0` on whole numbers, violating §3's "fenced percent: always 1dp, always signed" rule.
 
-**Design finalized 2026-09-24** in `scratch/2026-09-24_mvp_telegram_message_survey.py`, function `format_hourly_summary` and helpers:
+**Design finalized 2026-09-24** in `scratch/telegram_formats/2026-09-24_mvp_telegram_message_survey.py`, function `format_hourly_summary` and helpers:
   - **Single flat table**, no provider/category grouping (Animesh's explicit call over the original per-category-fenced-blocks structure).
   - **Broker-holdings-style columns**, inspired by a pasted Upstox holdings screenshot: `[badge] Instrument Qty Avg cost LTP P&L Chg%`. Column widths computed per-group, same pattern as
     `build_close_leg_table` (`src/notifications/formatting.py`). **`Day chg%` deliberately excluded** — MVP has no previous-close baseline stored anywhere today (checked: `mvp_snapshots` is hourly
@@ -152,7 +152,7 @@
   - **Final column set, re-settled 2026-09-24 against the confirmed 50-char budget**: `[badge] Sym LTP P&L Next` — 48 chars, confirmed rendering correctly on-device via `--send --send-only Hourly`.
     Core `badge`/`Sym`/`LTP`/`P&L` alone is 38 chars; every 2-optional-column combination that also keeps `Next` (target/SL proximity) — `Svc`+`Next`, `Qty`+`Next` — comes out at 53 chars, over
     budget, so only one optional column could be kept alongside the core four. Measured every 0/1/2-column combination of `Svc`/`Qty`/`Avg cost`/`Chg%`/`Next` against the real fixture data in
-    `scratch/2026-09-24_mvp_telegram_message_survey.py`; `Next` alone (48 chars) and `Svc`+`Qty` (48 chars) tied for the widest combo that still fit — Animesh chose `Next` alone, since it's the
+    `scratch/telegram_formats/2026-09-24_mvp_telegram_message_survey.py`; `Next` alone (48 chars) and `Svc`+`Qty` (48 chars) tied for the widest combo that still fit — Animesh chose `Next` alone, since it's the
     regression-restore column (see the `_next_level_str` note below) rather than a nice-to-have, over `Svc` (provider disambiguation) and `Qty`/`Avg cost`/`Chg%`. `Svc`, `Qty`, `Avg cost`, and `Chg%`
     are all dropped from the final table.
   - **`[O]`/`[P]` status badge folded into the table itself** (leftmost column) instead of a separate trailing "Unassigned (PENDING)" block — a PENDING row shows `—` for every value column (no fill
@@ -176,14 +176,14 @@
     (also feeds the all-recs footer's `Day chg`). | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 1a5d9dd
   - [x] **M13.3** — `src/mvp/store.py`: `MVPStore.get_category_high_low(category_id)` — cumulative-return time series per category from snapshot history, running high-water-mark / max-drawdown →
     `high_pct`/`low_pct`. | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 0b63904
-  - [x] **M13.4** — Port `format_eod_summary`/`build_eod_table`/`CategoryRollup`/`ProviderRollup` from `scratch/2026-09-24_mvp_telegram_message_survey.py` into `src/mvp/tracker.py`, wire real data
+  - [x] **M13.4** — Port `format_eod_summary`/`build_eod_table`/`CategoryRollup`/`ProviderRollup` from `scratch/telegram_formats/2026-09-24_mvp_telegram_message_survey.py` into `src/mvp/tracker.py`, wire real data
     from M13.1–13.3 into `scripts/mvp_watch.py`'s EOD path (new cron entry — `mvp_watch.py` today only runs hourly 9-15, no EOD invocation exists). Each sub-task ships as its own commit (Model → Store
     → wiring boundary, Step 5c) with its own tests. `Category.slug` has no dedicated short-code column — `category_short_code()` derives one (multi-word initials / single-word 3-char truncation, not
     guaranteed unique — Animesh's call, 2026-09-24) rather than adding a schema migration. `run_eod()` itself is integration-only, untested (same precedent as `run()`, M4.1); the pure builders it
     calls are fully unit-tested. New cron entry (`45 15 * * 1-5`, `mvp_watch.py --eod`) not yet added to the actual crontab — code-only this session. | Owner: Claude | Model: claude-sonnet-5 | Review:
     code-reviewer | SHA: 71bca0a, e7cdda0
 
-**Design finalized 2026-09-24** in `scratch/2026-09-24_mvp_telegram_message_survey.py`, function `format_eod_summary` + `build_eod_table` + `CategoryRollup`/`ProviderRollup`:
+**Design finalized 2026-09-24** in `scratch/telegram_formats/2026-09-24_mvp_telegram_message_survey.py`, function `format_eod_summary` + `build_eod_table` + `CategoryRollup`/`ProviderRollup`:
   - **Headline**: `{emoji} *MVP EOD Summary* | {date}` — same net-P&L color-emoji convention as M12's headline.
   - **One shared fenced table across every provider** (`build_eod_table`), columns `Cat / P&L / Win% / Incep% / High / Low`, no `Prv`/provider column — category short_codes (`VP`/`MB`/`TAS`/`IKA`)
     don't collide across providers, so a separate provider tag wasn't needed. `Invested`/`Current` deliberately dropped (Animesh's call) — this is a per-service scorecard, not a position-level view

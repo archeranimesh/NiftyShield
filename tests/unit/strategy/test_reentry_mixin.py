@@ -409,7 +409,7 @@ def test_reentry_dedup_different_days_writes_twice(tmp_path: Path):
 
 
 # ── ROLL-7: MarkdownV2 kv-line re-entry notice ───────────────────────────────
-# Reference: scratch/2026-08-08_reentry_notice_format.py; spec:
+# Reference: scratch/telegram_formats/2026-08-08_reentry_notice_format.py; spec:
 # docs/plan/telegram-markdown-migration/strategy-rollout/stories.md ROLL-7.
 
 

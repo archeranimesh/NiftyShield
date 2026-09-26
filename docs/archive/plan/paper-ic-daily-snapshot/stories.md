@@ -262,7 +262,7 @@ crashed at the IVR gate with `'str' object has no attribute 'glob'`, caught by a
 `except Exception` that logs and returns `None` — so the cron "succeeds" (clean early return, no
 Telegram alert) while never reaching chain fetch, strike selection, or `paper_trades` persistence.
 Confirmed against `logs/cc_entry.log`/`collar_entry.log`/`pp_entry.log` and independently
-re-verified against the live DB on the operator's own host (`scratch/2026-08-07_overlay_snap3_cross_check.py`
+re-verified against the live DB on the operator's own host (`scratch/diagnostics_db/2026-08-07_overlay_snap3_cross_check.py`
 output in `logs/snap3.log`) — same result as the Cowork-mounted copy, ruling out a stale-mount
 explanation.
 

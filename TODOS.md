@@ -119,9 +119,9 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 - [2026-09-24] MVP M11 — per-category win-rate/inception P&L stats footer (`CategoryStats`, `MVPStore.get_category_stats`, wired into `_format_alert_message`) — 3c331b8
 - [2026-09-24] MVP M10 — real ₹ P&L threaded into the MVP close alert (`ClosePickResult`, `_format_alert_message` redesign) — b812d82
 - [2026-09-24] MVP M12 design closed out (docs only, no `src/` changes — resumed the co-investor-review session). Settled the column set within the confirmed 50-char mobile budget: measured every
-  0/1/2-optional-column combination (`Svc`/`Qty`/`Avg cost`/`Chg%`/`Next`) against real fixture data in `scratch/2026-09-24_mvp_telegram_message_survey.py`; `badge`/`Sym`/`LTP`/`P&L`/`Next` (48 chars)
-  was Animesh's pick over `Svc`+`Qty` (also 48 chars) since `Next` is the regression-restore column, not a nice-to-have. Confirmed rendering correctly on-device via `--send --send-only Hourly`. M10,
-  M12, and M13 are now all fully signed off — next session should implement them for real (`src/mvp/tracker.py`, `scripts/mvp_watch.py`).
+  0/1/2-optional-column combination (`Svc`/`Qty`/`Avg cost`/`Chg%`/`Next`) against real fixture data in `scratch/telegram_formats/2026-09-24_mvp_telegram_message_survey.py`;
+  `badge`/`Sym`/`LTP`/`P&L`/`Next` (48 chars) was Animesh's pick over `Svc`+`Qty` (also 48 chars) since `Next` is the regression-restore column, not a nice-to-have. Confirmed rendering correctly
+  on-device via `--send --send-only Hourly`. M10, M12, and M13 are now all fully signed off — next session should implement them for real (`src/mvp/tracker.py`, `scripts/mvp_watch.py`).
 - [2026-09-24] MVP M9 — M-A lump-sum fill math: total_qty/deployed_capital/avg_cost/idle_cash on entry fill, realized_pnl with 25bps cost on close, CLI P&L/return% surfacing — 56f38e2
 - [2026-09-23] MVP M7 — feat(mvp): add reco_price, surface deviation via CLI — d2f60d2
 - [2026-09-23] MVP M6 — historical backfill primitives (`backfill_snapshots`, `fetch_historical_closes`, `mvp.py backfill`); spec rewritten against M0's Parquet layout, scoped apart from M8 —
@@ -480,8 +480,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
   its MarkdownV2 escaping (caller sends without re-wrapping), entry band = mean of agreeing models' quoted bands. 3 formatter render tests + escaping-guard baseline entry.
 - [2026-09-09] signals — restructured `signals_tasks.md` into "Remaining work — in order" (S5.5c → S5.5a → S5.5d → S5.5b → S6 + summary table) and "Completed". 4ec58c6.
 - [2026-09-09] signals S5.5a design — revived (was superseded → SPT-5) as the Phase-1 interim 16:00 outcome message; `signal_eod.py` currently sends nothing. Restyled messages 6–8 in
-  `scratch/2026-09-08_signal_telegram_messages.py` to the S5.5c vertical layout (executed / not-taken with would-be P&L / NO_TRADE); would-be P&L derived in the formatter, no `SignalOutcome` change.
-  Docs: signals_tasks.md, signals_stories.md §S5.5a, signals-paper-track/stories.md SPT-5/SPT-8, DECISIONS.md, TODOS.md. Implementation pending.
+  `scratch/telegram_formats/2026-09-08_signal_telegram_messages.py` to the S5.5c vertical layout (executed / not-taken with would-be P&L / NO_TRADE); would-be P&L derived in the formatter, no
+  `SignalOutcome` change. Docs: signals_tasks.md, signals_stories.md §S5.5a, signals-paper-track/stories.md SPT-5/SPT-8, DECISIONS.md, TODOS.md. Implementation pending.
 - [2026-09-09] signals S5.5 — rollout state recorded (discussion, no code): all 3 crons already live on the Mac host, so the cron-enablement runbook was dropped; rollout phase = Phase 1
   `openrouter_only`. Telegram scope settled — 09:15 message → S5.5c, `signal_report` 16:35 digest (full report, every weekday, MarkdownV2 fenced block) → new box S5.5d. Touched signals_tasks.md,
   signals_stories.md, DECISIONS.md, TODOS.md. No SHA.
@@ -491,7 +491,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
   Confirmed grok-3/gemini-2.0-flash retired on OpenRouter; gemini 400 is the slug not `response_format`. `.env.example` gitignored — doc edit on disk only. Suite green (3331), code-reviewer clean (1
   deferred WARNING). B041.3–B041.6 remain. — SHA `f1fad55`
 - [2026-09-08] BUG-041 B041.2b — provider payloads: `max_tokens` 512→2048, default `timeout` 30→60s so the reasoning models `~x-ai/grok-latest` / `~openai/gpt-latest` don't time out or return null
-  content. Probe: `scratch/2026-09-08_signal_model_probe.py`. Live `morning_signal` now gets 3/3 responses. Suite green (3334), code-reviewer 0 ERROR/CRITICAL. — SHA `9a2e9d3`
+  content. Probe: `scratch/data_probes/2026-09-08_signal_model_probe.py`. Live `morning_signal` now gets 3/3 responses. Suite green (3334), code-reviewer 0 ERROR/CRITICAL. — SHA `9a2e9d3`
 - [2026-09-08] signals S5.4 — `scripts/signal_eod.py` on-demand performance report: aggregates `get_all_outcomes` over a `--from`/`--to`/`--phase` window into OVERALL (win rate, realised EV,
   deterministic md5 coin-flip baseline), per-model direction accuracy (09:10 snapshot spot as open proxy), confidence calibration, NO_TRADE move check, phase breakdown. No unit tests (per S5.4 spec).
   — SHA: <pending>
@@ -512,7 +512,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 - [2026-09-08] signals S5.2a — built src/signals/market_inputs.py: fetch_gift_nifty (GLOBAL_INDEX|SGX NIFTY LTP), fetch_usd_inr (nearest-monthly NCD_FO USDINR future via InstrumentLookup),
   fetch_fii_data (NSE fiidiiTradeReact cash-market net → FIIData); each raises DataFetchError on failure, no fallbacks + 9 offline tests. SHA: <pending>
 - [2026-09-07] signals/ S5.2 split (docs-only) — S5.2 needs gift_nifty / fii / usd_inr and the repo has no fetcher; Animesh's call: probe Upstox/Dhan/Nuvama APIs rather than scrape NSE or hard-code
-  defaults. Added S5.2a (persistent source-discovery spike `scratch/2026-09-07_signal_input_sources.py` + `src/signals/market_inputs.py`
+  defaults. Added S5.2a (persistent source-discovery spike `scratch/data_probes/2026-09-07_signal_input_sources.py` + `src/signals/market_inputs.py`
   + offline tests) and S5.2b (`src/signals/snapshot.py` assemble_market_snapshot); S5.2 rewritten as wiring-only. Touched signals_tasks.md, signals_stories.md, docs/plan/README.md. No SHA (uncommitted
     at log time).
 - [2026-09-07] signals/ S5.1 — added config/signals.toml (thresholds + grok/gpt4o/gemini provider sub-tables) and extended .env.example with signals pipeline block (OPENROUTER/XAI/GOOGLE_AI keys,
@@ -538,11 +538,11 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
   warn/stop thresholds, so the Greeks behind a DELTA_WARN/DELTA_STOP decision are recoverable from `logs/` (the 2026-07-08 0.25→0.09 discrepancy had no such record). Weekly Parquet bucket — WG-1's
   primary fix — already landed in `a38e53f`. Story folder complete; removed from Feature Backlog. 2 tests.
 - [2026-09-07] `eod-pt-summary/` PT-3 — docs close. CONTEXT.md (`792fa79`) / DECISIONS.md §P&L & Reporting / TODOS.md log lines already landed piecemeal with PT-1/PT-2; this pass filled the PT-2
-  closing SHA (`77dc160`) into `tasks.md` + the PT-2 log line, refreshed the `docs/plan/README.md` Active-Stories row to ✅ Shipped, and marked `scratch/2026-08-13_eod_pt_summary.py` SUPERSEDED. Epic
-  `eod-pt-summary/` complete (PT-1..PT-3); folder archived to `docs/archive/plan/eod-pt-summary/`. Docs-only. SHA: dac18ea
-- [2026-09-07] `eod-pt-summary/` PT-2 — promoted `scratch/2026-08-13_eod_pt_summary.py` to `src/reporting/eod_pt_summary.py` (new package) + thin cron `scripts/eod_pt_summary.py`, 17 tests in
-  `tests/unit/reporting/test_eod_pt_summary.py`. Function boundaries unchanged from the validated prototype; `escape_markdown` swapped to `src/notifications/markdown.py`, local `LtpProvider` Protocol
-  for the broker surface, no-`LOT_SIZE` P&L regression-tested. Coordination question resolved with Animesh: runs **alongside** `scripts/eod_summary.py`, not a replacement (DECISIONS.md §P&L &
+  closing SHA (`77dc160`) into `tasks.md` + the PT-2 log line, refreshed the `docs/plan/README.md` Active-Stories row to ✅ Shipped, and marked `scratch/telegram_formats/2026-08-13_eod_pt_summary.py`
+  SUPERSEDED. Epic `eod-pt-summary/` complete (PT-1..PT-3); folder archived to `docs/archive/plan/eod-pt-summary/`. Docs-only. SHA: dac18ea
+- [2026-09-07] `eod-pt-summary/` PT-2 — promoted `scratch/telegram_formats/2026-08-13_eod_pt_summary.py` to `src/reporting/eod_pt_summary.py` (new package) + thin cron `scripts/eod_pt_summary.py`, 17
+  tests in `tests/unit/reporting/test_eod_pt_summary.py`. Function boundaries unchanged from the validated prototype; `escape_markdown` swapped to `src/notifications/markdown.py`, local `LtpProvider`
+  Protocol for the broker surface, no-`LOT_SIZE` P&L regression-tested. Coordination question resolved with Animesh: runs **alongside** `scripts/eod_summary.py`, not a replacement (DECISIONS.md §P&L &
   Reporting). `code-reviewer`: 1 ERROR + 5 WARNING all fixed. Next: PT-3 (docs close). SHA: 77dc160
 - [2026-09-06] `eod-pt-summary/` PT-1 — captured the confirmed 3-message Telegram-split spec (open positions / Closed Today / Strategy P&L·Ann.% on Margin) in `stories.md` as the reference for PT-2:
   full column/format derivation, CE/PE-last instrument label, the 3-Track + `STRATEGY_OVERLAY` strategy_name traps, no-`LOT_SIZE` P&L formula, MarkdownV2 fence + `_PART_EMOJI` map, non-fatal send
@@ -554,8 +554,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 - [2026-09-06] ROLL-17 — unify IC entry v1/v2 onto `src/notifications/ic_entry_message.py` fenced-table renderer; v2's bare `{strike}PE` label violation fixed; `ivr`/`dte`/`spot`/`net_credit` made
   required per `@code-reviewer` — 26527c2
 - [2026-09-06] ROLL-17 workshop — closed all design decisions for the IC entry v1/v2 unification: fenced `build_leg_table()` renderer, `[S]`/`[B]` badge, strike+PE/CE identity, entry price on all
-  legs, `IVR DTE Nifty Exp` kv row, `Net credit: X/lot x65 = Y`, `IC v1/v2 Entry` headline. Spec in `strategy-rollout/stories.md`; ref `scratch/2026-09-06_ic_entry_confirmation_format.py`. Docs +
-  scratch only — implementation is a follow-on session.
+  legs, `IVR DTE Nifty Exp` kv row, `Net credit: X/lot x65 = Y`, `IC v1/v2 Entry` headline. Spec in `strategy-rollout/stories.md`; ref
+  `scratch/telegram_formats/2026-09-06_ic_entry_confirmation_format.py`. Docs + scratch only — implementation is a follow-on session.
 - [2026-09-06] ROLL-16 — migrate production proxy delta CRITICAL alert to MarkdownV2 (shared `build_proxy_critical_alert`); guard-integrity follow-up — e5efb8f, 35c17e5
 - [2026-09-06] audit finding ROLL-15 — split base-expiry Telegram alert into summary + logged commands — 3855f8f
 - [2026-09-08] BUG-040 B040.2–B040.5 — signals prev-session OHLC now sourced from the Upstox v2 historical-candle day endpoint (`get_historical_candles_sync` in `upstox_market.py`, delegated from
@@ -937,7 +937,7 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
   CC/PP/Collar legs under one strategy_name `paper_nifty_overlay` (`STRATEGY_OVERLAY`, `src/paper/constants.py:37`), but `_STRATEGY_META` still mapped the three stale pre-migration names
   (`paper_collar_v1`/`paper_covered_call_v1`/`paper_protective_put_v1`) and lacked the new one. Replaced the three stale keys with `"paper_nifty_overlay": ("Overlay", "Overlay")` — can't split by
   leg_role here (unlike `src/reporting/eod_pt_summary.py`) since `eod_summary.py` only sees strategy-level NAV rows.
-- [2026-09-24] MVP Telegram message design session (docs only, no `src/` changes — everything prototyped in `scratch/2026-09-24_mvp_telegram_message_survey.py`). Found and added to
+- [2026-09-24] MVP Telegram message design session (docs only, no `src/` changes — everything prototyped in `scratch/telegram_formats/2026-09-24_mvp_telegram_message_survey.py`). Found and added to
   `docs/plan/mvp/tasks.md`: (1) M5's scope now includes registering `scripts/mvp_watch.py`'s hourly cron, which was coded (M4.1/M4.2) but never actually added to the live crontab; (2) new **M10** —
   wire M9's real ₹ `realized_pnl`/`total_qty`/`deployed_capital` into the per-alert message (currently shows only raw price %, predates M9); (3) new **M11** (Good-to-Have, blocked on M10) — IC-style
   win-rate/inception footer, needs a new `MVPStore` aggregate query; (4) **M12** — hourly summary redesign, single flat holdings-style table with `[O]`/`[P]` badges, 🟢/🔴/⚪ net-P&L headline color,

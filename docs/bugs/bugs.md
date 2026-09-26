@@ -251,7 +251,7 @@ UpstoxMarketClient first"). A reference sync implementation of the same endpoint
 - Flip the `get_historical_candles` row in `src/client/CLAUDE.md` from ⛔ to implemented.
 - Financial-data boundary → real `@code-reviewer` against the fix diff before commit.
 
-**Investigation notes / scratch (2026-09-08, `scratch/2026-09-08_signals_ohlc_probe.py`, read-only, no writes):**
+**Investigation notes / scratch (2026-09-08, `scratch/data_probes/2026-09-08_signals_ohlc_probe.py`, read-only, no writes):**
 
 - `/v3/market-quote/ohlc` `interval=1d` → `prev_ohlc: None`, `live_ohlc` = today's forming daily candle. Confirmed again live. Dead end for prev-session daily OHLC.
 - `interval=I1` → `prev_ohlc` populated but it is the previous *minute* candle. Not usable.
@@ -529,9 +529,9 @@ Tests added mirroring BUG-035's B035.4 pattern (happy path + duplicate-insert sk
 suites pass; a full `tests/unit/` run shows 31 pre-existing failures/7 errors unrelated to this change (missing `pyarrow`/`fastparquet`/etc. in the ad-hoc review venv, confirmed by traceback
 inspection — none touch the files this bug modified).
 
-**B037.5 (2026-08-24):** Re-verified the live DB (`data/portfolio/portfolio.sqlite`) via a new read-only diagnostic, `scratch/2026-08-24_check_stale_flat_legs.py` (same discovery query as the backfill
-script, no writes) — run both through the Cowork device bridge and directly by Animesh on the live host, identical result: 0 stale flat legs across 134 total trade rows / 9 strategies. Animesh
-confirmed he'd run `backfill_mark_trade_closed_overlay.py --dry-run` earlier — that mode never writes, so it isn't what resolved the 54 rows found at discovery time; the actual mechanism is
+**B037.5 (2026-08-24):** Re-verified the live DB (`data/portfolio/portfolio.sqlite`) via a new read-only diagnostic, `scratch/diagnostics_db/2026-08-24_check_stale_flat_legs.py` (same discovery query
+as the backfill script, no writes) — run both through the Cowork device bridge and directly by Animesh on the live host, identical result: 0 stale flat legs across 134 total trade rows / 9 strategies.
+Animesh confirmed he'd run `backfill_mark_trade_closed_overlay.py --dry-run` earlier — that mode never writes, so it isn't what resolved the 54 rows found at discovery time; the actual mechanism is
 unconfirmed. No backfill `--apply` run was needed or performed — nothing stale remains.
 
 **Outstanding for this bug:** B037.6 (mandatory real `@code-reviewer` run — this session is Cowork, which cannot spawn `.claude/agents/code-reviewer.md`; the B037.3/B037.4 commit (`5369c0e`) landed

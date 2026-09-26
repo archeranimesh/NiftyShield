@@ -6,7 +6,7 @@
 
 ## Why this epic exists
 
-Spawned from a Cowork session (2026-08-07) prototyping a nicer IC EOD audit Telegram message. The prototype (`scratch/2026-08-07_ic_eod_audit_telegram_format.py`) proved Markdown parse_mode gets real
+Spawned from a Cowork session (2026-08-07) prototyping a nicer IC EOD audit Telegram message. The prototype (`scratch/telegram_formats/2026-08-07_ic_eod_audit_telegram_format.py`) proved Markdown parse_mode gets real
 bold **and** a copyable fenced code block in the same message — something HTML parse_mode cannot do (nested `<b>` inside `<pre>` is not reliably rendered by Telegram's HTML parser; see that script's
 module docstring for the full elimination trail across HTML / plain / raw-HTML attempts). That prototype also surfaced a real bug class: a lone `_` in dynamic text (`DELTA_WARN`) opens an unclosed
 `_italic_` entity in Markdown and 400s the send — silently, since `TelegramNotifier.send()` swallows exceptions by contract (non-fatal notifications).

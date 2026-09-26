@@ -1,6 +1,6 @@
 """EOD PT Summary — cross-strategy paper-trade summary as 1-3 Telegram messages.
 
-Promoted from ``scratch/2026-08-13_eod_pt_summary.py`` (PT-2,
+Promoted from ``scratch/telegram_formats/2026-08-13_eod_pt_summary.py`` (PT-2,
 ``docs/plan/eod-pt-summary/``). Function boundaries and every per-cell
 derivation are unchanged from that validated prototype — this module only adds
 type hints, docstrings and tests. Where this code and the story spec disagree,

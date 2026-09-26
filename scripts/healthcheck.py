@@ -216,7 +216,7 @@ def build_healthcheck_alert(results: list[CheckResult], now: datetime | None = N
     """Render the System Healthcheck alert in the ROLL-11 grouped MarkdownV2 format.
 
     Shape (confirmed 2026-08-10, ``message-format-workshop.md`` — reference
-    ``scratch/2026-08-10_healthcheck_alert_format.py``)::
+    ``scratch/telegram_formats/2026-08-10_healthcheck_alert_format.py``)::
 
         ⚠️ NIFTYSHIELD: DEGRADED [HH:MM]
 

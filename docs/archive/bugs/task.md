@@ -697,10 +697,10 @@ split mirrors BUG-020's precedent — each phase independently working and teste
   `test_describe_context` assertions + 3 test fixtures' hardcoded `_STRATEGY` literals updated to derive from the real constant. 262 tests green (3 unrelated pre-existing pyarrow-missing failures in
   `test_overlay_entry.py`). SHA `ea5df81` (same commit as B031.2).
 - [x] **B031.4** — Manual action, independent of the code fix: review every currently-open CC/PP/Collar leg for exit-eligibility by hand (delta/premium/profit-target/DTE) — nothing has been doing this
-  automatically since 2026-07-29. **Closed 2026-08-24.** Delta/premium coverage: live run of `scratch/2026-08-24_bug031_manual_exit_review.py` against the real broker/DB found 5 open legs (not 2 as
+  automatically since 2026-07-29. **Closed 2026-08-24.** Delta/premium coverage: live run of `scratch/diagnostics_db/2026-08-24_bug031_manual_exit_review.py` against the real broker/DB found 5 open legs (not 2 as
   originally scoped — 3 `overlay_pp`, 1 `overlay_cc`, 1 `overlay_collar_put`), zero delta/premium-based signals fired at current market levels. DTE coverage was blocked by **BUG-033**/**BUG-034**
   (DTE-gated signals and, for PP/CC, the entire `check_signals()` path dead for real positions) — resolved for PP specifically by Animesh's decision to close all 3 `overlay_pp` legs by hand
-  (`scratch/2026-08-24_close_all_pp_legs.py --execute`, confirmed 0 open `overlay_pp` positions afterward) rather than wait on the DTE fix — this eliminates `NSE_FO|61604`'s near-expiry exposure
+  (`scratch/diagnostics_db/2026-08-24_close_all_pp_legs.py --execute`, confirmed 0 open `overlay_pp` positions afterward) rather than wait on the DTE fix — this eliminates `NSE_FO|61604`'s near-expiry exposure
   entirely rather than just reviewing it. **Residual, not closed by this**: the still-open `overlay_cc` (`NSE_FO|74391`) and `overlay_collar_put` (`NSE_FO|73994`) legs had their delta/premium checked
   clean but their DTE was never actually verifiable (same BUG-033/034 blockers) — re-run the review script against them once those bugs ship.
 - [x] **B031.5** — Review: real `code-reviewer` or `general-purpose` + `REVIEW.md` substitute (mandatory — governs live-capital-adjacent auto-execution: `MONETIZE_PP`, `ROLL_PP`, `CLOSE_CC`,
@@ -732,7 +732,7 @@ split mirrors BUG-020's precedent — each phase independently working and teste
 - [x] **B033.3** — Review: real `code-reviewer` or `general-purpose` + `REVIEW.md` substitute (mandatory — same live-capital-adjacent auto-execution bar as B031.5). | SHA ef1c341
 - [x] **B033.4** — Manual action, independent of the code fix and time-sensitive: `overlay_pp` leg `NSE_FO|61604` expires 2026-08-25 — decide whether to roll/close it by hand before expiry rather than
   wait for this fix to land. Closed by Animesh (2026-08-24) — all PP positions closed manually, ahead of expiry.
-- [x] **B033.5** — Commit, update `bugs.md` BUG-033 status to ✅ Fixed + SHA, update `TODOS.md`. Re-run `scratch/2026-08-24_bug031_manual_exit_review.py` afterward to close out BUG-031's B031.4 with
+- [x] **B033.5** — Commit, update `bugs.md` BUG-033 status to ✅ Fixed + SHA, update `TODOS.md`. Re-run `scratch/diagnostics_db/2026-08-24_bug031_manual_exit_review.py` afterward to close out BUG-031's B031.4 with
   real DTE coverage. Re-run done 2026-08-24 (Animesh, live, post-BUG-034): 2 open overlay legs (`overlay_cc` `NSE_FO|74391` dte=36, `overlay_collar_put` `NSE_FO|73994` dte=36). `CCOverlayV1` fired a
   real `PROFIT_TARGET` (auto_execute=True, auto_action=CLOSE_CC) — confirms DTE/delta/premium logic is now reachable end-to-end for a real `overlay_cc` position, closing out BUG-031's B031.4 with real
   coverage. No signal on the Collar leg (expected — not DTE-gated at dte=36, and Collar's own roles were never affected by BUG-034). | SHA ef1c341

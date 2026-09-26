@@ -72,7 +72,7 @@ eventually supersedes S5.5a.
   ```
 
   Reference renderer: `format_directional_v3` in
-  `scratch/2026-09-08_signal_telegram_messages.py` (messages 1–3, validated on-device
+  `scratch/telegram_formats/2026-09-08_signal_telegram_messages.py` (messages 1–3, validated on-device
   2026-09-08).
   Entry band = **mean of the agreeing models' `entry_premium_low` / `_high`** (consistent
   with `record_signal_outcome._consensus_entry_premium`), not a single model's band.
@@ -99,7 +99,7 @@ eventually supersedes S5.5a.
   no `SignalOutcome` / `SignalStore` change. Non-fatal send via `build_notifier()` mirroring
   `morning_signal`. `NO_TRADE` and non-`--auto` runs missing a premium fall back to the
   close-only render. Reference renderer: `format_outcome_notification` in
-  `scratch/2026-09-08_signal_telegram_messages.py` (messages 6–8, restyled 2026-09-09).
+  `scratch/telegram_formats/2026-09-08_signal_telegram_messages.py` (messages 6–8, restyled 2026-09-09).
   Tests: no-network render of all three cases + the empty-premium fallback. **SPT-5 still
   supersedes this** when the paper track goes live (real exit replaces the would-be row).
   | Owner: Claude | Model: Sonnet 5 | Review: code-reviewer | SHA: ce59529

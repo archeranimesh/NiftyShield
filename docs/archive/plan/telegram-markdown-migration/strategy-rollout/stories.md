@@ -50,7 +50,7 @@ via grep against `ic_nifty_v2.py`). So this task requires no per-version branchi
 and `for expiry_type, config in CONFIGS_V2.items()` (V2 — currently `monthly` only; `CONFIGS_V2` is Phase 1-scoped per `src/strategy/ ic_expiry_config_v2.py`,
 `paper_ic_nifty_v2_weekly`/`_leaps`/`_yearly` do not exist as runnable strategies yet — do not add them to any test fixture as if they're live). Since this task edits `process_variant()` itself, not a
 per-variant call site, every variant in both loops gets the long-leg Greeks capture and the Net Δ/θ line with zero additional code — no per-variant task needed here or in `ROLL-1`.
-`scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py` gained a `VARIANTS` dict + `--variant` CLI flag (5 entries: the four V1 expiries plus V2 monthly) purely to demonstrate `build_message()` is
+`scratch/telegram_formats/2026-08-07_ic_eod_audit_v2_telegram_format.py` gained a `VARIANTS` dict + `--variant` CLI flag (5 entries: the four V1 expiries plus V2 monthly) purely to demonstrate `build_message()` is
 already variant-agnostic — not because the real implementation needs a variants list of its own.
 
 **Files to change:**
@@ -60,7 +60,7 @@ already variant-agnostic — not because the real implementation needs a variant
 **What to change:**
 1. For all four roles (not just the two shorts), capture `opt_leg.delta` and `opt_leg.theta` into per-leg variables, `None` on any resolution miss (chain lookup fails, `opt_leg is None`, or the field
    itself is `None`) — do not default to `0.0` for any role.
-2. Compute `net_delta`/`net_theta` across all four legs using the same never-silently-partial rule already proven in `scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py`'s `compute_net_greek()`: if
+2. Compute `net_delta`/`net_theta` across all four legs using the same never-silently-partial rule already proven in `scratch/telegram_formats/2026-08-07_ic_eod_audit_v2_telegram_format.py`'s `compute_net_greek()`: if
    ANY leg's value is `None`, the net is `None` ("incomplete"), never a partial sum that looks complete. Port that helper's logic (or the function itself) rather than reimplementing the None-handling
    ad hoc.
 3. Add a `Net Δ: ... | Net θ: ...` line to the existing plain-text `report` string (between the `DTE/Nifty/IVR` line and the `Position:` block) — this lands in the *current* pre-Markdown report
@@ -83,15 +83,15 @@ already variant-agnostic — not because the real implementation needs a variant
 **As-built (SHA `f9e551e`):** Owner Claude / Sonnet. `Review: greeks-analyst` — mandatory for any delta/theta field change. This Cowork session could not spawn `.claude/agents/greeks-analyst.md`
 directly (same structural limitation as MD-7.3 / BUG-037 B037.6) — substituted a `general-purpose` agent loaded with the greeks-analyst persona. Verdict PASS with one documented WARNING: Net Δ sums
 raw per-option delta with no short/long position-direction sign flip — a pre-existing convention this diff extends, matching the never-partial-sum reference in
-`scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py`. Not fixed here — flagged as a fast-follow label-clarification candidate, not a blocker.
+`scratch/telegram_formats/2026-08-07_ic_eod_audit_v2_telegram_format.py`. Not fixed here — flagged as a fast-follow label-clarification candidate, not a blocker.
 
 ---
 
 ## ROLL-1 — IC EOD Audit
 
-**Reference implementation superseded 2026-08-07.** The original prototype (`scratch/2026-08-07_ic_eod_audit_telegram_format.py`, `strategy_id=paper_ic_nifty_v1_monthly`, legacy `parse_mode=Markdown`)
+**Reference implementation superseded 2026-08-07.** The original prototype (`scratch/telegram_formats/2026-08-07_ic_eod_audit_telegram_format.py`, `strategy_id=paper_ic_nifty_v1_monthly`, legacy `parse_mode=Markdown`)
 is now historical only — it proved the bold+fenced-table concept but predates both the MarkdownV2 revision (see epic `README.md`) and the confirmed layout below. **The live reference is
-`scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py`** (`strategy_id=paper_ic_nifty_v2_monthly`, real V2 IC position data, `parse_mode=MarkdownV2`) — produced via `message-format-workshop.md`,
+`scratch/telegram_formats/2026-08-07_ic_eod_audit_v2_telegram_format.py`** (`strategy_id=paper_ic_nifty_v2_monthly`, real V2 IC position data, `parse_mode=MarkdownV2`) — produced via `message-format-workshop.md`,
 confirmed on-device 2026-08-07. Port from this file, not the v1 one.
 
 **Confirmed message structure (updated 2026-08-07 — now includes Expiry, Net Δ/Net θ, AND the FMT-1c color-coded header/hashtag; hashtag auto-detection confirmed working live on-device):**
@@ -143,7 +143,7 @@ layout above should show real numbers instead of `incomplete` — update this bl
 ```
 get_code_snippet(<message-building function in paper_ic_snapshot.py>)   # find via search_graph first
 ```
-Port `scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py`'s `build_message()` structure: bold header + `mdcode()`-wrapped strategy_id, bold Nifty/DTE/IVR line, fenced leg table, bold Credit/Mark
+Port `scratch/telegram_formats/2026-08-07_ic_eod_audit_v2_telegram_format.py`'s `build_message()` structure: bold header + `mdcode()`-wrapped strategy_id, bold Nifty/DTE/IVR line, fenced leg table, bold Credit/Mark
 line, bold Captured/ROI line (with `pnl_emoji()` — see below), bold Margin line, bold Alert/Actions line (with `alert_emoji()`) — using `formatting-rules/`'s `build_leg_table` / `format_money` /
 `format_greek` / `format_strike` / `format_pct`, and `backbone/`'s `mdcode()` / `escape_markdown()` for every dynamic value AND every literal reserved character in the static template text
 (parentheses, pipes, decimal points — MarkdownV2's reserved set is wider than legacy Markdown's, see `backbone/stories.md`). Do not hand-roll formatting logic that FMT-2/FMT-3 already built. This
@@ -157,7 +157,7 @@ FMT-2b) before this task can import them; if `formatting-rules/` ships without t
 **Also confirmed 2026-08-07 — negative-money sign fix (see FMT-1's updated table):** `format_money` must put the sign before the `₹`, not after (`-₹11.08`, not `₹-11.08`). This only manifests once a
 strategy is in a loss state; caught via the scratch script's `--scenario loss` test path (see below) before it shipped as a live bug.
 
-**Scenario test harness (new convention, not previously part of this workshop's scope):** `scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py` gained a `SCENARIOS` dict + `--scenario` CLI flag
+**Scenario test harness (new convention, not previously part of this workshop's scope):** `scratch/telegram_formats/2026-08-07_ic_eod_audit_v2_telegram_format.py` gained a `SCENARIOS` dict + `--scenario` CLI flag
 (`profit` / `loss` / `flat` / `alert` / `loss_alert` / `full_greeks`) so `pnl_emoji`/`alert_emoji`/`compute_net_greek`'s branches can be exercised without hand-editing the data dict —
 `--list-scenarios` to enumerate, `--send` required to actually post (default is print-only, to avoid an accidental live send while browsing scenarios). `full_greeks` uses synthetic (clearly-labeled
 non-real) complete delta+theta data across all four legs specifically to demonstrate the Net Δ/Net θ line rendering a real number instead of `incomplete` — worth noting during the port that this
@@ -169,7 +169,7 @@ message, not just the scratch script — the same loss/alert/flat/full_greeks br
 `_run()` already calls it once per variant across both `CONFIGS` (V1: weekly/ monthly/leaps/yearly) and `CONFIGS_V2` (V2: monthly only, Phase 1-scoped — see `ROLL-0`'s note, do not assume V2
 weekly/leaps/yearly exist). No per-variant task, test file, or code path is needed — one port covers `IC EOD Audit — weekly (paper_ic_nifty_v1_weekly)` through `— yearly (paper_ic_nifty_v1_yearly)`
 and V2's monthly identically, since `strategy_label`/ `strategy_id`/`dte`/`nifty`/`ivr`/legs/`margin` are all already per-variant *data*, not per-variant *code*.
-`scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py`'s new `VARIANTS` dict + `--variant` flag (5 entries) demonstrates this — every variant renders correctly with zero branching in
+`scratch/telegram_formats/2026-08-07_ic_eod_audit_v2_telegram_format.py`'s new `VARIANTS` dict + `--variant` flag (5 entries) demonstrates this — every variant renders correctly with zero branching in
 `build_message()`. The FMT-1c color-coded header is the one piece that DOES need a per-variant **data** lookup (timeframe → color/emoji, `V1`-vs-`V2` → badge) — still not per-variant *code*, since
 `build_header()`'s `_TIMEFRAME_META`/`VARIANT_META` dicts (see FMT-1c) are the single source both `process_variant()`'s V1 and V2 call paths read from identically.
 
@@ -207,7 +207,7 @@ taken from the spec text. Two held, two new problems surfaced:
 *Held.* `get_strategy_realized_pnl(store, strategy_name) -> Decimal` (`src/paper/tracker.py:113`) is unchanged and still delegates to `_compute_realized_pnl`, which sums `store.get_trades()` — the
 `paper_trades` ledger, exactly as this spec claims. `build_stats()` still computes `open_pos = [p for p in positions if p.net_qty != 0]` as its first line, so the Legs row really is zero new queries.
 
-*Problem 1 — the table builder does not exist outside `scratch/`.* `build_compare_table` lives only in `scratch/2026-08-07_ic_monthly_comparison_telegram_format.py:126`. FMT-3 shipped
+*Problem 1 — the table builder does not exist outside `scratch/`.* `build_compare_table` lives only in `scratch/telegram_formats/2026-08-07_ic_monthly_comparison_telegram_format.py:126`. FMT-3 shipped
 `build_kv_table`/`build_side_by_side_kv_table`/`build_leg_table` into `src/notifications/formatting.py` and used `build_compare_table` as a *design reference* without porting it (TODOS.md's FMT-3
 entry says so explicitly). So this task as originally scoped hides a formatting-layer addition inside a strategy-rollout port commit — structurally identical to what ROLL-1 hid with FMT-1b/FMT-1c,
 which is why ROLL-1 was split. **ROLL-2a** is that promotion.
@@ -249,7 +249,7 @@ renders P&L.
 
 ---
 
-**Confirmed message structure (2026-08-07, `message-format-workshop.md` session) — reference implementation `scratch/2026-08-07_ic_monthly_comparison_telegram_format.py`:**
+**Confirmed message structure (2026-08-07, `message-format-workshop.md` session) — reference implementation `scratch/telegram_formats/2026-08-07_ic_monthly_comparison_telegram_format.py`:**
 
 ```
 ⚖️ *IC Monthly (V1 vs V2)* | 2026-08-07
@@ -305,12 +305,12 @@ get_code_snippet("build_comparison_report") # confirm current (TGFMT-1-fixed) im
 confirmed 2026-08-07 get_code_snippet("get_strategy_realized_pnl") # src/paper/tracker.py — confirm current signature before importing get_code_snippet("_get_monthly_realized_pnl") # the pattern
 _get_unrealized_pnl_month_change() must mirror
 ```
-Build the message using a single fenced comparison table (see the confirmed structure above and `scratch/2026-08-07_ic_monthly_comparison_telegram_format.py`'s `build_compare_table()` — a generic
+Build the message using a single fenced comparison table (see the confirmed structure above and `scratch/telegram_formats/2026-08-07_ic_monthly_comparison_telegram_format.py`'s `build_compare_table()` — a generic
 `list[list[(label, v1, v2)]]` row-groups builder with a dashed rule between groups and `max(len(x) for x in ...)`-computed widths, never a hand-counted constant, same discipline `build_leg_table`
 already follows). This does not use `formatting-rules/`'s `build_side_by_side_kv_table` — an earlier draft of this task assumed it would, but the confirmed on-device layout is one fenced table with
 row groups, not two bordered kv tables side by side; `build_compare_table` (or an equivalent promoted into `formatting-rules/`'s `formatting.py`, judgment call for the implementer) is the actual
 match. Preserve existing warn-emoji-on-value behavior (`🔴` suffix for a flagged value) for the new Legs row specifically — check `_build_side_by_side_report` in
-`scratch/2026-08-07_telegram_ic_comparison_format_repro.py` for how a similar flag was represented in the pre-Markdown version before deciding whether it survives unchanged.
+`scratch/telegram_formats/2026-08-07_telegram_ic_comparison_format_repro.py` for how a similar flag was represented in the pre-Markdown version before deciding whether it survives unchanged.
 
 **Tests:** existing `test_comparison_report_format` and `test_comparison_report_one_missing` must still pass (or be updated if the exact output string changed — expected, since parse_mode and
 table-builder call are changing; update assertions to match, don't weaken them). Keep TGFMT-1's existing long-label regression test (`"Realized (inception)"` or equivalent) — it must still pass under
@@ -432,7 +432,7 @@ approval message body survives correctly (same regression-test pattern as ROLL-1
 `TelegramNotifier.send()` entirely, which is why `backbone/`'s original audit missed it. This task covers both the transport switch (HTML → `TelegramNotifier.send()` + MarkdownV2) and the format
 migration in one pass, since the message was never wired through the shared notifier to begin with.
 
-**Confirmed message structure — FINAL v2 (2026-08-08, `message-format-workshop.md` session, iterated live on-device) — reference implementation `scratch/2026-08-08_eod_paper_summary_format.py`:**
+**Confirmed message structure — FINAL v2 (2026-08-08, `message-format-workshop.md` session, iterated live on-device) — reference implementation `scratch/telegram_formats/2026-08-08_eod_paper_summary_format.py`:**
 
 ```
 📝 NiftyShield Paper EOD | 07 Aug 2026 Activities: 0 | Net P&L: +₹65,404 ✅
@@ -574,7 +574,7 @@ msg = f"{status_line}\n{notes}"
 sent via `self._notifier.send_plain_message(msg)`.
 
 **Confirmed message structure (2026-08-08, `message-format-workshop.md` session, kv-line counter-proposal from Animesh, superseding this workshop's initial single-packed-line draft) — reference
-implementation `scratch/2026-08-08_reentry_notice_format.py`:**
+implementation `scratch/telegram_formats/2026-08-08_reentry_notice_format.py`:**
 
 ```
 ⛔ RE\-ENTRY BLOCKED: IC V1 Monthly
@@ -694,7 +694,7 @@ Event: `DELTA_BREACH`
 short put delta \-0\.42 exceeds threshold \-0\.40 \(review roll candidates\)\.
 ```
 
-**v2 (final, reference implementation `scratch/2026-08-08_strategy_event_alert_format.py`):**
+**v2 (final, reference implementation `scratch/telegram_formats/2026-08-08_strategy_event_alert_format.py`):**
 
 ```
 ⚠️ DELTA BREACH \- IC V1 Monthly
@@ -799,7 +799,7 @@ Handles both rollable leg roles: `base_futures` (DTE≤1, via `get_next_contract
 only, confirmed via that method's implementation). Separate from the backbone-managed overlay/CSP rolls `ROLL-3` covers (`CSPNiftyV1`/ `NiftyTrackComparisonV1` via `PaperExecutor`).
 
 **Confirmed message structure — two distinct layouts, one per leg role (this session, `message-format-workshop.md`, iterated on-device through 3 rounds) — reference implementation
-`scratch/2026-08-10_3track_roll_notification_format.py`:**
+`scratch/telegram_formats/2026-08-10_3track_roll_notification_format.py`:**
 
 `base_futures`:
 ```
@@ -935,7 +935,7 @@ Not named in `backbone/`'s MD-4 file list or any other `ROLL-*` task. Added as T
 missing-message-workshop-prompt's "do not batch" rule.
 
 **Confirmed message structure (2026-08-10, `message-format-workshop.md` session — one on-device round-trip via `--send`, reference implementation
-`scratch/2026-08-10_proxy_delta_critical_alert_format.py`):**
+`scratch/telegram_formats/2026-08-10_proxy_delta_critical_alert_format.py`):**
 
 ```
 🚨 CRITICAL: PROXY DELTA
@@ -1008,7 +1008,7 @@ collapses checks 1-3 into 3 fixed error lines instead.
 
 **Confirmed message structure (2026-08-10, `message-format-workshop.md` session — Animesh's counter-proposal, superseding this workshop's initial verbatim-line draft; not yet exercised via a live
 `--send` round-trip — the Cowork sandbox this session ran in had no working venv, see reference script's "Known sandbox limitation" note) — reference implementation
-`scratch/2026-08-10_healthcheck_alert_format.py`:**
+`scratch/telegram_formats/2026-08-10_healthcheck_alert_format.py`:**
 
 ```
 ⚠️ NIFTYSHIELD: DEGRADED [12:17]
@@ -1116,7 +1116,7 @@ f"({days_overdue}d overdue) net_qty={position.net_qty}"
 ```
 
 **Confirmed message structure (2026-08-10, `message-format-workshop.md` session — v3, after two rounds of iteration; not yet exercised via a live `--send` round-trip — this Cowork sandbox session had
-no working venv/aiohttp, same limitation ROLL-9/ROLL-10/ROLL-11 hit) — reference implementation `scratch/2026-08-10_position_health_alert_format.py`:**
+no working venv/aiohttp, same limitation ROLL-9/ROLL-10/ROLL-11 hit) — reference implementation `scratch/telegram_formats/2026-08-10_position_health_alert_format.py`:**
 
 ```
 ⚠️ NIFTYSHIELD: POSITION HEALTH
@@ -1228,7 +1228,7 @@ asyncio.run(notifier.send(msg))
 
 **Confirmed message structure (2026-08-11, `message-format-workshop.md` session — v2.1, after a counter-proposal round and a live `--send` correction; exercised via a real `--send` round trip against
 production Telegram credentials on Animesh's own machine, not just print-only — first message in this epic to actually clear a live send) — reference implementation
-`scratch/2026-08-11_3track_base_entry_format.py`:**
+`scratch/telegram_formats/2026-08-11_3track_base_entry_format.py`:**
 
 ```
 📥 Base Entry — 3-Track Bootstrap
@@ -1318,7 +1318,7 @@ asyncio.run(notifier.send(msg))
 ```
 
 **Confirmed message structure (2026-08-11, `message-format-workshop.md` session — v1.1, drafted directly from `ROLL-13`'s already-confirmed conventions rather than re-walking the raw-key elimination
-trail; one counter-proposal round from Animesh) — reference implementation `scratch/2026-08-11_3track_overlay_entry_format.py`:**
+trail; one counter-proposal round from Animesh) — reference implementation `scratch/telegram_formats/2026-08-11_3track_overlay_entry_format.py`:**
 
 ```
 📥 Overlay Entry — COLLAR Bootstrap
@@ -1439,7 +1439,7 @@ not blocking ROLL-15, noted for `TODOS.md`/ `docs/bugs/bugs.md` separately:** th
 (`paper_3track_snapshot.py:380-383` only checks `leg_role in {...}` and `net_qty != 0`, not sign) — if that assumption is ever violated by a future bug elsewhere, the hardcoded `--action
 SELL`/`--action BUY` pair in `close_cmd`/ `roll_cmd` would silently build the wrong-direction command. Not a message-formatting concern, tracked separately.
 
-**Confirmed summary shape (Telegram) — live `--send` reviewed and approved 2026-08-11 — reference implementation: `scratch/2026-08-11_3track_settlement_roll_format.py`:**
+**Confirmed summary shape (Telegram) — live `--send` reviewed and approved 2026-08-11 — reference implementation: `scratch/telegram_formats/2026-08-11_3track_settlement_roll_format.py`:**
 
 ```
 🚨 Base Position Expiry — Paper 3-Track Nifty V1
@@ -1516,7 +1516,7 @@ Track/Date line since this is the prod cron path); he chose verbatim reuse. This
 of shipping two near-duplicate ones — same rationale `ROLL-7`'s `STRATEGY_LABELS`/`LEG_ROLE_LABELS` reuse and `ROLL-8` reusing `ROLL-7`'s tables already established for this epic. No new elimination
 trail was needed this session — the format is a direct port, not a fresh design.
 
-**Confirmed message structure — reference implementation `scratch/2026-08-11_3track_proxy_delta_critical_alert_format.py`:**
+**Confirmed message structure — reference implementation `scratch/telegram_formats/2026-08-11_3track_proxy_delta_critical_alert_format.py`:**
 
 ```
 🚨 CRITICAL: PROXY DELTA
@@ -1567,7 +1567,7 @@ search_graph("TrackSnapshot")   # confirm consecutive_days plumbing status (ROLL
 ## ROLL-17 — IC Entry Confirmation: unify v1/v2 onto one fenced-table renderer
 
 **Status: SHIPPED 2026-09-06 (SHA `26527c2`).** Design closed the same day via a `message-format-workshop.md` session (Claude + Animesh); reference
-implementation `scratch/2026-09-06_ic_entry_confirmation_format.py`. Not live-`--send`-confirmed on-device (Animesh waived the round — see *Perspectives not
+implementation `scratch/telegram_formats/2026-09-06_ic_entry_confirmation_format.py`. Not live-`--send`-confirmed on-device (Animesh waived the round — see *Perspectives not
 covered*).
 
 **As-built.** New `src/notifications/ic_entry_message.py` — `ICEntryMessage` dataclass (`strategy_name`, `expiry_type`, `expiry`, `ivr`, `dte`, `spot`,
@@ -1711,7 +1711,7 @@ already a hard dependency per `tasks.md` but missing from this line until now).
 - `docs/plan/README.md` — mark `telegram-markdown-migration/` epic as shipped, matching the convention used for other archived epics in that table
 - `TODOS.md` — final session log entry
 
-**Also:** move `scratch/2026-08-07_ic_eod_audit_telegram_format.py` and `scratch/2026-08-07_telegram_ic_comparison_format_repro.py` out of active scratch — they've served their purpose as reference
+**Also:** move `scratch/telegram_formats/2026-08-07_ic_eod_audit_telegram_format.py` and `scratch/telegram_formats/2026-08-07_telegram_ic_comparison_format_repro.py` out of active scratch — they've served their purpose as reference
 implementations now fully ported into `src/`/`scripts/`. Per this project's scratch convention (dated throwaway files), leaving them in place is harmless, but note in the commit message that they're
 now historical/superseded rather than still-relevant references, so a future session doesn't mistake them for the current source of truth.
 

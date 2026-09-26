@@ -59,8 +59,8 @@ Margin happening to be whole rupees in practice is not a special case.
 carrying an expiry, which is exactly what §2 exists to prevent; and two renderings of the same date inside one message reads as a bug to the person on the receiving end. `%-d` remains banned
 (platform-dependent, fails on some Windows builds) — moot now, since the leading zero is kept and nothing is stripped.
 
-> **Carry-forward for `ROLL-1`:** its confirmed header and `scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py::format_expiry` still emit `25 Aug 26`. Both need updating when ROLL-1's real port
-> lands. Not changed here — FMT-1 is docs-only and ROLL-1 is another task's scope.
+> **Carry-forward for `ROLL-1`:** its confirmed header and `scratch/telegram_formats/2026-08-07_ic_eod_audit_v2_telegram_format.py::format_expiry` still emit `25 Aug 26`. Both need updating when
+> ROLL-1's real port lands. Not changed here — FMT-1 is docs-only and ROLL-1 is another task's scope.
 
 ### 3a. Spread labels — futures roll vs. option-premium roll (FMT-1f)
 
@@ -106,9 +106,12 @@ function's docstring as an override of the §3 default, and (c) be implemented a
 |---|---|---|---|
 | `build_leg_table` LTP/Entry columns | 1dp, no `₹` | FMT-1 (locked 2026-08-07) | specified, not yet real code |
 | Multi-strategy summary table (8+ rows, 3+ numeric cols) | signed integer, no `₹` per cell, zero as `-` | FMT-1d | `format_summary_money` + `build_strategy_table` (ROLL-6) |
-| IC V1-vs-V2 monthly comparison table | money at **0dp** with `₹`, `N/A` for `None` | `scratch/2026-08-07_ic_monthly_comparison_telegram_format.py` | **unregistered — reconcile at ROLL-2** |
-| EOD PT summary table | money at 2dp, no `₹` | `scratch/2026-08-13_eod_pt_summary.py` | **unregistered — reconcile at PT-1's ROLL task** |
-| Daily-snapshot waterfall | `k` abbreviation for \|value\| ≥ 1000 (`-3k`) | `scratch/2026-08-08_daily_snapshot_waterfall_format.py` | **unregistered — no ROLL task; deferred 2026-08-11** |
+<!-- lint-ignore-length -->
+| IC V1-vs-V2 monthly comparison table | money at **0dp** with `₹`, `N/A` for `None` | `scratch/telegram_formats/2026-08-07_ic_monthly_comparison_telegram_format.py` | **unregistered — reconcile at ROLL-2** |
+<!-- lint-ignore-length -->
+| EOD PT summary table | money at 2dp, no `₹` | `scratch/telegram_formats/2026-08-13_eod_pt_summary.py` | **unregistered — reconcile at PT-1's ROLL task** |
+<!-- lint-ignore-length -->
+| Daily-snapshot waterfall | `k` abbreviation for \|value\| ≥ 1000 (`-3k`) | `scratch/telegram_formats/2026-08-08_daily_snapshot_waterfall_format.py` | **unregistered — no ROLL task; deferred 2026-08-11** |
 
 ---
 
@@ -143,7 +146,7 @@ a literal emoji. Confirmed data points so far:
 | `₹` U+20B9 | **confirmed safe, 2026-08-26** — renders single-width inside a fence, alignment holds. See note below. |
 | `🔴` U+1F534 | **breaks alignment**, 2026-08-26 — renders double-width, same failure shape as `▶`. See note below. |
 
-- `₹` check: ROLL-2a blocking pre-check, live `--send` via `scratch/2026-08-07_ic_monthly_comparison_telegram_format.py`. Safe to use inside a fence going forward.
+- `₹` check: ROLL-2a blocking pre-check, live `--send` via `scratch/telegram_formats/2026-08-07_ic_monthly_comparison_telegram_format.py`. Safe to use inside a fence going forward.
 - `🔴` check: same on-device check as `₹` above, 2026-08-26.
 - Do not put a literal `🔴` inside a fenced column without a display-width-aware builder (see `build_compare_table`, `src/notifications/formatting.py`).
 
@@ -154,12 +157,12 @@ above"** — `Δ` is the first (and so far only) confirmed exception. Do not ext
 every new symbol needs its own on-device confirmation before it goes inside a fence, the same way `▶` was tested and rejected.
 
 **Resolved 2026-08-26 — `₹` confirmed, `🔴` rejected (ROLL-2a blocking pre-check).** ROLL-2's Legs row (`n/4` with a `🔴` suffix when `n < 4`) and its `₹`-in-a-fence layout could not proceed until both
-glyphs were individually checked, per the no-analogy rule above. A one-off `--send` (`scratch/2026-08-07_ic_monthly_comparison_telegram_format.py`, patched with a fabricated `3/4 🔴` Legs row for this
-check only) put both in the same fenced message: `₹` held alignment, `🔴` did not. `₹` U+20B9 joins `Δ` as a second confirmed-narrow exception; `🔴` U+1F534 joins `▶` as a confirmed-wide rejection.
-`src/notifications/formatting.py::build_compare_table` (ROLL-2a) is the first table builder in this codebase to compute column width via display width rather than `len()` — `_char_display_width`
-treats ASCII and the confirmed-narrow set (`Δ`, `₹`) as width 1 and **everything else, including any future unconfirmed symbol, as width 2 by default** — a fail-safe default per this section's
-no-exception-by-analogy rule, not a placeholder. Any new table builder that needs to put a non-ASCII, non-confirmed symbol inside a fence should reuse `_char_display_width`/`_display_width` rather
-than re-deriving its own width logic.
+glyphs were individually checked, per the no-analogy rule above. A one-off `--send` (`scratch/telegram_formats/2026-08-07_ic_monthly_comparison_telegram_format.py`, patched with a fabricated `3/4 🔴`
+Legs row for this check only) put both in the same fenced message: `₹` held alignment, `🔴` did not. `₹` U+20B9 joins `Δ` as a second confirmed-narrow exception; `🔴` U+1F534 joins `▶` as a
+confirmed-wide rejection. `src/notifications/formatting.py::build_compare_table` (ROLL-2a) is the first table builder in this codebase to compute column width via display width rather than `len()` —
+`_char_display_width` treats ASCII and the confirmed-narrow set (`Δ`, `₹`) as width 1 and **everything else, including any future unconfirmed symbol, as width 2 by default** — a fail-safe default per
+this section's no-exception-by-analogy rule, not a placeholder. Any new table builder that needs to put a non-ASCII, non-confirmed symbol inside a fence should reuse
+`_char_display_width`/`_display_width` rather than re-deriving its own width logic.
 
 ---
 
@@ -185,9 +188,9 @@ Every formatter defined in `scratch/*_format.py` as of this date, checked agains
 | `2026-08-13_eod_pt_summary` | `_fmt_expiry_label` | none — matches §3 | — |
 
 **Reference-implementation correction (verified 2026-08-25).** `formatting-rules/prompt.md` and FMT-3's spec both name `_kv_table` and `_side_by_side_kv` as "working, user-validated reference
-implementations" in `scratch/2026-08-07_ic_eod_audit_telegram_format.py`. **They do not exist.** That file contains only `_leg_table`; neither name appears anywhere in `scratch/`, `src/`, or
-`scripts/`. FMT-3 must therefore design `build_kv_table` / `build_side_by_side_kv_table` rather than port them, or start from the nearest real analogue — `build_compare_table` in
-`scratch/2026-08-07_ic_monthly_comparison_telegram_format.py`. Do not open FMT-3 expecting a port.
+implementations" in `scratch/telegram_formats/2026-08-07_ic_eod_audit_telegram_format.py`. **They do not exist.** That file contains only `_leg_table`; neither name appears anywhere in `scratch/`,
+`src/`, or `scripts/`. FMT-3 must therefore design `build_kv_table` / `build_side_by_side_kv_table` rather than port them, or start from the nearest real analogue — `build_compare_table` in
+`scratch/telegram_formats/2026-08-07_ic_monthly_comparison_telegram_format.py`. Do not open FMT-3 expecting a port.
 
 ---
 

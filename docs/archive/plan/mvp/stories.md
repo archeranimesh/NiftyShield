@@ -45,13 +45,13 @@
 **Sign-off gate:** once M0 + M7 (`reco_price` field) + M8 (backfill) are all implemented and this Uniparts flow runs clean end-to-end with correct data at every level above, tell the user the MVP
 pipeline is ready. They will then run Uniparts themselves as the worked example, inspect every data point, and only after they're satisfied will other stocks/providers be entered.
 
-**M0 data-source decision — RESOLVED 2026-09-23: NSE CM bhavcopy.** `scratch/2026-09-23_mvp_m0_data_source_probe.py` compared NSE CM bhavcopy vs. Yahoo Finance chart API for UNIPARTS daily closes, run
+**M0 data-source decision — RESOLVED 2026-09-23: NSE CM bhavcopy.** `scratch/data_probes/2026-09-23_mvp_m0_data_source_probe.py` compared NSE CM bhavcopy vs. Yahoo Finance chart API for UNIPARTS daily closes, run
 twice. NSE CM bhavcopy (`https://nsearchives.nseindia.com/content/cm/BhavCopy_NSE_CM_0_0_0_YYYYMMDD_F_0000.csv.zip`, UDiFF format, same session/auth pattern already used in
 `src/backtest/bhavcopy_ingest.py` for F&O) returned ₹659.70 for 2026-06-12 (matching the figure independently found via web search) and ₹851.70 for 2026-09-22, both dates correct on both runs; `None`
 for 2026-07-11 was correctly a non-trading Saturday, not a failure. Yahoo Finance's `query1.finance.yahoo.com` chart endpoint hit a 429 rate limit on both attempts — ruled out as unreliable.
 **Confirmed by user 2026-09-23: NSE CM bhavcopy is M0's data source**, mirroring the existing F&O ingest module's structure.
 
-**M0 NIFTY 50 index-level data-source decision — RESOLVED 2026-09-23: NSE index-close bhavcopy.** `scratch/2026-09-23_mvp_m0_nifty_index_probe.py` probed
+**M0 NIFTY 50 index-level data-source decision — RESOLVED 2026-09-23: NSE index-close bhavcopy.** `scratch/data_probes/2026-09-23_mvp_m0_nifty_index_probe.py` probed
 `https://nsearchives.nseindia.com/content/indices/ind_close_all_DDMMYYYY.csv` (plain CSV, not zipped, same host/session pattern as the CM equity bhavcopy) for the `Nifty 50` row's `Closing Index
 Value`, run twice. Both runs returned identical values: ₹23,622.90 for 2026-06-12 and ₹23,329.00 for 2026-09-22; `None` for 2026-07-11 was correctly a non-trading Saturday, matching the equity probe's
 behavior on the same date. Endpoint reachable, response shape stable across runs. **Not independently cross-checked against a second source** (unlike the equity close, which matched an external web

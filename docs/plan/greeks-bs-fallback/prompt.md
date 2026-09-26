@@ -9,9 +9,10 @@ spec in `stories.md` (same task id) before writing any code. One task per sessio
 
 `filter_strikes_by_delta()` (`src/instruments/strike_selector.py`) selects IC entry strikes by target `|delta|` against Upstox's `option_greeks.delta` field. Confirmed 2026-07-22 (Cowork session, live
 diagnostic scripts in `scratch/`): for the yearly IC bucket (Dec 2026 expiry, DTE 160 at the time), Upstox returns `delta`/`gamma`/`theta`/`vega`/`iv` as `0.0` on every single strike, both PE and CE —
-not missing/`None`, just zero — despite every strike having real, liquid `ltp`/`bid`/`ask`/`oi`/`volume` (confirmed via full chain dump, `scratch/2026-07-22_ic_yearly_full_chain_dump.py`). This is a
-data gap in Upstox's Greeks computation for far-dated contracts, not an illiquid/unquoted market. It hard-blocks yearly IC entry (`ic_entry.leg_resolution_failed`) regardless of the expiry-resolution
-fix in `DECISIONS.md` BUG-015 — no strike can ever match a nonzero delta band against an all-zero field. Re-confirmed 2026-08-06, still persistent 3+ weeks later — not a transient outage.
+not missing/`None`, just zero — despite every strike having real, liquid `ltp`/`bid`/`ask`/`oi`/`volume` (confirmed via full chain dump, `scratch/ic_repro/2026-07-22_ic_yearly_full_chain_dump.py`).
+This is a data gap in Upstox's Greeks computation for far-dated contracts, not an illiquid/unquoted market. It hard-blocks yearly IC entry (`ic_entry.leg_resolution_failed`) regardless of the
+expiry-resolution fix in `DECISIONS.md` BUG-015 — no strike can ever match a nonzero delta band against an all-zero field. Re-confirmed 2026-08-06, still persistent 3+ weeks later — not a transient
+outage.
 
 **Decision (Animesh, 2026-07-22):** compute Greeks ourselves rather than substitute a cruder points/percentage-OTM strike-selection heuristic. We have real spot (`NSE_INDEX|Nifty 50`), strike, DTE,
 and real mid prices — back out implied vol via Black-Scholes inversion (Newton-Raphson), then compute delta from that IV. This keeps every strategy's actual entry criteria (target `|δ|`) intact

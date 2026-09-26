@@ -10,7 +10,7 @@ def build_proxy_critical_alert(net_delta: float, proxy_delta_alert: str | None) 
     """Proxy Delta CRITICAL alert body, MarkdownV2-safe (ROLL-10).
 
     Confirmed format (2026-08-10 workshop, ref
-    ``scratch/2026-08-10_proxy_delta_critical_alert_format.py``)::
+    ``scratch/telegram_formats/2026-08-10_proxy_delta_critical_alert_format.py``)::
 
         🚨 CRITICAL: PROXY DELTA
         📐 Current: <signed 2dp> 🔴

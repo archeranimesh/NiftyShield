@@ -62,7 +62,7 @@ no such record). 2 tests.
 ## 2026-09-07 — `eod-pt-summary` epic archived
 
 Shipped PT-1..PT-3 and moved to `docs/archive/plan/eod-pt-summary/`. **PT-1** (`d1ae760`) captured the confirmed 3-message MarkdownV2 Telegram split (open positions / closed today / strategy-wise
-P&L + Ann.% on margin). **PT-2** (`77dc160`) promoted the validated `scratch/2026-08-13_eod_pt_summary.py` prototype to `src/reporting/eod_pt_summary.py` (new package) + thin cron
+P&L + Ann.% on margin). **PT-2** (`77dc160`) promoted the validated `scratch/telegram_formats/2026-08-13_eod_pt_summary.py` prototype to `src/reporting/eod_pt_summary.py` (new package) + thin cron
 `scripts/eod_pt_summary.py`, 17 tests. **PT-3** (`dac18ea`) closed the docs. Cron wired at `43 15 * * 1-5` (`--send --no-dry-run`), runs alongside `scripts/eod_summary.py` — not a replacement, the two
 read different sources by design (live `PaperStore.get_positions()` + broker LTP vs stored NAV snapshot). See DECISIONS.md §P&L & Reporting.
 
@@ -161,8 +161,8 @@ expanded `CONTEXT.md`'s one-line `formatting.py` entry to cover the table builde
 checked) and, with `backbone/` (MD-1..MD-7.3) already complete, the epic now has only `strategy-rollout/` (ROLL-*) remaining — see `docs/plan/telegram-markdown-migration/README.md`. 0i. [x] **Telegram
 Markdown migration — FMT-3 closed (2026-08-25, SHA `17cbeb6`)** — `docs/plan/telegram-markdown-migration/formatting-rules/tasks.md`, added
 `build_kv_table`/`build_side_by_side_kv_table`/`build_leg_table` + `LegRow` dataclass to `src/notifications/formatting.py`. Reference-implementation correction along the way: FMT-3's spec and
-`formatting-rules/prompt.md` both cite `_kv_table`/`_side_by_side_kv` in `scratch/2026-08-07_ic_eod_audit_telegram_format.py` as working references — that file only has `_leg_table`, `FORMATTING.md`
-§8 already documents the gap (audited 2026-08-25) and points at `build_compare_table` (`scratch/2026-08-07_ic_monthly_comparison_telegram_format.py`) as the nearest real analogue, which is what the
+`formatting-rules/prompt.md` both cite `_kv_table`/`_side_by_side_kv` in `scratch/telegram_formats/2026-08-07_ic_eod_audit_telegram_format.py` as working references — that file only has `_leg_table`, `FORMATTING.md`
+§8 already documents the gap (audited 2026-08-25) and points at `build_compare_table` (`scratch/telegram_formats/2026-08-07_ic_monthly_comparison_telegram_format.py`) as the nearest real analogue, which is what the
 two kv-table builders were designed from instead of a port. All widths computed via `max(len(...))`, never a hand-counted constant, per the `build_comparison_report()` bug class this task exists to
 not repeat. 8 new tests in `tests/unit/notifications/test_formatting.py` (happy path, empty-rows `ValueError`, mismatched-row-count padding, long-label width computation) — verified green in an
 isolated harness (device `.venv` unreachable from the sandbox, same recurring blocker noted throughout this file); full `tests/unit/` gate + commit run by Animesh on his own machine. Also stripped 4
@@ -203,7 +203,7 @@ would go fully silent with Telegram unset in prod — the exact "silent failure"
 in `_compute_overlay_pnl_snapshots`'s `prev_mark_value` denominator, logged separately as **BUG-036** rather than fixed inline. B032.4 (historical backfill of the understated 2026-08-20+ snapshots)
 remains open as a separate follow-up, per the ruling's own stance that it's not a precondition for shipping the live fix. See `DECISIONS.md` 2026-08-24, `docs/bugs/bugs.md` BUG-032/BUG-036. 0f3. [x]
 **BUG-033 close-out (B033.5) — real live re-run confirms end-to-end DTE/delta/premium exit-signal coverage (2026-08-24, closed same day, SHA `ef1c341`)** — after BUG-034 landed (SHA `88df26e`), re-ran
-`scratch/2026-08-24_bug031_manual_exit_review.py` live: 2 open overlay legs (`overlay_cc` `NSE_FO|74391` dte=36, `overlay_collar_put` `NSE_FO|73994` dte=36). `CCOverlayV1` fired a real `PROFIT_TARGET`
+`scratch/diagnostics_db/2026-08-24_bug031_manual_exit_review.py` live: 2 open overlay legs (`overlay_cc` `NSE_FO|74391` dte=36, `overlay_collar_put` `NSE_FO|73994` dte=36). `CCOverlayV1` fired a real `PROFIT_TARGET`
 (ACTION severity, `auto_execute=True`, `auto_action=CLOSE_CC`, mark 23.9 vs. entry credit 86.725) — first real signal the whole BUG-031/033/034 investigation chain has produced, confirming
 `strategy_name` (BUG-031) → DTE-parsing (BUG-033) → leg_role filter (BUG-034) all now resolve correctly together for a live position. No signal on the Collar leg (not DTE-gated at dte=36; Collar's
 roles were never affected by BUG-034 — expected). Also closes BUG-031's B031.4 (general exit-eligibility review) with real DTE coverage, not just delta/premium. **`NSE_FO|74391`'s
@@ -365,7 +365,7 @@ listing a weekly contract every Tuesday makes it unlikely but not impossible) �
     report → 7 strategies' close/roll notifications → approval requests last, coordinated with `docs/plan/full-repo-review-followups/telegram-approval-auth-fix/` — not itself a numbered item on this
     list, already shipped SHA `5cafc3c`). **Supersedes item 14's TGFMT-2..9** — see that item's note. Full real-caller list (confirmed via code graph, not assumed) and design rationale in the epic's
     `README.md`. **2026-08-07 (message-format-workshop session, docs+scratch only, no `backbone`/`formatting-rules` code exists yet):** ROLL-1's confirmed reference is now
-    `scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py` (`paper_ic_nifty_v2_monthly`, real position data, `parse_mode=MarkdownV2`), superseding the earlier v1-strategy/legacy-Markdown prototype
+    `scratch/telegram_formats/2026-08-07_ic_eod_audit_v2_telegram_format.py` (`paper_ic_nifty_v2_monthly`, real position data, `parse_mode=MarkdownV2`), superseding the earlier v1-strategy/legacy-Markdown prototype
     for layout purposes (that file stays as historical context per README). Confirmed layout is a single linear stack of bold summary lines + one fenced leg table — not the side-by-side Snapshot/P&L
     kv-table shape `ROLL-1`'s task text had assumed; task text corrected. Three new findings written into `formatting-rules/stories.md` (FMT-1 table + new **FMT-1b**) and `strategy-rollout/stories.md`
     (ROLL-1): (1) dynamic `pnl_emoji()`/`alert_emoji()` helpers — presence/sign-based, explicitly rejecting an external suggestion to substring-match signal codes for severity (fragile, couples
@@ -381,14 +381,14 @@ listing a weekly contract every Tuesday makes it unlikely but not impossible) �
     (`short_put`/`short_call`/`long_put_hedge`/`long_call_hedge`) confirmed identical via grep against `ic_nifty_v2.py` — so no per-version branching needed. Added **ROLL-0** to
     `strategy-rollout/stories.md`/`tasks.md` (new, unblocked, no `backbone`/`formatting-rules` dependency since it's plain-text data capture, not a parse_mode change) to fix both issues and add a `Net
     Δ`/`Net θ` line to the *current* pre-Markdown report; `ROLL-1`'s spec updated to consume `ROLL-0`'s output (not re-derive it) and to show the honest `incomplete` state in its confirmed-layout
-    example until `ROLL-0` ships. `scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py` gained `compute_net_greek()` (never sums a partial set — returns `None`/"incomplete" if any leg is missing the
+    example until `ROLL-0` ships. `scratch/telegram_formats/2026-08-07_ic_eod_audit_v2_telegram_format.py` gained `compute_net_greek()` (never sums a partial set — returns `None`/"incomplete" if any leg is missing the
     field) and a `full_greeks` synthetic scenario, which demonstrated the real number differs from the naive two-short-legs-only sum (`Net Δ: -0.01`, not `+0.00`) — evidence for why `ROLL-0`'s fix
     matters, not just a cosmetic addition. Still docs+scratch only this session — `ROLL-0` itself is unimplemented. **Same-day follow-up (all IC variants, not just V2 monthly):** confirmed via
     `get_code_snippet` on `_run()` that `process_variant()` is already called once per variant across two loops — `CONFIGS.items()` (V1: `weekly`/`monthly`/`leaps`/`yearly`, real strategy_names
     `paper_ic_nifty_v1_{weekly,monthly,leaps,yearly}` per `src/paper/constants.py`) and `CONFIGS_V2.items()` (V2: `monthly` only — `CONFIGS_V2` is Phase 1-scoped per
     `src/strategy/ic_expiry_config_v2.py`, V2 weekly/leaps/yearly do not exist as runnable strategies). Since `ROLL-0`/`ROLL-1` both edit `process_variant()` itself rather than a per-variant call
     site, every variant gets the new format and Net Δ/θ line automatically — no per-variant task needed, both story specs updated with an explicit "applies to every active variant" note so this
-    doesn't need re-deriving later. `scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py` gained a `VARIANTS` dict (5 entries: V1's four expiries + V2 monthly) + `--variant`/`--list-variants` CLI
+    doesn't need re-deriving later. `scratch/telegram_formats/2026-08-07_ic_eod_audit_v2_telegram_format.py` gained a `VARIANTS` dict (5 entries: V1's four expiries + V2 monthly) + `--variant`/`--list-variants` CLI
     flags to demonstrate `build_message()` is already fully variant-agnostic — confirmed all five render correctly with zero code branching. Also fixed a ruff F821 (`argparse` referenced in a
     return-type annotation but only imported locally inside the function) by moving `import argparse` to the top-level import block. **Same-day follow-up (color-coded headers, alert-fatigue
     differentiation):** an external suggestion proposed distinguishing the 5 IC EOD audit variants via color-coded headers — critiqued and revised before adopting: rejected `**bold**` (legacy GFM
@@ -398,9 +398,9 @@ listing a weekly contract every Tuesday makes it unlikely but not impossible) �
     confirmed against `ICExpiryConfig`'s real presets), version rides as a separate `\(V2\)`-style text badge (V1 unbadged), hashtag (`#IC_{Timeframe}_{Version}`) sits unwrapped on the title line for
     tap-to-filter, and the existing `` `strategy_id` `` code-span line is kept separate for exact-string copy/audit. **Hashtag auto-detection confirmed working live on-device** by Animesh — the one
     previously-flagged unverified assumption. Documented as new **FMT-1c** in `formatting-rules/stories.md` (added to `tasks.md`, which was also missing FMT-1b — backfilled that omission too) and
-    cross-referenced into `ROLL-1`'s confirmed layout/tests in `strategy-rollout/stories.md`/`tasks.md`. `scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py` gained `build_header()` +
+    cross-referenced into `ROLL-1`'s confirmed layout/tests in `strategy-rollout/stories.md`/`tasks.md`. `scratch/telegram_formats/2026-08-07_ic_eod_audit_v2_telegram_format.py` gained `build_header()` +
     `_TIMEFRAME_META`/`VARIANT_META`, verified rendering correctly for all 5 variants. Still docs+scratch only — FMT-1c/ROLL-1 themselves remain unimplemented in `src/`/`scripts/`. **Same-day
-    follow-up (ROLL-2, IC Monthly Comparison):** built and confirmed a new scratch reference (`scratch/2026-08-07_ic_monthly_comparison_telegram_format.py`) using real V1/V2 data the user supplied,
+    follow-up (ROLL-2, IC Monthly Comparison):** built and confirmed a new scratch reference (`scratch/telegram_formats/2026-08-07_ic_monthly_comparison_telegram_format.py`) using real V1/V2 data the user supplied,
     deliberately NOT copying two fields (Bkd P&L (I), Flt P&L (M)) or the Legs row from a separately-sourced mockup whose own numbers didn't match the real data (different DTE, Captured%, Edge) —
     rendered as `N/A`/omitted rather than fabricated. Investigated all three against the real code (not assumed): Legs row is free — `build_stats()` already computes `open_pos` on its first line, just
     needs `len(open_pos)` threaded through. Bkd P&L (I) is also already available via `src/paper/tracker.py::get_strategy_realized_pnl()` — but ROLL-2's existing story text had this WRONG, pointing at
@@ -412,14 +412,14 @@ listing a weekly contract every Tuesday makes it unlikely but not impossible) �
     stale claim that this task still needs to fix the hand-counted-width bug — TGFMT-1 already shipped that fix). Still docs+scratch only — ROLL-2 itself remains unimplemented. **Same-day follow-up
     (Expiry row, IC EOD audit):** confirmed `process_variant()` already resolves the real `expiry` date object (via the BOD instrument lookup) purely to compute `dte` and then discards it without ever
     printing it — zero new data fetch needed. Added `*Expiry:* 25 Aug 26 | *DTE:* 18 | *Nifty:* 24,571` as the header's second data line (confirmed with Animesh), `*IVR:*` moved onto the Net Δ/θ line
-    rather than dropped. New `format_expiry()` (`strftime("%d %b %y").lstrip("0")`, portable no-leading-zero day) added to `scratch/2026-08-07_ic_eod_audit_v2_telegram_format.py` and to
+    rather than dropped. New `format_expiry()` (`strftime("%d %b %y").lstrip("0")`, portable no-leading-zero day) added to `scratch/telegram_formats/2026-08-07_ic_eod_audit_v2_telegram_format.py` and to
     `formatting-rules/stories.md`'s FMT-1 table. `strategy-rollout/stories.md`'s ROLL-1 confirmed layout updated to match, with an explicit warning that the real implementation must print the
     already-resolved `expiry` directly and never reconstruct it from DTE (the scratch script's own data fixture does exactly that, but only because it has no live BOD lookup to call — that shortcut
     doesn't carry over to the real port). Still docs+scratch only. **Same-day follow-up (2026-08-08, EOD Paper Summary):** new **2026-08-08 follow-up (Cowork session,
     missing-message-workshop-prompt.md, message #1 of TODO.md's queue):** ran `TODO.md` item 1 (re-entry blocked/allowed notice, `ReEntryMixin._check_reentry`, `src/strategy/reentry_mixin.py:189-210`)
     through the format workshop. Reading the real method in full surfaced a second branch (ELIGIBLE, not just the BLOCKED half TODO.md's line named) sharing the same code path — both covered. Initial
     single-packed-line draft was superseded by a kv-line counter-proposal from Animesh (`RE-ENTRY BLOCKED: <label>` / `Leg: <label>` / `Reason: <short> (<detail>)`), confirmed and written back —
-    reference `scratch/2026-08-08_reentry_notice_format.py`. Two real scope items surfaced beyond plain escaping, both flagged explicitly in the new ROLL-7 spec rather than silently implemented: (1) a
+    reference `scratch/telegram_formats/2026-08-08_reentry_notice_format.py`. Two real scope items surfaced beyond plain escaping, both flagged explicitly in the new ROLL-7 spec rather than silently implemented: (1) a
     new `STRATEGY_LABELS` display-name table (separate from ROLL-6's `_DISPLAY_NAME` table, which is sized for a narrow summary-table column, not a standalone headline); (2) `_check_reentry`'s three
     gates must be refactored to return structured `(short_reason, detail)` pairs instead of one free-text `blocked_reason` string, since string-splitting the existing prose at render time would be
     brittle — real production-logic scope, in bounds for `strategy-rollout/` (allowed to reword) not `backbone/` (escaping-only). Added **ROLL-7** to `strategy-rollout/stories.md`/`tasks.md`
@@ -427,18 +427,18 @@ listing a weekly contract every Tuesday makes it unlikely but not impossible) �
     ROLL-7 itself remains unimplemented; `backbone/MD-1` still has not shipped, confirmed fresh this session via `search_graph("mdcode")` returning zero. **Same-day-class follow-up (2026-08-11,
     missing-message-workshop-prompt.md, TODO.md item 9 — Daily Portfolio Snapshot Summary):** ran the queue's next item (`src/portfolio/formatting._format_combined_summary`,
     `scripts/portfolio/daily_snapshot.py:739`, plus the separately-appended `format_options_section` from `src/dhan/positions.py:287`) through the workshop. Drafted and iterated a kv-line +
-    dash-hierarchy redesign (`scratch/2026-08-11_daily_snapshot_summary_format.py`) after confirming live, via a real send round-trip run directly on Animesh's machine (this Cowork session's own
+    dash-hierarchy redesign (`scratch/telegram_formats/2026-08-11_daily_snapshot_summary_format.py`) after confirming live, via a real send round-trip run directly on Animesh's machine (this Cowork session's own
     network egress to `api.telegram.org` is blocked and its linked device's `.venv` is a broken Mac-only symlink — neither side could send), that the current box-drawing/tree-character layout and
     2-space indentation both break under MarkdownV2 (leading whitespace stripped, flattening the Equity/Bonds hierarchy). A second, more compact alternative format was proposed and reviewed — rejected
     for reintroducing the Derivatives day-delta-vs-cumulative ambiguity and replacing the Hedge block's real MF Δ/Hedge Δ numbers with an unverifiable verdict. **Decision: keep the current format
     as-is for now — no `ROLL-N` created.** TODO.md item 9 ticked with the decision recorded inline; the scratch script stays as a reference draft only, not adopted.
-    `scratch/2026-08-08_eod_paper_summary_format.py` built and confirmed on-device (`message-format-workshop.md` session) for `scripts/eod_summary.py`'s daily message — which was **missing from the
+    `scratch/telegram_formats/2026-08-08_eod_paper_summary_format.py` built and confirmed on-device (`message-format-workshop.md` session) for `scripts/eod_summary.py`'s daily message — which was **missing from the
     epic's original confirmed-callers list** (`README.md`, addendum added this session) since it currently sends via raw HTML `parse_mode`, bypassing `TelegramNotifier.send()` entirely, so
     `backbone/`'s original audit never covered it. Confirmed format: `Flt`/`Bkd` column headers (reusing ROLL-2's vocabulary), human-readable strategy labels (`IC V1 Leap`, `IC V1 Mth`, etc. — `Mth` =
     monthly), a new `#EOD_SUMMARY` whole-message header hashtag (not per-strategy, since this message aggregates all 8 strategies unlike the single-strategy IC EOD Audit), and a new money-in-table
     exception (signed integer, no `₹` per-cell, `₹` only on the Total P&L line) — recorded as new **FMT-1d** in `formatting-rules/stories.md`. New **ROLL-6** added to
     `strategy-rollout/stories.md`/`tasks.md` (blocked by `backbone/`+`formatting-rules/`, same soft-dep pattern as other ROLL tasks); `ROLL-5` Docs Close now also blocked by `ROLL-6`. Still
-    docs+scratch only — no `src/`/`scripts/` code touched this session. **Same-day follow-up (2026-08-08, EOD Paper Summary v2 — final):** `scratch/2026-08-08_eod_paper_summary_format.py` revised
+    docs+scratch only — no `src/`/`scripts/` code touched this session. **Same-day follow-up (2026-08-08, EOD Paper Summary v2 — final):** `scratch/telegram_formats/2026-08-08_eod_paper_summary_format.py` revised
     through several more rounds and confirmed final on-device. Grew from 8 to 12 strategies, grouped into 4 buckets (Track: Fut/ Proxy/Spot; IC: 5 variants; Overlay: Collar/CC/PP; CSP: 1) — real
     strategy_id/bucket mapping confirmed via `src/paper/constants.py` and `src/strategy/ic_expiry_config_v2.py`, not assumed. Each bucket's subtotal now renders ABOVE its member rows (`"> BUCKET
     TOTAL"`) rather than below — a deliberate scan-speed trade-off for this specific daily-glance message, confirmed with Animesh, not a pattern to assume elsewhere in the epic. Member row labels
@@ -456,7 +456,7 @@ listing a weekly contract every Tuesday makes it unlikely but not impossible) �
 ### 2026-08-26 Session Log
 - **ROLL-2 design review (docs-only, no code) — split into ROLL-2a/2b/2c.** Verified the spec's claims against current code via `search_graph`/`get_code_snippet` instead of trusting the spec text; two
   held, four problems surfaced. Held: `get_strategy_realized_pnl(store, strategy_name) -> Decimal` unchanged and still sums `paper_trades` via `_compute_realized_pnl`; `build_stats()` still computes
-  `open_pos` as its first line (Legs row really is zero new queries). Problems: (1) `build_compare_table` exists **only** in `scratch/2026-08-07_ic_monthly_comparison_telegram_format.py` — FMT-3 used
+  `open_pos` as its first line (Legs row really is zero new queries). Problems: (1) `build_compare_table` exists **only** in `scratch/telegram_formats/2026-08-07_ic_monthly_comparison_telegram_format.py` — FMT-3 used
   it as a design reference and never promoted it, so ROLL-2 as scoped hid a `formatting.py` addition inside a rollout port commit, the exact shape that forced ROLL-1's split -> **ROLL-2a**. (2)
   `FORMATTING.md` §7/FMT-1e was tightened 2026-08-25, *after* ROLL-2's 2026-08-07 layout was confirmed: `₹` U+20B9 inside a fence is marked **unverified** and the new Legs row's `🔴` suffix inside the
   fence has no on-device confirmation at all — made a **blocking pre-check on ROLL-2a for Animesh** (one live `--send`, then update §7's table), because if either glyph is double-width then
@@ -517,7 +517,7 @@ listing a weekly contract every Tuesday makes it unlikely but not impossible) �
   **Not yet done**: B037.5 (re-run `scripts/dev/backfill_mark_trade_closed_overlay.py` against the live DB — already covers all 54 rows found) and B037.6 (mandatory real `@code-reviewer` pass — this
   session is Cowork and cannot spawn `.claude/agents/code-reviewer.md`; the commit landed without that gate clearing, so a review from Claude Code against this commit's diff is still owed). See
   `docs/bugs/bugs.md` BUG-037.
-- **BUG-037 B037.5**: re-verified the live DB via a new read-only diagnostic script, `scratch/2026-08-24_check_stale_flat_legs.py` — 0 stale flat legs found (134 total trade rows), confirmed identical
+- **BUG-037 B037.5**: re-verified the live DB via a new read-only diagnostic script, `scratch/diagnostics_db/2026-08-24_check_stale_flat_legs.py` — 0 stale flat legs found (134 total trade rows), confirmed identical
   on the live host directly by Animesh, not just through the device bridge. Root cause: Animesh ran `backfill_mark_trade_closed_overlay.py` for real (without `--dry-run`) after B037.3 landed, clearing
   all 54 rows found at discovery. B037.5 marked done.
 
@@ -568,9 +568,9 @@ listing a weekly contract every Tuesday makes it unlikely but not impossible) �
   the real constant (surfaced 3 real `test_describe_context` regressions, fixed). 2 new end-to-end `StrategyMonitor` tests. 262 tests green. `general-purpose` + `REVIEW.md` substitute review: clean.
   **Verification gotcha worth remembering**: the first test pass looked green but was run before the edits were committed to the device — `device_bash` runs against the real on-device files, not the
   cloud sandbox's staged copy, so that first "121 passed" was silently testing the unmodified pre-fix code. Always commit to device before trusting a `device_bash` test run.
-- **BUG-031 B031.4/B031.6 closed**: live run of `scratch/2026-08-24_bug031_manual_exit_review.py` found 5 open overlay legs (3 `overlay_pp`, 1 `overlay_cc`, 1 `overlay_collar_put` — not the 2
+- **BUG-031 B031.4/B031.6 closed**: live run of `scratch/diagnostics_db/2026-08-24_bug031_manual_exit_review.py` found 5 open overlay legs (3 `overlay_pp`, 1 `overlay_cc`, 1 `overlay_collar_put` — not the 2
   originally scoped), zero delta/premium signals fired. DTE coverage blocked by two new bugs found mid-review (below). Animesh's call on the time-sensitive piece: close all 3 `overlay_pp` legs by hand
-  (`scratch/2026-08-24_close_all_pp_legs.py --execute`) rather than wait on the DTE fix — confirmed 0 open `overlay_pp` positions afterward. BUG-031 fully closed, section moved to
+  (`scratch/diagnostics_db/2026-08-24_close_all_pp_legs.py --execute`) rather than wait on the DTE fix — confirmed 0 open `overlay_pp` positions afterward. BUG-031 fully closed, section moved to
   `docs/archive/bugs/{bugs,task}.md`.
 - **BUG-033 filed** (not fixed): `_parse_expiry` in all three overlay classes is regex-only, never resolves real numeric Upstox instrument keys (`NSE_FO|61604` etc.) — same bug class as the
   already-fixed `_open_pp_dte`/`paper_3track_overlay_entry.py` gap (2026-08-13/08-20), never swept into these three files. Result: every DTE-gated signal (`ROLL_ELIGIBLE`/`DTE_REVIEW`) has been dead
@@ -662,7 +662,7 @@ listing a weekly contract every Tuesday makes it unlikely but not impossible) �
   stay byte-identical for a future shared-builder follow-up. No new elimination trail (pure reuse of an already on-device- confirmed format). **Could not complete a live `--send` round-trip this
   session** — this Cowork sandbox's mounted `.venv` has broken symlinks pointing at the host Mac's absolute paths, unusable inside the sandboxed device-bash VM (`ModuleNotFoundError: No module named
   'aiohttp'` when falling back to system Python); confirmed print-only output is byte-identical to `ROLL-10`'s confirmed block instead, same class of limitation `ROLL-11`/`ROLL-12` hit. Reference
-  `scratch/2026-08-11_3track_proxy_delta_critical_alert_format.py`. Added **ROLL-16** to `strategy-rollout/stories.md`/`tasks.md` (unblocked by `backbone/`+`formatting-rules/`, same soft deps as other
+  `scratch/telegram_formats/2026-08-11_3track_proxy_delta_critical_alert_format.py`. Added **ROLL-16** to `strategy-rollout/stories.md`/`tasks.md` (unblocked by `backbone/`+`formatting-rules/`, same soft deps as other
   ROLL tasks; soft-sequenced after `ROLL-10` for the shared-builder follow-up); `ROLL-5`'s docs-close blocked-by list updated to include it. Ticked TODO.md item 10, SHA `ba81291`. Docs+scratch only —
   `ROLL-16` itself remains unimplemented; `backbone/MD-1` still has not shipped, confirmed fresh this session via `search_graph("mdcode")`/ `search_graph("escape_markdown")`, both returning only
   `scratch/`-file hits.
@@ -693,7 +693,7 @@ listing a weekly contract every Tuesday makes it unlikely but not impossible) �
 ### 2026-08-11 Session Log (missing-message-workshop, queue item 8 — confirmed, closed out)
 - **Telegram Markdown migration** (item 29): follow-up to the same-day draft session below. Animesh confirmed the leg-direction open question directly (`base_futures`/`base_ditm_call` never go short
   by strategy design) — the `is_short` check in the real source is copy-reused entry-price logic shared with genuinely short-capable legs elsewhere in the file (`overlay_cc`/`overlay_collar_call`),
-  not evidence this leg can be short. Verb hardcoded `Long` in `scratch/2026-08-11_3track_settlement_roll_format.py`'s v2 (commands dropped entirely from `build_message()`, kept only in `SCENARIOS` as
+  not evidence this leg can be short. Verb hardcoded `Long` in `scratch/telegram_formats/2026-08-11_3track_settlement_roll_format.py`'s v2 (commands dropped entirely from `build_message()`, kept only in `SCENARIOS` as
   future log-emit test fixtures). Noted a non-blocking residual gap for a future `docs/bugs/bugs.md` entry: nothing in `paper_3track_snapshot.py:380-383` actually guards against a negative `net_qty`
   reaching this branch, so the "never short" assumption is a strategy-design fact, not a code invariant. Animesh ran both scenarios (`base_futures_expiring`, `base_ditm_call_expiring_stale_bod`) live
   via `--send` in his own terminal (this session's sandbox couldn't — `device_bash` has no network access and the local `.venv` is built against `/opt/anaconda3/bin/python3.12`, not present in the
@@ -704,7 +704,7 @@ listing a weekly contract every Tuesday makes it unlikely but not impossible) �
 ### 2026-08-11 Session Log (missing-message-workshop, queue item 8 — draft only, not confirmed)
 - **Telegram Markdown migration** (item 29): ran `TODO.md` queue item 8 (three-track base position expiry alert, `scripts/strategies/three_track/paper_3track_snapshot.py:487-501`) through
   `message-format-workshop.md`. Confirmed the real source directly (TODO.md's grep excerpt pointed at the wrong line range — the `if notifier:` block, not the `msg = (...)` build). Built an initial
-  scratch script (`scratch/2026-08-11_3track_settlement_roll_format.py`) keeping the original's two-code-block shape MarkdownV2-safe. Animesh then reviewed a hand-drafted alternative that dropped the
+  scratch script (`scratch/telegram_formats/2026-08-11_3track_settlement_roll_format.py`) keeping the original's two-code-block shape MarkdownV2-safe. Animesh then reviewed a hand-drafted alternative that dropped the
   shell commands entirely in favor of a compact summary — flagged three concerns before treating it as confirmed (commands disappearing isn't a formatting change, "Next Contract" placeholder text
   discards a real resolved value when available, source of the draft unclear) and asked whether commands should move elsewhere rather than vanish. Animesh's follow-up: keep a Telegram summary, move
   the commands to a structured log line instead — a genuine behavior change, not pure formatting, first of its kind in this epic. Opened **ROLL-15** in `strategy-rollout/stories.md`/ `tasks.md` as an
@@ -759,7 +759,7 @@ listing a weekly contract every Tuesday makes it unlikely but not impossible) �
   spirit from the original source — `GateViolation.threshold`/`.actual` are already pre-formatted `str` fields (confirmed via `get_code_snippet` on `src/paper/models.py::GateViolation`), so no numeric
   formatting work needed there, just escaping. Applied `ROLL-13`'s two live-caught escaping lessons (static `=` needs explicit `\=`, em dash must NOT be escaped) proactively this time via the same
   reserved-char sweep script, verified clean across all four scenarios before any `--send` — no live escaping bugs this round, unlike 7a's two-round correction. Reference
-  `scratch/2026-08-11_3track_overlay_entry_format.py` (4 scenarios: `pp_bootstrap`, `cc_bootstrap`, `collar_bootstrap`, `cc_bootstrap_gate_logged`). Added **ROLL-14** to
+  `scratch/telegram_formats/2026-08-11_3track_overlay_entry_format.py` (4 scenarios: `pp_bootstrap`, `cc_bootstrap`, `collar_bootstrap`, `cc_bootstrap_gate_logged`). Added **ROLL-14** to
   `strategy-rollout/stories.md`/`tasks.md`. TODO.md item 7 now fully closed (both 7a and 7b ticked). Docs commit pending — same `.git/HEAD.lock` sandbox caveat as 7a, Animesh committing locally.
 
 ### 2026-08-11 Session Log (missing-message-workshop, queue item 7a)
@@ -776,7 +776,7 @@ listing a weekly contract every Tuesday makes it unlikely but not impossible) �
   only) — an unescaped `\` before it doesn't error, it silently renders as a literal backslash, so this class of bug survives a failed-send check and only a reserved-char-string sweep catches it. Both
   fixed and verified with a standalone Python reserved-char sweep (every backslash precedes a reserved char, every reserved char outside a code span is preceded by one) before each re-send. A third,
   non- escaping miss also surfaced live: v2's first pass put the 📥 emoji on the headline only, dropping it from the three leg lines — Animesh's actual counter-proposal used it as a per-line marker;
-  caught after Animesh flagged the rendered message and fixed as v2.1. Reference `scratch/2026-08-11_3track_base_entry_format.py` (3 scenarios: `all_three`, `futures_only`, `proxy_only`). Added
+  caught after Animesh flagged the rendered message and fixed as v2.1. Reference `scratch/telegram_formats/2026-08-11_3track_base_entry_format.py` (3 scenarios: `all_three`, `futures_only`, `proxy_only`). Added
   **ROLL-13** to `strategy-rollout/stories.md`/`tasks.md`; added a regression-test addendum to `backbone/stories.md` MD-1 for the two escaping bugs. Docs + scratch script committed `4e19c64`
   (`--no-verify`, sandbox pre-commit-hook-unavailable caveat per `missing-message-workshop-prompt.md`).
 
@@ -827,7 +827,7 @@ listing a weekly contract every Tuesday makes it unlikely but not impossible) �
   action/remediation-state field exists anywhere upstream of this alert (`ProxyDeltaMonitor`/`TrackSnapshot` compute no such value), rendering one would have fabricated data. `Rule Breach:` ships the
   `proxy_delta_alert` string verbatim rather than split into threshold/day-count sub-fields — those aren't separately available at this call site today, only pre-baked into one string; splitting it
   needs a real `TrackSnapshot`/`generate_track_snapshot` data-plumbing addition (`consecutive_days`), deferred to `ROLL-10`'s real implementation per Animesh, not done in this format-only session.
-  Reference `scratch/2026-08-10_proxy_delta_critical_alert_format.py` (3 scenarios). Added **ROLL-10** to `strategy-rollout/stories.md`/`tasks.md` (unblocked by `backbone/`+`formatting-rules/`, same
+  Reference `scratch/telegram_formats/2026-08-10_proxy_delta_critical_alert_format.py` (3 scenarios). Added **ROLL-10** to `strategy-rollout/stories.md`/`tasks.md` (unblocked by `backbone/`+`formatting-rules/`, same
   soft deps as other ROLL tasks); `ROLL-5`'s docs-close blocked-by list updated to include it. Ticked TODO.md item 4, added TODO.md item 10 for the production-duplicate gap. Still docs+scratch only —
   `ROLL-10` itself remains unimplemented; `backbone/MD-1` still has not shipped, confirmed fresh this session via `search_graph("mdcode")`/`search_graph("escape_markdown")` both returning zero
   results.
@@ -840,7 +840,7 @@ listing a weekly contract every Tuesday makes it unlikely but not impossible) �
   on-device rendering before real implementation starts. Flagged real scope in the write-back: the confirmed v2 format needs `run_checks()` refactored to return structured `CheckResult` objects
   (label/severity/ status_word/detail) instead of today's pre-formatted `list[str]` — re-parsing the existing strings back into parts would repeat the brittle string-split pattern already rejected for
   `ROLL-7`'s `blocked_reason`. Overall status word stays a single fixed `DEGRADED` for any `has_issue=True` state (no distinct DOWN/CRITICAL tier — not part of what was confirmed). Reference
-  `scratch/2026-08-10_healthcheck_alert_format.py` (4 scenarios: `single_issue`, `multi_issue`, `db_down`, `exception_text`). Added **ROLL-11** to `strategy-rollout/stories.md`/`tasks.md` (unblocked
+  `scratch/telegram_formats/2026-08-10_healthcheck_alert_format.py` (4 scenarios: `single_issue`, `multi_issue`, `db_down`, `exception_text`). Added **ROLL-11** to `strategy-rollout/stories.md`/`tasks.md` (unblocked
   by `backbone/`+`formatting-rules/`, same soft deps as other ROLL tasks); `ROLL-5`'s docs-close blocked-by list updated to include it. Ticked TODO.md item 5. Still docs+scratch only — `ROLL-11`
   itself remains unimplemented; `backbone/MD-1` still has not shipped, confirmed fresh this session via `search_graph("mdcode")`/`search_graph("escape_markdown")` both returning zero results.
 
@@ -856,7 +856,7 @@ listing a weekly contract every Tuesday makes it unlikely but not impossible) �
   write-back: `run_position_checks()` needs refactoring to return structured `PositionFinding` objects (same class of change ROLL-11 needed for `run_checks()`); `UNMAPPED ASSET` findings structurally
   can't get a resolved label (no `inst` by construction — the lookup failure is exactly why the finding fired) — this is a permanent asymmetry vs. `ROLLS OVERDUE` rows, not a formatting gap to close
   later. Confirmed on rendered-source review only — this Cowork sandbox has no working venv/aiohttp (same limitation ROLL-9/ROLL-10/ROLL-11 hit); Animesh is running it locally to verify on-device
-  rendering before real implementation starts. Reference `scratch/2026-08-10_position_health_alert_format.py` (5 scenarios: `roll_overdue_only`, `unresolved_only`, `mixed`, `single_finding`,
+  rendering before real implementation starts. Reference `scratch/telegram_formats/2026-08-10_position_health_alert_format.py` (5 scenarios: `roll_overdue_only`, `unresolved_only`, `mixed`, `single_finding`,
   `roll_overdue_futures` — the last one surfaced a real gap, `format_option_label()` prints a meaningless strike for FUT legs, special-cased in `_resolved_label()` rather than passed through). Added
   **ROLL-12** to `strategy-rollout/stories.md`/`tasks.md` (unblocked by `backbone/`+`formatting-rules/`, same soft deps as other ROLL tasks); `ROLL-5`'s docs-close blocked-by list updated to include
   it. Ticked TODO.md item 6. Still docs+scratch only — `ROLL-12` itself remains unimplemented; `backbone/MD-1` still has not shipped, confirmed fresh this session via
@@ -878,7 +878,7 @@ listing a weekly contract every Tuesday makes it unlikely but not impossible) �
   line (`pnl = (close_price - pos.avg_cost) * abs(pos.net_qty)` — confirmed `avg_cost` not `avg_sell_price`, both leg roles are long positions) and month labels derived from data already resolved
   elsewhere in `_run()` (`expiry_date`/`next_inst["expiry"]`), not a new fetch. One DITM gate-reason ask ("Wide Bid/Ask" parenthetical) was explicitly scoped out — `check_ditm_liquidity_gate`
   collapses two independent checks into one bool today, and splitting them is real gate-logic scope, not a formatting change; confirmed deferred with Animesh rather than faked. Reference
-  `scratch/2026-08-10_3track_roll_notification_format.py` (7 scenarios). Added **ROLL-9** to `strategy-rollout/stories.md`/`tasks.md` (unblocked by `backbone/`+`formatting-rules/`, same soft deps as
+  `scratch/telegram_formats/2026-08-10_3track_roll_notification_format.py` (7 scenarios). Added **ROLL-9** to `strategy-rollout/stories.md`/`tasks.md` (unblocked by `backbone/`+`formatting-rules/`, same soft deps as
   other ROLL tasks); `ROLL-5`'s docs-close blocked-by list updated to include it. Added **FMT-1f** to `formatting-rules/stories.md` (signed-money override for the P&L line, plus the
   Contango/Backwardation vs. Debit/Credit label-pair distinction — the two spread labels are NOT interchangeable, confirmed correction mid-session after an initial assumption that futures-curve
   terminology would generalize to options). Ticked TODO.md item 3. Still docs+scratch only — ROLL-9 itself remains unimplemented; `backbone/MD-1` still has not shipped, confirmed fresh this session
@@ -894,7 +894,7 @@ listing a weekly contract every Tuesday makes it unlikely but not impossible) �
   `send_approval_request`, INFO just logs) — a fixed `⚠️` is the accurate signal, not a compromise, and reuses `FMT-1b`'s already-settled objection to selecting emoji by string-matching the signal
   code. What WAS free and used: `event_type.replace("_", " ")` (mechanical reformat of the real identifier, not an invented label) and a `Leg:` line sourced from `event.payload.get("leg_role", "")`,
   which `_route_event` already reads for its WARN dedup key — both real, no upstream refactor needed. Kept ROLL-7's fuller-form `STRATEGY_LABELS`/`LEG_ROLE_LABELS` tables (not ROLL-6's abbreviated
-  table-column form), confirmed explicitly. Reference `scratch/2026-08-08_strategy_event_alert_format.py` (v2). `strategy-rollout/stories.md`'s ROLL-8 section rewritten with the v2 structure, the
+  table-column form), confirmed explicitly. Reference `scratch/telegram_formats/2026-08-08_strategy_event_alert_format.py` (v2). `strategy-rollout/stories.md`'s ROLL-8 section rewritten with the v2 structure, the
   v1->v2 rationale, and revised tests (dropped the `mdcode()`-escaping test since v1's `Event:` line no longer exists; added headline-humanization and fixed-severity-emoji regression tests). `TODO.md`
   item 2's SHA updated to the v2 write-back. No new FMT-1 rule surfaced. Docs+scratch only — `backbone/MD-1` still not shipped (confirmed fresh via
   `search_graph("mdcode")`/`search_graph("escape_markdown")`, both zero). SHA `ec008ba`.
@@ -917,7 +917,7 @@ listing a weekly contract every Tuesday makes it unlikely but not impossible) �
   `paper_snapshot.py` batches every strategy in `paper_trades` identically. Initial write-up wrongly attributed CC/PP/Collar's empty tables to "pre-bootstrap" (stale `CONTEXT.md` text) — corrected
   same session after operator pushback: those crons are live (`logs/cron.log`) but every invocation has crashed at the IVR gate since ≥2026-08-04 (`'str' object has no attribute 'glob'`,
   `settings.vix_data_dir` typed `str` not `Path`), silently caught, no Telegram alert. Filed as **BUG-026** (`docs/bugs/bugs.md`), not fixed (out of this read-only task's scope). Cross-checked
-  independently on the operator's own host via `scratch/2026-08-07_overlay_snap3_cross_check.py` (output `logs/snap3.log`) — ruled out a stale-mount explanation before concluding it was a real bug.
+  independently on the operator's own host via `scratch/diagnostics_db/2026-08-07_overlay_snap3_cross_check.py` (output `logs/snap3.log`) — ruled out a stale-mount explanation before concluding it was a real bug.
   See `stories.md` SNAP-3 findings + correction.
 - **SNAP-4** (`docs/archive/plan/paper-ic-daily-snapshot/tasks.md`): new `scripts/reporting/paper_pnl_report.py`
   + `build_pnl_report()` — daily P&L graph data, realized-since-inception (summed from `paper_trades` via `get_strategy_realized_pnl()`, immune to the cycle-reset trap SNAP-1 flagged),
@@ -961,7 +961,7 @@ listing a weekly contract every Tuesday makes it unlikely but not impossible) �
 - **GF-1 partial (`greeks-bs-fallback`)**: audit-only, no code change. Confirmed monthly bucket (2026-08-25 expiry) has no zero-Greeks defect — clean, smoothly-varying deltas, same degenerate-
   pinned-delta pattern on illiquid strikes as quarterly (not a monthly-specific issue). Re-confirmed yearly's zero-Greeks defect persists 3+ weeks after first discovery (2026-07-22), plus a new
   observation: yearly's raw strike count is unstable run-to-run (41 vs 42 strikes, same day, ~1hr apart). Validated via row-level cross-check: a fresh live diagnostic pull
-  (`scratch/2026-07-22_ic_yearly_full_chain_dump.py`) matched the 5-min intraday cron's stored Parquet snapshot exactly on strike/ltp/oi/iv for both monthly and quarterly — confirms
+  (`scratch/ic_repro/2026-07-22_ic_yearly_full_chain_dump.py`) matched the 5-min intraday cron's stored Parquet snapshot exactly on strike/ltp/oi/iv for both monthly and quarterly — confirms
   `parse_upstox_option_chain`/`ChainWriter` are not introducing any of the zero-Greeks behavior. Weekly still unaudited — not in either chain script's `_PREFERENCE` list. Findings appended to
   `docs/plan/greeks-bs-fallback/stories.md` GF-1 section; `docs/plan/README.md` row updated. Per Animesh: use both monthly and quarterly as GF-5's validation ground truth (not quarterly alone as
   originally recorded).
@@ -1215,7 +1215,7 @@ listing a weekly contract every Tuesday makes it unlikely but not impossible) �
 - 2026-08-25: FMT-2 (formatting-rules) — Added `src/notifications/formatting.py` value formatters (`format_money`, `format_greek`, `format_strike`, `format_pct`) and matching test suite in
   `tests/unit/notifications/test_formatting.py`. Implemented exact specs for each (e.g. `format_money` requires `Decimal` and rejects `float`). Ran full `pytest tests/unit/` suite (2926 passed, 2
   skipped). Updated `CONTEXT.md` module tree and ticked FMT-2 checklist.
-- 2026-08-26: ROLL-2a (strategy-rollout) — promoted `build_compare_table` from `scratch/2026-08-07_ic_monthly_comparison_telegram_format.py` into `src/notifications/formatting.py`, using display-width
+- 2026-08-26: ROLL-2a (strategy-rollout) — promoted `build_compare_table` from `scratch/telegram_formats/2026-08-07_ic_monthly_comparison_telegram_format.py` into `src/notifications/formatting.py`, using display-width
   column sizing (`_char_display_width`/`_display_width`/`_pad_display`) instead of `len()`. Blocking pre-check resolved first: a live `--send` via the scratch script (patched with a fabricated `3/4 🔴`
   Legs row for this check only) confirmed `₹` U+20B9 renders single-width inside a fence (safe) while `🔴` U+1F534 renders double-width and breaks alignment, same failure class as `▶` — FORMATTING.md
   §7 updated with both results. `_char_display_width` treats ASCII plus the confirmed-narrow set (`Δ`, `₹`) as width 1 and everything else as width 2 by default (fail-safe, no exception by analogy). 7

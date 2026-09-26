@@ -30,7 +30,7 @@
 
 This workshop covers one message at a time. Ask (unless already given in the prompt that started the session):
 
-- **Which message?** Name it against `strategy-rollout/tasks.md`'s list (ROLL-1 IC audit [done — reference: `scratch/2026-08-07_ic_eod_audit_telegram_format.py`], ROLL-2 comparison report, ROLL-3 the
+- **Which message?** Name it against `strategy-rollout/tasks.md`'s list (ROLL-1 IC audit [done — reference: `scratch/telegram_formats/2026-08-07_ic_eod_audit_telegram_format.py`], ROLL-2 comparison report, ROLL-3 the
   7 strategy close/roll notifications, ROLL-4 approval requests) if it matches one of those. If it's a message not on that list, that's fine — note it as a new task to add to
   `strategy-rollout/tasks.md` at the end of this workshop, don't block on it not having a pre-assigned slot.
 - **Current ("from") message**, if one exists — paste the actual current rendered text/format, or point at the source function (`get_code_snippet`/`search_graph` it, don't guess).
@@ -41,7 +41,7 @@ This workshop covers one message at a time. Ask (unless already given in the pro
 ## Build the scratch script
 
 - Path: `scratch/YYYY-MM-DD_<message-name>_format.py` (today's date, kebab-case name matching the message — e.g. `2026-08-08_ic_comparison_report_format.py`).
-- Structure: mirror `scratch/2026-08-07_ic_eod_audit_telegram_format.py` — sample data dict, `build_message(d)` pure function, a `main()` that prints then sends via real Telegram credentials from
+- Structure: mirror `scratch/telegram_formats/2026-08-07_ic_eod_audit_telegram_format.py` — sample data dict, `build_message(d)` pure function, a `main()` that prints then sends via real Telegram credentials from
   `src.config.settings`, non-fatal error handling that surfaces Telegram's actual `description` field on a 400 (don't let `raise_for_status()` swallow it — that exact mistake cost a full debugging
   round-trip in the IC EOD session).
 - `parse_mode="MarkdownV2"` per the backbone decision — not legacy `Markdown`, not HTML.

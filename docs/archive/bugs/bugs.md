@@ -1138,7 +1138,7 @@ ERROR: auto-CC bootstrap failed. Check logs.
 and returns `None` (or `(None, None)` for PP) — the crash never propagates, so the cron job "succeeds" (exit path is a clean early return, not an unhandled exception) and produces no Telegram alert.
 This is why `paper_trades`/`paper_nav_snapshots`/`paper_leg_snapshots`/`paper_overlay_pnl_snapshots` all show zero rows for `paper_nifty_overlay` and every overlay `leg_role` (`overlay_cc`,
 `overlay_pp`, `overlay_collar_call`, `overlay_collar_put`) — confirmed independently against the live DB by both Cowork's mounted copy and a direct run on the operator's host
-(`scratch/2026-08-07_overlay_snap3_cross_check.py`).
+(`scratch/diagnostics_db/2026-08-07_overlay_snap3_cross_check.py`).
 
 **Root cause:** `Settings.vix_data_dir: str = Field(default="data/historical/ohlc/india_vix", ...)` in `src/config.py` — typed as a plain string. `load_vix_series(data_dir: Path)` in
 `src/backtest/vix_ingest.py` immediately calls `data_dir.glob("**/india_vix_*.parquet")`, which raises `AttributeError` on a `str`. Every other `load_vix_series` caller apparently wraps the setting in
@@ -1581,7 +1581,7 @@ second look, not a unilaterally-settled one.
 delta/premium-based signals fired at current market levels. DTE coverage was blocked mid-review by two newly-discovered bugs — **BUG-033** (`_parse_expiry` regex-only, never resolves real numeric
 instrument keys) and **BUG-034** (`PPOverlayV1`/`CCOverlayV1`'s own `leg_role` filter sets are stale and never match production, so `check_signals()` evaluated zero real PP/CC positions regardless of
 BUG-033 — found while building the PP-close script below, and the more severe of the two since it runs first). Animesh's resolution for the time-sensitive piece (`NSE_FO|61604`, DTE=1 at discovery):
-rather than wait on BUG-033/034, closed all 3 open `overlay_pp` legs by hand via `scratch/2026-08-24_close_all_pp_legs.py --execute` (confirmed 0 open `overlay_pp` positions afterward), eliminating
+rather than wait on BUG-033/034, closed all 3 open `overlay_pp` legs by hand via `scratch/diagnostics_db/2026-08-24_close_all_pp_legs.py --execute` (confirmed 0 open `overlay_pp` positions afterward), eliminating
 the exposure directly instead of reviewing it. The still-open `overlay_cc`/`overlay_collar_put` legs had delta/premium checked clean but DTE remains genuinely unverified — flagged as residual work, to
 re-check once BUG-033/034 ship. BUG-031 itself — the `strategy_name` defect this entry is about — is fully closed; BUG-033/034 continue as their own open entries.
 
@@ -1602,7 +1602,7 @@ were apparently authored after — or already using — the `overlay_collar_*` c
 
 **Impact:** identical in shape to BUG-031's original finding — zero live exit-signal coverage — but for a *different* reason and, since this filter runs first, it's the reason that actually matters
 right now: even with BUG-031's `strategy_name` fix live (SHA `ea5df81`), `PPOverlayV1`/`CCOverlayV1.check_signals()` still evaluate exactly zero real positions. The "no exit signals fired" result from
-today's B031.4 live run (`scratch/2026-08-24_bug031_manual_exit_review.py`) was **not** informative for PP/CC — it never got past this filter to check delta/premium/DTE at all. It *was* informative
+today's B031.4 live run (`scratch/diagnostics_db/2026-08-24_bug031_manual_exit_review.py`) was **not** informative for PP/CC — it never got past this filter to check delta/premium/DTE at all. It *was* informative
 for the `overlay_collar_put` leg (Collar's role constants are correct), so that leg's "no signal fired" read stands.
 
 **Suggested fix:** repoint `LONG_PUT_ROLES` (`pp_overlay_v1.py`) to `{"overlay_pp"}` and `SHORT_CALL_ROLES` (`cc_overlay_v1.py`) to `{"overlay_cc"}` — a PP-only and CC-only set respectively (not
@@ -1618,7 +1618,7 @@ open leg, it changes how much to trust "no signal fired" as evidence that a leg 
 `overlay_collar_put` leg is the one leg this session's live check actually covers.
 
 **Related:** BUG-031 (same three-file "role rename never propagated" pattern, `strategy_name` axis); BUG-033 (same pattern, `_parse_expiry` axis — and downstream of this bug for PP/CC, since this
-filter runs first); found while building the PP-close script for Animesh's "close all PP legs" request (`scratch/2026-08-24_close_all_pp_legs.py`), which uses the real `"overlay_pp"` literal directly
+filter runs first); found while building the PP-close script for Animesh's "close all PP legs" request (`scratch/diagnostics_db/2026-08-24_close_all_pp_legs.py`), which uses the real `"overlay_pp"` literal directly
 rather than the buggy `LONG_PUT_ROLES` constant so it isn't blocked by this bug.
 
 **Implementation progress (2026-08-24):** Fix applied — `LONG_PUT_ROLES` (`pp_overlay_v1.py`) → `{"overlay_pp"}`, `SHORT_CALL_ROLES` (`cc_overlay_v1.py`) → `{"overlay_cc"}`, exactly per the suggested
@@ -1673,11 +1673,11 @@ Committed as SHA `88df26e`. This entry is now archived; B033.5's close-out can p
 |---|---|
 | Severity | **CRITICAL** — live (paper) risk-management gap, same class as BUG-031 but on the DTE axis specifically. Delta/premium-based signals (`CRASH_MONETIZE`, `LOSS_STOP`, `PROFIT_TARGET`, `DELTA_STOP`) are unaffected — only DTE-gated signals are dead. Directly time-sensitive: `overlay_pp` leg `NSE_FO|61604` expires **tomorrow (2026-08-25)** and, as of discovery, would get no `ROLL_ELIGIBLE` signal at all. |
 | Status | ✅ Fixed (SHA `ef1c341`, 2026-08-24) — B033.1-B033.5 all done. Found 2026-08-24, during BUG-031's B031.4 manual exit-eligibility review. Closed same day after BUG-034 landed and the live re-run confirmed real DTE/delta/premium signal coverage end-to-end. |
-| Discovered | 2026-08-24, Animesh — ran `scratch/2026-08-24_bug031_manual_exit_review.py` (built for BUG-031's B031.4) live against the real broker/DB now that `strategy_name` is fixed (BUG-031, SHA `ea5df81`). Live chain fetch succeeded (2 `upstox.api_call status_code=200` log lines, both expiries), but `check_signals()` reported "No exit signals fired for any open leg" across all 5 open overlay legs — including `NSE_FO|61604`, whose own instrument-master DTE is 1 (expires 2026-08-25), well inside `evaluate_pp`'s `dte <= 5` `ROLL_ELIGIBLE` threshold. Confirmed live via direct call: `PPOverlayV1()._parse_expiry("NSE_FO|61604")` returns `None` — `_EXPIRY_RE` (`r"NSE_FO\|NIFTY(\d{2}[A-Za-z]{3}\d{4})(PE\|CE)"`) only matches text-format keys like `NSE_FO|NIFTY29MAY2026PE`, never numeric exchange-token keys like `NSE_FO|61604` (the format Upstox's real BOD data actually uses, confirmed via `data/instruments/NSE.json.gz`). `check_signals()`'s own fallback (`dte = ... if expiry is not None else 9999`) then makes the DTE-gated branch permanently unreachable for any real position. |
+| Discovered | 2026-08-24, Animesh — ran `scratch/diagnostics_db/2026-08-24_bug031_manual_exit_review.py` (built for BUG-031's B031.4) live against the real broker/DB now that `strategy_name` is fixed (BUG-031, SHA `ea5df81`). Live chain fetch succeeded (2 `upstox.api_call status_code=200` log lines, both expiries), but `check_signals()` reported "No exit signals fired for any open leg" across all 5 open overlay legs — including `NSE_FO|61604`, whose own instrument-master DTE is 1 (expires 2026-08-25), well inside `evaluate_pp`'s `dte <= 5` `ROLL_ELIGIBLE` threshold. Confirmed live via direct call: `PPOverlayV1()._parse_expiry("NSE_FO|61604")` returns `None` — `_EXPIRY_RE` (`r"NSE_FO\|NIFTY(\d{2}[A-Za-z]{3}\d{4})(PE\|CE)"`) only matches text-format keys like `NSE_FO|NIFTY29MAY2026PE`, never numeric exchange-token keys like `NSE_FO|61604` (the format Upstox's real BOD data actually uses, confirmed via `data/instruments/NSE.json.gz`). `check_signals()`'s own fallback (`dte = ... if expiry is not None else 9999`) then makes the DTE-gated branch permanently unreachable for any real position. |
 | Location | `src/strategy/pp_overlay_v1.py:414-421` (`_parse_expiry`), `src/strategy/cc_overlay_v1.py` (own copy, same pattern, used at line ~129/210/367 call sites), `src/strategy/collar_overlay_v1.py` (own copy, used at line ~180/365). Each file defines its own private `_EXPIRY_RE`/`_parse_expiry` rather than sharing one implementation. |
 
 **Symptom, confirmed via direct call (not inferred):** `PPOverlayV1()._parse_expiry("NSE_FO|61604")` → `None`. `_EXPIRY_RE.search("NSE_FO|61604")` → `None` (no match — the pattern requires an embedded
-`NIFTY<DD><Mon><YYYY><PE|CE>` substring that numeric exchange-token keys never contain). Live `scratch/2026-08-24_bug031_manual_exit_review.py` run against the real broker/DB (5 open legs, 2 live
+`NIFTY<DD><Mon><YYYY><PE|CE>` substring that numeric exchange-token keys never contain). Live `scratch/diagnostics_db/2026-08-24_bug031_manual_exit_review.py` run against the real broker/DB (5 open legs, 2 live
 chain fetches, both `status_code=200`) reported zero signals fired for any leg — a false-negative "everything is fine" result masking that DTE-gated evaluation never runs at all for these positions.
 
 **Root cause:** same bug class explicitly named as already-fixed elsewhere in this repo — TODOS.md's 2026-08-13/2026-08-20 entries describe `_open_pp_dte`'s and `paper_3track_overlay_entry.py`'s
@@ -1720,7 +1720,7 @@ regressions attributable to this diff (pre-existing 29 failures — missing VIX 
 scan, can't raise) — and one test-coverage gap (missing/malformed BOD `expiry` field), which was closed with the two additional test cases above. B033.4 (manual `NSE_FO|61604` decision, expires
 2026-08-25) and B033.5 (close-out, blocked on BUG-034) remain open.
 
-**B033.5 close-out (2026-08-24):** re-ran `scratch/2026-08-24_bug031_manual_exit_review.py` live, now that BUG-034 (SHA `88df26e`) has landed. 2 open overlay legs found: `overlay_cc` `NSE_FO|74391`
+**B033.5 close-out (2026-08-24):** re-ran `scratch/diagnostics_db/2026-08-24_bug031_manual_exit_review.py` live, now that BUG-034 (SHA `88df26e`) has landed. 2 open overlay legs found: `overlay_cc` `NSE_FO|74391`
 (dte=36, NIFTY 25400 CE 29 SEP 26) and `overlay_collar_put` `NSE_FO|73994` (dte=36, NIFTY 23500 PE 29 SEP 26). Live option-chain fetch succeeded (status 200). `CCOverlayV1` fired `PROFIT_TARGET`
 (ACTION severity, `auto_execute=True`, `auto_action=CLOSE_CC`) — mark 23.9 vs. entry credit 86.725 (well under the 30% profit-target threshold), delta 0.0748. This confirms the fix chain (BUG-031
 strategy_name → BUG-033 DTE-parsing → BUG-034 leg_role filter) now delivers real, end-to-end exit-signal coverage for a live `overlay_cc` position — first real signal this whole investigation thread
@@ -1983,7 +1983,7 @@ morning_signal_complete n_responses=1 consensus_direction=NEUTRAL trade_action=N
 
 - **B041.2b (SHA `9a2e9d3`)** — After Animesh set `SIGNAL_MODEL_GROK=~x-ai/grok-latest`, `SIGNAL_MODEL_GPT4O=~openai/gpt-latest`, `SIGNAL_MODEL_GEMINI=~google/gemini-flash-latest`, the 404/400 were
   gone but three new failures appeared: grok timed out at 30s (reasoning model, ~45s), gpt4o returned `content: null` (512-token budget consumed by reasoning tokens), gemini-pro returned truncated
-  non-strict JSON. Probe script `scratch/2026-09-08_signal_model_probe.py` confirmed the pattern across 11 candidate slugs. Fix: `max_tokens` 512→2048 and default `timeout` 30→60s in all three
+  non-strict JSON. Probe script `scratch/data_probes/2026-09-08_signal_model_probe.py` confirmed the pattern across 11 candidate slugs. Fix: `max_tokens` 512→2048 and default `timeout` 30→60s in all three
   providers (no code change needed for the `-latest` slugs themselves — they resolve fine). Live `morning_signal` run 16:34: 3/3 providers respond (grok 46s, gpt4o + gemini fast); consensus NEUTRAL →
   NO_TRADE (correct — grok conf 2 below `min_confidence=3`). Suite green (3334), `@code-reviewer` 0 ERROR/CRITICAL (2 test-helper WARNINGs resolved). Status stays 🔴 Open — B041.3–B041.6 remain.
 

@@ -184,7 +184,7 @@ def build_roll_trades(
 
 # ── Roll-notification message builder (MarkdownV2, ROLL-9) ─────────────────────
 # Two confirmed layouts, one per rollable leg role — reference implementation
-# scratch/2026-08-10_3track_roll_notification_format.py (locked on-device through
+# scratch/telegram_formats/2026-08-10_3track_roll_notification_format.py (locked on-device through
 # message-format-workshop.md, 2026-08-10). Static template punctuation ('[', ']',
 # '(', ')', '-') is escaped inline per the epic's escape-everything contract.
 

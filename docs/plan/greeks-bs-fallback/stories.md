@@ -7,11 +7,11 @@
 **Problem:** Confirmed 2026-07-22 (Cowork session): live Dec 2026 NIFTY chain (DTE 160, the yearly IC bucket's resolved expiry per `DECISIONS.md` BUG-015) returns `option_greeks.delta` = `0.0` on all
 20 strikes, both PE and CE — alongside `gamma`/`theta`/`vega`/`iv`, all also `0.0`. This is not a missing-field (`None`) case; the field is present and populated with a real zero. The same chain's
 `market_data` block (`ltp`/`bid`/`ask`/`oi`/`volume`) is fully populated and liquid (OI in the hundreds of thousands to millions per strike, tight spreads) — ruling out "unquoted contract" as the
-explanation. Confirmed via `scratch/2026-07-22_ic_yearly_leg_resolution_repro.py` and `scratch/2026-07-22_ic_yearly_full_chain_dump.py` (the latter now accepts a bucket-name CLI arg, defaulting to
-`yearly`).
+explanation. Confirmed via `scratch/ic_repro/2026-07-22_ic_yearly_leg_resolution_repro.py` and `scratch/ic_repro/2026-07-22_ic_yearly_full_chain_dump.py` (the latter now accepts a bucket-name CLI arg,
+defaulting to `yearly`).
 
-A quarterly repro (`python scratch/2026-07-22_ic_yearly_full_chain_dump.py quarterly` — resolves to 2026-09-29, DTE 69 as of 2026-07-22) was requested in the same session but its output was not
-captured before this story was written. **Do not assume the pattern is yearly-only** — confirm which buckets are actually affected before scoping GF-4's fallback trigger.
+A quarterly repro (`python scratch/ic_repro/2026-07-22_ic_yearly_full_chain_dump.py quarterly` — resolves to 2026-09-29, DTE 69 as of 2026-07-22) was requested in the same session but its output was
+not captured before this story was written. **Do not assume the pattern is yearly-only** — confirm which buckets are actually affected before scoping GF-4's fallback trigger.
 
 **Task:**
 1. Run the full chain dump script (or its logical equivalent) against `weekly`, `monthly`, `quarterly`, and `yearly` buckets. For each, record: does Upstox return nonzero Greeks or not?
@@ -30,8 +30,8 @@ captured before this story was written. **Do not assume the pattern is yearly-on
 
 ### GF-1 findings (partial — weekly/monthly still unconfirmed)
 
-Ran `scratch/2026-07-22_ic_yearly_full_chain_dump.py` against `yearly` and `quarterly` on 2026-07-22 (`logs/ic_yearly_full_chain.log`-equivalent output, pasted into the session — not yet saved as a
-permanent fixture, see below).
+Ran `scratch/ic_repro/2026-07-22_ic_yearly_full_chain_dump.py` against `yearly` and `quarterly` on 2026-07-22 (`logs/ic_yearly_full_chain.log`-equivalent output, pasted into the session — not yet
+saved as a permanent fixture, see below).
 
 - **yearly** (Dec 2026, DTE 160): all 20 strikes, both sides — `delta`/`gamma`/`theta`/`vega`/`iv` all exactly `0.0`. Real, liquid `market_data` on every strike (confirmed earlier this session).
   **Zero-Greeks pattern confirmed.**
@@ -57,8 +57,8 @@ run-to-run, on top of the zero-Greeks defect.
 
 **Still open — weekly bucket has not been checked**, and cannot be from stored data alone: no weekly expiry is currently fetched by either `upstox_chain_snapshot.py` or `upstox_chain_intraday.py`
 (`_PREFERENCE = ["monthly", "quarterly", "yearly"]` in both — weekly is simply not in the capture pipeline). Auditing weekly requires either a one-off live run of
-`scratch/2026-07-22_ic_yearly_full_chain_dump.py weekly` or adding `"weekly"` to `_PREFERENCE` first. Do not assume it behaves like monthly/quarterly just because they're clean — GF-1's original
-instruction to check all four buckets stands.
+`scratch/ic_repro/2026-07-22_ic_yearly_full_chain_dump.py weekly` or adding `"weekly"` to `_PREFERENCE` first. Do not assume it behaves like monthly/quarterly just because they're clean — GF-1's
+original instruction to check all four buckets stands.
 
 **Decision — validation ground truth:** use the **quarterly** bucket (2026-09-29 as of this writing) for GF-5, excluding the pinned-delta anomaly rows described above. Whoever picks this up should
 re-resolve the expiry at that time (it will have rolled forward) rather than hardcoding 2026-09-29.

@@ -544,7 +544,7 @@ async def test_niftytrackcomparisonv1_untouched() -> None:
 # ── ROLL-9: build_roll_notification MarkdownV2 layout ───────────────────────────
 #
 # One test per confirmed scenario in the reference script
-# (scratch/2026-08-10_3track_roll_notification_format.py), asserting the exact
+# (scratch/telegram_formats/2026-08-10_3track_roll_notification_format.py), asserting the exact
 # layout + escaping for its leg role, plus the label / partial / escape regressions
 # the epic carries forward.
 

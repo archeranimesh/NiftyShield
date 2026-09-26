@@ -767,7 +767,7 @@ _(was `## Process` in `DECISIONS.md` — 3-track consolidation CC1..CC5 / S1r..S
 
 **Scope note:** this bug degraded exit-signal gating (`PROFIT_TARGET`, `LOSS_STOP`, and any other combined-mark-based signal) for every numeric-keyed position the daemon monitors, not only the monthly IC — CSP, overlays, and all four IC V1/V2 expiry variants share the same `_get_position_expiry` path. No retroactive audit of how long other strategies' signals were suppressed has been done yet; worth a follow-up TODOS item if other positions show similarly stale unresolved ACTION signals.
 
-Source: this session (Cowork), diagnosed via `scratch/2026-07-20_ic_v1_monthly_profit_target_repro.py` against live Upstox chain data.
+Source: this session (Cowork), diagnosed via `scratch/ic_repro/2026-07-20_ic_v1_monthly_profit_target_repro.py` against live Upstox chain data.
 
 ---
 

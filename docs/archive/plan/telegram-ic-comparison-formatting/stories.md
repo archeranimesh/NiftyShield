@@ -3,7 +3,7 @@
 **Trigger:** 2026-08-07 Cowork session. User flagged that the "IC Monthly Comparison" Telegram
 message (`build_comparison_report()`, `scripts/strategies/ic/paper_ic_monthly_comparison.py`)
 renders misaligned in the actual Telegram app. Confirmed via a diagnostic scratch script
-(`scratch/2026-08-07_telegram_ic_comparison_format_repro.py`, real sends to the configured
+(`scratch/telegram_formats/2026-08-07_telegram_ic_comparison_format_repro.py`, real sends to the configured
 Telegram chat using the real `TelegramNotifier`) that the current implementation hand-counts
 literal spaces to hit a fixed 20-char label budget plus fixed-width value columns — this breaks
 silently the moment a label is longer than what was counted by hand at write time (reproduced
@@ -82,7 +82,7 @@ budget, and uses fixed `:<15`-style value-column widths. Both break silently the
 value exceeds what was counted/assumed by hand — reproduced live in this session.
 
 **Fix:** Replace the hand-padded f-string block in `build_comparison_report()` with the
-dynamic-width approach proven in `scratch/2026-08-07_telegram_ic_comparison_format_repro.py`'s
+dynamic-width approach proven in `scratch/telegram_formats/2026-08-07_telegram_ic_comparison_format_repro.py`'s
 `_build_side_by_side_report()`:
 - `label_width = max(len(label) for label in rows) + 1`
 - `col1_width = max(len("V1 Monthly"), max(len(v1_cell) for v1_cell in rows))` (same pattern for
@@ -222,7 +222,7 @@ Out-of-scope files (prose only, no column alignment, nothing to fix):
 ## TGFMT-4 — Extract shared dynamic-width table formatter
 
 **Context:** TGFMT-1 fixes `build_comparison_report()` inline, following the pattern proven in
-`scratch/2026-08-07_telegram_ic_comparison_format_repro.py`'s `_build_side_by_side_report()`.
+`scratch/telegram_formats/2026-08-07_telegram_ic_comparison_format_repro.py`'s `_build_side_by_side_report()`.
 Retrofitting 6 more call sites with independent copies of that logic reintroduces the exact
 maintenance problem this story exists to fix — a shared helper is required before any retrofit.
 

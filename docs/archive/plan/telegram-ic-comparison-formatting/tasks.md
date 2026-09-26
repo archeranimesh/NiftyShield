@@ -67,7 +67,7 @@
 ## Notes for whoever picks this up
 
 - Approved format (confirmed via real Telegram sends from
-  `scratch/2026-08-07_telegram_ic_comparison_format_repro.py`, 2026-08-07) is reproduced in full in
+  `scratch/telegram_formats/2026-08-07_telegram_ic_comparison_format_repro.py`, 2026-08-07) is reproduced in full in
   `stories.md`'s header — use it as the byte-for-byte target for TGFMT-1's happy-path test.
 - This story is independent of `docs/plan/paper-ic-daily-snapshot/` (SNAP-1..4) — it reads
   `paper_nav_snapshots` (already populated for every IC variant + CSP), not `paper_leg_snapshots`
@@ -77,7 +77,7 @@
   is a **real new calculation** (month-start delta on `unrealized_pnl`, a point-in-time field) —
   do not implement it as a copy of `Flt (I)`; the two are expected to differ and a test asserts
   that.
-- The scratch script (`scratch/2026-08-07_telegram_ic_comparison_format_repro.py`) sends real
+- The scratch script (`scratch/telegram_formats/2026-08-07_telegram_ic_comparison_format_repro.py`) sends real
   Telegram messages and counts against the message budget — do not add it to any cron; it's a
   throwaway diagnostic, not a production entrypoint.
 - **Scope extension (same day):** TGFMT-4 onward generalize TGFMT-1's fix into a shared

@@ -4,7 +4,7 @@ Read `CONTEXT.md` and state `CONTEXT.md ✓` before doing anything else. Then re
 Complete it fully. Stop.
 
 **Origin:** A Cowork session (2026-08-13) iterated the shape of this report live in
-`scratch/2026-08-13_eod_pt_summary.py` — cross-strategy open positions, a "closed
+`scratch/telegram_formats/2026-08-13_eod_pt_summary.py` — cross-strategy open positions, a "closed
 today" table, and a strategy-wise P&L/annualized-%-on-margin summary, confirmed
 message-by-message with Animesh before this epic was written up. That script is the
 reference implementation for every task below; read it before writing any code.

@@ -2,7 +2,7 @@
 
 ROLL-17 (`docs/plan/telegram-markdown-migration/strategy-rollout/stories.md`). Design closed
 2026-09-06 via a `message-format-workshop.md` session; reference implementation
-`scratch/2026-09-06_ic_entry_confirmation_format.py`.
+`scratch/telegram_formats/2026-09-06_ic_entry_confirmation_format.py`.
 Originally built for IC, generalized in UEM-1.
 
 The confirmed message is a fenced `build_leg_table()` table — `LegRow` reused verbatim, no

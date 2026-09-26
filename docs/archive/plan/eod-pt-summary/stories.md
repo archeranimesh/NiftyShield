@@ -3,7 +3,7 @@
 ## PT-1 — Document the confirmed 3-message split
 
 **Problem:** The report's shape (columns, formats, message split) was iterated live with
-Animesh in a Cowork session against `scratch/2026-08-13_eod_pt_summary.py` and confirmed
+Animesh in a Cowork session against `scratch/telegram_formats/2026-08-13_eod_pt_summary.py` and confirmed
 message-by-message, but that confirmation only exists as chat history + scratch code. There is
 no durable spec a future session (or a different engineer) can read without replaying the whole
 conversation.
@@ -155,7 +155,7 @@ changes.
 
 ## PT-2 — Promote to tested `src/` code + real cron
 
-**Problem:** `scratch/2026-08-13_eod_pt_summary.py` is throwaway-convention code (per repo
+**Problem:** `scratch/telegram_formats/2026-08-13_eod_pt_summary.py` is throwaway-convention code (per repo
 CLAUDE.md, `scratch/` is explicitly not held to test/type-check standards) but is now Animesh's
 daily-use report. It needs to become a maintained, tested module with a real cron entry, the same
 way other scratch prototypes in this repo have graduated (e.g. `paper-ic-daily-snapshot/`'s

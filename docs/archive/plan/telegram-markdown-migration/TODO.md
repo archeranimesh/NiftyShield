@@ -41,7 +41,7 @@
       table, no multi-source data. No escaping audit (MD-*) or format task (ROLL-*) names this
       file. Format confirmed 2026-08-08 (kv-line shape, not the originally-drafted single
       packed line) and written back as `strategy-rollout/` **ROLL-7** — see
-      `scratch/2026-08-08_reentry_notice_format.py`. | SHA: e00326d
+      `scratch/telegram_formats/2026-08-08_reentry_notice_format.py`. | SHA: e00326d
 
 - [x] **2. Strategy event alerts** — `src/strategy/monitor.py:366-367`
       `text = f"[{strategy.strategy_name}] {event.event_type}: {event.description}"` →
@@ -51,7 +51,7 @@
       revised to a v2 cause->effect compact shape (headline + optional Leg: line +
       description) after a counter-proposal, superseding the initial kv-line draft — and
       written back as `strategy-rollout/` **ROLL-8** — see
-      `scratch/2026-08-08_strategy_event_alert_format.py`. | SHA: ec008ba
+      `scratch/telegram_formats/2026-08-08_strategy_event_alert_format.py`. | SHA: ec008ba
 
 - [x] **3. Three-track roll notification** —
       `scripts/strategies/three_track/paper_3track_roll.py:309-313`
@@ -60,7 +60,7 @@
       a NIFTY FUT header + Contango/Backwardation spread label, base_ditm_call gets a
       strike-bearing ticket line + Debit/Credit spread label; both add a new closed-leg
       realized P&L line and month labels) and written back as `strategy-rollout/` **ROLL-9** —
-      see `scratch/2026-08-10_3track_roll_notification_format.py`. | SHA: 79e6314
+      see `scratch/telegram_formats/2026-08-10_3track_roll_notification_format.py`. | SHA: 79e6314
 
 - [x] **4. Dev paper-track snapshot** — `scripts/dev/paper_track_snapshot.py:188`
       Max-drawdown / return-on-NEE metrics + proxy-delta alert state. A few metric lines, lives
@@ -68,7 +68,7 @@
       confirmed 2026-08-10 (3-line 📐/📉 emoji-labeled shape, `Action:` line dropped as
       fabricated-data, `Rule Breach:` ships verbatim pending a real data-plumbing follow-up) and
       written back as `strategy-rollout/` **ROLL-10** — see
-      `scratch/2026-08-10_proxy_delta_critical_alert_format.py`. | SHA: 54f7acc
+      `scratch/telegram_formats/2026-08-10_proxy_delta_critical_alert_format.py`. | SHA: 54f7acc
 
 - [x] **5. System healthcheck alert** — `scripts/healthcheck.py:171-178`
       `⚠️ NiftyShield Healthcheck — {now_str} IST` + multi-line disk/process alert body (variable
@@ -77,7 +77,7 @@
       REQUIRED` issue lines, `SYSTEMS NORMAL` pass summary — supersedes an initial
       verbatim-line draft; not yet exercised via a live `--send` round-trip, this Cowork
       sandbox had no working venv) and written back as `strategy-rollout/` **ROLL-11** — see
-      `scratch/2026-08-10_healthcheck_alert_format.py`. | SHA: —
+      `scratch/telegram_formats/2026-08-10_healthcheck_alert_format.py`. | SHA: —
 
 - [x] **6. Position health check alert** — `scripts/position_health_check.py:129-135`
       `⚠️ NiftyShield Position Health — {date}` + overdue-position list (days overdue, net_qty
@@ -88,7 +88,7 @@
       ⚠️ rows with a parsed token suffix instead of the raw broker key; not yet exercised via a
       live `--send` round-trip, this Cowork sandbox had no working venv) and written back as
       `strategy-rollout/` **ROLL-12** — see
-      `scratch/2026-08-10_position_health_alert_format.py`. | SHA: 049d4ff
+      `scratch/telegram_formats/2026-08-10_position_health_alert_format.py`. | SHA: 049d4ff
 
 - [x] **7a. Three-track base entry bootstrap confirmation** —
       `scripts/strategies/three_track/paper_3track_entry.py:940`. Split out of the original
@@ -98,7 +98,7 @@
       2026-08-11 (per-leg 📥-prefixed kv lines, resolved human-readable instrument labels
       instead of raw broker keys, unified `Long` verb, explicit lot count on every leg,
       internal `Cycle:` tag dropped) and written back as `strategy-rollout/` **ROLL-13** — see
-      `scratch/2026-08-11_3track_base_entry_format.py`. First message in this epic actually
+      `scratch/telegram_formats/2026-08-11_3track_base_entry_format.py`. First message in this epic actually
       confirmed via a live `--send` round trip, not just print-only review — caught two real
       MarkdownV2 escaping bugs in the process (see ROLL-13's spec / `backbone/stories.md`
       MD-1 addendum). | SHA: 4e19c64
@@ -112,7 +112,7 @@
       round from the ROLL-13-derived opening draft — resolved human-readable instrument
       labels, explicit lot count, fixed leg-role→label/right/verb mapping) and written back as
       `strategy-rollout/` **ROLL-14** — see
-      `scratch/2026-08-11_3track_overlay_entry_format.py`. | SHA: —
+      `scratch/telegram_formats/2026-08-11_3track_overlay_entry_format.py`. | SHA: —
 
 - [x] **8. Three-track snapshot — settlement/roll command message** —
       `scripts/strategies/three_track/paper_3track_snapshot.py:487-501`
@@ -125,7 +125,7 @@
       Animesh decided to split this into a Telegram summary + logged commands rather than a
       pure reformat — leg-direction confirmed (`base_futures`/`base_ditm_call` never go short),
       live `--send` reviewed and approved on-device for both scenarios — written back as
-      `strategy-rollout/` **ROLL-15** — see `scratch/2026-08-11_3track_settlement_roll_format.py`.
+      `strategy-rollout/` **ROLL-15** — see `scratch/telegram_formats/2026-08-11_3track_settlement_roll_format.py`.
       Real implementation (message rewrite + new `logger.info` call for the commands) is a
       separate later task, per the workshop's own rule. | SHA: 9d13123
 
@@ -140,7 +140,7 @@
       Workshop session run 2026-08-11: real source read
       (`_format_combined_summary`, 326 lines, two layouts — waterfall/has_deltas=True vs.
       fallback/has_deltas=False). A kv-line + dash-hierarchy redesign was drafted and iterated
-      (`scratch/2026-08-11_daily_snapshot_summary_format.py`) after confirming, live on-device,
+      (`scratch/telegram_formats/2026-08-11_daily_snapshot_summary_format.py`) after confirming, live on-device,
       that the current box-drawing/tree-character layout (`├ └ ▲ ▼ ─`) and 2-space indentation
       both break under MarkdownV2 plain text (leading whitespace stripped, flattening the
       Equity/Bonds child hierarchy — caught via a real send round-trip run directly on
@@ -152,7 +152,7 @@
 
       **Decision (confirmed with Animesh, 2026-08-11): keep the current format as-is for now
       — no ROLL-N reformat at this time.** The redesign draft and its review are kept as
-      `scratch/2026-08-11_daily_snapshot_summary_format.py` for future reference only, not
+      `scratch/telegram_formats/2026-08-11_daily_snapshot_summary_format.py` for future reference only, not
       adopted. This message therefore does NOT get a new `strategy-rollout/` ROLL-N entry.
       MarkdownV2 escaping-safety for its current wording (separate from any format redesign,
       per MD-4's "escaping only" scope) remains `backbone/`'s job when that lands — re-check
@@ -171,7 +171,7 @@
       any `ROLL-*` task. Format confirmed 2026-08-11 (reuse of `ROLL-10`'s 3-line shape,
       verbatim — no track/date line added, Animesh's call between the two options put to him)
       and written back as `strategy-rollout/` **ROLL-16** — see
-      `scratch/2026-08-11_3track_proxy_delta_critical_alert_format.py`. Not yet exercised via a
+      `scratch/telegram_formats/2026-08-11_3track_proxy_delta_critical_alert_format.py`. Not yet exercised via a
       live `--send` round-trip (this Cowork sandbox's mounted `.venv` doesn't resolve inside the
       device-bash VM); print-only output matches `ROLL-10`'s already on-device-confirmed block
       byte-for-byte. | SHA: ba81291

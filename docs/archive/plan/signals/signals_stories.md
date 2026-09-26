@@ -844,7 +844,7 @@ confirmed endpoints.
 
 ### Step 1 — source-discovery spike ✅ DONE (2026-09-07)
 
-Persistent artifact: **`scratch/2026-09-07_signal_input_sources.py`** (`git log` it for the
+Persistent artifact: **`scratch/data_probes/2026-09-07_signal_input_sources.py`** (`git log` it for the
 probe history — commits `c0208c9`..`735cb86`). All three sources are now settled; the spike
 stays in-tree as the source-of-record. **The remaining work is Step 2 only** — a fresh session
 can pick this up cold from the recipe below.
@@ -1290,7 +1290,7 @@ what Telegram formatting work is still owed. No source or test changes.
 
 3. **Telegram messages:**
    - **09:15 directional** — finalized; `format_directional_v3` in
-     `scratch/2026-09-08_signal_telegram_messages.py` (CONSENSUS / NO CONSENSUS / PIPELINE
+     `scratch/telegram_formats/2026-09-08_signal_telegram_messages.py` (CONSENSUS / NO CONSENSUS / PIPELINE
      FAILED), on-device validated 2026-09-08. Implementation = **S5.5c**.
    - **entry / exit / P&L** — moved to `signals-paper-track` SPT-3 / SPT-5 (the track now
      paper-trades for real). Not owed here.
@@ -1365,7 +1365,7 @@ NO_TRADE (or any run missing a premium — close-only fallback):
   (mirror `morning_signal`).
 
 **Reference renderer:** `format_outcome_notification` in
-`scratch/2026-09-08_signal_telegram_messages.py` (messages 6–8, restyled 2026-09-09).
+`scratch/telegram_formats/2026-09-08_signal_telegram_messages.py` (messages 6–8, restyled 2026-09-09).
 
 **Tests:** no-network render of executed / not-taken / NO_TRADE + the missing-premium
 fallback. Register the formatter in `tests/unit/notifications/test_escaping_guard.py` if it

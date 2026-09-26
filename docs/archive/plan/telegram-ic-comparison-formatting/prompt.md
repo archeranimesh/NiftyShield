@@ -6,7 +6,7 @@ it fully. Stop.
 **Origin:** 2026-08-07 Cowork session. The "IC Monthly Comparison" Telegram message
 (`build_comparison_report()`, `scripts/strategies/ic/paper_ic_monthly_comparison.py`) rendered
 misaligned in the real Telegram app — confirmed live via
-`scratch/2026-08-07_telegram_ic_comparison_format_repro.py` (real sends to the configured chat).
+`scratch/telegram_formats/2026-08-07_telegram_ic_comparison_format_repro.py` (real sends to the configured chat).
 Root cause: hand-counted literal-space column widths that break silently once a label grows past
 what was counted by hand at write time (reproduced with `"Realized (inception)"` /
 `"Unrealized(inception)"` colliding into the value column). TGFMT-1..3 fix that report directly

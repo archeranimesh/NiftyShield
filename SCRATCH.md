@@ -7,10 +7,23 @@ for elegance.
 This file exists because scratch/ accumulated ~50 scripts over a few months and two duplication patterns emerged. The rules below are the minimum needed to keep that convergence signal usable instead
 of buried.
 
-## Naming
+## Naming and folder
 
-Keep the existing convention: `YYYY-MM-DD_topic_purpose.py` (or `.md` for a question/handoff doc, `.sh` for a one-off shell probe). The date is load-bearing — it's how a future session tells "this
-already answered that" from "this is stale."
+Keep the existing filename convention: `YYYY-MM-DD_topic_purpose.py` (or `.md` for a question/handoff doc, `.sh` for a one-off shell probe). The date is load-bearing — it's how a future session tells
+"this already answered that" from "this is stale."
+
+Place every new script in the subfolder matching its purpose (added 2026-09-26 once the flat folder passed ~55 files):
+
+- `scratch/telegram_formats/` — Telegram/notification message-shape POCs
+- `scratch/ic_repro/` — Iron Condor P&L / leg-resolution repro and audit scripts
+- `scratch/data_probes/` — external API / data-source exploration (Dhan, signals, OHLC, bhavcopy)
+- `scratch/diagnostics_db/` — read-only DB checks and one-off cleanup/verify scripts against `portfolio.sqlite`
+- `scratch/council/` — council question drafts and their dispatch `.sh` scripts
+- `scratch/handoffs/` — session dispatch / subagent handoff notes
+- `scratch/misc/` — loose artifacts (raw `.patch`/`.diff` dumps) that don't fit another bucket
+- `scratch/_lib/` — abstracted plumbing helpers (see below)
+
+If a new script doesn't fit any bucket, create one rather than defaulting to `misc/` — `misc/` is for artifacts, not a catch-all for scripts.
 
 ## The convergence rule
 

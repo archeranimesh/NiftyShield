@@ -2,7 +2,7 @@
 repo has no other source for: ``gift_nifty``, ``usd_inr``, and ``fii``.
 
 Sources are spike-confirmed (2026-09-07) — see ``docs/plan/signals/signals_stories.md``
-§S5.2a and ``scratch/2026-09-07_signal_input_sources.py``:
+§S5.2a and ``scratch/data_probes/2026-09-07_signal_input_sources.py``:
 
 - ``gift_nifty`` → Upstox ``GLOBAL_INDEX|SGX NIFTY`` via ``broker.get_ltp``.
 - ``usd_inr``    → Upstox nearest-monthly ``NCD_FO`` USDINR future via ``broker.get_ltp``.

@@ -20,7 +20,7 @@ content-derived widths; FMT-1b–1f capture the emoji / header / summary-table r
 ## Session-start load hints
 
 - Root `FORMATTING.md` — FMT-1's output; §§ 3 / 4 / 7 / 8 / 10 / 11 carry the corrections and the audit of all 14 scratch-script formatters. Read it before touching any FMT-* task.
-- `scratch/2026-08-07_ic_eod_audit_telegram_format.py` (final version) — working reference implementations of the table builders. Port and generalize; do not redesign.
+- `scratch/telegram_formats/2026-08-07_ic_eod_audit_telegram_format.py` (final version) — working reference implementations of the table builders. Port and generalize; do not redesign.
 - Epic `README.md` — the `backbone/` dependency (FMT-2/FMT-3 need `escape_markdown()` / `mdcode()` from `src/notifications/markdown.py`).
 - No `schema.md` — this story changes no DB schema.
 
