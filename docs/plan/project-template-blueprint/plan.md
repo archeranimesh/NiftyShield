@@ -83,8 +83,9 @@ The output is a git repo, not a loose folder of files floating around — a smal
 diffed over time.
 
 **Canonical location (superseding the earlier `~/myWork/myCode/_templates/py-project-tier0/` sketch — decided in the PTB-2 session):** `/Users/abhadra/myWork/myCode/AI/project-scaffold/`. The root
-folder name names the template project itself, not a single tier or language; each tier is a subfolder inside it (`tier0/`, `tier1/`, `tier2/`, `tier3/`), added as PTB-2/3/4 concretize each one. Not
-yet `git init`'d — deliberately deferred until PTB-3 fills in the two currently-empty skill directories below, so the first commit isn't half-empty.
+folder name names the template project itself, not a single tier or language; each tier is a subfolder inside it (`tier0/`, `tier1/`, `tier2/`, `tier3/`), added as PTB-2/3/4 concretize each one.
+`project-scaffold` is `git init`'d and has its first commit (`2e0c667`), as its own independent GitHub-project-shaped repo (see Distribution section below for the clone-once + scaffold-script model) —
+tiers are never their own separate repos; only `project-scaffold` itself is one, with the tiers as plain subfolders inside it.
 
 Current state of `project-scaffold/` (2026-09-26, PTB-2 session):
 
@@ -127,6 +128,25 @@ a Tier 1+ mechanism (Rule 0 enforcement, council checkpoint, doc-staleness gates
 adopted. `docs/plan/` confirmed to stay Tier 1 (not pulled forward) — discussed and re-affirmed, the trigger-based principle holds even though story planning happens early in some projects, because
 the final project structure is flat regardless (see `TradeResearch` example above) so there's no cost to adding it exactly when the backlog trigger fires.
 
+**Post-close corrections, found by dogfooding (2026-09-26, same day, after PTB-2 closed):** `project-scaffold/tier0/` was copied into a throwaway test project ("BudgetBuddy") and run through a real
+Claude Code session to validate the skeleton actually works standalone. Two real gaps surfaced and were fixed directly in the already-closed Tier 0 output (not re-opening the task, just correcting the
+deliverable):
+
+- **`CLAUDE.md` Step 2 didn't ask whether code was wanted at all.** Given a vague "set up the project" prompt, the first dogfood run jumped straight to implementation questions (storage backend,
+  language) and scaffolded a full Python package, without first confirming whether the project was even past the design/planning stage. Fixed: Step 2 now explicitly asks that fork first — "confirm
+  whether this session wants an implementation... or is still in design/planning" — before any language/storage/`src/` questions. Re-run confirmed the fix works: a second dogfood session correctly
+  stayed in design/planning mode (README + CONTEXT.md only, no `src/`) until asked.
+- **New markdown files were being hard-wrapped at ~80 chars instead of the intended fill-to-≤200 style.** All 8 Tier 0 markdown files were reflowed with NiftyShield's own `scripts/dev/reflow_md.py`
+  (run against the external path — the tool isn't part of Tier 0 itself). A new "Markdown formatting" section was added to `CLAUDE.md` stating the ≤200-char rule as a direct instruction, since this is
+  a generation-time habit no post-hoc pre-commit hook would have prevented; the automated reflow tool/hook itself stays deferred to the `python-addon` trigger, per the same "rule now, tooling only
+  once Python is confirmed" split as `.pre-commit-config.yaml` above.
+
+Separately, all "NiftyShield"-referencing wording was stripped from `tier0/`'s placeholder comments (5 occurrences — in `CLAUDE.md`'s file-thinness note, module-index note, Python-conventions note,
+and markdown-reflow note, plus `scratch/SCRATCH.md`'s subfolder-timing note) — these were citing NiftyShield as the pattern's origin, which is harmless in isolation but inappropriate for a template
+meant for unrelated future projects to inherit; replaced with generic wording carrying the same guidance with no attribution to the source project.
+
+`project-scaffold` is now `git init`'d with its first commit (`2e0c667`) including all of the above.
+
 **How a new project gets it — two viable mechanisms, either works, pick per-project:**
 
 1. **GitHub template repository** — mark the repo as a template in its settings, then `gh repo create <new-project> --template <you>/py-project-tier0` creates a brand-new repo seeded with those files
@@ -153,6 +173,14 @@ project's root, once, at scaffold time. The same flattening applies to `python-a
 a target path, have it ask a handful of yes/no questions (is this a Python project? does a backlog exist yet? etc.), and have it copy `tier0/*` plus whichever tier/addon deltas the answers select,
 flattened directly into the target root. Repeatable means re-running it against an existing project only adds files that don't already exist — it never overwrites what's already there. This is
 explicitly PTB-5 scope to design and build, not something to implement mid-PTB-2 — captured here so PTB-5 starts from it instead of re-deriving it from scratch.
+
+**Refined further (Animesh, PTB-2 session, after `project-scaffold` was `git init`'d):**
+
+- `project-scaffold` itself is a GitHub project. A consumer clones it once locally (not a submodule, not a sync-forever link — matches the copy-once conclusion above).
+- The scaffold script lives at `project-scaffold`'s own root. Invoking it asks tier-specific questions plus a project name and target path, then writes the selected tiers' files — flattened per the
+  semantics above — into `<path>/<project-name>/`.
+- **Script scope stops at "files written."** It does not `git init` or make any commit in the new project — that stays a deliberate, separate step the operator takes afterward. Matches the `commit`
+  skill's own philosophy (a commit is explicitly executed, never done silently on the operator's behalf).
 
 ## Open questions (carried from `prompt.md` §"Perspectives not covered" — not resolved here)
 
