@@ -3,7 +3,7 @@
 
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task spec.
 
-**Open: PTB-4, PTB-5.**
+**Open: PTB-4, PTB-5, PTB-6.**
 
 - [x] **PTB-1** — Write up 2026-09-26 discussion as `plan.md` draft (tier table + open questions) | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: <pending>
 - [x] **PTB-2** — Concretize Tier 0 (Bootstrap) file skeletons, including stripped `commit` + `session-close` skills (re-scoped from PTB-3, 2026-09-26 — both are Tier 0 per `plan.md`'s own tier table)
@@ -11,6 +11,8 @@ Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task
 - [x] **PTB-3** — Concretize Tier 1 (Recurring work): `work` + `new-story` skill genericization only (narrowed from PTB-2, 2026-09-26) | Owner: Animesh | Model: n/a | Review: none | SHA: cf515b5
 - [ ] **PTB-4** — Concretize Tier 2/3 gating criteria + generalized model-routing buckets | Owner: Claude | Model: claude-opus-5-5 | Review: none | SHA: <—>
 - [ ] **PTB-5** — Decide distribution mechanism; hand off template-repo build to a new story | Owner: Animesh | Model: n/a | Review: none | SHA: <—>
+- [ ] **PTB-6** — Concretize the `python-addon/` overlay (deferred at PTB-2, 2026-09-26 — now in scope: most future projects, CardLedger and TaxCalculation included, are Python) | Owner: Claude
+  | Model: claude-sonnet-5 | Review: none | SHA: <—>
 
 ## Story done when
 
@@ -21,6 +23,8 @@ Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task
 - **PTB-4** — Tier 2/3 trigger conditions are concrete enough to apply to a real project (not just "correctness-critical," but a checklist), and the three model-routing buckets are named with what
   actually goes in each.
 - **PTB-5** — A distribution-mechanism decision is recorded in `DECISIONS.md`, and a new `docs/plan/` story exists (linked from here) scoped to building the actual template repo.
+- **PTB-6** — `python-addon/`'s exact file set (contents, not just names) is written to `project-scaffold/`, its placement decided (inside a tier, sibling at root, or its own opt-in overlay) and
+  stated, and Animesh has confirmed it's what a brand-new Python project should start with beyond Tier 0's language-agnostic baseline.
 
 ## After each task
 

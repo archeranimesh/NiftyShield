@@ -119,3 +119,30 @@ mechanism. (`commit` and `session-close` moved to PTB-2, 2026-09-26 — both are
 **Tests:** none.
 
 **Commit:** `docs(plan): record template distribution decision; hand off to build story`
+
+---
+
+## PTB-6 — Concretize `python-addon/`
+
+**Files to change / create:**
+- `docs/plan/project-template-blueprint/plan.md` — new "Python addon" section, replacing the "deferred, not built yet" note.
+- `/Users/abhadra/myWork/myCode/AI/project-scaffold/python-addon/` (or wherever this task decides it belongs) — the actual file set.
+- `project-scaffold/scaffold.sh` — extend to overlay the addon when selected, if placement makes that necessary.
+
+**Before any code:** re-read `plan.md`'s "`python-addon/` deferred, not built yet" note in full — it records why this was pulled out of Tier 0 (language-agnostic day one) and exactly what was in the
+earlier draft (`pyproject.toml`, `.pre-commit-config.yaml`, ruff/mypy/pytest config) before Animesh's correction.
+
+**What to implement:**
+
+1. Decide placement: inside `tier0/` as a Python-specific sibling set, a fourth `python-addon/` folder at `project-scaffold/` root layered on top of whichever tier is chosen, or something else — state
+   the reasoning, don't just restate the open question.
+2. Write the concrete file set: `pyproject.toml`, `.pre-commit-config.yaml` (ruff/mypy at minimum), a `pytest` config, and anything from NiftyShield's own Python-hygiene table in `plan.md` (type
+   hints, `(str, Enum)`, `Decimal`-for-money as an opt-in note since it's domain-conditional, not universal) worth carrying as a default.
+3. State whether/how `scaffold.sh` selects this addon (a flag, an interactive question per the PTB-5 scaffold-script idea, or manual copy) — do not block this task on PTB-5's interactive-script design
+   landing first; a manual "copy this folder in too" instruction is an acceptable interim answer.
+4. Validate: run `scaffold.sh` (or the manual copy) against a scratch destination and confirm the result is a working `pyproject.toml`-rooted Python project layout with no leftover placeholder folder
+   names, mirroring the flatten-at-copy-time semantics already established for tier0/tier1.
+
+**Tests:** none (docs/config only; no NiftyShield `src/`/`scripts/` code changes).
+
+**Commit:** `docs(plan): concretize python-addon overlay`

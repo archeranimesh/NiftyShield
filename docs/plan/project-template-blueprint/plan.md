@@ -124,6 +124,9 @@ building Python-specific tooling into it now is premature. Do **not** create `py
 identifies `project-scaffold` — or the tier-0-derived output — as needing Python tooling. When that trigger fires, decide then whether it lives inside `tier0/`, as a sibling at the `project-scaffold/`
 root, or elsewhere; that placement question is explicitly not resolved by this note.
 
+**Trigger fired (2026-09-26, this session):** Animesh confirmed a majority of planned projects (CardLedger, TaxCalculation, and future ones) are Python. **PTB-6** now owns concretizing `python-addon/`
+— see `tasks.md`/`stories.md` for the task spec. This note stays as the historical record of why it was deferred in the first place; do not re-derive that reasoning in PTB-6, just read it.
+
 **PTB-2 closed (2026-09-26):** Animesh confirmed the final file set. Corrections made during review before sign-off: `python-addon/` removed entirely (deferred — see below, not universal Tier 0);
 `.gitignore` stripped of Python-specific entries (`__pycache__/`, `*.pyc`, `.venv/`) and fixed so `tmp/README.md` isn't silently excluded by the `tmp/` ignore rule (`tmp/*` + `!tmp/README.md`);
 `commit` skill's Step 2 genericized (was hardcoded to `pytest`, now command-agnostic); `commit`/`session-close` skills re-scoped in from PTB-3 and written (see tree above) since both are Tier 0, not
