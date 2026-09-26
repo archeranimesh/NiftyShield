@@ -104,3 +104,8 @@ slug. If it did **not** recur in 3+ such sessions, tick the box — the hook wor
   full `Read` of a `src/`/`scripts/` file from landing before a graph query for that specific file's symbols — graph calls made for unrelated symbols elsewhere in the same session do not satisfy Rule
   0 for this file. Latest case: M13.1 mvp session — `src/mvp/backfill.py` read directly while the session's `search_graph`/`get_code_snippet` calls all targeted `MVPStore`/`CategoryStats`/`Pick`. This
   is the same hook-effectiveness gap as DEBT-16; do not fix independently. Standalone once DEBT-16 lands a fix — re-verify both slugs together.
+- **DEBT-21** — `plan-doc-not-reflowed-before-commit` (Count 5). Remediation already exists: the `md-reflow` pre-commit gate (a896ce1) aborts a commit when a touched `docs/plan/**`/`docs/bugs/**`
+  paragraph exceeds the ≤200-char fill. Despite the gate existing, sessions keep discovering the backlog only via the commit abort — SPT-8 close, signals-cost-tracking SCT-1 close, signals-paper-track
+  SPT-3, M12 hourly-summary close, and the BUG-053 backfill-resume session all needed a post-hoc `reflow_md` + `awk length>200` sweep and a re-stage/re-commit round trip instead of running the reflow
+  before the first `git add`. Verify the existing gate is effective by checking whether authors run `reflow_md` pre-emptively over the next 3 logged sessions; if this slug still recurs, escalate to a
+  protocol/model discussion.

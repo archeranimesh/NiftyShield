@@ -70,3 +70,7 @@ commit — they are proactive verification/reconciliation work, not opportunisti
   file's own symbols (graph calls for *other* symbols in the same session do not satisfy Rule 0 for this file). Latest case: M13.1 mvp session — `src/mvp/backfill.py` read directly while graph calls
   that session targeted `MVPStore`/`CategoryStats`/`Pick` only. Fold into DEBT-16's verification rather than re-deciding independently — same hook, same warn-only gap. Trigger: standalone once DEBT-16
   lands a fix. | Owner: Claude | Model: claude-sonnet-5 | Review: none
+- [ ] **DEBT-21** — `standalone-actionable`. `plan-doc-not-reflowed-before-commit` (Count 5 at escalation, 2026-09-24). The `md-reflow` pre-commit gate (a896ce1) already exists and does abort a commit
+  when a touched `docs/plan/**`/`docs/bugs/**` paragraph exceeds the ≤200-char fill, but sessions keep discovering the backlog only via the abort — costing a reflow-run + re-stage + re-commit round
+  trip each time (SPT-8, SCT-1, SPT-3, M12, and the BUG-053 backfill-resume session all hit this). Verify the existing `md-reflow` gate is effective; if this slug still recurs in 3 sessions logged
+  after this DEBT line, escalate to a protocol/model discussion. Trigger: standalone. | Owner: Claude | Model: claude-sonnet-5 | Review: none
