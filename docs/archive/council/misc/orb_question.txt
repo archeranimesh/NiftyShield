@@ -1,0 +1,33 @@
+Strategy 2 of NiftyShield's swing strategy pipeline is an Opening Range Breakout (ORB) on Nifty 50 using weekly credit spreads. The strategy forms the opening range from the first N 15-min candles and enters on a breakout if the OR width is below a fraction of the 14-day ATR. Full spec in SWING_STRATEGY_RESEARCH.md (Strategy 2 section). Three structural design decisions need council input before the signal generator is built.
+
+DECISION 1 — Volatility filter: ATR-only vs. VIX co-filter
+
+Current spec: entry allowed when OR width < (0.6 × 14-day ATR). No VIX condition.
+
+Position A (ATR-only): 14-day ATR is sufficient. It directly measures the denominator the OR is compressed against. Adding VIX introduces a second threshold with its own boundary-noise problem — VIX fluctuates ±1–1.5 points daily; 20–30% of entry days fall within ±1.5 points of any fixed threshold (per Donchian council precedent). Sample sizes in low-VIX cells are too small to validate a VIX-based exclusion rule empirically.
+
+Position B (VIX co-filter mandatory): ATR measures past realised vol; VIX measures forward implied vol. They diverge on pre-event consolidation days — realised vol is low (ATR low), but the market is pricing known event risk (VIX elevated). On these days, the OR looks "compressed" by the ATR filter but the post-open move is driven by announcement content, not overnight information resolution. The ORB hypothesis is structurally invalid on these days. Without a VIX filter, the strategy systematically enters on the worst days.
+
+Position C (dual filter): OR width < ATR fraction AND VIX below percentile threshold. Strictest, lowest trade count, cleanest hypothesis.
+
+Questions: (1) Which filter best preserves the ORB hypothesis without overfitting? (2) Should VIX be applied as an absolute threshold or as IVP (rolling percentile rank)? (3) If VIX co-filter is adopted, what cutoff — absolute or percentile?
+
+DECISION 2 — Event day treatment: structural exclusion or leave to filters?
+
+Current spec: structurally excludes weekly expiry Thursdays. Silent on RBI MPC days, Union Budget day, major US Fed event days.
+
+Position A (structural exclusion): The ORB hypothesis — overnight uncertainty resolves into directional breakout conviction from the opening range — is by definition invalid on announcement days. The actual post-open move is determined by announcement content at a known future time, not by overnight information already absorbed. A static calendar of RBI MPC dates, budget dates, and key US Fed events is available months in advance — using it is not look-ahead bias.
+
+Position B (no explicit exclusion): The ATR/VIX filter handles elevated-volatility event days implicitly. Explicit calendar-based exclusion introduces subtle selection bias — by manually excluding "bad" days, you are not testing whether the filter itself is sufficient. If the filter fails on event days, that is signal to strengthen the filter, not to add manual exclusions. Also: the spec notes ORB "works" on post-event days — a blanket event-week exclusion could eliminate the strategy's most productive setup days.
+
+Questions: (1) Is manual event-day exclusion a structural necessity, or over-engineering if a proper VIX filter is in place? (2) Does excluding pre-announced event dates introduce look-ahead bias in a backtest?
+
+DECISION 3 — Near-expiry contract selection: nearest weekly vs. skip-to-next when DTE is low
+
+Current spec: "nearest weekly (Thursday expiry), giving 0–4 DTE." No rule for what happens when a Monday or Tuesday signal leaves only 2–3 DTE to Thursday.
+
+Position A (always nearest weekly): Theta decay is steepest in the last 2–3 DTE — from a premium-per-day perspective, 2-DTE options are the most efficient vehicle for same-day directional bets. The hard exit at 15:15 IST removes overnight risk. DhanHQ ATM±10 coverage applies near expiry.
+
+Position B (skip to next weekly when DTE ≤ 2): At 2 DTE, the spread's Greeks are so extreme that discrete 15-min bar backtesting cannot model intraday spike risk accurately — a 50-point Nifty intraday move can breach a spread's max loss and recover within a single 15-min candle, leaving the backtest showing a loss that live execution would have stopped out on at tick level. The 8-DTE next weekly has stable Greeks throughout the session. OTM strike liquidity on 2-DTE Nifty weeklies is also materially lower.
+
+Questions: (1) Should there be a DTE cutoff below which next weekly is preferred, and if so what threshold (≤1, ≤2, ≤3 DTE)? (2) How significantly does 2-DTE gamma risk affect 15-min discrete-bar backtest fidelity vs. continuous-time Greeks? (3) Is near-expiry liquidity on Nifty weeklies sufficient at ATM±5 strikes at 2 DTE for a realistic cost model?

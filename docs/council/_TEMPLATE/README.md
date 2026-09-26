@@ -6,6 +6,11 @@ Only start here after the Step 2b council checkpoint (`CLAUDE.md` §Step 2b) con
 three trigger conditions hold. See `docs/council/README.md` §"When to Trigger the Council"
 for the full test and the do-NOT-trigger list.
 
+**Before copying anything: check `docs/council/README.md` §"Topics Already Covered".** If
+an existing or closely adjacent topic slug is already there — `active` or `archived` — read
+that file first rather than drafting a new question. The council should not be asked the
+same question twice.
+
 ```
 cp docs/council/_TEMPLATE/question.md tmp/q<N>_<topic-slug>.md
 cp docs/council/_TEMPLATE/submit.sh    tmp/q<N>.sh
@@ -31,9 +36,9 @@ in a separate terminal.
 
 Output lands at `docs/council/YYYY-MM-DD_<topic>.md`. Read it — Stage 3 Chairman Synthesis
 first — then update `DECISIONS.md` and the relevant plan/strategy doc per
-`docs/council/README.md` §"Workflow". Once absorbed, the file moves to the matching
-`docs/archive/council/<category>/` subfolder and gets a row in `docs/council/README.md`
-§"Archived Decisions".
+`docs/council/README.md` §"Workflow", and add a row to §"Topics Already Covered" for the new
+topic slug. Once absorbed, the file moves to the matching `docs/archive/council/<category>/`
+subfolder and its §"Topics Already Covered" row is updated to `archived`.
 
 ## Choosing a template
 

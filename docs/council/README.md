@@ -21,6 +21,43 @@ docs/archive/council/
 Active (unresolved) council decisions live directly under `docs/council/` as `YYYY-MM-DD_<topic>.md`. Once the decision is absorbed into `DECISIONS.md` and the relevant strategy/plan docs, it moves to
 the appropriate `docs/archive/council/` subfolder.
 
+## Topics Already Covered
+
+**Check this table before drafting a new question.** If an existing or closely adjacent
+topic slug appears below, read that file first — via `protocol-reference` §1 if it's still
+`active` — rather than resubmitting the same question to the council.
+
+| Topic slug | Status | File | Key decision |
+|---|---|---|---|
+| donchian-roll-mechanics | archived | `archive/council/strategy/2026-05-01_donchian-roll-mechanics.md` | Signal-in-only; uniform credit spreads; ATR-proportional width, floor 150 |
+| orb-volatility-filter-design | archived | `archive/council/strategy/2026-05-01_orb-volatility-filter-design.md` | ATR primary filter + VIX-IVP ≥90th pct exclusion; event-day calendar exclusion; DTE ≤2 skip |
+| csp-entry-delta-v2 | archived | `archive/council/strategy/2026-05-02_csp-entry-delta-v2.md` | 22-delta default; 25-delta when IVR 25–40 |
+| gap-fade-vix-filter-threshold | archived | `archive/council/strategy/2026-05-02_gap-fade-vix-filter-threshold.md` | Gap Fade IVP threshold: 75th pct (vs ORB 90th) |
+| integrated-leg2-strike-methodology | archived | `archive/council/strategy/2026-05-02_integrated-leg2-strike-methodology.md` | %OTM over delta-based for Leg 2 |
+| iron-condor-v1-core-design | archived | `archive/council/strategy/2026-05-02_iron-condor-v1-core-design.md` | Mild put-side asymmetry: 16Δ/14Δ normal, 18Δ/12Δ high-IVR |
+| nifty-long-instrument-comparison-protection | archived | `archive/council/strategy/2026-05-02_nifty-long-instrument-comparison-protection.md` | Track C = Deep ITM Call (delta ≈ 0.90); Futures+CC/CSP blocked |
+| continuous-revalidation-statistical-power | archived | `archive/council/risk/2026-05-02_continuous-revalidation-statistical-power.md` | CUSUM lower-sided (k=0.50); graduated regime by N |
+| multi-strategy-portfolio-risk-allocation | archived | `archive/council/risk/2026-05-02_multi-strategy-portfolio-risk-allocation.md` | 10 binding rules: delta caps, ₹3–4L stress loss, ₹6L drawdown kill |
+| variance-gate-regime-completeness | archived | `archive/council/risk/2026-05-02_variance-gate-regime-completeness.md` | Phase 0.8 gate: 4 criteria A–D; graduated deployment tiers |
+| gamma-acceleration-mispricing-option-buying | archived | `archive/council/research/2026-05-02_gamma-acceleration-mispricing-option-buying.md` | Gamma Gearing primary metric; Speed secondary; OI velocity confirmation only |
+| paper-trade-exit-philosophy | archived | `archive/council/strategy/2026-06-26_paper-trade-exit-philosophy.md` | TIME_STOP/DTE_REVIEW priority fix; StrategyMonitor observability logs |
+| strategy-monitor-watchlist-design | archived | `archive/council/data_architecture/2026-06-26_strategy-monitor-watchlist-design.md` | StrategyMonitor watchlist design and storage |
+| ic-v2-core-design | archived | `archive/council/strategy/2026-06-26_ic-v2-core-design.md` | IronCondorV2 25Δ/22Δ entry, 10Δ wings, partial-roll, DTE exits |
+| ic-v2-profit-lock-adjustment | archived | `archive/council/strategy/2026-06-27_ic-v2-profit-lock-adjustment.md` | IC V2 profit-lock Zone 1/2/3 rules |
+| signals-paper-track-execution-layer | archived | `archive/council/strategy/2026-09-09_signals-paper-track-execution-layer.md` | Signals→paper track execution layer design |
+| paper-delta-source-architecture | active | `council/2026-07-02_paper-delta-source-architecture.md` | not yet absorbed into `DECISIONS.md` — read before citing |
+| pp-crash-monetize-profit-extraction | active | `council/2026-08-03_pp-crash-monetize-profit-extraction.md` | not yet absorbed into `DECISIONS.md` — read before citing |
+| ic-time-stop-dte-tiering | active | `council/2026-08-05_ic-time-stop-dte-tiering.md` | not yet absorbed into `DECISIONS.md` — read before citing |
+| overlay-pnl-reporting-track-independence | active | `council/2026-08-10_overlay-pnl-reporting-track-independence.md` | overlay P&L invariant (SNAP-5/BUG-032/BUG-028) — see `DECISIONS.md:344` |
+| bug032-ambiguous-match-aggregation-vs-hard-fail | active | `council/2026-08-24_bug032-ambiguous-match-aggregation-vs-hard-fail.md` | not yet absorbed into `DECISIONS.md` — read before citing |
+| mvp-corporate-actions | active | `council/2026-09-25_mvp-corporate-actions.md` | not yet absorbed into `DECISIONS.md` — read before citing |
+
+Superseded-only entries (`donchian-roll-mechanics` 04-30 prelim, `paper-trade-exit-philosophy`
+05-28, `strategy-monitor-watchlist-design` 06-02) are omitted above — the row shown is the
+current version. Question **drafts** for everything already listed here (including the
+resolved `bug028`/`orb`/`bug032` ones) live in `archive/council/misc/` as prompt-only
+records, not as re-runnable questions.
+
 ## When to Trigger the Council
 
 **The council is a planning-phase tool. Never invoke it mid-implementation.** The right moment is after scope is confirmed but before the implementation plan is finalised — so the council output can
@@ -68,25 +105,18 @@ Implementation  ✗  Do not stop mid-implementation to ask the council; finish t
 
 ## Submitting a Question
 
+Start from `docs/council/_TEMPLATE/` rather than drafting freehand — see
+`_TEMPLATE/README.md` for the copy-and-fill steps. It checks §Topics Already Covered above
+for you before a new question is drafted. Once `question.md` and `submit.sh` are filled in:
+
 ```bash
 # Council server must be running first
 cd tools/llm-council && ./start.sh
 
 # From project root — in a new terminal
-python scripts/ask_council.py \
-    --topic slippage-model \
-    --template backtest_methodology \
-    --question "Which slippage model is appropriate for NSE Bhavcopy backtesting?"
+bash tmp/q<N>.sh
 
-# Include an additional strategy spec as context
-python scripts/ask_council.py \
-    --topic csp-delta-selection \
-    --template strategy_parameters \
-    --context docs/strategies/csp_nifty_v1.md \
-    --question "Should the CSP entry delta be 0.20 or 0.25 given the stress window data?"
-
-# Preview the assembled prompt without submitting
-python scripts/ask_council.py --topic foo --question "..." --dry-run
+# Preview the assembled prompt without submitting (edit submit.sh to add --dry-run)
 ```
 
 ## Templates
@@ -99,10 +129,13 @@ python scripts/ask_council.py --topic foo --question "..." --dry-run
 
 ## Workflow
 
-1. I (Claude) draft the question + recommend a `--template` when a non-obvious design decision arises
-2. You run `ask_council.py` (server must be up)
+1. I (Claude) check §Topics Already Covered, then draft the question from `_TEMPLATE/` +
+   recommend a `--template` when a non-obvious design decision arises
+2. You run `bash tmp/q<N>.sh` (server must be up)
 3. Decision is saved to `docs/council/YYYY-MM-DD_<topic>.md`
-4. I read the decision file and update `DECISIONS.md` + relevant plan files
+4. I read the decision file and update `DECISIONS.md` + relevant plan files, add a row to
+   §Topics Already Covered, then move the file to the matching `archive/council/<category>/`
+   subfolder once absorbed
 
 ## Response File Structure
 

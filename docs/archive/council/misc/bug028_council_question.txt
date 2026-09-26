@@ -1,0 +1,68 @@
+BUG-028: NiftyShield's overlay P&L reporting pipeline (track_snapshot.py's
+generate_track_snapshot(), paper_3track_snapshot.py's
+_compute_overlay_pnl_snapshots()/_build_recovery_digest()) still assumes CC/PP/
+Collar overlay legs are filed under one of the three base 3-track strategies'
+own strategy_name (paper_nifty_spot / paper_nifty_futures / paper_nifty_proxy).
+On 2026-07-29 (S2r), overlay entry/roll was deliberately decoupled from tracks:
+all overlay legs now write under a single standalone strategy_name
+(STRATEGY_OVERLAY = "paper_nifty_overlay"), independent of which of the three
+base tracks is running. The reporting pipeline was never updated to match, so
+every overlay leg opened since S2r shows as a silent, unflagged 0 P&L in
+paper_overlay_pnl_snapshots and the daily "NiftyBees vs overlays" Telegram
+digest — no exception, no warning, indistinguishable from "no P&L movement
+today." Full root-cause writeup: docs/bugs/bugs.md BUG-028 entry.
+
+Two fixes are on the table. Council input is needed before implementation
+because this is load-bearing for daily reporting and any future automation
+built on paper_overlay_pnl_snapshots, the two options produce materially
+different module boundaries, and it spans both strategy-design (was S2r's
+track-independence choice correct to begin with, and does the reporting layer
+need to honor it) and data-architecture (table schema/keying, migration path)
+simultaneously.
+
+DECISION — Re-couple reporting to tracks, or decouple the pipeline to match
+the entry layer's actual architecture?
+
+Position A (Re-attribute): extend generate_track_snapshot() to additionally
+query STRATEGY_OVERLAY-scoped legs and attribute them back into each base
+track's per-track view, preserving the current report's shape (each track
+"carries" its own overlay in the digest, as it did pre-S2r). Smallest diff —
+touches one function's query scope, no schema change. Tension: this re-couples
+overlays to tracks for reporting purposes only, cutting directly against S2r's
+own rationale for decoupling them at the entry layer. It also leaves an
+unresolved attribution question with no obviously correct answer: when a
+STRATEGY_OVERLAY leg is genuinely track-independent, which track's view should
+show it in the digest — all three (triple-counting the same P&L), one
+designated "primary" track (arbitrary), or a new synthetic aggregate row
+(changes the report's shape anyway, undermining the "smallest diff" claim)?
+
+Position B (Decouple pipeline): rebuild the overlay P&L/snapshot/digest
+pipeline around STRATEGY_OVERLAY as its own first-class independent strategy,
+matching the entry layer's actual current architecture. Larger, multi-file
+rework — track_snapshot.py, paper_3track_snapshot.py, PaperStore, the
+paper_overlay_pnl_snapshots table's schema/semantics (currently keyed to a
+track-carrying strategy_name, would need to key on STRATEGY_OVERLAY directly
+or drop the track dimension entirely), and the recovery digest's entire
+framing (currently built around "NiftyBees vs each track's overlay," would
+become "NiftyBees vs one track-independent overlay book"). Structurally
+correct going forward and avoids re-litigating the coupling S2r just removed,
+but touches more surface area and needs a migration story for the
+2026-08-04-and-earlier snapshot rows that were correctly filed under a track's
+strategy_name before S2r shipped (do they get backfilled/relabeled, or does
+the table simply have a schema discontinuity at the S2r date?).
+
+Questions: (1) Given S2r was a deliberate operator decision to decouple
+overlays from tracks at the entry layer, is it architecturally sound for the
+reporting layer to reintroduce that coupling (Position A), or does that just
+relocate the confusion S2r was written to resolve? (2) If Position B is
+correct, can the pipeline rework be done incrementally (e.g. dual-write old
+and new shape for one release) without a hard migration/backfill step for
+in-flight overlay positions, or does the schema discontinuity at the S2r
+cutover date make a clean backfill necessary regardless? (3) Is there a third
+option — e.g. persisting overlay P&L under STRATEGY_OVERLAY but computing a
+read-time join against whichever track is "active" for display purposes only,
+with no schema change — that neither A nor B as scoped considered? (4) Does
+the daily Telegram digest's audience (a single human operator monitoring one
+account) argue for a simpler design than a fully general strategy-independent
+reporting layer would need to support if this pipeline were ever meant to
+scale to N concurrent strategies?
