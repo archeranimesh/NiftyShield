@@ -45,6 +45,11 @@ equivalents.
 3. Decide whether `scratch/`'s subfolder-per-purpose convention should exist from day one (empty buckets) or only appear once a project's own scratch/ folder passes some file count — this specific
    question was left open in discussion and needs Animesh's call, not an assumed answer.
 4. Confirm the `tmp/README.md` one-liner travels as-is (it's already fully generic).
+5. **Re-scoped in from PTB-3 (2026-09-26):** `commit` and `session-close` are both classified Tier 0 in `plan.md`'s own tier table, so their stripped/genericized skill files belong here, not in PTB-3.
+   Produce `.claude/skills/commit/SKILL.md` and `.claude/skills/session-close/SKILL.md` with every NiftyShield-specific reference removed (`@code-reviewer`/`@greeks-analyst`/`@roll-validator` gates,
+   `scripts.dev.commit_preflight`, `scripts.dev.token_audit`, `scripts.dev.session_audit_log`, council/Antigravity checklist rows) — keep only the mechanism that has no NiftyShield-specific tooling
+   dependency: diff review → tests → structured commit message → stage/commit → confirm SHA (for `commit`); and a Tier-0-only protocol checklist (CONTEXT.md read, scope confirmed, plan + go-ahead,
+   tests written, docs updated, commit + SHA confirmed) plus a plain-append `session_audit.jsonl` row with no external CLI dependency (for `session-close`).
 
 **Tests:** none.
 
@@ -57,12 +62,12 @@ equivalents.
 **Files to change / create:**
 - `docs/plan/project-template-blueprint/plan.md` — Tier 1 section.
 
-**Before any code:** re-read `.claude/skills/work/SKILL.md`, `.claude/skills/new-story/SKILL.md`, `.claude/skills/session-close/SKILL.md` to identify exactly which lines are NiftyShield-specific
-(paths, project names, module lists) versus mechanism.
+**Before any code:** re-read `.claude/skills/work/SKILL.md`, `.claude/skills/new-story/SKILL.md` to identify exactly which lines are NiftyShield-specific (paths, project names, module lists) versus
+mechanism. (`commit` and `session-close` moved to PTB-2, 2026-09-26 — both are Tier 0, not Tier 1.)
 
 **What to implement:**
 
-1. For each of `work` / `new-story` / `session-close` / `commit`, produce a stripped/parameterized version (or a diff against the NiftyShield original) suitable for a new project.
+1. For each of `work` / `new-story`, produce a stripped/parameterized version (or a diff against the NiftyShield original) suitable for a new project.
 2. Confirm `docs/plan/_TEMPLATE/` itself needs no changes (it's already project-agnostic scaffolding) — or note what, if anything, is NiftyShield-specific in it.
 3. State the concrete trigger for adding `DECISIONS.md` and `TODOS.md` ("on the first real architecture decision" / "on the first backlog item" — confirm this is precise enough to act on, not just a
    slogan).

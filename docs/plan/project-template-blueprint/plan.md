@@ -80,17 +80,52 @@ the first real consumer anyway.
 ### Tier 0 output, concretely (answered ahead of PTB-5, scoped to Tier 0 only)
 
 The output is a git repo, not a loose folder of files floating around — a small one, mostly markdown plus a few real config files, version-controlled itself so the template can be iterated on and
-diffed over time. A canonical location, e.g. `~/myWork/myCode/_templates/py-project-tier0/`, holding:
+diffed over time.
 
-- `CLAUDE.md` (Step 1–5 skeleton, no NiftyShield-specific references)
-- `CONTEXT.md` skeleton, `README.md` skeleton
-- `scratch/` (with `SCRATCH.md`'s naming + convergence rules) and `tmp/` (gitignored)
-- `.claude/skills/commit/SKILL.md` and `.claude/skills/session-close/SKILL.md`
-- `pyproject.toml` (ruff/mypy/pytest config), `.pre-commit-config.yaml`, `.gitignore`
-- an empty `session_audit.jsonl` + `suggestions.md` seed
+**Canonical location (superseding the earlier `~/myWork/myCode/_templates/py-project-tier0/` sketch — decided in the PTB-2 session):** `/Users/abhadra/myWork/myCode/AI/project-scaffold/`. The root
+folder name names the template project itself, not a single tier or language; each tier is a subfolder inside it (`tier0/`, `tier1/`, `tier2/`, `tier3/`), added as PTB-2/3/4 concretize each one. Not
+yet `git init`'d — deliberately deferred until PTB-3 fills in the two currently-empty skill directories below, so the first commit isn't half-empty.
+
+Current state of `project-scaffold/` (2026-09-26, PTB-2 session):
+
+```
+project-scaffold/
+├── tier0/                          # populated this session (PTB-2)
+│   ├── README.md
+│   ├── CLAUDE.md                   # Step 1-5 skeleton, placeholder comments for deferred sections
+│   ├── CONTEXT.md                  # 4-header skeleton (What Exists / Key Decisions ptr / Constraints / Protocol ptr)
+│   ├── .gitignore
+│   ├── session_audit.jsonl         # empty seed
+│   ├── suggestions.md              # empty seed
+│   ├── scratch/
+│   │   ├── SCRATCH.md              # naming convention + convergence rule; subfolder-bucket list stripped (Tier 0 stays flat)
+│   │   └── _lib/                   # empty, kept for the convergence rule to point to
+│   ├── tmp/
+│   │   └── README.md
+│   └── .claude/skills/
+│       ├── commit/SKILL.md          # written PTB-2 session (re-scoped from PTB-3 — Tier 0 per tier table above)
+│       └── session-close/SKILL.md   # written PTB-2 session (re-scoped from PTB-3 — Tier 0 per tier table above)
+├── tier1/                           # empty — PTB-3, now scoped to work/new-story only
+├── tier2/                           # empty — PTB-4
+└── tier3/                           # empty — PTB-4
+```
 
 Notably little actual Python code — Tier 0 is almost entirely markdown + config, which is exactly why "git repo to copy from" beats "installable package" here: there is no runtime code to
 version-bump, just a starting shape to copy.
+
+**`python-addon/` deferred, not built yet (decided in the PTB-2 session):** an earlier draft of this session put a `python-addon/` subfolder (with `pyproject.toml`, `.pre-commit-config.yaml`,
+ruff/mypy/pytest config) directly inside `tier0/`. Animesh corrected this — Tier 0 is meant to stay universal/language-agnostic, and this repo (`project-scaffold`) isn't itself a Python project, so
+building Python-specific tooling into it now is premature. Do **not** create `python-addon/` (at `tier0/python-addon/`, as a sibling of `tier0/`, or anywhere else) until a future session actually
+identifies `project-scaffold` — or the tier-0-derived output — as needing Python tooling. When that trigger fires, decide then whether it lives inside `tier0/`, as a sibling at the `project-scaffold/`
+root, or elsewhere; that placement question is explicitly not resolved by this note.
+
+**PTB-2 closed (2026-09-26):** Animesh confirmed the final file set. Corrections made during review before sign-off: `python-addon/` removed entirely (deferred — see below, not universal Tier 0);
+`.gitignore` stripped of Python-specific entries (`__pycache__/`, `*.pyc`, `.venv/`) and fixed so `tmp/README.md` isn't silently excluded by the `tmp/` ignore rule (`tmp/*` + `!tmp/README.md`);
+`commit` skill's Step 2 genericized (was hardcoded to `pytest`, now command-agnostic); `commit`/`session-close` skills re-scoped in from PTB-3 and written (see tree above) since both are Tier 0, not
+Tier 1, per this file's own tier table — PTB-3 narrowed to `work`/`new-story` only. `.claude/settings.json` deliberately excluded from Tier 0 — every hook/permission in NiftyShield's real file maps to
+a Tier 1+ mechanism (Rule 0 enforcement, council checkpoint, doc-staleness gates), so there is no Tier-0-appropriate content to ship; add the file the moment the first such mechanism is actually
+adopted. `docs/plan/` confirmed to stay Tier 1 (not pulled forward) — discussed and re-affirmed, the trigger-based principle holds even though story planning happens early in some projects, because
+the final project structure is flat regardless (see `TradeResearch` example above) so there's no cost to adding it exactly when the backlog trigger fires.
 
 **How a new project gets it — two viable mechanisms, either works, pick per-project:**
 
@@ -104,6 +139,20 @@ earlier submodule rejection (a live pointer isn't worth the coupling cost for st
 that auto-updates.
 
 Tier 1–3 distribution (does a project add these by editing its own copy of the same files, or is there a second template layer?) stays open for PTB-5 — this section only concretizes Tier 0.
+
+### Flatten-at-copy-time semantics (clarified in the PTB-2 session, input for PTB-5's scaffold script)
+
+Confirmed via `TradeResearch` (`/Users/abhadra/myWork/myCode/AI/TradeResearch/`) as a worked example: a real consuming project is **always one flat directory at its own root** —
+`TradeResearch/CLAUDE.md`, `TradeResearch/CONTEXT.md`, and `TradeResearch/scripts/*.py` all sit directly at root, with no `tier0/` or `python-addon/`-named subfolder anywhere inside it. This settles a
+question raised in discussion: the template repo's `tier0/`/`tier1/`/`tier2/`/`tier3/` subfolders are **source-only** — a place to copy *from* — and never appear as structure *inside* a scaffolded
+project. There is no "promote a file from tier1 up into tier0" step, because tiers are never merged with each other inside `project-scaffold/` itself; they are each independently overlaid onto a real
+project's root, once, at scaffold time. The same flattening applies to `python-addon/` once it exists (deferred, see above) — its files land directly in the consuming project's root (`pyproject.toml`,
+`.pre-commit-config.yaml`, `src/`), never inside a folder literally named `python-addon/` in the real project.
+
+**Idea floated for the PTB-5 scaffold script, not yet built (Animesh, this session):** make the local scaffold-script option interactive and repeatable rather than a static copy — run it once against
+a target path, have it ask a handful of yes/no questions (is this a Python project? does a backlog exist yet? etc.), and have it copy `tier0/*` plus whichever tier/addon deltas the answers select,
+flattened directly into the target root. Repeatable means re-running it against an existing project only adds files that don't already exist — it never overwrites what's already there. This is
+explicitly PTB-5 scope to design and build, not something to implement mid-PTB-2 — captured here so PTB-5 starts from it instead of re-deriving it from scratch.
 
 ## Open questions (carried from `prompt.md` §"Perspectives not covered" — not resolved here)
 
@@ -259,4 +308,6 @@ setup/maintenance cost for savings that only exceed that cost once the codebase 
 
 ## Status
 
-PTB-1 (this file) done. Next: PTB-2 — concretize Tier 0's literal starting file contents, and resolve the `scratch/` subfolder-timing question above.
+PTB-1 and PTB-2 done. Tier 0 file set confirmed and written to `/Users/abhadra/myWork/myCode/AI/project-scaffold/tier0/` (see "Tier 0 output, concretely" above) — `scratch/` subfolder-timing question
+resolved (stay flat until ~50 files), `commit`/`session-close` skills written and re-scoped in from PTB-3. Not yet `git init`'d in `project-scaffold/` (Animesh's call, deferred without a hard trigger
+stated — revisit next session). Next: PTB-3 — `work`/`new-story` skill genericization only.
