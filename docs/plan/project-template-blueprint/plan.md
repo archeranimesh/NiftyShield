@@ -272,7 +272,10 @@ meant for unrelated future projects to inherit; replaced with generic wording ca
 
 `project-scaffold` is now `git init`'d with its first commit (`2e0c667`) including all of the above.
 
-**How a new project gets it — two viable mechanisms, either works, pick per-project:**
+**How a new project gets it (decided PTB-5, 2026-09-26, superseding the two-mechanism sketch below):** `project-scaffold/scaffold.sh <destination-path> [--piece <name>]...` — a local, per-piece
+scaffold script, no GitHub dependency. `project-scaffold` stays local-only (no remote, not marked a GitHub template repository) until a second real consumer project actually needs `gh repo create
+--template`; see `DECISIONS.md` for the full reasoning. The two-mechanism sketch that follows (naming `py-project-tier0` and a `new_project_from_tier0` script) is the pre-PTB-5 draft, kept here as the
+historical record of the discussion this decision resolved — the actual script is `project-scaffold/scaffold.sh`, not either name below.
 
 1. **GitHub template repository** — mark the repo as a template in its settings, then `gh repo create <new-project> --template <you>/py-project-tier0` creates a brand-new repo seeded with those files
    and fresh git history (not a fork, no linkage back). Clean, but assumes the new project is pushed to GitHub.
@@ -508,3 +511,12 @@ problems flagged for PTB-5 (per-item rather than per-level selection; `settings.
 re-scoped from "hand off to a build story" to the distribution decision plus `scaffold.sh` per-piece selection and merging (`.gitignore` added as a third merged file — `python/` needs it); PTB-7 (Tier
 2 content), PTB-8 (Tier 3 content), and PTB-9 (port this guide into `project-scaffold/README.md`, ship a trigger list into scaffolded projects, three-configuration end-to-end validation, archive)
 added. Order: PTB-5 → PTB-6 → PTB-7 → PTB-8 → PTB-9. `project-scaffold` commit SHAs are recorded here per task from PTB-5 on.
+
+**PTB-5 closed (2026-09-26):** Distribution decision recorded in `DECISIONS.md` — `project-scaffold` stays a copy-once template repo, local-only (no GitHub remote) for now. `scaffold.sh` rewritten
+around per-piece `--piece <name>` selection (`tier1`, `tier2/{stakes,test-runner,multi-surface}`, `tier3/{rule0,md-organize,state-freshness,weekly-audit}`); Tier 0 always applies. `tier0/CLAUDE.md`
+gained named `<!-- INSERT: NAME -->` markers at Step 1 (rule0), Step 2b (stakes), Step 3 (multi-surface), Step 4 (test-runner), Step 5a (state-freshness, md-organize), Step 5c (weekly-audit).
+`tier2/`/`tier3/` restructured into empty per-piece placeholder folders (`.gitkeep`), content is PTB-7/PTB-8. Merge mechanics: `CLAUDE.md` fragments at markers (idempotent, python3-checked containment
+— a first attempt used `grep -F` for the idempotency check, which is wrong for multi-line patterns and was replaced); `.claude/settings.json` hook-array merge per event/matcher via `python3` (tradeoff
+vs `jq`/bash recorded in `DECISIONS.md`); `.gitignore` append-with-dedup. Validated against `/Users/abhadra/myWork/myCode/AI/_scratch_to_delete`: tier0-only, tier0+tier1,
+tier0+tier1+dummy-tier2+dummy-tier3 (dummy fragments built in the session scratchpad only, never committed) — valid merged JSON, both fragments landed at markers, second run zero-diff.
+`project-scaffold` commits: `84357d8` (baseline `scaffold.sh` committed unchanged, per the task spec) then `d433ba0` (`feat: per-piece scaffold selection with merged shared files`). Next: PTB-6.

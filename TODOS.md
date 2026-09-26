@@ -117,6 +117,12 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 - [2026-09-26] `project-template-blueprint/` re-planned (docs-only) — end state is now a self-contained `project-scaffold`, not a design doc plus a follow-on build story. PTB-5 re-scoped to the
   distribution decision + `scaffold.sh` per-piece selection and merging of `CLAUDE.md` / `settings.json` / `.gitignore`; PTB-7 (Tier 2 content), PTB-8 (Tier 3 content), PTB-9 (guide ported into
   `project-scaffold/README.md`, shipped trigger list, three-config validation, archive) added; `prompt.md` scope guard + DoD rewritten; PTB-1/2/4 SHAs backfilled.
+- [2026-09-26] `project-template-blueprint/` PTB-5 done — distribution decision recorded in `DECISIONS.md` (`project-scaffold` stays copy-once, local-only, no GitHub remote). `scaffold.sh` rewritten
+  for per-piece `--piece <name>` selection (tier1/tier2 sub-pieces/tier3 sub-pieces independently selectable, tier0 always applied); `tier0/CLAUDE.md` gained named insertion markers; `tier2/`/`tier3/`
+  restructured into empty per-piece placeholders (content is PTB-7/PTB-8). Merge mechanics added: `CLAUDE.md` fragment-at-marker (idempotent via python3 containment check), `.claude/settings.json`
+  hook-array merge per event/matcher via python3 (chosen over `jq`/bash — see `DECISIONS.md`), `.gitignore` append-with-dedup. Validated tier0-only, tier0+tier1, and
+  tier0+tier1+dummy-tier2+dummy-tier3 against `_scratch_to_delete`: valid merged JSON, fragments landed at markers, second run zero-diff. `project-scaffold` SHAs `84357d8` (baseline commit) +
+  `d433ba0` (rewrite). Next: PTB-6.
 - [2026-09-26] `strategy-refactor-blueprint/` scaffolded (docs-only, no code) — captures a discussion session's finding that `src/strategy/` (14,255 LOC) is dominated by `ic_nifty_v2.py` (2,935
   lines) + `ic_nifty_v1.py` (1,409 lines), ~30% of the package with no existing `DEBT-*` tracking it, and lays out a golden-test-gated, council-ruled, one-extraction-per-commit approach to decomposing
   it without disturbing live paper-trading cycles. Also confirmed `md-organize` already covers the doc-growth (`TODOS.md`/`DECISIONS.md`) side of the same discussion — BP-1 just needs to run it, not

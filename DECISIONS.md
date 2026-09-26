@@ -1132,6 +1132,31 @@ session (−27.25% over 11 months on a live `gtf`/`diwali-picks` pick) but the c
 
 ---
 
+## `project-template-blueprint` — distribution decision + per-piece scaffold mechanics (PTB-5, 2026-09-26)
+
+Distribution stays a **copy-once template repo**, not a submodule and not an installable package — reaffirms the PTB-1/PTB-2 conclusion (`docs/plan/project-template-blueprint/plan.md` §"Distribution
+mechanism"): most of what's templated is static harness config Claude Code reads at session start, not runtime code with a version story. `project-scaffold`
+(`/Users/abhadra/myWork/myCode/AI/project-scaffold/`) **stays local-only for now** (Animesh, this session) — no GitHub remote, not marked a template repository; revisit once a second real consumer
+project needs `gh repo create --template`. Reconciled `plan.md`'s stale mechanism text (the `py-project-tier0` name and `new_project_from_tier0` script were superseded by `project-scaffold` +
+`scaffold.sh`).
+
+`scaffold.sh` rewritten around **per-piece selection**, not a numeric tier level: Tier 0 always applies; every later piece (`tier1`, `tier2/{stakes,test-runner,multi-surface}`,
+`tier3/{rule0,md-organize,state-freshness,weekly-audit}`) is its own `--piece <name>` flag, so "2a yes, 2b no, Rule 0 yes, weekly-audit not yet" is expressible — the numeric level couldn't express
+that combination. Kept: refuses a non-empty destination without `--force`; re-running only adds files that don't already exist, never overwrites; no `git init`/commit.
+
+Three shared files can no longer be overwritten wholesale once two tiers both touch them, so each piece ships a fragment and `scaffold.sh` merges: `CLAUDE.md` fragments (`CLAUDE.fragment.md`, first
+line `<!-- marker: NAME -->`) are inserted at named `<!-- INSERT: NAME -->` markers in `tier0/CLAUDE.md`, idempotent by checking whether the fragment's body is already present verbatim (an earlier
+`grep -F` idempotency check was wrong — multi-line `-F` patterns match if *any single line* of the pattern matches a line in the target, so a blank line in the fragment made every file look like a
+match; fixed by doing the containment check in the `python3` merge step, where a multi-line substring check behaves correctly). `.claude/settings.json` hook arrays are merged per event/matcher via
+**`python3`** (chosen over `jq` — an extra external dependency neither Tier 0 nor a non-Python project otherwise needs — and over plain-bash append, which can't safely do structural JSON merging;
+`python3` ships by default on macOS and most Linux, and `python/`-overlay projects already require it). `.gitignore` lines are appended with duplicates skipped.
+
+Validated against `/Users/abhadra/myWork/myCode/AI/_scratch_to_delete` (tier0-only; tier0+tier1; tier0+tier1+dummy-tier2+dummy-tier3-piece each registering one hook and one `CLAUDE.md` fragment) —
+confirmed valid merged JSON, both fragments landed at their markers, and a second run against the same destination produced zero diff. The dummy Tier 2/3 fragments were built in the session
+scratchpad, not committed — `tier2/`/`tier3/` ship as empty per-piece placeholder folders; content is PTB-7/PTB-8.
+
+---
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/` (except 0.6c), `src/streaming/` — all empty
