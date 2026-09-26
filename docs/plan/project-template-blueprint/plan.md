@@ -86,6 +86,114 @@ the first real consumer anyway.
 - `scratch/` subfolder timing for a new project (see above, under the scratch/tmp section) — open for PTB-2.
 - Where the template repo itself should live, and whether it ever needs an "update flow" back into existing consumers or is genuinely copy-once — open for PTB-5.
 
+## Full inventory — everything present in NiftyShield, classified by tier
+
+Working pass at PTB-2/PTB-3/PTB-4's classification question, done as one inventory sweep rather than per-tier — enumerate first, concretize file contents per tier afterward. "Not portable" means the
+item is real and good but tied to this project's domain (options trading) and shouldn't be copied; "pattern only" means the mechanism generalizes but the content must be rewritten per project, not
+copied verbatim.
+
+### Python / code hygiene (from `CLAUDE.md` + the global `~/.claude/CLAUDE.md`)
+
+<!-- lint-ignore-length -->
+| Item | Tier | Note |
+|---|---|---|
+| Type hints + Google-style docstrings on public functions | 0 | Portable as-is. |
+| `(str, Enum)` pattern, never `StrEnum` | 0 | Portable as-is (a 3.10 compatibility choice, not project-specific). |
+| Functions 10–20 lines typical, split only for clarity | 0 | Portable as-is. |
+| Frozen `dataclasses` / Pydantic for API shapes | 0 | Portable as-is. |
+<!-- lint-ignore-length -->
+| `Decimal` for all monetary values, SQLite `TEXT` + `Decimal(row[...])` read-back | 0 | Portable *pattern* — adopt whenever a project touches money (true for CardLedger and TaxCalculation, not universal for every future project). |
+<!-- lint-ignore-length -->
+| `asyncio` as primary concurrency model, `ProcessPoolExecutor` for CPU-bound, explicit timeouts | not portable by default | This is NiftyShield-specific to its live 30s-cadence daemon. Adopt only if a future project is itself a long-running concurrent service — not CardLedger/TaxCalculation, which are batch scripts. |
+| Testing: offline-first, one happy-path + one edge-case per public function, integration opt-in only | 0 | Portable as-is. |
+| Git conventions (imperative ≤60-char subject, never amend pushed commits, stage specific files) | 0 | Portable as-is. |
+
+### `CLAUDE.md` protocol mechanics
+
+<!-- lint-ignore-length -->
+| Item | Tier | Note |
+|---|---|---|
+| Step 1–5 skeleton (read context → confirm scope → plan+go-ahead → tests mandatory → docs→tests→commit) | 0 | Portable pattern — the shape, not NiftyShield's specific file names. |
+| Bash output discipline (aggregate/filter before it enters context) | 0 | Portable as-is — cheap, universal token hygiene. |
+| Tool-call param hygiene notes (`AskUserQuestion` plain strings, don't poll `ScheduleWakeup` for subagents) | 0 | Portable as-is — these are Claude-Code-harness-level facts, not project facts. |
+| Rule 0 — graph-before-read (`codebase-memory-mcp`) + its specific project-id/`repo_path` param hygiene | 3 | Only earns its cost once a codebase is large enough to index; dead weight below that. |
+| Step 2b — council checkpoint (three-condition test) | 2 | Pattern generalizes; content (which council, what template) is per-project. |
+| Step 3b — Claude vs. Antigravity routing table | 2 | Only relevant if a project actually splits work across two agent surfaces. |
+| AutoTrigger agent table (blocking test-runner / code-reviewer) | 2 | Mechanism generalizes; NiftyShield's specific agents do not (see Agents below). |
+
+### Skills (`.claude/skills/*`)
+
+<!-- lint-ignore-length -->
+| Skill | Tier | Note |
+|---|---|---|
+| `commit` | 0 | Portable pattern (message format, stage-specific-files) once stripped of NiftyShield's code-reviewer-gate specifics. |
+| `work` | 1 | Portable pattern — front-door router to feature/bug trees; needs `docs/plan/`+`docs/bugs/` to exist first. |
+| `new-story` | 1 | Portable as-is — thin wrapper around a scaffold script, already project-agnostic. |
+| `session-close` | 1 | Portable as-is — the token-efficiency audit is domain-agnostic. |
+| `md-organize` | 3 | Portable pattern, fires only once a doc crosses the size trigger. |
+| `weekly-audit` | 3 | Portable pattern, only worth the cadence once there's enough surface area. |
+<!-- lint-ignore-length -->
+| `protocol-reference` | 1 (pattern) / 2 (most content) | The *pattern* — keep `CLAUDE.md` resident-only, push detail to a lazily-loaded skill — is Tier 1 good practice for any project whose protocol doc is growing. Its actual sections (council protocol, AI-collaboration routing) are Tier 2 content. |
+| `prompt-refine` | 1 | Generic utility, optional. |
+| `handoff-antigravity` | 2 | Only if Antigravity is actually in the workflow. |
+
+### Agents (`.claude/agents/*`)
+
+<!-- lint-ignore-length -->
+| Agent | Tier | Note |
+|---|---|---|
+<!-- lint-ignore-length -->
+| `test-runner` | 2 | The underlying rule ("tests pass before commit") is Tier 0; running it via a dedicated blocking subagent is Tier 2 overhead, worth it once sessions are long/complex enough that inline `pytest` runs bloat context. |
+| `code-reviewer` | 2 | A generic version (type hints, async correctness, no domain checks) is a reasonable Tier 2 default; NiftyShield's Decimal/BrokerClient-specific checks stay behind. |
+<!-- lint-ignore-length -->
+| `greeks-analyst`, `roll-validator`, `options-strategist` | not portable | Entirely NiftyShield/options-domain-specific. A future project's Tier 2 would define its own equivalents (e.g. a `tax-rule-reviewer`), not reuse these. |
+
+### Hooks (`.claude/hooks/*`, `scripts/dev/hooks/*`, pre-commit)
+
+<!-- lint-ignore-length -->
+| Hook | Tier | Note |
+|---|---|---|
+| `ruff` / `ruff-format` / `mypy` / `detect-secrets` (pre-commit) | 0 | Portable as-is. |
+<!-- lint-ignore-length -->
+| `no-script-main-logger` / `no-bare-logging` (pre-commit) | 0 | Portable *pattern* — enforce whatever the project's canonical logging entrypoint is; the specific rule (`structlog.get_logger(__name__)` banned in `scripts/`) is NiftyShield's own convention shape, reusable if a project adopts the same logging setup. |
+| `task_protocol.sh` (UserPromptSubmit step gate) | 1/2 | The nudge mechanism is generalizable once a project has a `CLAUDE.md` protocol worth enforcing; its specific step list is this project's. |
+| `doc_update_gate.sh` (reminds to update state docs on commit) | 1 | Portable pattern once `TODOS.md`/`DECISIONS.md`/`docs/plan/README.md` exist (Tier 1). |
+| `check_story_structure.py` / `check_checkbox_consistency.py` (+ `md-line-length` / `md-reflow`) | 1 | Portable as-is — these enforce the `docs/plan/_TEMPLATE` shape itself, so they travel with it. |
+| `repeat_read.sh` / `check_repeat_read.py` | 3 | Pairs with Rule 0 — a repeat-Read guard only matters once the graph is the expected first stop. |
+| `guard_src_reads.sh` | 3 | Rule 0 enforcement itself. |
+| `wide_grep.sh` / `check_inline_full_suite.py` | 2/3 | Bash-output-discipline enforcement; worth it once codebases/log volumes are large enough for unscoped commands to matter. |
+| `state_doc_freshness.sh` | 3 | Flags docs stale relative to commit count — needs enough commit volume to be meaningful. |
+| `council_check.sh` | 2 | Only relevant once the council protocol (Tier 2) exists. |
+
+### Docs
+
+<!-- lint-ignore-length -->
+| Doc | Tier | Note |
+|---|---|---|
+| `CONTEXT.md` | 0 | See architecture-doc trio above. |
+| `DECISIONS.md` | 1 | Created on first real decision. |
+| `CONTEXT_TREE.md` | 3 | Created once `CONTEXT.md`'s flat list is unwieldy. |
+| `MISSION.md` (immutable mission + grounding principles) | 0 (pattern) | A one-page "why this exists, what never changes" doc is cheap and useful for any project — content is entirely per-project. |
+| `TODOS.md` (backlog + session log) | 1 | Portable pattern. |
+| `docs/plan/_TEMPLATE/` + `docs/plan/README.md` §Conventions | 1 | Portable as-is (see prior conclusion). |
+| `docs/bugs/` (`bugs.md`/`prompt.md`/`task.md`) | 1 | Portable pattern — parallel bug-tracking tree alongside the feature-story tree, same shape as `docs/plan/`. |
+| `docs/council/` + `_TEMPLATE` | 2 | Portable pattern once council (Tier 2) is adopted. |
+| `REVIEW.md` (review hygiene rules) | 2 | Pattern pairs with `code-reviewer` agent; content is NiftyShield's own review checklist. |
+<!-- lint-ignore-length -->
+| `LOGGING.md` | 0 (pattern) | The idea — one canonical logging standard doc every entrypoint follows — is Tier 0; NiftyShield's specific event-naming convention is a starting template to adapt, not copy verbatim. |
+<!-- lint-ignore-length -->
+| `PLANNER.md`, `DB_REGISTRY.md`, `REFERENCES.md`, `LITERATURE.md`, `BACKTEST_PLAN*.md`, `FORMATTING.md`, `ANTIGRAVITY.md`, `INSTRUCTION.md`, `BUGS.md` | not portable | Entirely NiftyShield-domain content (options trading, brokers, backtest phases). Each may have a generalizable *shape* worth noting later (e.g. `DB_REGISTRY.md`'s "one row per table, owner, purpose" shape is a Tier 1 pattern once a project has multiple DB tables) but none travel as content. |
+
+### Project layout
+
+<!-- lint-ignore-length -->
+| Item | Tier | Note |
+|---|---|---|
+| `scratch/` (dated-filename POC folder + convergence rule) | 0 | Portable pattern (see scratch/tmp section above); subfolder-per-purpose timing still open. |
+| `tmp/` (gitignored throwaway) | 0 | Portable as-is. |
+| `session_audit.jsonl` + `suggestions.md` (token-efficiency loop, driven by `session-close`) | 1 | Portable as-is. |
+| `AGENTS.md` mirroring `CLAUDE.md` for Antigravity | 2 | Only if Antigravity is in the workflow (per existing memory note: keep it a full mirror, never a stub). |
+
 ## Status
 
 PTB-1 (this file) done. Next: PTB-2 — concretize Tier 0's literal starting file contents, and resolve the `scratch/` subfolder-timing question above.
