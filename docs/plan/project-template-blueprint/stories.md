@@ -142,7 +142,10 @@ the current `scaffold.sh` in full.
 
 ---
 
-## PTB-6 — Concretize the `python/` overlay
+## PTB-6a — Concretize the `python/` overlay: file set + Python-gated hooks
+
+> Split from the original PTB-6 (2026-09-26) after review surfaced that several hooks assumed "NiftyShield-specific" without checking their actual content — see PTB-6b for the half that turned out to
+> be a Tier 1 gap instead. PTB-6a keeps everything that is genuinely gated on "this project is Python."
 
 **Files to change / create:**
 - `docs/plan/project-template-blueprint/plan.md` — new "Python overlay" section, replacing the "`python-addon/` deferred" note.
@@ -151,8 +154,8 @@ the current `scaffold.sh` in full.
 
 **Before any code:** re-read `plan.md`'s "`python-addon/` deferred, not built yet" note (historical record of why this was pulled out of Tier 0) — do not re-derive that reasoning, just read it. Also
 re-read NiftyShield's own current top-level layout as the worked example this generalizes from: `src/` (151 files, the production package), `scripts/` (106 files, entrypoints/CLIs), `tests/` (238
-files), `data/`, `logs/`, `config/`, `.venv/` (gitignored, never committed), `pyproject.toml` + `requirements.txt` + `requirements-dev.txt`, `.pre-commit-config.yaml` (hooks: `ruff`, `ruff-format`,
-`mypy`, `detect-secrets`, plus NiftyShield-specific local hooks that stay out of this overlay — those are Tier 1+ content already covered elsewhere in `plan.md`).
+files), `data/`, `logs/`, `config/`, `.venv/` (gitignored, never committed), `pyproject.toml` + `requirements.txt` + `requirements-dev.txt`, `.pre-commit-config.yaml`, and `Makefile` (`test`, `lint`,
+`fmt`, `security`, `ci`, `clean`, `help` targets — `coverage`'s `--cov-fail-under` threshold and the `index`/`dupes`/`dead-code` targets are project-specific or Tier-3-scoped, not carried over as-is).
 
 **Decisions already confirmed with Animesh (2026-09-26), do not re-litigate:**
 - Dependency management: `requirements.txt` + `requirements-dev.txt`, matching NiftyShield's own convention — not a `pyproject.toml`-only dependency model.
@@ -161,8 +164,17 @@ files), `data/`, `logs/`, `config/`, `.venv/` (gitignored, never committed), `py
   every project.
 - `src/`, `scripts/`, `tests/` — always ship, empty-but-present with a seeded `__init__.py` each (mirrors the "new Python package directory must include `__init__.py`" rule from NiftyShield's own
   `CLAUDE.md`).
-- Pre-commit hooks: `ruff`, `ruff-format`, `mypy`, `detect-secrets`, **plus a generic test-gate hook** that runs `pytest` — so tests can't be skipped even without an agent enforcing it. No
-  NiftyShield-specific local hooks (logging-convention checks, markdown/story-structure checks — those stay Tier 1+ and are not part of this overlay).
+- Pre-commit hooks, revised set (2026-09-26 session, superseding the original five-hook list — see the corrected reasoning below): `ruff`, `ruff-format`, `mypy`, `detect-secrets`, a generic test-gate
+  hook that runs `pytest`, `bandit` (security scan — generic, not NiftyShield-specific, already a Makefile target), the two logging pygrep hooks (`no-script-main-logger`, `no-bare-logging` — generic
+  Python logging hygiene enforcing use of this overlay's own `setup_logging()` stub, not a NiftyShield business rule), and `md-line-length`/`md-reflow` generalized to the whole tree (not
+  `docs/plan`-scoped) — the *rule* was already Tier 0 text in `tier0/CLAUDE.md`'s "Markdown formatting" section; only the *enforcement script* was deferred, because it needs `python3` to run and Tier
+  0 can't assume that. `check_story_structure`/`check_checkbox_consistency` are **not** part of this list — they check `docs/plan/` folder shape, a Tier 1 concept, not a Python concept; see PTB-6b.
+- `Makefile`: generic targets ported (`test`, `test-serial`, `lint`, `fmt`, `security`, `ci`, `clean`, `help`); `coverage`'s pass threshold becomes a placeholder value, not NiftyShield's `80`; `index`
+  (codebase-memory-mcp) stays out — that's Tier 3/`rule0` territory; `dupes`/`dead-code` (pylint-similarities, vulture) ship as advisory-only, commented-out targets, not active.
+- Design principles: a compact 3-4 bullet addition to `tier0/CLAUDE.md`'s existing "Python conventions" section naming the concrete patterns this codebase validated — `Protocol`-based dependency
+  injection (the `BrokerClient` pattern: depend on an interface, swap implementations for testing), frozen `dataclass`/Pydantic for immutable domain models, pure functions separated from I/O
+  (`Store`/`Tracker` split). Not a general SOLID essay — `tier0/CLAUDE.md`'s own governing principle is to stay thin, and a generic design-patterns lecture doesn't change behavior the way naming
+  concrete, enforced patterns does.
 
 **What to implement:**
 
@@ -170,9 +182,8 @@ files), `data/`, `logs/`, `config/`, `.venv/` (gitignored, never committed), `py
    reasoning, don't just restate the open question. (Given `python/` is orthogonal to the tier axis — a Tier 0 project can be Python or not — a root-level sibling overlay, not nested inside a tier, is
    the likely answer; confirm or override this with reasoning.)
 2. Write the concrete file set per the confirmed decisions above: `src/`, `scripts/`, `tests/` (each with a seeded `__init__.py`), `logs/` + a minimal `setup_logging()` stub, `pyproject.toml`,
-   `requirements.txt` + `requirements-dev.txt`, `.pre-commit-config.yaml` (the five hooks above), and a `.gitignore` addition for `.venv/`. `data/` is documented as an optional add-on, not scaffolded
-   by default. Carry NiftyShield's own Python-hygiene defaults where universal (type hints, `(str, Enum)` — never `StrEnum`) and flag `Decimal`-for-money as an opt-in note since it's
-   domain-conditional, not universal.
+   `requirements.txt` + `requirements-dev.txt`, `.pre-commit-config.yaml` (the revised hook list above), `Makefile`, and a `.gitignore` addition for `.venv/`. `data/` is documented as an optional
+   add-on, not scaffolded by default. Add the design-principles bullets to `tier0/CLAUDE.md`'s "Python conventions" section (not a new doc).
 3. Validate the `python/` file set on its own: run `scaffold.sh` with a manual copy of `python/` (no interactive question yet) against a scratch destination and confirm the result is a working
    `pyproject.toml`-rooted Python project layout with no leftover placeholder folder names, mirroring the flatten-at-copy-time semantics already established for tier0/tier1. Do this **before** step 4
    — the file set must be right before wiring a question around it.
@@ -185,6 +196,40 @@ files), `data/`, `logs/`, `config/`, `.venv/` (gitignored, never committed), `py
 **Tests:** none (docs/config only; no NiftyShield `src/`/`scripts/` code changes).
 
 **Commit:** `docs(plan): concretize python overlay`
+
+---
+
+## PTB-6b — Wire `docs/plan/` structure-enforcement hooks into Tier 1
+
+> Split from the original PTB-6 (2026-09-26). `check_story_structure.py` and `check_checkbox_consistency.py` were originally assumed to be NiftyShield-specific and excluded from the overlay entirely;
+> on inspection neither references NiftyShield's domain — they enforce the `docs/plan/` folder shape (`prompt.md`/`tasks.md`/`stories.md`) that Tier 1's own `_TEMPLATE` already ships. PTB-3
+> (2026-09-26) narrowed Tier 1's scope to just the `work`/`new-story` skills and never carried these two hooks over — this task closes that gap.
+
+**Files to change / create:**
+- `project-scaffold/tier1/.claude/hooks/` (new) — `check_story_structure.py`, `check_checkbox_consistency.py`, generalized.
+- `project-scaffold/tier1/.claude/settings.fragment.json` (new, Tier 1 currently ships no settings fragment) — registers both as pre-commit-equivalent hooks per PTB-5's merge mechanism.
+- Possibly `project-scaffold/tier1/docs/plan/README.md` skeleton, if the scaffolded `_TEMPLATE` doesn't already carry a `§Conventions` section the hooks' error messages can point to — decide during
+  implementation, don't assume either way.
+
+**Before any code:** read `scripts/dev/hooks/check_story_structure.py` and `scripts/dev/hooks/check_checkbox_consistency.py` in full (NiftyShield originals) and `docs/plan/README.md` §Conventions (the
+doc they enforce). Confirm `project-scaffold/tier1/docs/plan/_TEMPLATE/` already matches the shapes these scripts check (story folder = `prompt.md`+`tasks.md`+`stories.md`; epic folder =
+`prompt.md`+`README.md`+sub-folders) before porting — if it doesn't, that mismatch is a bug to fix, not something to route around.
+
+**What to implement:**
+
+1. Port both scripts, stripping NiftyShield-specific content: `_LEGACY_ALLOWLIST` (session-specific grandfathering, not portable), the `RDO-15`/`SWEEP-4` convention references in comments, and any
+   hardcoded review-agent names (`code-reviewer`/`greeks-analyst`/`roll-validator`) in `check_checkbox_consistency.py`'s tail-format check — replace with a generic placeholder the operator fills in,
+   or make the review-agent field free-form.
+2. Same hook-language-dependency note as PTB-7/PTB-8: both scripts need `python3`. State explicitly that Tier 1 is not gated on Python being confirmed (a non-Python project can still use
+   `docs/plan/`), so this is a soft dependency on `python3` being present — acceptable since it's near-universal on the platforms this scaffold targets, but call it out rather than silently assuming.
+3. Wire both into `tier1/.claude/settings.fragment.json` following PTB-5's hook-array-merge shape, and into a `CLAUDE.fragment.md` note under Tier 1 if one doesn't already reference `docs/plan/`
+   conventions.
+4. Validate: scaffold Tier 0+1 only (no `python/` piece) against a fresh scratch destination; confirm both hooks run cleanly (via `python3 <hook> --staged` or equivalent) against the freshly
+   scaffolded `docs/plan/_TEMPLATE/` with zero findings, and that a deliberately malformed story folder trips `check_story_structure` correctly.
+
+**Tests:** step 4 validation.
+
+**Commit:** `docs(plan): PTB-6b wire docs/plan hooks into Tier 1`
 
 ---
 
