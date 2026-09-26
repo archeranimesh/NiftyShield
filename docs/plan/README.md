@@ -63,9 +63,9 @@ Requested by Animesh 2026-09-10.
 `src/strategy/`'s 14,255 LOC) without disturbing live paper-trading cycles — golden-test-gated extraction, council-ruled decomposition boundary, then a generalized Claude/Antigravity/council routing
 blueprint drawn from the case study. No `src/` code touched under this story. Requested by Animesh 2026-09-26.
 
-**`project-template-blueprint/`** · 🔄 In progress · next: **PTB-2** (concretize Tier 0 file skeletons) Discussion-only, multi-session: abstract NiftyShield's Python conventions, Claude-Code harness
-(skills/hooks/agents), and `docs/plan/` scaffolding into a trigger-gated tier system future projects (CardLedger, TaxCalculation) can selectively inherit. No template repo built under this story —
-that's a follow-on story PTB-5 hands off to. Requested by Animesh 2026-09-26.
+**`project-template-blueprint/`** · 🔄 In progress · next: **PTB-4** (Tier 2/3 gating criteria + model-routing buckets) Discussion-only, multi-session: abstract NiftyShield's Python conventions,
+Claude-Code harness (skills/hooks/agents), and `docs/plan/` scaffolding into a trigger-gated tier system future projects (CardLedger, TaxCalculation) can selectively inherit. No template repo built
+under this story — that's a follow-on story PTB-5 hands off to. Requested by Animesh 2026-09-26.
 
 **`backtest-engine/`** · 🔄 In progress · next: **1.3a / 1.4** (`phase1/`, parallel) Four chained phases (`phase1..4/`) building the Phase 0→1+ systematic options backtest/paper-trading pipeline off
 `BACKTEST_PLAN_PHASE1.md` (root, canonical spec) — CSP v1 variance-gate buildout, CSP-live/IC-paper expansion, post-gate strategy expansion, long-horizon capital allocation. Each phase gated on the

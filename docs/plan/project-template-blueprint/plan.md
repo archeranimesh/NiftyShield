@@ -23,7 +23,7 @@ tier" mechanism if what it computes is load-bearing (TaxCalculation's bracket/de
 <!-- lint-ignore-length -->
 | **0 — Bootstrap** | Every project, day one | `CONTEXT.md` (mutable current-state doc, the only mandatory design doc up front) + a `CLAUDE.md` skeleton (Step 1 read-context → Step 2 confirm scope → Step 3 plan+go-ahead → Step 4 tests mandatory → Step 5 docs→tests→commit) + `README.md`. `scratch/` (dated-filename POC folder, see below — mandatory staging ground, no throwaway code lands directly in `src`/`scripts`) and `tmp/` (gitignored, throwaway) from day one. `commit` skill. Git conventions (imperative ≤60-char subject, no amending pushed commits, stage specific files). All token-optimization techniques below marked Tier 0 (bash output discipline, `session-close` loop, `codebase-memory-mcp` indexing without its enforcement gate, keeping `CLAUDE.md` itself thin). No `DECISIONS.md`, no `TODOS.md`, no `docs/plan/` yet — don't scaffold empty structure for decisions/backlog that don't exist yet. |
 <!-- lint-ignore-length -->
-| **1 — Recurring work** | Second real session, or a backlog exists | `docs/plan/_TEMPLATE/` + `docs/plan/README.md` §Conventions + `TODOS.md` (backlog + session log, "pointers only" convention), `work`/`new-story` skills. `DECISIONS.md` — created on the *first* real architecture decision, not before; append-only, records "why" not "what." |
+| **1 — Recurring work** | `TODOS.md`: the moment there's a *second* piece of work being consciously deferred rather than done now — one task in flight needs no backlog, the instant of "I'll get to that after" is the first entry. `DECISIONS.md`: the moment you're choosing between two-or-more genuinely viable approaches and the choice would need justifying to a future reader — test: "if I didn't write this down, would a future session plausibly redo this wrong or re-litigate it?"; a forced/obvious first decision doesn't count | `docs/plan/_TEMPLATE/` + `docs/plan/README.md` §Conventions + `TODOS.md` (backlog + session log, "pointers only" convention), `work`/`new-story` skills. `DECISIONS.md` — append-only, records "why" not "what." |
 <!-- lint-ignore-length -->
 | **2 — Correctness-critical or multi-surface** | The domain has a load-bearing, hard-to-reverse decision (financial/legal correctness, irreversible migration) — fires regardless of project size — **or** work genuinely spans Claude + Antigravity + subagents | `docs/council/` protocol, for decisions meeting the real three-condition test (load-bearing + two defensible approaches + spans disciplines). A generic `code-reviewer` agent, plus a domain-specific reviewer only where a specific correctness risk exists (NiftyShield's `greeks-analyst`/`roll-validator` are the pattern — e.g. a `tax-rule-reviewer` for TaxCalculation). `handoff-antigravity` + `ANTIGRAVITY.md` only if Antigravity is actually in the loop. |
 <!-- lint-ignore-length -->
@@ -49,7 +49,7 @@ Three documents, three different mutability contracts — this shape is the reus
 
 - **`CONTEXT.md`** — a mutable snapshot. Always edited in place, never appended to. Answers "what's true right now." The only Tier-0 design doc.
 - **`DECISIONS.md`** — append-only. Answers "why did we choose this." Old entries are never rewritten, only occasionally archived wholesale once the file is too long (Tier 3's `md-organize` trigger).
-  Created on the first real architecture decision (Tier 1), not before.
+  Created the moment a decision between genuinely viable approaches needs justifying to a future reader (Tier 1) — see the concrete test in the tier table above, not before.
 - **`CONTEXT_TREE.md`** — a derived index (file → one-line purpose). Exists only once `CONTEXT.md`'s inline "What Exists" listing gets too flat to navigate (Tier 3).
 
 ## Model routing (generalized, draft)
@@ -106,7 +106,11 @@ project-scaffold/
 │   └── .claude/skills/
 │       ├── commit/SKILL.md          # written PTB-2 session (re-scoped from PTB-3 — Tier 0 per tier table above)
 │       └── session-close/SKILL.md   # written PTB-2 session (re-scoped from PTB-3 — Tier 0 per tier table above)
-├── tier1/                           # empty — PTB-3, now scoped to work/new-story only
+├── tier1/                           # populated PTB-3 session
+│   ├── docs/plan/_TEMPLATE/          # story/ + epic/ skeletons, generic-only
+│   └── .claude/skills/
+│       ├── work/SKILL.md            # bug branch made optional-and-detected
+│       └── new-story/SKILL.md       # ported near-verbatim, already project-agnostic
 ├── tier2/                           # empty — PTB-4
 └── tier3/                           # empty — PTB-4
 ```
@@ -354,7 +358,17 @@ setup/maintenance cost for savings that only exceed that cost once the codebase 
 
 ## Status
 
-PTB-1 and PTB-2 done. Tier 0 file set confirmed and written to `/Users/abhadra/myWork/myCode/AI/project-scaffold/tier0/` (see "Tier 0 output, concretely" above) — `scratch/` subfolder-timing question
-resolved (stay flat until ~50 files), `commit`/`session-close` skills written and re-scoped in from PTB-3. `project-scaffold/scaffold.sh` written and verified against tier0 (see "Validation script"
-above) — run it after every tier-content change. Not yet `git init`'d in `project-scaffold/` (Animesh's call, deferred without a hard trigger stated — revisit next session). Next: PTB-3 — `work`/
-`new-story` skill genericization only.
+PTB-1, PTB-2, and PTB-3 done. Tier 0 file set confirmed and written to `/Users/abhadra/myWork/myCode/AI/project-scaffold/tier0/` (see "Tier 0 output, concretely" above) — `scratch/` subfolder-timing
+question resolved (stay flat until ~50 files), `commit`/`session-close` skills written and re-scoped in from PTB-3. `project-scaffold/scaffold.sh` written and verified against tier0, then re-verified
+against tier0+tier1 together (see "Validation script" above) — run it after every tier-content change. Not yet `git init`'d in `project-scaffold/` (Animesh's call, deferred without a hard trigger
+stated — revisit next session).
+
+**PTB-3 closed (2026-09-26):** `docs/plan/_TEMPLATE/` (story + epic skeletons) and the `work`/`new-story` skills written to `/Users/abhadra/myWork/myCode/AI/project-scaffold/tier1/`, generic-only.
+`_TEMPLATE` was **not** copy-as-is — four NiftyShield/Tier-2/3-leaking spots were found and fixed: the mandatory graph-query step in `story/stories.md` (Rule 0 / Tier 3 tooling — made an optional,
+delete-if-unused block), `story/schema.md.example`'s NiftyShield-specific `portfolio.sqlite`/`DB_REGISTRY.md` content (replaced with a bare, convention-agnostic skeleton), the fixed `Owner`/`Review`
+enums in `tasks.md` naming NiftyShield's specific agents (made free text), and `epic/prompt.md`'s hardcoded agent names in the review-gate note (generalized to "whatever review gate your project
+defines"). `work`'s bug branch made **optional and detected** (only offered if `docs/bugs/` exists in the target project) rather than assumed — matches the trigger-based tiering principle; a new small
+project carries no bug-tracking overhead until a bug is actually worth tracking formally. `new-story` ported near-verbatim (already project-agnostic) with a fallback to a direct `cp -r` when the
+target project has no scaffold script yet, so it doesn't hard-depend on `scripts/dev/new_plan_folder.py` existing elsewhere. `DECISIONS.md`/`TODOS.md` triggers sharpened from session-count language to
+a single testable fact each (see tier table above) — confirmed with Animesh. Validated: `scaffold.sh --force 1 <scratch-dest>` overlays clean — no NiftyShield references, no `tier0`/`tier1`-named
+subfolders in the output, `.gitignore`'s `tmp/README.md` exemption still holds. Next: PTB-4 — Tier 2/3 gating criteria + generalized model-routing buckets.

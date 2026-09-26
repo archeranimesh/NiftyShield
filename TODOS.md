@@ -46,9 +46,9 @@ rot them.
 23. **Strategy module refactor & AI-collaboration blueprint** — `docs/plan/strategy-refactor-blueprint/` — next **BP-1** (`/md-organize` run). Planning-only across several sessions: safe,
     golden-test-gated decomposition of `ic_nifty_v1.py`/`ic_nifty_v2.py` (14,255 LOC `src/strategy/` total, these two files ~30% of it) without disturbing live paper-trading cycles, plus a generalized
     Claude/Antigravity/council routing blueprint drawn from the case study. Requested by Animesh 2026-09-26. 24a. **Cross-project Claude template blueprint** — `docs/plan/project-template-blueprint/`
-    — next **PTB-3** (`work`/`new-story` skill genericization). Discussion-only across several sessions: abstract NiftyShield's Python conventions + Claude-Code harness (skills/hooks/agents) +
-    `docs/plan/` scaffolding into a trigger-gated tier system (Bootstrap / Recurring work / Correctness-critical / Scale) other future projects (CardLedger, TaxCalculation) can selectively inherit.
-    Requested by Animesh 2026-09-26.
+    — next **PTB-4** (Tier 2/3 gating criteria + model-routing buckets). Discussion-only across several sessions: abstract NiftyShield's Python conventions + Claude-Code harness
+    (skills/hooks/agents) + `docs/plan/` scaffolding into a trigger-gated tier system (Bootstrap / Recurring work / Correctness-critical / Scale) other future projects (CardLedger, TaxCalculation) can
+    selectively inherit. Requested by Animesh 2026-09-26.
 24. **Portfolio snapshot slimdown** — `docs/plan/portfolio-snapshot-slimdown/` — next **FD-1** (pre-delete audit). Epic, two sequenced sub-stories that both rework `_build_portfolio_summary` +
     `_format_combined_summary`: `finideas-decommission/` (FD-1..7 — full removal of `finideas_ilts` + `finrakshak`: the `src/portfolio/strategies/` provider layer, the options / hedge / ETF snapshot
     terms, and every Finideas row in `strategies` / `legs` / `trades` / `daily_snapshots` via a `scripts/dev/decommission_finideas.py` CLI — history option A, hard delete) → `dhan-holdings-removal/`
@@ -104,6 +104,12 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
   out of scope for Tier 0 (no Tier-0-appropriate content exists in NiftyShield's own file). `docs/plan/` confirmed to stay Tier 1, not pulled forward. Not yet `git init`'d. Docs-only, no code. Next:
   PTB-3. Distribution mechanism sketched as a template repo, not a git submodule or installable package — same reasoning as the earlier conclusion that runtime code (logging, db helpers) should only
   be extracted into a shared library once a second real consumer exists. Explicitly not the same story as `strategy-refactor-blueprint` below — kept separate, discussion-only, multi-session.
+- [2026-09-26] `project-template-blueprint/` PTB-3 done — Tier 1 (Recurring work) written to `/Users/abhadra/myWork/myCode/AI/project-scaffold/tier1/`: `docs/plan/_TEMPLATE/` (story + epic skeletons)
+  and the `work`/`new-story` skills, generic-only. `_TEMPLATE` needed real fixes, not a straight copy: the mandatory graph-query step in `stories.md` (Rule 0/Tier 3) made optional,
+  `schema.md.example`'s NiftyShield-specific DB content replaced with a bare skeleton, the fixed `Owner`/`Review` agent-name enums in `tasks.md` made free text, `epic/prompt.md`'s hardcoded agent
+  names generalized. `work`'s bug branch made optional-and-detected (only offered if `docs/bugs/` exists) rather than assumed. `DECISIONS.md`/`TODOS.md` triggers sharpened to one testable fact each
+  (see `plan.md` Tier 1 row) — confirmed with Animesh. `scaffold.sh` needed no code change (already loops generically over tiers); validated clean via `--force 1` against
+  `/Users/abhadra/myWork/myCode/AI/_scratch_to_delete`. Docs-only, no NiftyShield `src/`/`scripts/` code touched. Next: PTB-4.
 - [2026-09-26] `strategy-refactor-blueprint/` scaffolded (docs-only, no code) — captures a discussion session's finding that `src/strategy/` (14,255 LOC) is dominated by `ic_nifty_v2.py` (2,935
   lines) + `ic_nifty_v1.py` (1,409 lines), ~30% of the package with no existing `DEBT-*` tracking it, and lays out a golden-test-gated, council-ruled, one-extraction-per-commit approach to decomposing
   it without disturbing live paper-trading cycles. Also confirmed `md-organize` already covers the doc-growth (`TODOS.md`/`DECISIONS.md`) side of the same discussion — BP-1 just needs to run it, not
