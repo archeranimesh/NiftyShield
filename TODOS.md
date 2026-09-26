@@ -46,9 +46,9 @@ rot them.
 23. **Strategy module refactor & AI-collaboration blueprint** — `docs/plan/strategy-refactor-blueprint/` — next **BP-1** (`/md-organize` run). Planning-only across several sessions: safe,
     golden-test-gated decomposition of `ic_nifty_v1.py`/`ic_nifty_v2.py` (14,255 LOC `src/strategy/` total, these two files ~30% of it) without disturbing live paper-trading cycles, plus a generalized
     Claude/Antigravity/council routing blueprint drawn from the case study. Requested by Animesh 2026-09-26. 24a. **Cross-project Claude template blueprint** — `docs/plan/project-template-blueprint/`
-    — next **PTB-5** (distribution mechanism + hand off template-repo build). Discussion-only across several sessions: abstract NiftyShield's Python conventions + Claude-Code harness
-    (skills/hooks/agents) + `docs/plan/` scaffolding into a trigger-gated tier system (Bootstrap / Recurring work / Correctness-critical / Scale) other future projects (CardLedger, TaxCalculation) can
-    selectively inherit. Requested by Animesh 2026-09-26.
+    — next **PTB-5** (distribution decision + `scaffold.sh` per-piece selection and merging); PTB-5..PTB-9 end with a self-contained `project-scaffold`. Multi-session: abstract NiftyShield's Python
+    conventions + Claude-Code harness (skills/hooks/agents) + `docs/plan/` scaffolding into a trigger-gated tier system (Bootstrap / Recurring work / Correctness-critical / Scale) other future
+    projects (CardLedger, TaxCalculation) can selectively inherit. Requested by Animesh 2026-09-26.
 24. **Portfolio snapshot slimdown** — `docs/plan/portfolio-snapshot-slimdown/` — next **FD-1** (pre-delete audit). Epic, two sequenced sub-stories that both rework `_build_portfolio_summary` +
     `_format_combined_summary`: `finideas-decommission/` (FD-1..7 — full removal of `finideas_ilts` + `finrakshak`: the `src/portfolio/strategies/` provider layer, the options / hedge / ETF snapshot
     terms, and every Finideas row in `strategies` / `legs` / `trades` / `daily_snapshots` via a `scripts/dev/decommission_finideas.py` CLI — history option A, hard delete) → `dhan-holdings-removal/`
@@ -114,6 +114,9 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
   check, TaxCalculation qualifies) and 2b multi-surface; Tier 3 thresholds anchored to NiftyShield's own history (Rule 0 at ~10K LOC / 69 files, `a1aca07`); three routing buckets by reasoning demand ×
   cost of error, Tier 0/1 single-model. Governing rule from `docs/archive/process/2026-05-08_workflow-improvements.md`: a gate ships with its at-the-moment hook or not at all. Two scaffold problems
   flagged for PTB-5 (per-item selection; `settings.json`/`CLAUDE.md` merge). Docs-only. Next: PTB-5.
+- [2026-09-26] `project-template-blueprint/` re-planned (docs-only) — end state is now a self-contained `project-scaffold`, not a design doc plus a follow-on build story. PTB-5 re-scoped to the
+  distribution decision + `scaffold.sh` per-piece selection and merging of `CLAUDE.md` / `settings.json` / `.gitignore`; PTB-7 (Tier 2 content), PTB-8 (Tier 3 content), PTB-9 (guide ported into
+  `project-scaffold/README.md`, shipped trigger list, three-config validation, archive) added; `prompt.md` scope guard + DoD rewritten; PTB-1/2/4 SHAs backfilled.
 - [2026-09-26] `strategy-refactor-blueprint/` scaffolded (docs-only, no code) — captures a discussion session's finding that `src/strategy/` (14,255 LOC) is dominated by `ic_nifty_v2.py` (2,935
   lines) + `ic_nifty_v1.py` (1,409 lines), ~30% of the package with no existing `DEBT-*` tracking it, and lays out a golden-test-gated, council-ruled, one-extraction-per-commit approach to decomposing
   it without disturbing live paper-trading cycles. Also confirmed `md-organize` already covers the doc-growth (`TODOS.md`/`DECISIONS.md`) side of the same discussion — BP-1 just needs to run it, not

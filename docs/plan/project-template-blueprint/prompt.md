@@ -29,9 +29,12 @@ The working hypothesis from discussion, to be refined across sessions rather tha
 
 ## Scope guard
 
-This story is **discussion and design only**. No template repo is created, no `.claude/` files are copied anywhere, and no `src/`/`scripts/` code in NiftyShield changes under this story. The concrete
-artifact this story produces is a converged design doc (`plan.md`, an extra file per `docs/plan/README.md` §Conventions "Extra files") — the actual template-repo scaffolding work spins off as its own
-separate story once the design is settled, the same handoff pattern `strategy-refactor-blueprint` uses for its own extraction work.
+No `src/`/`scripts/` code in NiftyShield changes under this story. It produces two artifacts: the design record (`plan.md`, an extra file per `docs/plan/README.md` §Conventions "Extra files") and the
+template repo itself, `/Users/abhadra/myWork/myCode/AI/project-scaffold/` (its own git repo).
+
+**Superseded 2026-09-26:** this section originally said the story was discussion-only — no template repo created, no `.claude/` files copied, the build spun off as a separate story. PTB-2 and PTB-3
+wrote `tier0/`/`tier1/` straight into `project-scaffold`, and after PTB-4 Animesh set the goal explicitly: at story completion `project-scaffold` holds everything — every tier, the `python/` overlay,
+a working `scaffold.sh`, and the tier/trigger guide — with no follow-on build story. PTB-5..PTB-9 are planned to that end state.
 
 **Standing instruction (Animesh, 2026-09-26):** this is expected to run across several future sessions as pure discussion — the tier boundaries, what belongs in each tier, and the distribution
 mechanism are all still open. Do not treat any task below as "ready to execute" just because the session reaches it in sequence; each still needs explicit confirmation that the design question it
@@ -55,18 +58,22 @@ covers has actually converged.
 - **PTB-3** — Concretize Tier 1 (Recurring work): exact `docs/plan/_TEMPLATE` portability, `session-close` / `work` / `new-story` skill genericization, the `DECISIONS.md`-on-first-decision trigger.
 - **PTB-4** — Concretize Tier 2/3 gating criteria (council, AutoTrigger agents, Rule 0 graph tooling, `md-organize`) and the generalized model-routing buckets (mechanical / design-judgment /
   independent verification).
-- **PTB-5** — Decide and document the distribution mechanism (template repo shape, how a new project pulls updates if ever) and hand off to a new, separate story that actually scaffolds the template
-  repo.
+- **PTB-5** — Record the distribution decision, and rebuild `scaffold.sh` around per-piece selection (not a numeric tier level) with merging for the shared files (`CLAUDE.md`, `.claude/settings.json`,
+  `.gitignore`). Re-scoped 2026-09-26 from "hand off to a separate build story."
 - **PTB-6** — Concretize the `python/` overlay (renamed from the earlier `python-addon/` concept, deferred at PTB-2): `src`/`scripts`/`tests`/`logs` structure, `pyproject.toml` + requirements files,
   pre-commit config — most future projects will actually need this, since a majority of Animesh's planned projects are Python.
+- **PTB-7** — Write Tier 2 (`stakes/`, `test-runner/`, `multi-surface/`) into `project-scaffold`, genericized.
+- **PTB-8** — Write Tier 3 (Rule 0 bundle, `md-organize`, `state-freshness`, `weekly-audit`) into `project-scaffold`, genericized.
+- **PTB-9** — Port the tier/trigger guide into `project-scaffold/README.md`, ship a compact trigger list into every scaffolded project, validate three reference configurations end to end, archive.
 
 Task order above is a starting guess, not a commitment — expect renumbering, merging, or new tasks as the discussion continues. `stories.md` intentionally leaves later tasks under-specified until
 earlier ones converge.
 
 ## Definition of done
 
-This story's own scope is "the tiered design is written down and Animesh has converged on it" — it does **not** include building the template repo itself (that's a follow-on story `PTB-5` hands off
-to). Done when: `plan.md` exists, covers all four tiers concretely enough to scaffold from, states the distribution mechanism, and Animesh confirms it's ready to execute.
+Done when `project-scaffold` is self-contained and usable without NiftyShield. That means every tier piece and the `python/` overlay are written; `scaffold.sh` selects pieces individually and merges
+shared files; the tier/trigger guide lives in `project-scaffold/README.md`; a scaffolded project ships its own trigger list; the three reference configurations validate; and Animesh confirms it's
+ready to use. (Re-defined 2026-09-26 — previously "`plan.md` written, build handed off to a follow-on story.")
 
 ## Perspectives not covered
 
@@ -75,3 +82,7 @@ to). Done when: `plan.md` exists, covers all four tiers concretely enough to sca
 - **Whether CardLedger's statement-parser and rewards-optimizer are truly one system or two** — flagged in discussion as needing confirmation; changes whether "twin projects" reasoning applies to it
   or to TaxCalculation.
 - **Antigravity's actual fit for a small, single-operator project** — the handoff-antigravity pattern was designed for NiftyShield's scale; untested whether it's worth the overhead below Tier 2.
+- **Hook language dependency** — several NiftyShield hooks shell out to Python helpers (`scripts/dev/hooks/*.py`), but the scaffold is meant to be language-agnostic. PTB-7/PTB-8 decide per hook;
+  nobody has yet checked whether a non-Python project would ever reach Tier 3 in practice.
+- **Template drift** — copy-once means `project-scaffold` improvements never reach existing projects. With per-piece selection, re-running `scaffold.sh` adds new pieces but never updates files already
+  there; whether that is enough is untested until a second project exists.

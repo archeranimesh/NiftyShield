@@ -1,8 +1,10 @@
 
 # Cross-Project Claude Template Blueprint — story specs
 
-> One task per session. Find the first unchecked item in `tasks.md`. That is your only task. All tasks here are docs/design-only — no `src/`/`scripts/` graph queries needed, no tests, no code-reviewer
-> gate. After each task: set `SHA:` on the task line + tick the box, update the story status summary, add one line to `TODOS.md`. See `docs/plan/README.md` §Conventions.
+> One task per session. Find the first unchecked item in `tasks.md`. That is your only task. No task here touches NiftyShield `src/`/`scripts/` — no graph queries needed, no NiftyShield tests, no
+> code-reviewer gate. PTB-5 onward write files into `/Users/abhadra/myWork/myCode/AI/project-scaffold/` (its own git repo — commit there too, and record that SHA in `plan.md` §Status); their "tests"
+> are `scaffold.sh` runs against a scratch destination, spelled out per task. After each task: set `SHA:` on the task line + tick the box, update the story status summary, add one line to `TODOS.md`.
+> See `docs/plan/README.md` §Conventions.
 
 ---
 
@@ -100,25 +102,43 @@ mechanism. (`commit` and `session-close` moved to PTB-2, 2026-09-26 — both are
 
 ---
 
-## PTB-5 — Distribution mechanism + handoff
+## PTB-5 — Distribution decision + `scaffold.sh` per-item selection and merge mechanics
+
+> Re-scoped 2026-09-26. Originally "decide distribution; hand off template-repo build to a new story." The repo already exists and is committed (`project-scaffold`, `2e0c667` / `ebd0e8b`), so there is
+> nothing to hand off — the remaining build work is PTB-6..PTB-9 inside this story. This task now owns the two structural problems PTB-4 surfaced (`plan.md` §"What `tier2/` and `tier3/` will hold"),
+> because every later task writes files in the shape this one defines.
 
 **Files to change / create:**
-- `docs/plan/project-template-blueprint/plan.md` — final "Distribution" section.
-- `DECISIONS.md` — record the distribution-mechanism decision.
-- A new `docs/plan/<slug>/` story (slug TBD at authoring time) scoped to actually building the template repo, linked from this story's `plan.md`.
+- `project-scaffold/scaffold.sh` — commit the current untracked version first, unchanged, as a baseline; then rewrite.
+- `project-scaffold/tier0/CLAUDE.md` — add named insertion markers where later pieces' fragments land.
+- `project-scaffold/tier2/`, `project-scaffold/tier3/` — restructure into per-piece folders (empty placeholders are fine; content is PTB-7/PTB-8).
+- `docs/plan/project-template-blueprint/plan.md` — "Distribution" section finalized; stale bits reconciled (see step 1).
+- `DECISIONS.md` — the distribution decision.
 
-**Before any code:** none.
+**Before any code:** read `plan.md` §"Distribution mechanism", §"Flatten-at-copy-time semantics", §"Validation script", and §"What `tier2/` and `tier3/` will hold" (the two structural problems). Read
+the current `scaffold.sh` in full.
 
 **What to implement:**
 
-1. Confirm (does not re-litigate, just confirms) the template-repo-not-submodule-not-package conclusion from discussion, or record why it changed.
-2. Decide where the template repo itself lives (a new local path, a GitHub template repository, or something else) — this is a real open decision, not assumed.
-3. Scaffold the follow-on story via `/new-story` and link it from this story's `plan.md` and `DECISIONS.md`.
-4. Follow §Conventions *Completion → archive* for this story once linked.
+1. **Distribution decision.** Confirm (do not re-litigate) copy-once template repo, not submodule, not package. Decide with Animesh: does `project-scaffold` get a GitHub remote (and is it marked a
+   GitHub template repository), or stay local-only for now? Reconcile `plan.md`'s stale mechanism text — it still names `py-project-tier0` and a `python -m scripts.dev.new_project_from_tier0` script
+   that were superseded by `project-scaffold` + `scaffold.sh`. Record the decision in `DECISIONS.md`.
+2. **Per-piece layout.** Tier 0 stays one folder (always applied); Tier 1 stays one folder (one question: "is there a backlog / second deferred piece of work yet?"). Tier 2 becomes `tier2/stakes/`,
+   `tier2/test-runner/`, `tier2/multi-surface/`; Tier 3 becomes `tier3/rule0/`, `tier3/md-organize/`, `tier3/state-freshness/`, `tier3/weekly-audit/`. `python/` (PTB-6) is one more piece at root.
+3. **Per-piece selection.** Replace the numeric tier-level argument with one yes/no per piece, each question phrased as its `plan.md` trigger (for example 2a asks the two-box project-level check).
+   Support a non-interactive form too (flags) so validation runs are scriptable. Keep the existing rules: refuse a non-empty destination unless `--force`; re-running only adds files that don't exist,
+   never overwrites; no `git init`, no commit.
+4. **Merge semantics** for the three shared files, decided and implemented:
+   - `CLAUDE.md` — each piece ships `CLAUDE.fragment.md` (or similar) inserted at its named marker in the Tier 0 skeleton; a fragment already present is not inserted twice (re-run safety).
+   - `.claude/settings.json` — each piece ships a settings fragment; hook arrays are merged per event/matcher, not replaced. Decide the tool: `jq` (external dependency) vs `python3` (already required
+     by `python/` projects, but not by a non-Python one) vs plain-bash append — state the tradeoff and the choice.
+   - `.gitignore` — pieces append lines; duplicates skipped.
+5. **Validate** against a scratch destination (`/Users/abhadra/myWork/myCode/AI/_scratch_to_delete`, per `plan.md` §"Validation script"): Tier 0 only; Tier 0+1; Tier 0+1 plus a dummy Tier 2 and a
+   dummy Tier 3 piece that each register one hook and one fragment — confirm the result has both hooks in valid JSON, both fragments in `CLAUDE.md` at their markers, and a second run changes nothing.
 
-**Tests:** none.
+**Tests:** the validation runs in step 5; paste the key checks (JSON validity, fragment count, second-run no-op) into the session log line.
 
-**Commit:** `docs(plan): record template distribution decision; hand off to build story`
+**Commit:** `project-scaffold`: `feat: per-piece scaffold selection with merged shared files`. NiftyShield: `docs(plan): PTB-5 distribution decision and scaffold mechanics`.
 
 ---
 
@@ -156,13 +176,92 @@ files), `data/`, `logs/`, `config/`, `.venv/` (gitignored, never committed), `py
 3. Validate the `python/` file set on its own: run `scaffold.sh` with a manual copy of `python/` (no interactive question yet) against a scratch destination and confirm the result is a working
    `pyproject.toml`-rooted Python project layout with no leftover placeholder folder names, mirroring the flatten-at-copy-time semantics already established for tier0/tier1. Do this **before** step 4
    — the file set must be right before wiring a question around it.
-4. **Only once step 3 validates cleanly:** extend `scaffold.sh` to ask "Is this a Python project?" and, on yes, overlay `python/` (flattened, same semantics as the tier overlays) in addition to
-   whichever tier is selected. This is scoped to PTB-6, not PTB-5 — PTB-5's own interactive-script work covers language-agnostic questions (e.g. does a backlog exist yet); the Python question is gated
-   on `python/` existing, so it belongs here. If PTB-5 hasn't yet built the interactive-script scaffolding this question would hang off of, add the minimal flag/prompt needed to ask it standalone
-   (e.g. a `--python` flag or a single `y/n` prompt) rather than blocking on PTB-5 landing first.
+4. **Only once step 3 validates cleanly:** add `python/` as one more piece in PTB-5's per-piece selection ("Is this a Python project?"), flattened like every other piece. PTB-5 now lands first, so use
+   its mechanism — no standalone fallback flag. `python/`'s `.venv/`/`__pycache__/` ignore lines go through PTB-5's `.gitignore` merge, and any Python-specific `CLAUDE.md` guidance (type hints, `(str,
+   Enum)`, opt-in `Decimal` note) ships as a fragment at its marker, not as edits to `tier0/CLAUDE.md`.
 5. Re-validate: run the updated `scaffold.sh` end-to-end (tier selection + Python question) against a fresh scratch destination and confirm a clean, flat, correctly-conditional result (`data/` absent
    unless something in the answers calls for it).
 
 **Tests:** none (docs/config only; no NiftyShield `src/`/`scripts/` code changes).
 
 **Commit:** `docs(plan): concretize python overlay`
+
+---
+
+## PTB-7 — Write Tier 2 into `project-scaffold`
+
+**Files to change / create:** `project-scaffold/tier2/{stakes,test-runner,multi-surface}/` — the file list in `plan.md` §"What `tier2/` and `tier3/` will hold", in PTB-5's fragment shape.
+
+**Before any code:** read `plan.md` §"The enforcement lesson" and §"Tier 2 — gating, concretely" (what each piece is for and which hook it travels with). Read each NiftyShield source file before
+porting it: `.claude/agents/code-reviewer.md`, `.claude/agents/test-runner.md`, `REVIEW.md`, `docs/council/README.md` + its `_TEMPLATE`, `.claude/hooks/council_check.sh`,
+`.claude/hooks/inline_full_suite.sh`, `.claude/skills/handoff-antigravity/SKILL.md`, `ANTIGRAVITY.md`, `AGENTS.md`, and `CLAUDE.md` Step 2b / Step 3b / the AutoTrigger table.
+
+**What to implement:**
+
+1. **`stakes/`**: generic `code-reviewer` agent (type hints, error handling, hygiene — every Decimal / BrokerClient / Greeks check removed); `REVIEW.md` skeleton (general Python-hygiene section kept
+   only as a clearly marked Python-only block, or moved to `python/` — decide); `docs/council/README.md` + `_TEMPLATE` genericized (no NiftyShield models, templates, or topics); `council_check.sh`
+   printing the four-box per-decision checklist from `plan.md`; `CLAUDE.md` fragment with Step 2b and an AutoTrigger table holding only the generic rows plus a commented example row showing how a
+   project adds its own domain reviewer ("one reviewer per 2a computation, path-triggered").
+2. **`test-runner/`**: `test-runner` agent with the test command left as a placeholder (not hardcoded `pytest`); `inline_full_suite.sh`.
+3. **`multi-surface/`**: `handoff-antigravity` skill (four mandatory elements, content injected inline); `ANTIGRAVITY.md` and `AGENTS.md` templates (`AGENTS.md` as a mirror of `CLAUDE.md`, never a
+   stub); Step 3b fragment.
+4. **Hook language dependency.** NiftyShield's `inline_full_suite.sh` shells out to `scripts/dev/hooks/check_inline_full_suite.py`. The scaffold is language-agnostic, so each hook must be
+   self-contained bash, or clearly require `python3` and ship its helper inside the piece. Pick per hook and state why.
+5. Validate: scaffold with all three pieces selected; `grep -ri 'niftyshield\|greeks\|broker\|nifty'` returns nothing; `settings.json` parses; every registered hook path exists and is executable.
+
+**Tests:** step 5 validation.
+
+**Commit:** `project-scaffold`: `feat(tier2): add stakes, test-runner, and multi-surface pieces`. NiftyShield: `docs(plan): PTB-7 tier 2 written to project-scaffold`.
+
+---
+
+## PTB-8 — Write Tier 3 into `project-scaffold`
+
+**Files to change / create:** `project-scaffold/tier3/{rule0,md-organize,state-freshness,weekly-audit}/`, in PTB-5's fragment shape.
+
+**Before any code:** read `plan.md` §"Tier 3 — gating, concretely". Read each NiftyShield source before porting: `.claude/hooks/{guard_src_reads,repeat_read,wide_grep,state_doc_freshness}.sh`,
+`scripts/dev/hooks/{check_repeat_read,check_wide_grep}.py`, `scripts/dev/graph_snippet.py`, `.claude/skills/{md-organize,weekly-audit}/SKILL.md`, `CONTEXT_TREE.md` (shape only), and `CLAUDE.md` Rule 0
+/ the Rule 1 grep row.
+
+**What to implement:**
+
+1. **`rule0/`**: `guard_src_reads.sh`, `repeat_read.sh`, `wide_grep.sh` with the source directories made configurable (not hardcoded `src/`/`scripts/`); the `graph_snippet` wrapper as a standalone
+   script (it is currently a NiftyShield `scripts.dev` module); `CONTEXT_TREE.md` skeleton; Rule 0 `CLAUDE.md` fragment with the `codebase-memory-mcp` project id left as a placeholder the operator
+   fills in.
+2. **`md-organize/`**: skill genericized to "any root doc over ~400 lines", `docs/archive/` with its dated-snapshot convention.
+3. **`state-freshness/`**: `state_doc_freshness.sh` with the per-doc threshold list moved to a small config the project edits, seeded with Tier 0/1 docs only.
+4. **`weekly-audit/`**: skill genericized, on-demand only.
+5. Same hook-language rule as PTB-7 step 4. Same validation as PTB-7 step 5, with all four Tier 3 pieces selected on top of Tier 0+1+2.
+
+**Tests:** step 5 validation.
+
+**Commit:** `project-scaffold`: `feat(tier3): add rule0, md-organize, state-freshness, weekly-audit`. NiftyShield: `docs(plan): PTB-8 tier 3 written to project-scaffold`.
+
+---
+
+## PTB-9 — Self-documenting `project-scaffold`, end-to-end validation, archive
+
+**Files to change / create:**
+- `project-scaffold/README.md` (new, repo root — not copied into consuming projects).
+- `project-scaffold/tier0/` — a compact trigger list shipped into every scaffolded project (file name decided here; likely `TIERS.md` plus one pointer line in the `CLAUDE.md` skeleton).
+- `docs/plan/project-template-blueprint/plan.md` — final status; pointer to where the guide now lives.
+- Story archive per §Conventions *Completion → archive*.
+
+**Before any code:** read `plan.md` in full — it is the source being ported.
+
+**What to implement:**
+
+1. **`project-scaffold/README.md`**: what the repo is, how to run `scaffold.sh` (interactive and flag forms), and the full guide ported from `plan.md`: governing principle, per-piece triggers (Tier 1
+   triggers, 2a two-box project check + four-box per-decision check, 2b trigger, test-runner trigger, Tier 3 threshold table), the enforcement rule, model-routing buckets, the scratch/tmp split, the
+   architecture-doc trio. Strip NiftyShield history and SHAs — keep the reasoning, drop the provenance (`plan.md` stays the provenance record in NiftyShield's archive).
+2. **Shipped trigger list**: a scaffolded project must be able to tell, on its own, when to re-run `scaffold.sh` for the next piece. Keep it short (one line per piece: trigger → what to add); the
+   resident `CLAUDE.md` carries only a one-line pointer to it.
+3. **Open questions**: resolve each remaining one in `plan.md` §"Open questions" with Animesh, or carry it into the README as explicitly open.
+4. **End-to-end validation**, three reference configurations into fresh scratch destinations: (a) plain Tier 0, non-Python; (b) CardLedger-shaped — Tier 0 + 1 + `python/` + `data/`; (c)
+   TaxCalculation-shaped — Tier 0 + 1 + `python/` + 2a `stakes/`. For each: no NiftyShield references, `settings.json` valid, hooks executable, `CLAUDE.md` fragments at their markers, re-run is a
+   no-op.
+5. Animesh confirms `project-scaffold` is ready to use. Then archive this story.
+
+**Tests:** step 4 validation.
+
+**Commit:** `project-scaffold`: `docs: add scaffold guide and shipped trigger list`. NiftyShield: `docs(plan): close project-template-blueprint and archive`.

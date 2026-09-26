@@ -159,9 +159,9 @@ for orchestration, planning and graph queries, Opus for code review, roll valida
 Escalation rule carried from FR-8 §3 (job type 5): a task starts in the bucket its shape suggests and **moves up** the moment it turns out to touch a 2a computation — a routine debugging session that
 finds the bug is in the tax/P&L path becomes design/judgment work, and its fix goes through independent verification.
 
-## What `tier2/` and `tier3/` will hold (input for the PTB-5 build story)
+## What `tier2/` and `tier3/` will hold (built by PTB-7 and PTB-8)
 
-Not written to `project-scaffold/` under PTB-4 — this task's scope is `plan.md` only. Listed so the build story starts from a file list rather than re-deriving it:
+Not written to `project-scaffold/` under PTB-4 — that task's scope was `plan.md` only. PTB-7 (Tier 2) and PTB-8 (Tier 3) build from this list, in the fragment shape PTB-5 defines:
 
 - `tier2/stakes/` (2a): `docs/council/README.md` + `_TEMPLATE/`, `.claude/agents/code-reviewer.md` (generic), `REVIEW.md` skeleton, `.claude/hooks/council_check.sh`, `CLAUDE.md` Step 2b + AutoTrigger
   table fragments. `test-runner.md` + `inline_full_suite.sh` as a separately selectable piece (its trigger is context cost, not stakes).
@@ -485,8 +485,8 @@ setup/maintenance cost for savings that only exceed that cost once the codebase 
 
 PTB-1, PTB-2, and PTB-3 done. Tier 0 file set confirmed and written to `/Users/abhadra/myWork/myCode/AI/project-scaffold/tier0/` (see "Tier 0 output, concretely" above) — `scratch/` subfolder-timing
 question resolved (stay flat until ~50 files), `commit`/`session-close` skills written and re-scoped in from PTB-3. `project-scaffold/scaffold.sh` written and verified against tier0, then re-verified
-against tier0+tier1 together (see "Validation script" above) — run it after every tier-content change. Not yet `git init`'d in `project-scaffold/` (Animesh's call, deferred without a hard trigger
-stated — revisit next session).
+against tier0+tier1 together (see "Validation script" above) — run it after every tier-content change. ~~Not yet `git init`'d in `project-scaffold/`~~ — superseded: `git init`'d with commits `2e0c667`
+(Tier 0) and `ebd0e8b` (Tier 1); `scaffold.sh` itself is still untracked there (PTB-5 commits it as a baseline first).
 
 **PTB-3 closed (2026-09-26):** `docs/plan/_TEMPLATE/` (story + epic skeletons) and the `work`/`new-story` skills written to `/Users/abhadra/myWork/myCode/AI/project-scaffold/tier1/`, generic-only.
 `_TEMPLATE` was **not** copy-as-is — four NiftyShield/Tier-2/3-leaking spots were found and fixed: the mandatory graph-query step in `story/stories.md` (Rule 0 / Tier 3 tooling — made an optional,
@@ -503,3 +503,8 @@ multi-surface (Antigravity routing, adopted only after a real task has run there
 `a1aca07`). Model routing converged into three buckets routed by reasoning demand × cost of error, with Tier 0/1 explicitly single-model. The governing rule, drawn from
 `docs/archive/process/2026-05-08_workflow-improvements.md`: a gate ships with its at-the-moment hook or not at all. `tier2/`/`tier3/` file lists written as PTB-5 input, not built; two scaffold
 problems flagged for PTB-5 (per-item rather than per-level selection; `settings.json`/`CLAUDE.md` need merging, not overwriting). Next: PTB-5.
+
+**Story re-planned (2026-09-26, after PTB-4):** Animesh set the end state as a self-contained `project-scaffold` — everything a consuming project needs lives there, not only in this file. PTB-5
+re-scoped from "hand off to a build story" to the distribution decision plus `scaffold.sh` per-piece selection and merging (`.gitignore` added as a third merged file — `python/` needs it); PTB-7 (Tier
+2 content), PTB-8 (Tier 3 content), and PTB-9 (port this guide into `project-scaffold/README.md`, ship a trigger list into scaffolded projects, three-configuration end-to-end validation, archive)
+added. Order: PTB-5 → PTB-6 → PTB-7 → PTB-8 → PTB-9. `project-scaffold` commit SHAs are recorded here per task from PTB-5 on.
