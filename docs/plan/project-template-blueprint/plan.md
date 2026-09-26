@@ -21,9 +21,9 @@ tier" mechanism if what it computes is load-bearing (TaxCalculation's bracket/de
 | Tier | Trigger to add it | Ships |
 |---|---|---|
 <!-- lint-ignore-length -->
-| **0 — Bootstrap** | Every project, day one | `CONTEXT.md` (mutable current-state doc, the only mandatory design doc up front) + a `CLAUDE.md` skeleton (Step 1 read-context → Step 2 confirm scope → Step 3 plan+go-ahead → Step 4 tests mandatory → Step 5 docs→tests→commit) + `README.md`. `scratch/` (dated-filename POC folder, see below) and `tmp/` (gitignored, throwaway) from day one — both cheap enough to start with. `commit` skill. Git conventions (imperative ≤60-char subject, no amending pushed commits, stage specific files). No `DECISIONS.md`, no `TODOS.md`, no `docs/plan/` yet — don't scaffold empty structure for decisions/backlog that don't exist yet. |
+| **0 — Bootstrap** | Every project, day one | `CONTEXT.md` (mutable current-state doc, the only mandatory design doc up front) + a `CLAUDE.md` skeleton (Step 1 read-context → Step 2 confirm scope → Step 3 plan+go-ahead → Step 4 tests mandatory → Step 5 docs→tests→commit) + `README.md`. `scratch/` (dated-filename POC folder, see below — mandatory staging ground, no throwaway code lands directly in `src`/`scripts`) and `tmp/` (gitignored, throwaway) from day one. `commit` skill. Git conventions (imperative ≤60-char subject, no amending pushed commits, stage specific files). All token-optimization techniques below marked Tier 0 (bash output discipline, `session-close` loop, `codebase-memory-mcp` indexing without its enforcement gate, keeping `CLAUDE.md` itself thin). No `DECISIONS.md`, no `TODOS.md`, no `docs/plan/` yet — don't scaffold empty structure for decisions/backlog that don't exist yet. |
 <!-- lint-ignore-length -->
-| **1 — Recurring work** | Second real session, or a backlog exists | `docs/plan/_TEMPLATE/` + `docs/plan/README.md` §Conventions + `TODOS.md` (backlog + session log), `work`/`new-story` skills. `DECISIONS.md` — created on the *first* real architecture decision, not before; append-only, records "why" not "what." `session-close` skill + `session_audit.jsonl`/`suggestions.md` mechanism — cheap, pays off once sessions recur; no further gating needed beyond "you're doing a second session." |
+| **1 — Recurring work** | Second real session, or a backlog exists | `docs/plan/_TEMPLATE/` + `docs/plan/README.md` §Conventions + `TODOS.md` (backlog + session log, "pointers only" convention), `work`/`new-story` skills. `DECISIONS.md` — created on the *first* real architecture decision, not before; append-only, records "why" not "what." |
 <!-- lint-ignore-length -->
 | **2 — Correctness-critical or multi-surface** | The domain has a load-bearing, hard-to-reverse decision (financial/legal correctness, irreversible migration) — fires regardless of project size — **or** work genuinely spans Claude + Antigravity + subagents | `docs/council/` protocol, for decisions meeting the real three-condition test (load-bearing + two defensible approaches + spans disciplines). A generic `code-reviewer` agent, plus a domain-specific reviewer only where a specific correctness risk exists (NiftyShield's `greeks-analyst`/`roll-validator` are the pattern — e.g. a `tax-rule-reviewer` for TaxCalculation). `handoff-antigravity` + `ANTIGRAVITY.md` only if Antigravity is actually in the loop. |
 <!-- lint-ignore-length -->
@@ -107,6 +107,8 @@ copied verbatim.
 | `asyncio` as primary concurrency model, `ProcessPoolExecutor` for CPU-bound, explicit timeouts | not portable by default | This is NiftyShield-specific to its live 30s-cadence daemon. Adopt only if a future project is itself a long-running concurrent service — not CardLedger/TaxCalculation, which are batch scripts. |
 | Testing: offline-first, one happy-path + one edge-case per public function, integration opt-in only | 0 | Portable as-is. |
 | Git conventions (imperative ≤60-char subject, never amend pushed commits, stage specific files) | 0 | Portable as-is. |
+<!-- lint-ignore-length -->
+| No throwaway code written directly in `src/`/`scripts/` — a quick POC/exploration always starts in `scratch/` first, and only graduates via the convergence rule (see Project layout below) once it's proven | 0 | Portable as-is, and now a hard requirement, not just an available option — the discipline is "stage in `scratch/`, promote deliberately," never "write it in prod folders and clean up later." |
 
 ### `CLAUDE.md` protocol mechanics
 
@@ -116,7 +118,10 @@ copied verbatim.
 | Step 1–5 skeleton (read context → confirm scope → plan+go-ahead → tests mandatory → docs→tests→commit) | 0 | Portable pattern — the shape, not NiftyShield's specific file names. |
 | Bash output discipline (aggregate/filter before it enters context) | 0 | Portable as-is — cheap, universal token hygiene. |
 | Tool-call param hygiene notes (`AskUserQuestion` plain strings, don't poll `ScheduleWakeup` for subagents) | 0 | Portable as-is — these are Claude-Code-harness-level facts, not project facts. |
-| Rule 0 — graph-before-read (`codebase-memory-mcp`) + its specific project-id/`repo_path` param hygiene | 3 | Only earns its cost once a codebase is large enough to index; dead weight below that. |
+<!-- lint-ignore-length -->
+| `codebase-memory-mcp` **indexing** (`index_repository` run once, kept fresh) | 0 | Cheap, one-shot setup with no ongoing cost — index from day one regardless of project size, so the tool is already there once it's needed. |
+<!-- lint-ignore-length -->
+| Rule 0's **enforcement** — mandatory graph-before-read, `search_graph`/`get_code_snippet`/`trace_path` as the required first stop over `Read` | 3 | The reminder/gate only fires once the codebase is big enough that "query the graph" actually beats "just read the file" — below that, indexing exists but isn't yet enforced. |
 | Step 2b — council checkpoint (three-condition test) | 2 | Pattern generalizes; content (which council, what template) is per-project. |
 | Step 3b — Claude vs. Antigravity routing table | 2 | Only relevant if a project actually splits work across two agent surfaces. |
 | AutoTrigger agent table (blocking test-runner / code-reviewer) | 2 | Mechanism generalizes; NiftyShield's specific agents do not (see Agents below). |
@@ -129,7 +134,7 @@ copied verbatim.
 | `commit` | 0 | Portable pattern (message format, stage-specific-files) once stripped of NiftyShield's code-reviewer-gate specifics. |
 | `work` | 1 | Portable pattern — front-door router to feature/bug trees; needs `docs/plan/`+`docs/bugs/` to exist first. |
 | `new-story` | 1 | Portable as-is — thin wrapper around a scaffold script, already project-agnostic. |
-| `session-close` | 1 | Portable as-is — the token-efficiency audit is domain-agnostic. |
+| `session-close` | 0 | Promoted from Tier 1 — negligible cost, default on from day one (see token-optimization section below). |
 | `md-organize` | 3 | Portable pattern, fires only once a doc crosses the size trigger. |
 | `weekly-audit` | 3 | Portable pattern, only worth the cadence once there's enough surface area. |
 <!-- lint-ignore-length -->
@@ -189,10 +194,40 @@ copied verbatim.
 <!-- lint-ignore-length -->
 | Item | Tier | Note |
 |---|---|---|
-| `scratch/` (dated-filename POC folder + convergence rule) | 0 | Portable pattern (see scratch/tmp section above); subfolder-per-purpose timing still open. |
+<!-- lint-ignore-length -->
+| `scratch/` (dated-filename POC folder + convergence rule) | 0 | Portable pattern (see scratch/tmp section above); subfolder-per-purpose timing still open. **Mandatory, not optional** — see the no-throwaway-code-in-prod-folders rule above. |
 | `tmp/` (gitignored throwaway) | 0 | Portable as-is. |
-| `session_audit.jsonl` + `suggestions.md` (token-efficiency loop, driven by `session-close`) | 1 | Portable as-is. |
+<!-- lint-ignore-length -->
+| `session_audit.jsonl` + `suggestions.md` (token-efficiency loop, driven by `session-close`) | 0 | Promoted from Tier 1 — cost is negligible (one subagent call at session end) regardless of project size, so it defaults on everywhere. |
 | `AGENTS.md` mirroring `CLAUDE.md` for Antigravity | 2 | Only if Antigravity is in the workflow (per existing memory note: keep it a full mirror, never a stub). |
+
+## Token optimization techniques — consolidated
+
+Pulled together from scattered rows above into one place, since these were being classified piecemeal. Split by whether the technique is free at any size (defaults to Tier 0) or trades
+setup/maintenance cost for savings that only exceed that cost once the codebase is large enough (stays gated).
+
+**Free at any size — Tier 0 by default:**
+
+- Bash output discipline (aggregate/filter at the source, never dump raw result sets into context).
+- The `session_audit.jsonl` + `suggestions.md` loop, driven by `session-close` — one subagent call at session end, negligible cost, no size threshold below which it stops paying off.
+- `codebase-memory-mcp` **indexing** (run `index_repository` once, keep it fresh) — one-shot setup cost, no ongoing cost, so index from day one even on a tiny project.
+- The deferred/lazy-loaded-reference pattern — keep `CLAUDE.md` itself thin and push bulky detail (a `protocol-reference`-style skill, a `CONTEXT_TREE.md` split out of `CONTEXT.md`) into something
+  loaded only when actually needed. Free to set up from day one; the "content" that gets deferred (council protocol, full module tree) may not exist yet on a small project, but the *shape* — resident
+  doc stays short, detail is one skill-invocation away — costs nothing to establish early.
+- No throwaway code directly in `src`/`scripts` — always stage in `scratch/` first (see Python hygiene table above) — this is as much a token-optimization technique as a code-hygiene one: it prevents
+  a half-finished exploration from bloating a session's diff/review surface before the idea is even proven.
+- "Pointers only, not full detail" in the backlog doc (`TODOS.md`'s convention: title/path/next-task/one-line why, real detail lives in the story folder) and "find the first unchecked task, do only
+  that task, stop" in every story's `prompt.md` — both bound what a session has to load and how far it's expected to range, before a backlog or a story even gets long. Tier 1 in practice only because
+  they need `docs/plan/`/`TODOS.md` to exist first, not because of any cost concern.
+
+**Trades setup/maintenance cost for size-dependent payoff — stays gated:**
+
+- Rule 0's **enforcement** (`guard_src_reads.sh`, `repeat_read.sh` mandating graph-over-`Read`) — Tier 3. The index from Tier 0 sits there unused until the codebase is big enough that a graph query
+  actually beats reading the file; forcing the enforcement hook on earlier just nags with no query worth making yet.
+- `wide_grep.sh` scoped-grep enforcement — Tier 2/3, same reasoning: only bites once log/codebase volume makes an unscoped grep actually expensive.
+- `md-organize` / doc archival — Tier 3. Zero payoff until a doc is actually large enough to be reread wholesale every session.
+- `graph_snippet`'s field-stripping wrapper (drops unused `fp`/`sp`/`bt` fingerprint fields, ~244 tokens/call) — rides along with whatever tier the graph tool itself is gated at (its enforcement, not
+  its indexing).
 
 ## Status
 
