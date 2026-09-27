@@ -17,8 +17,7 @@ it); PTB-7..PTB-9 added. SHAs below are NiftyShield commits; `project-scaffold` 
 - [x] **PTB-5** — Distribution decision + `scaffold.sh` per-item selection and merge mechanics (re-scoped 2026-09-26: was "hand off template-repo build to a new story") | Owner: Claude | Model:
   claude-opus-5-5 | Review: none | SHA: 5110b0a
 - [x] **PTB-6a** — Concretize the `python/` overlay: file set + Python-gated hooks (renamed from the earlier `python-addon/` concept, deferred at PTB-2, 2026-09-26 — now in scope: most future
-  projects, CardLedger and TaxCalculation included, are Python) | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: db90cf2 (project-scaffold); NiftyShield SHA set in the follow-up commit
-  below
+  projects, CardLedger and TaxCalculation included, are Python) | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: db90cf2 (project-scaffold); b3b788e (NiftyShield)
 - [ ] **PTB-6b** — Wire `docs/plan/` structure-enforcement hooks (`check_story_structure`, `check_checkbox_consistency`) into Tier 1 (split out of PTB-6, 2026-09-26 — generic content gated on Tier 1's
   `docs/plan/_TEMPLATE` already existing, not on Python; PTB-3 narrowed Tier 1 to skills only and never carried these over) | Owner: Claude | Model: claude-sonnet-5 | Review: none
   | SHA: <—>
