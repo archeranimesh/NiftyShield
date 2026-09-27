@@ -126,6 +126,11 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 - [2026-09-26] `project-template-blueprint/` PTB-5 post-close fix — Animesh's own validation run (`--piece tier1 --piece tier2/stakes --piece tier3/rule0`) surfaced a stray `.gitkeep` leaking into the
   scaffolded project's root whenever an empty tier2/tier3 piece was selected. Fixed in `scaffold.sh`'s `copy_piece_files` skip-list; re-validated clean and still zero-diff on re-run.
   `project-scaffold` SHA `70d3762`.
+- [2026-09-27] `project-template-blueprint/` PTB-6a done — `python/` overlay concretized as a root-level sibling piece in `project-scaffold` (orthogonal to the tier axis): seeded
+  `src`/`scripts`/`tests` packages, `logs/setup_logging.py` stub (stdlib logging), `pyproject.toml`/`requirements.txt`/`requirements-dev.txt`, the full Python-gated pre-commit hook set (`ruff`,
+  `ruff-format`, `mypy`, `detect-secrets`, `pytest-gate`, `bandit`, the two logging pygrep hooks, `md-line-length`/`md-reflow` copied verbatim from NiftyShield's own generic scripts), a generic
+  `Makefile`, and `.gitignore`/`CLAUDE.md` fragments (new `<!-- INSERT: python -->` marker in `tier0/CLAUDE.md`). Validated standalone then end-to-end via `scaffold.sh --piece python`. Wired into
+  `scaffold.sh`'s `PIECES` array. `project-scaffold` SHA `db90cf2`. Next: PTB-6b.
 - [2026-09-26] `strategy-refactor-blueprint/` scaffolded (docs-only, no code) — captures a discussion session's finding that `src/strategy/` (14,255 LOC) is dominated by `ic_nifty_v2.py` (2,935
   lines) + `ic_nifty_v1.py` (1,409 lines), ~30% of the package with no existing `DEBT-*` tracking it, and lays out a golden-test-gated, council-ruled, one-extraction-per-commit approach to decomposing
   it without disturbing live paper-trading cycles. Also confirmed `md-organize` already covers the doc-growth (`TODOS.md`/`DECISIONS.md`) side of the same discussion — BP-1 just needs to run it, not

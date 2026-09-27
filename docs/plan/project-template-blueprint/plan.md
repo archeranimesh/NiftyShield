@@ -245,6 +245,33 @@ dependency management stays `requirements.txt` + `requirements-dev.txt` (matches
 folder; `data/` is conditional on the project's actual input/output shape, not scaffolded by default; pre-commit hooks are `ruff`/`ruff-format`/`mypy`/`detect-secrets` plus a generic `pytest`
 test-gate hook — the domain-agnostic five, no NiftyShield-specific local hooks.
 
+**PTB-6a design-doc discussion (2026-09-27):** prompted by a real diagnosis — `ic_nifty_v1.py`/`ic_nifty_v2.py` both crossing 1000+ LOC — worked back from "why" to "what would have prevented it."
+Generic SRP framing didn't catch it (a class accreting entry/exit/roll/sizing logic doesn't obviously violate "one reason to change" until it's already large); the concrete diagnosis is OCP: each new
+roll/entry rule was added as a branch inside an existing decision method instead of a new implementer of an interface. That reframing — SOLID as concrete, checkable *triggers* tied to the exact edit
+that provokes them, not a principles essay — is now the confirmed approach for `python/`'s design-principles content, superseding the earlier "not a general SOLID essay" framing in `stories.md` (that
+principle still holds: `tier0/CLAUDE.md` stays thin; the change is *where* the content lives — a separate trigger-loaded `PYTHON_DESIGN.md` — and *how* it's written, as triggers). Content also folds
+in: Zen of Python (PEP 20) as the governing frame; a small named pattern set (Strategy — the `EntryRule`/`ExitRule`/`RollPolicy` seam itself; Factory Method; Template Method; Decorator; Observer only
+if an actual reactive need exists); and two reference links for edge cases (`testdriven.io/blog/clean-code-python`, `refactoring.guru/design-patterns/python`), framed as fallback consultation, not
+required reading. Also discussed and deferred: `ruff N` (pep8-naming) enablement in the `python/` overlay's `pyproject.toml` template — confirmed necessary but must ship with a documented exception
+for option-pricing math notation (`S`/`K`/`T`/`IV`), since a live check against NiftyShield's own code (`ruff check --select N`) returned 53 violations, 46 of them exactly that notation, not naming
+carelessness. Explicitly scoped: no `ruff`/`pyproject.toml` change to NiftyShield itself — this is `project-scaffold`-template-only.
+
+**`PYTHON_DESIGN.md` written (2026-09-27):** `project-scaffold/python/PYTHON_DESIGN.md` — the doc described above, written directly to `project-scaffold` (NiftyShield's own source/config untouched).
+
+**PTB-6a closed (2026-09-27):** `project-scaffold/python/` is a root-level sibling piece (not nested inside a tier) — Python is orthogonal to the tier axis, so a Tier 0 project can be Python or not,
+and later tiers don't change that. File set: `src/`/`scripts/`/`tests/` each seeded with `__init__.py` (`scripts/` includes `dev/` and `dev/hooks/` sub-packages, also seeded); `logs/setup_logging.py`
+(stdlib `logging`, not structlog — this overlay stays dependency-free by default) + `logs/.gitignore` scoping the ignore to `*.log`; `pyproject.toml` (dependency-free `[project.dependencies]`,
+`ruff`/`mypy`/`pytest`/`coverage` config carried over from NiftyShield's own, `ruff N` left commented as a note, not enabled — the math-notation exception only matters once a project that needs it
+exists); `requirements.txt` (empty, a comment, not pre-populated) + `requirements-dev.txt`; `.pre-commit-config.yaml` with the full confirmed hook list (`ruff`, `ruff-format`, `mypy`,
+`detect-secrets`, a local `pytest-gate` hook, `bandit`, `no-script-main-logger`, `no-bare-logging`, `md-line-length`/`md-reflow` — the latter two copied verbatim from
+`scripts/dev/{reflow_md.py,hooks/check_md_line_length.py}`, both already generic with no NiftyShield-specific scoping, and generalized here to the whole tree rather than `docs/plan`-scoped);
+`Makefile` with the confirmed generic targets, `coverage` threshold as a placeholder (`60`, not NiftyShield's `80`), `dupes`/`dead-code` left as a comment rather than commented-out targets (advisory
+tools aren't installed by default, so there's nothing to wire yet); `.gitignore.fragment` (`.venv/`, caches, `*.pyc`, `logs/*.log`); `CLAUDE.fragment.md` at a new `<!-- INSERT: python -->` marker
+added to `tier0/CLAUDE.md`'s existing "Python conventions" section (type hints on all public signatures, `(str, Enum)`, opt-in `Decimal`, the `setup_logging()` call convention, the `__init__.py` rule,
+a pointer to `PYTHON_DESIGN.md`). `data/` stays undocumented-by-default per the conditional decision — added per-project when needed, not scaffolded. Validated in two passes: standalone
+(`copy_piece_files` against a scratch destination — flat, no leftover placeholder names) then end-to-end via `scaffold.sh --piece python` (tier0 + python together — `.gitignore` and `CLAUDE.md`
+fragment merges both landed correctly). Wired into `scaffold.sh`'s `PIECES` array (per-piece selection, not a numeric tier or standalone flag, per PTB-5's mechanism).
+
 **PTB-2 closed (2026-09-26):** Animesh confirmed the final file set. Corrections made during review before sign-off: `python-addon/` removed entirely (deferred — see below, not universal Tier 0);
 `.gitignore` stripped of Python-specific entries (`__pycache__/`, `*.pyc`, `.venv/`) and fixed so `tmp/README.md` isn't silently excluded by the `tmp/` ignore rule (`tmp/*` + `!tmp/README.md`);
 `commit` skill's Step 2 genericized (was hardcoded to `pytest`, now command-agnostic); `commit`/`session-close` skills re-scoped in from PTB-3 and written (see tree above) since both are Tier 0, not

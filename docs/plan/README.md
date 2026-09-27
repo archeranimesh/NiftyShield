@@ -63,8 +63,8 @@ Requested by Animesh 2026-09-10.
 `src/strategy/`'s 14,255 LOC) without disturbing live paper-trading cycles — golden-test-gated extraction, council-ruled decomposition boundary, then a generalized Claude/Antigravity/council routing
 blueprint drawn from the case study. No `src/` code touched under this story. Requested by Animesh 2026-09-26.
 
-**`project-template-blueprint/`** · 🔄 In progress · next: **PTB-6a** (concretize the `python/` overlay) Multi-session: abstract NiftyShield's Python conventions, Claude-Code harness
-(skills/hooks/agents), and `docs/plan/` scaffolding into a trigger-gated tier system future projects (CardLedger, TaxCalculation) can selectively inherit. Ends with a self-contained
+**`project-template-blueprint/`** · 🔄 In progress · next: **PTB-6b** (wire `docs/plan/` structure-enforcement hooks into Tier 1) Multi-session: abstract NiftyShield's Python conventions, Claude-Code
+harness (skills/hooks/agents), and `docs/plan/` scaffolding into a trigger-gated tier system future projects (CardLedger, TaxCalculation) can selectively inherit. Ends with a self-contained
 `/Users/abhadra/myWork/myCode/AI/project-scaffold/` (all tiers, `python/` overlay, per-piece `scaffold.sh`, the tier/trigger guide) — no follow-on build story (re-planned 2026-09-26, PTB-5..PTB-9).
 Requested by Animesh 2026-09-26.
 
