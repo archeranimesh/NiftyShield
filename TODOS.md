@@ -92,6 +92,10 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-27] `project-template-blueprint/` PTB-7 done — Tier 2 (`stakes/`, `test-runner/`, `multi-surface/`) written to `project-scaffold` (SHA `c76a659`): genericized `code-reviewer` agent +
+  `REVIEW.md` + council `README.md`/`_TEMPLATE`/`council_check.sh` (stakes); `test-runner` agent + `inline_full_suite.sh` with a placeholder test command (test-runner); `handoff-antigravity` skill +
+  `ANTIGRAVITY.md` + `AGENTS.md` mirror + Step 3b routing fragment (multi-surface). Validated: `scaffold.sh --piece tier1 --piece tier2/stakes --piece tier2/test-runner --piece tier2/multi-surface`
+  against a scratch destination produces valid `settings.json`, both hooks run cleanly, `CLAUDE.md` fragments land at their markers, and a domain-leakage grep returns clean.
 - [2026-09-26] `project-template-blueprint/` PTB-1 done — `plan.md` written, capturing the four-tier table (Bootstrap / Recurring work / Correctness-critical or multi-surface / Scale), the scratch/tmp
   distinction, the architecture-doc trio, the generalized model-routing buckets, and the draft template-repo distribution decision, plus all open questions carried forward for PTB-2..PTB-5.
 - [2026-09-26] `project-template-blueprint/` scaffolded (docs-only, no code) — captures a separate discussion session abstracting NiftyShield's Python conventions, Claude-Code harness

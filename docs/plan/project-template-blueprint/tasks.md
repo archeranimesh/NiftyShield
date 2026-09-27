@@ -3,7 +3,7 @@
 
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task spec.
 
-**Open: PTB-6a, PTB-6b, PTB-7, PTB-8, PTB-9.**
+**Open: PTB-8, PTB-9.**
 
 **Re-planned 2026-09-26 (after PTB-4):** the story's end state is now a self-contained `project-scaffold` — every tier's files, the `python/` overlay, a per-item `scaffold.sh`, and the tier/trigger
 guide itself all live there, so nothing a consuming project needs is left behind in NiftyShield. PTB-5 no longer hands off to a separate build story (the repo already exists, Tier 0/1 are committed in
@@ -21,8 +21,8 @@ it); PTB-7..PTB-9 added. SHAs below are NiftyShield commits; `project-scaffold` 
 - [x] **PTB-6b** — Wire `docs/plan/` structure-enforcement hooks (`check_story_structure`, `check_checkbox_consistency`) into Tier 1 (split out of PTB-6, 2026-09-26 — generic content gated on Tier 1's
   `docs/plan/_TEMPLATE` already existing, not on Python; PTB-3 narrowed Tier 1 to skills only and never carried these over) | Owner: Claude | Model: claude-sonnet-5 | Review: none
   | SHA: ae356e5 (project-scaffold); adae861 (NiftyShield)
-- [ ] **PTB-7** — Write Tier 2 (`stakes/`, `test-runner/`, `multi-surface/`) into `project-scaffold`, genericized, in PTB-5's fragment shape | Owner: Claude | Model: claude-sonnet-5 | Review: none
-  | SHA: <—>
+- [x] **PTB-7** — Write Tier 2 (`stakes/`, `test-runner/`, `multi-surface/`) into `project-scaffold`, genericized, in PTB-5's fragment shape | Owner: Claude | Model: claude-sonnet-5 | Review: none
+  | SHA: c76a659 (project-scaffold); <—> (NiftyShield)
 - [ ] **PTB-8** — Write Tier 3 (Rule 0 bundle, `md-organize`, `state_doc_freshness`, `weekly-audit`) into `project-scaffold`, genericized, in PTB-5's fragment shape | Owner: Claude | Model:
   claude-sonnet-5 | Review: none | SHA: <—>
 - [ ] **PTB-9** — Make `project-scaffold` self-documenting (root README + shipped trigger guide), end-to-end validation, archive this story | Owner: Claude | Model: claude-opus-5-5 | Review: none |
