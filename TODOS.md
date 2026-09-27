@@ -131,6 +131,12 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
   `ruff-format`, `mypy`, `detect-secrets`, `pytest-gate`, `bandit`, the two logging pygrep hooks, `md-line-length`/`md-reflow` copied verbatim from NiftyShield's own generic scripts), a generic
   `Makefile`, and `.gitignore`/`CLAUDE.md` fragments (new `<!-- INSERT: python -->` marker in `tier0/CLAUDE.md`). Validated standalone then end-to-end via `scaffold.sh --piece python`. Wired into
   `scaffold.sh`'s `PIECES` array. `project-scaffold` SHA `db90cf2`. Next: PTB-6b.
+- [2026-09-27] `project-template-blueprint/` PTB-6b done — `check_story_structure.py`/`check_checkbox_consistency.py` ported into `project-scaffold/tier1/.claude/hooks/`, generalized (empty
+  legacy-allowlist, NiftyShield-specific `Review:` enum dropped, RDO/SWEEP session references stripped from comments). Wired via a new `docs_plan_gate.sh` PreToolUse(Bash) git-commit gate
+  (`[skip-docs-check]` escape hatch) registered through `tier1/.claude/settings.fragment.json` and PTB-5's hook-merge mechanism — chosen over the pre-commit-framework route NiftyShield itself uses,
+  since Tier 0/1 don't assume `pre-commit` is installed. Added a minimal `tier1/docs/plan/README.md` §Conventions skeleton the hooks' error messages point to (confirmed `_TEMPLATE/` already matched
+  both scripts' expected shapes — no fix needed there). Validated against a scratch `--piece tier1` scaffold: valid story passes, a missing `stories.md` is flagged and blocks the git-commit gate (exit
+  2), fix clears it (exit 0) — no `python/` overlay required. `project-scaffold` SHA `ae356e5`. Next: PTB-7.
 - [2026-09-26] `strategy-refactor-blueprint/` scaffolded (docs-only, no code) — captures a discussion session's finding that `src/strategy/` (14,255 LOC) is dominated by `ic_nifty_v2.py` (2,935
   lines) + `ic_nifty_v1.py` (1,409 lines), ~30% of the package with no existing `DEBT-*` tracking it, and lays out a golden-test-gated, council-ruled, one-extraction-per-commit approach to decomposing
   it without disturbing live paper-trading cycles. Also confirmed `md-organize` already covers the doc-growth (`TODOS.md`/`DECISIONS.md`) side of the same discussion — BP-1 just needs to run it, not
