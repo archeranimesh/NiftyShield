@@ -92,6 +92,11 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-29] BUG-056 found + fixed — the signals prompt (`src/signals/prompt.py`) asked GPT-4o/Grok/Gemini for `entry_premium_low`/`high` with no real premium anywhere in the input; Grok returned
+  `null` rather than invent one, crashing the unguarded `Decimal(str(...))` cast in `_parse_response`. Added `OptionChainSummary.premiums` (real CE/PE LTP for ATM-1/ATM/ATM+1, already fetched but
+  previously discarded by `_summarize_option_chain`) and rendered a "Live premiums" line + explicit instruction in the prompt. Missing legs render "N/A", never a bare 0 the LLM could mistake for a
+  real quote. Two real `@code-reviewer` rounds, 0 CRITICAL/ERROR both; round-1's 2 WARNINGs (0-as-sentinel ambiguity, missing one-leg test) fixed and verified clean in round 2. SHA `2c17a85`. Archived
+  directly to `docs/archive/bugs/bugs.md`. Deferred: a defensive null-guard in the three providers' `_parse_response` — not done here, noted as a candidate follow-up.
 - [2026-09-29] BUG-055 found + fixed — `_nearest_monthly_usdinr_key` (`src/signals/market_inputs.py`) picked an untraded trailing NCD_FO USDINR weekly (2026-10-30) over the true monthly (2026-10-28,
   off the Friday weekly cadence), crashing the 09:30 `morning_signal.py` cron with `DataFetchError`. Replaced the "last expiry in calendar month" heuristic with a weekday-anchor detector; 2 new tests
   (off-cadence pick + bucket-max fallback), real `@code-reviewer` clean (0 CRITICAL/ERROR). SHA `6e6b6aa`. Archived directly to `docs/archive/bugs/bugs.md`.
