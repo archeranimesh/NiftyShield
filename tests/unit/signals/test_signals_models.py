@@ -11,6 +11,7 @@ from src.signals.models import (
     SignalOutcome,
     SignalResponse,
     SignalUsage,
+    StrikePremium,
     TradeAction,
 )
 
@@ -47,6 +48,11 @@ def test_market_snapshot_round_trip():
             pcr_atm=Decimal("1.10"),
             top_call_oi=[OILevel(strike=23000, oi=5000000, oi_change=100000)],
             top_put_oi=[OILevel(strike=22000, oi=4500000, oi_change=-50000)],
+            premiums=[
+                StrikePremium(strike=22450, call_ltp=Decimal("120.5"), put_ltp=Decimal("70.0")),
+                StrikePremium(strike=22500, call_ltp=Decimal("95.0"), put_ltp=Decimal("90.5")),
+                StrikePremium(strike=22550, call_ltp=Decimal("72.0"), put_ltp=Decimal("115.0")),
+            ],
         ),
         fii=FIIData(
             fii_cash_net_cr=Decimal("1500.00"),

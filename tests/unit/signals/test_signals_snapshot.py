@@ -14,7 +14,7 @@ import pytest
 from src.client.exceptions import DataFetchError
 from src.instruments.lookup import InstrumentLookup
 from src.signals import snapshot
-from src.signals.models import FIIData, MarketSnapshot, OptionChainSummary
+from src.signals.models import FIIData, MarketSnapshot, OptionChainSummary, StrikePremium
 from src.signals.snapshot import assemble_market_snapshot
 
 
@@ -162,6 +162,14 @@ async def test_assemble_happy_path(_patch_market_inputs) -> None:
     assert oc.top_call_oi[0].strike == 23900 and oc.top_call_oi[0].oi == 500
     assert oc.top_put_oi[0].strike == 23700 and oc.top_put_oi[0].oi == 400
     assert oc.top_call_oi[0].oi_change == 0
+    # Fixture chain rows are spaced 100 apart (23700/23800/23900); the real 50
+    # NIFTY_STRIKE_STEP puts ATM-1/ATM+1 at 23750/23850, which miss the chain
+    # and correctly fall back to Decimal("0") — only ATM (23800) resolves.
+    premiums = {p.strike: p for p in oc.premiums}
+    assert set(premiums) == {23750, 23800, 23850}
+    assert premiums[23750].call_ltp == Decimal("0") and premiums[23750].put_ltp == Decimal("0")
+    assert premiums[23800].call_ltp == Decimal("50") and premiums[23800].put_ltp == Decimal("48")
+    assert premiums[23850].call_ltp == Decimal("0") and premiums[23850].put_ltp == Decimal("0")
 
 
 @pytest.mark.asyncio
@@ -207,6 +215,54 @@ async def test_iv_skew_zero_when_one_otm_side_missing(_patch_market_inputs) -> N
         lookup=_nifty_expiry_lookup(),
     )
     assert snap.option_chain.iv_skew == Decimal("0")
+
+
+@pytest.mark.asyncio
+async def test_strike_premiums_missing_strike_falls_back_to_zero(_patch_market_inputs) -> None:
+    """ATM+1 (23950) has no row in the chain — falls back to Decimal("0"), not a raise."""
+    broker = _FakeBroker(
+        ltp={
+            "NSE_INDEX|Nifty 50": Decimal("23900"),  # nearest chain strike -> atm=23900
+            "NSE_INDEX|India VIX": Decimal("11.16"),
+        },
+        historical_candles=[["2026-08-25", 1, 1, 1, 1, 0, 0]],
+        chain=_raw_chain(),  # strikes 23700/23800/23900 only — 23950 absent
+    )
+    snap = await assemble_market_snapshot(
+        broker,
+        store=_StubStore(),
+        trade_date=date(2026, 9, 8),
+        lookup=_nifty_expiry_lookup(),
+    )
+    premiums = {p.strike: p for p in snap.option_chain.premiums}
+    assert premiums[23850].call_ltp == Decimal("0") and premiums[23850].put_ltp == Decimal("0")
+    assert premiums[23900].call_ltp == Decimal("50") and premiums[23900].put_ltp == Decimal("48")
+    assert premiums[23950].call_ltp == Decimal("0") and premiums[23950].put_ltp == Decimal("0")
+
+
+@pytest.mark.asyncio
+async def test_strike_premiums_one_leg_missing_at_present_strike(_patch_market_inputs) -> None:
+    """Strike is present but PE is absent (deep-OTM illiquid put) — call_ltp
+    resolves normally, put_ltp falls back to Decimal("0") independently."""
+    chain = _raw_chain()
+    chain[1]["put_options"] = {}  # 23800 (ATM) loses its PE leg only
+    broker = _FakeBroker(
+        ltp={
+            "NSE_INDEX|Nifty 50": Decimal("23779.15"),
+            "NSE_INDEX|India VIX": Decimal("11.16"),
+        },
+        historical_candles=[["2026-08-25", 1, 1, 1, 1, 0, 0]],
+        chain=chain,
+    )
+    snap = await assemble_market_snapshot(
+        broker,
+        store=_StubStore(),
+        trade_date=date(2026, 9, 8),
+        lookup=_nifty_expiry_lookup(),
+    )
+    premiums = {p.strike: p for p in snap.option_chain.premiums}
+    assert premiums[23800].call_ltp == Decimal("50")
+    assert premiums[23800].put_ltp == Decimal("0")
 
 
 @pytest.mark.asyncio
@@ -319,6 +375,11 @@ def _make_snap(vix: str) -> MarketSnapshot:
             pcr_atm=Decimal("1"),
             top_call_oi=[],
             top_put_oi=[],
+            premiums=[
+                StrikePremium(strike=23750, call_ltp=Decimal("60"), put_ltp=Decimal("55")),
+                StrikePremium(strike=23800, call_ltp=Decimal("50"), put_ltp=Decimal("48")),
+                StrikePremium(strike=23850, call_ltp=Decimal("40"), put_ltp=Decimal("62")),
+            ],
         ),
         fii=FIIData(fii_cash_net_cr=Decimal("0"), dii_cash_net_cr=Decimal("0")),
     )

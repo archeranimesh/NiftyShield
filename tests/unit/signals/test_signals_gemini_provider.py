@@ -16,6 +16,7 @@ from src.signals.models import (
     OILevel,
     OptionChainSummary,
     SignalResponse,
+    StrikePremium,
 )
 from src.signals.protocol import SignalProvider
 from src.signals.providers.gemini import GeminiSignalProvider
@@ -44,6 +45,11 @@ def snapshot() -> MarketSnapshot:
             pcr_atm=Decimal("0.90"),
             top_call_oi=[OILevel(strike=24100, oi=100000, oi_change=5000)],
             top_put_oi=[OILevel(strike=23900, oi=150000, oi_change=-2000)],
+            premiums=[
+                StrikePremium(strike=23950, call_ltp=Decimal("130.25"), put_ltp=Decimal("62.5")),
+                StrikePremium(strike=24000, call_ltp=Decimal("102.0"), put_ltp=Decimal("88.75")),
+                StrikePremium(strike=24050, call_ltp=Decimal("78.5"), put_ltp=Decimal("118.0")),
+            ],
         ),
         fii=FIIData(
             fii_cash_net_cr=Decimal("1500.5"),

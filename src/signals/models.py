@@ -30,6 +30,18 @@ class OILevel(BaseModel, frozen=True):
     oi_change: int  # vs previous day; negative = OI unwinding
 
 
+class StrikePremium(BaseModel, frozen=True):
+    """CE/PE last-traded price at one permitted-strike row.
+
+    A missing leg (broker omitted it) is represented by Decimal("0"),
+    mirroring :class:`~src.models.options.OptionLeg`'s own convention.
+    """
+
+    strike: int
+    call_ltp: Decimal
+    put_ltp: Decimal
+
+
 class OptionChainSummary(BaseModel, frozen=True):
     """Derived option-chain fields injected into every model prompt."""
 
@@ -40,6 +52,12 @@ class OptionChainSummary(BaseModel, frozen=True):
     pcr_atm: Decimal
     top_call_oi: list[OILevel]  # top 3 strikes by call OI
     top_put_oi: list[OILevel]  # top 3 strikes by put OI
+    # BUG-056: providers were asked for entry_premium_low/high with no real
+    # price in the prompt (Grok returned null and crashed the parser,
+    # 2026-09-29). premiums carries CE/PE LTP for every permitted strike
+    # (ATM-1, ATM, ATM+1) so the LLM can ground its premium estimate in a
+    # real quote instead of guessing.
+    premiums: list[StrikePremium]  # ATM-1, ATM, ATM+1, ascending by strike
 
 
 class FIIData(BaseModel, frozen=True):

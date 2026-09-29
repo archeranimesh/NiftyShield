@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from src.signals.models import MarketSnapshot
 
 NIFTY_STRIKE_STEP = 50
@@ -40,6 +42,17 @@ def build_prompt(snapshot: MarketSnapshot, provider_name: str) -> list[dict[str,
         for level in snapshot.option_chain.top_put_oi
     )
 
+    # Decimal("0") means the leg was absent from the chain (OptionLeg's own
+    # missing-price convention) — render "N/A" so it never reads to the model
+    # as a real zero-premium quote it's then instructed to use verbatim.
+    def _premium_text(value: Decimal) -> str:
+        return "N/A" if value == 0 else str(value)
+
+    premiums_text = " | ".join(
+        f"{row.strike} CE:{_premium_text(row.call_ltp)} PE:{_premium_text(row.put_ltp)}"
+        for row in snapshot.option_chain.premiums
+    )
+
     system_prompt = (
         "You are a quantitative analyst for Indian derivatives markets.\n"
         "Respond ONLY in valid JSON. No markdown, no explanation outside JSON."
@@ -60,6 +73,7 @@ def build_prompt(snapshot: MarketSnapshot, provider_name: str) -> list[dict[str,
 - PCR total: {snapshot.option_chain.pcr_total:.2f}  |  PCR ATM: {snapshot.option_chain.pcr_atm:.2f}
 - Top CALL OI: {top_call_oi_text}
 - Top PUT  OI: {top_put_oi_text}
+- Live premiums (LTP): {premiums_text}
 
 ## FII/DII Cash Flows (yesterday)
 - FII cash net: ₹{snapshot.fii.fii_cash_net_cr:,.0f} cr  (positive = net buyer)
@@ -81,6 +95,10 @@ def build_prompt(snapshot: MarketSnapshot, provider_name: str) -> list[dict[str,
 ATM strike is {snapshot.option_chain.atm_strike}. Permitted strikes: {atm_minus_1}, {snapshot.option_chain.atm_strike}, {atm_plus_1}.
 Any other strike will be rejected and your response discarded.
 If uncertain, use {snapshot.option_chain.atm_strike}.
+Set entry_premium_low/high from the "Live premiums" line above, for the CE or PE leg of your
+recommended_strike matching your direction — never null, and never a number you invented.
+If that leg shows N/A (no live quote for that strike), estimate from the nearest strike that
+does have a quote rather than leaving it null.
 """
 
     return [

@@ -25,13 +25,17 @@ from src.models.options import OptionChain, OptionChainStrike
 from src.paper.constants import DEFAULT_BOD_PATH
 
 from .market_inputs import fetch_fii_data, fetch_gift_nifty, fetch_usd_inr
-from .models import MarketSnapshot, OILevel, OptionChainSummary
+from .models import MarketSnapshot, OILevel, OptionChainSummary, StrikePremium
 from .store import SignalStore
 
 logger = structlog.stdlib.get_logger(__name__)
 
 NIFTY_KEY = "NSE_INDEX|Nifty 50"
 VIX_KEY = "NSE_INDEX|India VIX"
+# Mirrors prompt.py / aggregator.py's own NIFTY_STRIKE_STEP — the permitted-
+# strike band is defined independently in each module (see their own
+# duplication), not shared, to keep each pure/self-contained.
+NIFTY_STRIKE_STEP = Decimal("50")
 
 
 async def assemble_market_snapshot(
@@ -217,7 +221,27 @@ def _summarize_option_chain(chain: OptionChain, nifty_spot: Decimal) -> OptionCh
         pcr_atm=pcr_atm,
         top_call_oi=_top_oi(strikes, "ce"),
         top_put_oi=_top_oi(strikes, "pe"),
+        premiums=_strike_premiums(strikes, atm),
     )
+
+
+def _strike_premiums(
+    strikes: dict[Decimal, OptionChainStrike], atm: Decimal
+) -> list[StrikePremium]:
+    """CE/PE LTP at ATM-1, ATM, ATM+1 — the only strikes a provider may recommend.
+
+    A permitted strike missing from the chain, or missing one leg, falls back
+    to Decimal("0") for that leg (mirrors OptionLeg's own "missing price"
+    convention) rather than raising — a thin chain shouldn't abort the whole
+    snapshot when the rest of the input is usable.
+    """
+    rows = []
+    for k in (atm - NIFTY_STRIKE_STEP, atm, atm + NIFTY_STRIKE_STEP):
+        leg = strikes.get(k)
+        call_ltp = leg.ce.ltp if leg is not None and leg.ce is not None else Decimal("0")
+        put_ltp = leg.pe.ltp if leg is not None and leg.pe is not None else Decimal("0")
+        rows.append(StrikePremium(strike=int(k), call_ltp=call_ltp, put_ltp=put_ltp))
+    return rows
 
 
 def _top_oi(strikes: dict[Decimal, OptionChainStrike], side: str) -> list[OILevel]:
