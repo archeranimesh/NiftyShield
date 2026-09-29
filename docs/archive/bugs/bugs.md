@@ -7,6 +7,32 @@
 
 ---
 
+## BUG-055 — `_nearest_monthly_usdinr_key` picked an untraded trailing weekly instead of the true USDINR monthly, crashing `morning_signal.py`
+
+**Status:** ✅ Fixed, SHA `6e6b6aa`, closed 2026-09-29.
+
+| | |
+|---|---|
+| Discovered | 2026-09-29 (production crash, `morning_signal.py` 09:30 cron) |
+| Location | `src/signals/market_inputs.py::_nearest_monthly_usdinr_key` |
+| SHA | `6e6b6aa` |
+
+**Symptom:** `morning_signal.py` crashed with `DataFetchError: usd_inr unavailable: get_ltp(NCD_FO|1420) returned {'NCD_FO|1420': Decimal('0.0')}`, aborting the 09:30 signal pipeline before any
+provider fan-out.
+
+**Root cause:** the resolver treated "last expiry within the earliest live calendar month" as a proxy for "the monthly contract" — correct for NIFTY's Tuesday-anchored options cadence (where the
+monthly is *defined* as the last Tuesday of the month, so it's always the bucket max by construction), but wrong for NCD_FO USDINR: weeklies are Friday-anchored while the monthly expires on NSE's
+last trading day of the month, which need not be a Friday. On 2026-09-29 the true monthly was 2026-10-28 (Wednesday), but a trailing ordinary Friday weekly landed on 2026-10-30 — still inside
+October, so it won the bucket-max comparison. That contract had no trades yet and Upstox's v3 LTP endpoint returned a genuine `last_price: 0` for it, which the existing `ltp <= 0` guard correctly
+rejected — but against the wrong contract, so the run aborted instead of resolving the liquid Oct-28 monthly.
+
+**Fix:** compute the dominant weekday across all live USDINR expiries (the weekly anchor), then within the earliest live month prefer whichever expiry breaks that weekday — the monthly. Falls back
+to bucket-max when every expiry in the bucket shares the anchor weekday (i.e. the monthly happens to also land on the weekly's own weekday that month), which is then correct too. Added
+`test_fetch_usd_inr_picks_off_cadence_monthly_not_bucket_max` (reproduces the exact Oct-28-vs-Oct-30 incident) and `test_fetch_usd_inr_falls_back_to_bucket_max_when_monthly_on_anchor` (fallback-path
+coverage). Real `@code-reviewer` pass: 0 CRITICAL/ERROR, 7 stylistic WARNINGs, all resolved before commit. `tests/unit/signals/test_signals_market_inputs.py` 11/11 green.
+
+---
+
 ## BUG-053 — no way to transition a `backfill`-created pick from PENDING to OPEN with full snapshot history, without duplicating the pick
 
 **Status:** ✅ Fixed, SHA `3540577` (B053.1) + SHA `1042312` (B053.2/B053.3, closing commit), closed 2026-09-24.

@@ -12,6 +12,8 @@
 
 ---
 
+## BUG-055 [MOVED] — see `docs/archive/bugs/bugs.md` (closed 2026-09-29, SHA `6e6b6aa`)
+
 ## BUG-049 [MOVED] — see `docs/archive/bugs/bugs.md` (closed 2026-09-24, SHA `a874876`)
 
 ---
