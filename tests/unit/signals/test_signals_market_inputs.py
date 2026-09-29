@@ -98,6 +98,44 @@ async def test_fetch_usd_inr_rolls_to_next_month_when_earliest_expired() -> None
     assert await fetch_usd_inr(broker, lookup=lookup) == Decimal("94.80")
 
 
+async def test_fetch_usd_inr_picks_off_cadence_monthly_not_bucket_max() -> None:
+    """Monthly (28-Oct, Wed) breaks the Friday weekly cadence; a trailing
+    weekly (30-Oct, Fri) is a later bucket max but must lose to the monthly.
+    Reproduces the 2026-09-29 NCD_FO|1420 incident."""
+    lookup = InstrumentLookup(
+        instruments=[
+            _fut("NCD_FO|OCT01", "USDINR FUT 01 OCT 26", "2026-10-01"),
+            _fut("NCD_FO|OCT09", "USDINR FUT 09 OCT 26", "2026-10-09"),
+            _fut("NCD_FO|OCT16", "USDINR FUT 16 OCT 26", "2026-10-16"),
+            _fut("NCD_FO|OCT23", "USDINR FUT 23 OCT 26", "2026-10-23"),
+            # true monthly — off Friday cadence
+            _fut("NCD_FO|OCT28", "USDINR FUT 28 OCT 26", "2026-10-28"),
+            # trailing weekly, still Friday-anchored, illiquid
+            _fut("NCD_FO|OCT30", "USDINR FUT 30 OCT 26", "2026-10-30"),
+        ]
+    )
+    broker = _FakeBroker({"NCD_FO|OCT28": Decimal("94.90"), "NCD_FO|OCT30": Decimal("0.0")})
+    assert await fetch_usd_inr(broker, lookup=lookup) == Decimal("94.90")
+
+
+async def test_fetch_usd_inr_falls_back_to_bucket_max_when_monthly_on_anchor() -> None:
+    """When the monthly happens to land on the weekly's own anchor weekday,
+    every contract in the bucket shares one weekday and off_cadence is empty
+    — the fallback to bucket-max must still resolve to the monthly (the
+    latest Friday in the month)."""
+    lookup = InstrumentLookup(
+        instruments=[
+            _fut("NCD_FO|F1", "USDINR FUT 02 OCT 26", "2026-10-02"),
+            _fut("NCD_FO|F2", "USDINR FUT 09 OCT 26", "2026-10-09"),
+            _fut("NCD_FO|F3", "USDINR FUT 16 OCT 26", "2026-10-16"),
+            _fut("NCD_FO|F4", "USDINR FUT 23 OCT 26", "2026-10-23"),
+            _fut("NCD_FO|F5", "USDINR FUT 30 OCT 26", "2026-10-30"),  # monthly, also Friday
+        ]
+    )
+    broker = _FakeBroker({"NCD_FO|F5": Decimal("95.10")})
+    assert await fetch_usd_inr(broker, lookup=lookup) == Decimal("95.10")
+
+
 async def test_fetch_usd_inr_no_contract_raises() -> None:
     empty = InstrumentLookup(instruments=[])
     with pytest.raises(DataFetchError, match="no live monthly"):

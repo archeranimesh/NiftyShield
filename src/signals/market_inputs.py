@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+from collections import Counter
 from decimal import Decimal, InvalidOperation
 
 import requests
@@ -60,7 +61,8 @@ async def fetch_usd_inr(broker: BrokerClient, *, lookup: InstrumentLookup | None
     """Fetch USD/INR from the nearest-monthly NCD_FO USDINR future.
 
     The monthly contract is liquid outside currency-market hours; weeklies return
-    ``0.0`` and are excluded by taking the last expiry of the earliest live month.
+    ``0.0`` and are excluded by the weekday-anchor heuristic in
+    ``_nearest_monthly_usdinr_key``.
 
     Args:
         broker: Authenticated broker client.
@@ -89,10 +91,30 @@ async def fetch_usd_inr(broker: BrokerClient, *, lookup: InstrumentLookup | None
 
 
 def _nearest_monthly_usdinr_key(lookup: InstrumentLookup) -> str | None:
-    """Instrument key of the last-expiry USDINR future in the earliest live month."""
+    """Instrument key of the monthly USDINR future in the earliest live month.
+
+    NCD_FO USDINR expires weekly, anchored to a fixed weekday (Friday in
+    practice), while the monthly expires on NSE's last-trading-day-of-month —
+    which need not share that weekday (e.g. 2026-10-28 Wed vs the surrounding
+    Friday weeklies, with a trailing Friday weekly on 2026-10-30 still inside
+    October). "Last expiry within the calendar month" therefore does NOT
+    reliably identify the monthly here, unlike NIFTY's Tuesday-anchored
+    options cadence (`InstrumentLookup.get_expiry_candidates`), where the
+    monthly is defined as the last Tuesday of the month and so is always the
+    bucket max by construction. Picking the true bucket max for USDINR
+    silently grabbed a not-yet-traded trailing weekly (LTP 0.0) instead of the
+    liquid monthly (root-caused 2026-09-29, `NCD_FO|1420` 30-Oct vs the real
+    28-Oct monthly).
+
+    Fix: find the dominant weekday across all live USDINR expiries (the
+    weekly anchor), then within the earliest live month prefer whichever
+    expiry breaks that weekday — the monthly. If every expiry in the bucket
+    shares the anchor weekday (monthly lands on the weekly's own weekday that
+    month), fall back to the bucket max, which is then correct too.
+    """
     futs = lookup.search("USDINR", segment="NCD_FO", instrument_type="FUT", max_results=50)
     today = dt.date.today()
-    last_of_month: dict[tuple[int, int], tuple[dt.date, str]] = {}
+    live: list[tuple[dt.date, str]] = []
     for fut in futs:
         exp_str = parse_expiry(fut.get("expiry"))
         key = fut.get("instrument_key")
@@ -104,13 +126,25 @@ def _nearest_monthly_usdinr_key(lookup: InstrumentLookup) -> str | None:
             continue
         if expiry < today:
             continue
-        bucket = (expiry.year, expiry.month)
-        if bucket not in last_of_month or expiry > last_of_month[bucket][0]:
-            last_of_month[bucket] = (expiry, key)
+        live.append((expiry, key))
 
-    if not last_of_month:
+    if not live:
         return None
-    return last_of_month[min(last_of_month)][1]
+
+    # Tie breaks by insertion order (CPython stable sort); irrelevant in
+    # prod — weeklies always outnumber the single monthly in a live window.
+    weekday_counts = Counter(expiry.weekday() for expiry, _ in live)
+    anchor_weekday = weekday_counts.most_common(1)[0][0]
+
+    by_month: dict[tuple[int, int], list[tuple[dt.date, str]]] = {}
+    for expiry, key in live:
+        bucket = by_month.setdefault((expiry.year, expiry.month), [])
+        bucket.append((expiry, key))
+
+    earliest_bucket = by_month[min(by_month)]
+    off_cadence = [c for c in earliest_bucket if c[0].weekday() != anchor_weekday]
+    chosen = max(off_cadence or earliest_bucket, key=lambda c: c[0])
+    return chosen[1]
 
 
 async def fetch_fii_data(broker: BrokerClient) -> FIIData:
