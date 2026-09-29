@@ -24,7 +24,7 @@ it); PTB-7..PTB-9 added. SHAs below are NiftyShield commits; `project-scaffold` 
 - [x] **PTB-7** — Write Tier 2 (`stakes/`, `test-runner/`, `multi-surface/`) into `project-scaffold`, genericized, in PTB-5's fragment shape | Owner: Claude | Model: claude-sonnet-5 | Review: none
   | SHA: c76a659 (project-scaffold); eec250e (NiftyShield)
 - [x] **PTB-8** — Write Tier 3 (Rule 0 bundle, `md-organize`, `state_doc_freshness`, `weekly-audit`) into `project-scaffold`, genericized, in PTB-5's fragment shape | Owner: Claude | Model:
-  claude-sonnet-5 | Review: none | SHA: 5a6f498 (project-scaffold); <—> (NiftyShield)
+  claude-sonnet-5 | Review: none | SHA: 5a6f498 (project-scaffold); d1622fa (NiftyShield)
 - [ ] **PTB-9** — Make `project-scaffold` self-documenting (root README + shipped trigger guide), end-to-end validation, archive this story | Owner: Claude | Model: claude-opus-5-5 | Review: none |
   SHA: <—>
 
