@@ -100,6 +100,11 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 - [2026-09-29] BUG-055 found + fixed — `_nearest_monthly_usdinr_key` (`src/signals/market_inputs.py`) picked an untraded trailing NCD_FO USDINR weekly (2026-10-30) over the true monthly (2026-10-28,
   off the Friday weekly cadence), crashing the 09:30 `morning_signal.py` cron with `DataFetchError`. Replaced the "last expiry in calendar month" heuristic with a weekday-anchor detector; 2 new tests
   (off-cadence pick + bucket-max fallback), real `@code-reviewer` clean (0 CRITICAL/ERROR). SHA `6e6b6aa`. Archived directly to `docs/archive/bugs/bugs.md`.
+- [2026-09-29] `project-template-blueprint/` PTB-8 done — Tier 3 (`rule0/`, `md-organize/`, `state-freshness/`, `weekly-audit/`) written to `project-scaffold` (SHA `5a6f498`): Rule 0 hooks with source
+  dirs in `rule0.conf`, standalone `.claude/tools/graph_snippet.py` (project id derived from cwd), `CONTEXT_TREE.md` skeleton, Rule 0 fragment with a `<GRAPH_PROJECT_ID>` placeholder;
+  `state_doc_freshness.sh` with docs/thresholds in a `.conf` seeded with Tier 0/1 docs; genericized `md-organize` + `docs/archive/README.md`; `weekly-audit` reading Tier 0's `session_audit.jsonl`
+  schema directly. Validated: all four pieces on top of Tier 0+1+2 give valid merged `settings.json`, all registered hooks exist and are executable, fragments land at markers, second run zero-diff,
+  domain-leakage grep clean, hook behaviour checked with sample payloads. Next: PTB-9.
 - [2026-09-27] `project-template-blueprint/` PTB-7 done — Tier 2 (`stakes/`, `test-runner/`, `multi-surface/`) written to `project-scaffold` (SHA `c76a659`): genericized `code-reviewer` agent +
   `REVIEW.md` + council `README.md`/`_TEMPLATE`/`council_check.sh` (stakes); `test-runner` agent + `inline_full_suite.sh` with a placeholder test command (test-runner); `handoff-antigravity` skill +
   `ANTIGRAVITY.md` + `AGENTS.md` mirror + Step 3b routing fragment (multi-surface). Validated: `scaffold.sh --piece tier1 --piece tier2/stakes --piece tier2/test-runner --piece tier2/multi-surface`

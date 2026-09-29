@@ -547,3 +547,10 @@ gained named `<!-- INSERT: NAME -->` markers at Step 1 (rule0), Step 2b (stakes)
 vs `jq`/bash recorded in `DECISIONS.md`); `.gitignore` append-with-dedup. Validated against `/Users/abhadra/myWork/myCode/AI/_scratch_to_delete`: tier0-only, tier0+tier1,
 tier0+tier1+dummy-tier2+dummy-tier3 (dummy fragments built in the session scratchpad only, never committed) — valid merged JSON, both fragments landed at markers, second run zero-diff.
 `project-scaffold` commits: `84357d8` (baseline `scaffold.sh` committed unchanged, per the task spec) then `d433ba0` (`feat: per-piece scaffold selection with merged shared files`). Next: PTB-6.
+
+**PTB-8 closed (2026-09-29):** Tier 3 written to `project-scaffold/tier3/` (SHA `5a6f498`), all four pieces in PTB-5 fragment shape. Choices worth keeping: source directories and per-doc thresholds
+moved into small sourced `.conf` files next to their hook (`rule0.conf`, `state_doc_freshness.conf`) rather than hardcoded; `graph_snippet` lives at `.claude/tools/graph_snippet.py` and derives the
+graph project id from the cwd (override with `--project`), while the Rule 0 `CLAUDE.md` fragment carries a `<GRAPH_PROJECT_ID>` placeholder for the raw MCP calls; `repeat_read` ships blocking as in
+NiftyShield, with a `BLOCK_ON_REPEAT` constant to demote it; `weekly-audit` reads `session_audit.jsonl` with an inline `python3` snippet against Tier 0's row schema (`avoidable_rereads`,
+`output_discipline_flags`, `suggestions_count`) — NiftyShield's richer graph/subagent columns do not exist in the scaffold. Every hook needs `python3` (Tier 3 is not language-agnostic; none is gated
+on the project being Python). `state-freshness` is seeded with Tier 0/1 docs only; `CONTEXT_TREE.md` is noted in the conf as an add-on for projects that adopt `rule0`. Next: PTB-9.
