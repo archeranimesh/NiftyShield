@@ -51,6 +51,23 @@ def escape_mdv2(text: str) -> str:
     return _MDV2_SPECIAL.sub(r"\\\1", text)
 
 
+async def _read_error_body(resp: aiohttp.ClientResponse, limit: int = 500) -> str:
+    """Best-effort read of an HTTP error response body for logging.
+
+    Args:
+        resp: The aiohttp response whose status is >= 400.
+        limit: Max characters returned.
+
+    Returns:
+        The response text truncated to ``limit`` chars, or a placeholder if
+        the body cannot be read. Never raises.
+    """
+    try:
+        return (await resp.text())[:limit]
+    except Exception:  # Intentional: diagnostics must never mask the send failure
+        return "<unreadable body>"
+
+
 class TelegramNotifier:
     """Fire-and-forget notifier that sends text to a Telegram chat.
 
@@ -110,6 +127,16 @@ class TelegramNotifier:
             timeout = aiohttp.ClientTimeout(total=self._timeout)
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.post(self._url, json=payload) as resp:
+                    if resp.status >= 400:
+                        # raise_for_status() discards Telegram's JSON body, which
+                        # carries the "can't parse entities ... byte offset N"
+                        # reason (BUG-042); capture it before the context exits.
+                        logger.warning(
+                            "Telegram notification rejected: status=%s body=%s",
+                            resp.status,
+                            await _read_error_body(resp),
+                        )
+                        return False
                     resp.raise_for_status()
                     data = await resp.json()
                     if not data.get("ok"):

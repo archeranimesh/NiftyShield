@@ -172,6 +172,34 @@ async def test_send_passes_correct_chat_id() -> None:
 # ── TelegramNotifier.send — error paths ──────────────────────────
 
 
+async def test_send_logs_telegram_400_response_body() -> None:
+    """BUG-042 B042.4: the 400 body (entity-parse offset) must reach the log."""
+    body = "Bad Request: can't parse entities: Character '.' is reserved at byte offset 12"
+    mock_session = _make_mock_session({"ok": False}, status=400)
+    mock_session.post.return_value.text = AsyncMock(return_value=body)
+    with (
+        patch("src.notifications.telegram.aiohttp.ClientSession", return_value=mock_session),
+        patch("src.notifications.telegram.logger") as mock_logger,
+    ):
+        notifier = TelegramNotifier(bot_token="tok", chat_id="789")
+        assert await notifier.send("a.b") is False
+    args = mock_logger.warning.call_args.args
+    assert 400 in args
+    assert body in args
+
+
+async def test_send_400_with_unreadable_body_still_returns_false() -> None:
+    mock_session = _make_mock_session({"ok": False}, status=400)
+    mock_session.post.return_value.text = AsyncMock(side_effect=RuntimeError("closed"))
+    with (
+        patch("src.notifications.telegram.aiohttp.ClientSession", return_value=mock_session),
+        patch("src.notifications.telegram.logger") as mock_logger,
+    ):
+        notifier = TelegramNotifier(bot_token="tok", chat_id="789")
+        assert await notifier.send("hello") is False
+    assert "<unreadable body>" in mock_logger.warning.call_args.args
+
+
 async def test_send_returns_false_on_request_exception() -> None:
     # Patch ClientSession to raise on creation or entering context
     with patch("src.notifications.telegram.aiohttp.ClientSession") as mock_cls:
