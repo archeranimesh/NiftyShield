@@ -210,7 +210,10 @@ async def run() -> None:
         open_picks = await asyncio.to_thread(store.get_open_picks)
         pending_picks = await asyncio.to_thread(store.list_picks, PickStatus.PENDING)
         run_time = datetime.now(timezone.utc).astimezone().strftime("%I:%M %p").lstrip("0")
-        summary = format_hourly_summary(open_picks + pending_picks, ltp_map, run_time)
+        adjusted = [
+            await asyncio.to_thread(store.get_adjusted_pick, p) for p in open_picks + pending_picks
+        ]
+        summary = format_hourly_summary(adjusted, ltp_map, run_time)
         if summary:
             await notifier.send(summary)
 

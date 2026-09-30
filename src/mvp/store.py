@@ -684,11 +684,13 @@ class MVPStore:
             ).fetchall()
             all_rows = conn.execute(
                 """
-                SELECT status, deployed_capital, avg_cost, total_qty, instrument_key
+                SELECT pick_id, symbol, status, deployed_capital, avg_cost, total_qty,
+                       instrument_key
                 FROM mvp_recommendations WHERE category_id = ?
                 """,
                 (category_id,),
             ).fetchall()
+        split_symbols = {a.symbol for a in self.get_corporate_actions()}
 
         pnls = [Decimal(row["realized_pnl"]) for row in closed_rows]
         closed_count = len(pnls)
@@ -711,7 +713,12 @@ class MVPStore:
             if row["instrument_key"]:
                 ltp = ltp_map.get(row["instrument_key"])
             if ltp is not None and row["avg_cost"] is not None:
-                current += ltp * row["total_qty"]
+                qty = row["total_qty"]
+                if row["symbol"] in split_symbols:
+                    stored = self.get_pick(row["pick_id"])
+                    if stored is not None:
+                        qty = self.get_adjusted_pick(stored).total_qty
+                current += ltp * qty
             else:
                 current += deployed_capital
 

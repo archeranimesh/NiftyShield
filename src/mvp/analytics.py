@@ -10,13 +10,15 @@ from __future__ import annotations
 
 import math
 from collections import defaultdict
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
 from src.db import connect
-from src.mvp.models import PickStatus
+from src.mvp.adjustment import cumulative_multiplier
+from src.mvp.models import CorporateAction, PickStatus
 from src.mvp.store import MVPStore
 
 TRADING_DAYS_PER_YEAR = 252
@@ -97,7 +99,8 @@ def compute_category_returns(store: MVPStore) -> list[CategoryReturn]:
         for p in picks:
             if p.status == PickStatus.OPEN:
                 ltp = latest_ltp.get(p.pick_id)
-                current += ltp * p.total_qty if ltp is not None else p.deployed_capital
+                qty = store.get_adjusted_pick(p).total_qty
+                current += ltp * qty if ltp is not None else p.deployed_capital
             else:
                 current += p.deployed_capital + p.realized_pnl
         total_return_pct = (current - deployed) / deployed * 100 if deployed else None
@@ -120,8 +123,16 @@ def compute_category_returns(store: MVPStore) -> list[CategoryReturn]:
     return results
 
 
-def _daily_price_returns(db_path: Path) -> dict[str, dict[str, float]]:
-    """Per-pick {date: pct_return} from that pick's own snapshot price series."""
+def _daily_price_returns(
+    db_path: Path,
+    actions_by_pick: dict[str, list[CorporateAction]] | None = None,
+) -> dict[str, dict[str, float]]:
+    """Per-pick {date: pct_return} from that pick's own snapshot price series.
+
+    Snapshots stay raw; the previous day's price is restated to the current
+    day's basis (``prev / M``) so a split is not counted as a price move.
+    """
+    actions_by_pick = actions_by_pick or {}
     with connect(db_path) as conn:
         rows = conn.execute(
             """
@@ -143,8 +154,15 @@ def _daily_price_returns(db_path: Path) -> dict[str, dict[str, float]]:
     returns: dict[str, dict[str, float]] = defaultdict(dict)
     for pick_id, by_date in series.items():
         days = sorted(by_date)
+        actions = actions_by_pick.get(pick_id, [])
         for i in range(1, len(days)):
             prev, cur = by_date[days[i - 1]], by_date[days[i]]
+            if actions:
+                prev /= float(
+                    cumulative_multiplier(
+                        actions, date.fromisoformat(days[i - 1]), date.fromisoformat(days[i])
+                    )
+                )
             if prev > 0:
                 returns[pick_id][days[i]] = (cur / prev - 1) * 100
     return returns
@@ -182,7 +200,17 @@ def compute_category_volatility(store: MVPStore, min_days: int = 10) -> list[Cat
         pick.pick_id: category_map.get(pick.category_id, ("-", "-")) for pick in deployed_picks
     }
 
-    daily_returns_by_pick = _daily_price_returns(store.db_path)
+    actions_by_symbol: dict[str, list[CorporateAction]] = {}
+    for a in store.get_corporate_actions():
+        actions_by_symbol.setdefault(a.symbol, []).append(a)
+    daily_returns_by_pick = _daily_price_returns(
+        store.db_path,
+        {
+            p.pick_id: actions_by_symbol[p.symbol]
+            for p in deployed_picks
+            if p.symbol in actions_by_symbol
+        },
+    )
 
     cat_day_returns: dict[tuple[str, str], dict[str, list[tuple[Decimal, float]]]] = defaultdict(
         lambda: defaultdict(list)
