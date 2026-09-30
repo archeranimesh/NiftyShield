@@ -23,14 +23,17 @@ import sys
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from scripts.strategies.three_track.paper_3track_snapshot import (
     _build_recovery_digest,
+    _compute_overlay_leg_totals,
     _compute_overlay_pnl_snapshots,
     _compute_protection_recovery_snapshot,
     _overlay_type_groups,
+    _save_overlay_leg_snapshots,
 )
 from src.models.portfolio import TradeAction
 from src.paper.constants import STRATEGY_OVERLAY, STRATEGY_SPOT
@@ -492,3 +495,109 @@ def test_recovery_digest_shows_cc_line_for_standalone_cc(tmp_path: Path) -> None
     digest = _build_recovery_digest(recovery_snap)
     assert "CC" in digest
     assert "CC     No data" not in digest
+
+
+# ── BUG-061: missing LTP must not persist as a zero-P&L leg snapshot ─────────
+
+_KEY_PUT = "NSE_FO|73994"
+_KEY_CALL = "NSE_FO|73995"
+
+
+def _fake_ltp_broker(ltp_by_key: dict[str, str]) -> MagicMock:
+    broker = MagicMock()
+    broker.get_ltp = AsyncMock(return_value=ltp_by_key)
+    return broker
+
+
+def _seed_collar(store: PaperStore, entry_date: date) -> None:
+    _open_leg(
+        store,
+        "overlay_collar_put",
+        entry_date,
+        65,
+        Decimal("100"),
+        action=TradeAction.BUY,
+        instrument_key=_KEY_PUT,
+    )
+    _open_leg(
+        store,
+        "overlay_collar_call",
+        entry_date,
+        65,
+        Decimal("50"),
+        action=TradeAction.SELL,
+        instrument_key=_KEY_CALL,
+    )
+
+
+async def test_missing_ltp_leg_is_not_persisted_as_zero_snapshot(tmp_path: Path) -> None:
+    """B061.1: a single-instrument leg with no LTP is omitted, not zeroed."""
+    store = _store(tmp_path)
+    _seed_collar(store, date(2026, 9, 1))
+    broker = _fake_ltp_broker({_KEY_CALL: "48"})  # put LTP missing
+
+    totals = await _compute_overlay_leg_totals(store, broker, date(2026, 9, 30))
+
+    assert "overlay_collar_put" not in totals
+    assert totals["overlay_collar_call"][3] == Decimal("48")
+
+
+async def test_priced_legs_are_unchanged_by_bug061_fix(tmp_path: Path) -> None:
+    """Both legs priced: both present with real unrealized P&L."""
+    store = _store(tmp_path)
+    _seed_collar(store, date(2026, 9, 1))
+    broker = _fake_ltp_broker({_KEY_PUT: "110", _KEY_CALL: "48"})
+
+    totals = await _compute_overlay_leg_totals(store, broker, date(2026, 9, 30))
+
+    assert totals["overlay_collar_put"][0] == Decimal("650")  # (110-100)*65
+    assert totals["overlay_collar_call"][0] == Decimal("130")  # (50-48)*65
+
+
+async def test_missing_ltp_yields_no_fictitious_1d_loss_end_to_end(tmp_path: Path) -> None:
+    """B061.1/2: real prev mark + missing LTP today -> no collar row, digest 'No data'."""
+    store = _store(tmp_path)
+    prev, today = date(2026, 9, 29), date(2026, 9, 30)
+    _seed_collar(store, date(2026, 9, 1))
+    store.record_leg_snapshot(
+        _leg_snap("overlay_collar_put", Decimal("45001.125"), prev, Decimal("790"), 65)
+    )
+    store.record_leg_snapshot(
+        _leg_snap("overlay_collar_call", Decimal("-100"), prev, Decimal("51"), 65)
+    )
+    store.record_track_comparison_snapshot(
+        TrackComparisonSnapshot(
+            strategy_name=STRATEGY_SPOT,
+            snapshot_date=today,
+            pnl_1d_abs=Decimal("-7972"),
+            pnl_1d_pct=Decimal("-1"),
+            pnl_inception_abs=Decimal("-7972"),
+            pnl_inception_pct=Decimal("-1"),
+        )
+    )
+    broker = _fake_ltp_broker({_KEY_CALL: "48"})  # put LTP missing
+
+    totals = await _compute_overlay_leg_totals(store, broker, today)
+    _save_overlay_leg_snapshots(store, totals, today)
+    results = _compute_overlay_pnl_snapshots(store, today)
+
+    assert results == []  # neither a collar row nor a call-only "cc" row
+    recovery = _compute_protection_recovery_snapshot(store, today)
+    assert recovery is not None and recovery.collar_pnl_1d is None
+    digest = _build_recovery_digest(recovery)
+    assert "Collar" in digest and "No data" in digest
+    assert "45001" not in digest
+
+
+def test_leg_closed_today_is_not_treated_as_unpriced(tmp_path: Path) -> None:
+    """A closed-today row (net_qty 0, ltp None) is real data: the group still reports."""
+    store = _store(tmp_path)
+    prev, today = date(2026, 9, 29), date(2026, 9, 30)
+    _open_leg(store, "overlay_pp", date(2026, 9, 1), 65, Decimal("100"), TradeAction.BUY)
+    store.record_leg_snapshot(_leg_snap("overlay_pp", Decimal("100"), prev, Decimal("101"), 65))
+    store.record_leg_snapshot(_leg_snap("overlay_pp", Decimal("120"), today, None, 0))
+
+    results = _compute_overlay_pnl_snapshots(store, today)
+
+    assert [r.overlay_type for r in results] == ["pp"]
+    assert results[0].pnl_1d_abs == Decimal("20")

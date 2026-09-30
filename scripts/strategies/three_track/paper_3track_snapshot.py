@@ -1134,6 +1134,7 @@ def _compute_track_comparison_snapshot(
 # "cc"; overlay_pp is independent and always "pp".
 
 _OVERLAY_ROLES = ("overlay_cc", "overlay_pp", "overlay_collar_call", "overlay_collar_put")
+_COLLAR_ROLES = frozenset({"overlay_collar_call", "overlay_collar_put"})
 
 
 def _overlay_type_groups(present_roles: set[str]) -> dict[str, list[str]]:
@@ -1246,10 +1247,26 @@ def _compute_overlay_pnl_snapshots(
         if leg is not None:
             today_by_role[role] = leg
 
+    # BUG-061: a role open on its previous snapshot but with no row today was
+    # skipped for want of a price. Its group's P&L is unknown — emit no row
+    # (digest renders "No data") rather than a diff against a partial sum.
+    unpriced: set[str] = set()
+    for role in _OVERLAY_ROLES:
+        if role in today_by_role:
+            continue
+        prev_leg = store.get_prev_leg_snapshot(STRATEGY_OVERLAY, role, snap_date)
+        if prev_leg is not None and prev_leg.net_qty:
+            unpriced.add(role)
+            logger.warning("overlay_pnl.leg_unpriced_today", leg_role=role)
+    if unpriced & _COLLAR_ROLES:
+        unpriced |= _COLLAR_ROLES
+
     groups = _overlay_type_groups(set(today_by_role))
     results: list[OverlayPnLSnapshot] = []
 
     for overlay_type, roles in groups.items():
+        if unpriced.intersection(roles):
+            continue
         pnl_inception_abs = sum((today_by_role[r].total_pnl for r in roles), Decimal("0"))
 
         entry_basis = sum(
@@ -1522,15 +1539,17 @@ async def _compute_overlay_leg_totals(
         elif n == 1:
             pos = matches[0]
             overlay_ltp = ltp_map.get(pos.instrument_key) if pos.instrument_key else None
-            if overlay_ltp is not None:
-                unrealized = _compute_leg_unrealized_pnl(pos, overlay_ltp)
-            else:
+            if overlay_ltp is None:
+                # BUG-061: skip the role today (same as the BUG-032
+                # multi-instrument omit below) — a zero snapshot would be
+                # read as a real mark by tomorrow's and today's 1-day diff.
                 logger.warning(
                     "overlay_leg_totals.ltp_unavailable",
                     instrument_key=pos.instrument_key,
                     leg_role=role,
                 )
-                unrealized = Decimal("0")
+                continue
+            unrealized = _compute_leg_unrealized_pnl(pos, overlay_ltp)
             totals[role] = (unrealized, realized, unrealized + realized, overlay_ltp, pos.net_qty)
         else:
             # BUG-032: role holds >1 open instrument. Value each
