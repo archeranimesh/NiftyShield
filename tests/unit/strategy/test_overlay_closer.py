@@ -601,3 +601,141 @@ def test_monetize_collar_put_aborts_when_put_leg_missing(
     # mdcode() must survive it intact inside a code span rather than
     # opening/closing spurious _italic_ entities under MarkdownV2.
     assert any("`paper_collar_v1`" in m for m in notifier.sent_messages)
+
+
+# ---------------------------------------------------------------------------
+# BUG-038: alerts must be awaited when the notifier's send() is `async def`
+# ---------------------------------------------------------------------------
+
+
+class AsyncNotifier:
+    """TelegramNotifier-shaped double: ``async def send`` records only if awaited."""
+
+    def __init__(self) -> None:
+        self.sent_messages: list[str] = []
+
+    async def send(self, text: str) -> bool:
+        self.sent_messages.append(text)
+        return True
+
+
+class AsyncGateway:
+    """TelegramGateway-shaped double: only ``send_plain_message``, no ``send``."""
+
+    def __init__(self) -> None:
+        self.sent_messages: list[str] = []
+
+    async def send_plain_message(self, text: str) -> bool:
+        self.sent_messages.append(text)
+        return True
+
+
+def _seed_collar(store: PaperStore, *, with_put: bool = True) -> None:
+    store.record_trade(
+        PaperTrade(
+            strategy_name="paper_collar_v1",
+            leg_role="overlay_collar_call",
+            instrument_key="NSE_FO|NIFTY24500CE",
+            trade_date=date.today(),
+            action=TradeAction.SELL,
+            quantity=65,
+            price=Decimal("80"),
+            is_paper=True,
+        )
+    )
+    if with_put:
+        store.record_trade(
+            PaperTrade(
+                strategy_name="paper_collar_v1",
+                leg_role="overlay_collar_put",
+                instrument_key="NSE_FO|NIFTY21500PE",
+                trade_date=date.today(),
+                action=TradeAction.BUY,
+                quantity=65,
+                price=Decimal("50"),
+                is_paper=True,
+            )
+        )
+
+
+def _fail_writes(store: PaperStore) -> None:
+    def boom(trades: list[PaperTrade]) -> tuple:
+        raise ValueError("Simulated DB error")
+
+    store.record_trades = boom  # type: ignore[method-assign]
+
+
+@pytest.mark.parametrize("notifier_cls", [AsyncNotifier, AsyncGateway])
+def test_close_collar_all_write_failure_alert_is_awaited(
+    store: PaperStore, simulator: PaperFillSimulator, notifier_cls: type
+) -> None:
+    async_notifier = notifier_cls()
+    closer = OverlayCloser(store, simulator, async_notifier)
+    _seed_collar(store)
+    _fail_writes(store)
+
+    result = closer.close_collar_all(
+        "paper_collar_v1", _make_chain("10", "0.05", "20", "-0.10"), None, 15.0
+    )
+
+    assert result is False
+    assert len(async_notifier.sent_messages) == 1
+    assert "Collar close failed" in async_notifier.sent_messages[0]
+
+
+def test_monetize_collar_put_write_failure_alert_is_awaited(
+    store: PaperStore, simulator: PaperFillSimulator
+) -> None:
+    async_notifier = AsyncNotifier()
+    closer = OverlayCloser(store, simulator, async_notifier)
+    _seed_collar(store)
+    _fail_writes(store)
+
+    closer.monetize_collar_put(
+        "paper_collar_v1", _make_chain("4.0", "0.05", "250", "-0.85"), None, 15.0
+    )
+
+    assert len(async_notifier.sent_messages) == 1
+    assert "Collar monetize failed" in async_notifier.sent_messages[0]
+
+
+def test_monetize_collar_put_incomplete_collar_alert_is_awaited(
+    store: PaperStore, simulator: PaperFillSimulator
+) -> None:
+    async_notifier = AsyncNotifier()
+    closer = OverlayCloser(store, simulator, async_notifier)
+    _seed_collar(store, with_put=False)
+
+    closer.monetize_collar_put(
+        "paper_collar_v1", _make_chain("4.0", "0.05", "250", "-0.85"), None, 15.0
+    )
+
+    assert len(async_notifier.sent_messages) == 1
+    assert "Collar monetize aborted" in async_notifier.sent_messages[0]
+
+
+def test_notify_from_running_loop_schedules_send(
+    store: PaperStore, simulator: PaperFillSimulator
+) -> None:
+    """Called inside a live event loop, the alert is scheduled, not dropped."""
+    import asyncio
+
+    async_notifier = AsyncNotifier()
+    closer = OverlayCloser(store, simulator, async_notifier)
+
+    async def main() -> None:
+        closer._notify("hello")
+        await asyncio.sleep(0)
+
+    asyncio.run(main())
+    assert async_notifier.sent_messages == ["hello"]
+
+
+def test_notify_swallows_notifier_failure(store: PaperStore, simulator: PaperFillSimulator) -> None:
+    """A raising async notifier must never propagate into the close path."""
+
+    class Boom:
+        async def send(self, text: str) -> bool:
+            raise RuntimeError("telegram down")
+
+    OverlayCloser(store, simulator, Boom())._notify("x")  # must not raise
