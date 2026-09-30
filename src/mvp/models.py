@@ -1,3 +1,4 @@
+from datetime import date
 from decimal import Decimal
 from enum import Enum
 from typing import Any
@@ -22,6 +23,49 @@ class PickStatus(str, Enum):
     TARGET_HIT = "TARGET_HIT"
     SL_HIT = "SL_HIT"
     MANUAL_CLOSE = "MANUAL_CLOSE"
+
+
+class CorporateActionType(str, Enum):
+    """Kind of share-count-changing corporate action."""
+
+    SPLIT = "SPLIT"
+    BONUS = "BONUS"
+    CONSOLIDATION = "CONSOLIDATION"
+
+
+class CorporateAction(BaseModel):
+    """A symbol-scoped share-count event (split / bonus / consolidation).
+
+    ``new_shares`` shares are held AFTER per ``old_shares`` held BEFORE, so a
+    1:5 split is ``new_shares=5, old_shares=1``. ``ex_date`` is the first
+    trading day on the new price basis (the bhavcopy gap date, not the
+    record date).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    action_id: str
+    symbol: str
+    ex_date: str
+    action_type: CorporateActionType
+    new_shares: int
+    old_shares: int
+    source: str
+    notes: str | None = None
+    created_at: str
+
+    @field_validator("new_shares", "old_shares")
+    @classmethod
+    def _positive(cls, v: int) -> int:
+        if v <= 0:
+            raise ValueError("new_shares and old_shares must be positive")
+        return v
+
+    @field_validator("ex_date")
+    @classmethod
+    def _iso_date(cls, v: str) -> str:
+        date.fromisoformat(v)
+        return v
 
 
 class Provider(BaseModel):

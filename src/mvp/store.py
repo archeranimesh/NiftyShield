@@ -8,10 +8,13 @@ from decimal import Decimal
 from pathlib import Path
 
 from src.db import connect
+from src.mvp.adjustment import Fill, adjusted_pick
 from src.mvp.models import (
     Category,
     CategoryStats,
     ClosePickResult,
+    CorporateAction,
+    CorporateActionType,
     MVPSnapshot,
     Pick,
     PickStatus,
@@ -121,6 +124,26 @@ class MVPStore:
                 """
             )
             conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS mvp_corporate_actions (
+                    action_id     TEXT PRIMARY KEY,
+                    symbol        TEXT NOT NULL,
+                    ex_date       TEXT NOT NULL,
+                    action_type   TEXT NOT NULL,
+                    new_shares    INTEGER NOT NULL CHECK (new_shares > 0),
+                    old_shares    INTEGER NOT NULL CHECK (old_shares > 0),
+                    source        TEXT NOT NULL,
+                    notes         TEXT,
+                    created_at    TEXT NOT NULL,
+                    UNIQUE (symbol, ex_date, action_type)
+                )
+                """
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_mvp_ca_symbol "
+                "ON mvp_corporate_actions (symbol, ex_date)"
+            )
+            conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_mvp_snapshots_pick "
                 "ON mvp_snapshots (pick_id, captured_at)"
             )
@@ -151,6 +174,75 @@ class MVPStore:
                     provider.created_at,
                 ),
             )
+
+    def add_corporate_action(self, action: CorporateAction) -> None:
+        """Insert a corporate action.
+
+        Args:
+            action: The event to persist.
+
+        Raises:
+            ValueError: If an action with the same ``(symbol, ex_date,
+                action_type)`` already exists (idempotency guard).
+        """
+        try:
+            with connect(self.db_path) as conn:
+                conn.execute(
+                    """
+                    INSERT INTO mvp_corporate_actions
+                        (action_id, symbol, ex_date, action_type, new_shares,
+                         old_shares, source, notes, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        action.action_id,
+                        action.symbol,
+                        action.ex_date,
+                        action.action_type.value,
+                        action.new_shares,
+                        action.old_shares,
+                        action.source,
+                        action.notes,
+                        action.created_at,
+                    ),
+                )
+        except sqlite3.IntegrityError as exc:
+            raise ValueError(
+                f"Corporate action already exists: {action.symbol} "
+                f"{action.ex_date} {action.action_type.value}"
+            ) from exc
+
+    def get_corporate_actions(self, symbol: str | None = None) -> list[CorporateAction]:
+        """List corporate actions ordered by ``(symbol, ex_date)``.
+
+        Args:
+            symbol: If given, only actions for this symbol (case-insensitive).
+
+        Returns:
+            The matching actions.
+        """
+        query = "SELECT * FROM mvp_corporate_actions"
+        params: tuple[str, ...] = ()
+        if symbol is not None:
+            query += " WHERE symbol = ?"
+            params = (symbol.upper(),)
+        query += " ORDER BY symbol, ex_date"
+        with connect(self.db_path) as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [
+            CorporateAction(
+                action_id=r["action_id"],
+                symbol=r["symbol"],
+                ex_date=r["ex_date"],
+                action_type=CorporateActionType(r["action_type"]),
+                new_shares=r["new_shares"],
+                old_shares=r["old_shares"],
+                source=r["source"],
+                notes=r["notes"],
+                created_at=r["created_at"],
+            )
+            for r in rows
+        ]
 
     def get_provider(self, slug: str) -> Provider | None:
         """Fetch a provider by slug.
@@ -409,7 +501,67 @@ class MVPStore:
                 (*values, pick_id),
             )
 
-    def close_pick(self, pick_id: str, close_price: Decimal, status: PickStatus) -> ClosePickResult:
+    def get_fills(self, pick: Pick) -> list[Fill]:
+        """Fills backing a pick's position, each on its own raw price basis.
+
+        Uses filled ``mvp_tranches`` rows when present. Otherwise the M-A
+        lump-sum fill (``avg_cost`` x ``total_qty``) is dated by the pick's
+        earliest snapshot (the entry day for backfilled picks; the first
+        watch tick after entry for live picks), falling back to ``pick_date``.
+
+        Args:
+            pick: The pick whose fills are wanted.
+
+        Returns:
+            Fills in ascending fill-date order; empty when nothing is filled.
+        """
+        with connect(self.db_path) as conn:
+            rows = conn.execute(
+                """
+                SELECT fill_price, qty, filled_at FROM mvp_tranches
+                WHERE pick_id = ? AND fill_price IS NOT NULL AND qty IS NOT NULL
+                  AND filled_at IS NOT NULL
+                ORDER BY filled_at
+                """,
+                (pick.pick_id,),
+            ).fetchall()
+            first_snap = conn.execute(
+                "SELECT MIN(captured_at) AS c FROM mvp_snapshots WHERE pick_id = ?",
+                (pick.pick_id,),
+            ).fetchone()
+        if rows:
+            return [
+                Fill(Decimal(r["fill_price"]), r["qty"], date.fromisoformat(r["filled_at"][:10]))
+                for r in rows
+            ]
+        if pick.avg_cost is None or not pick.total_qty:
+            return []
+        stamp = first_snap["c"] if first_snap and first_snap["c"] else pick.pick_date
+        return [Fill(pick.avg_cost, pick.total_qty, date.fromisoformat(stamp[:10]))]
+
+    def get_adjusted_pick(self, pick: Pick, as_of: date | None = None) -> Pick:
+        """Read-time view of ``pick`` on the ``as_of`` price basis.
+
+        Args:
+            pick: The stored (raw) pick.
+            as_of: Evaluation date; defaults to today (UTC).
+
+        Returns:
+            ``pick`` unchanged when its symbol has no corporate actions.
+        """
+        actions = self.get_corporate_actions(pick.symbol)
+        if not actions:
+            return pick
+        as_of = as_of or datetime.now(timezone.utc).date()
+        return adjusted_pick(pick, actions, as_of, self.get_fills(pick))
+
+    def close_pick(
+        self,
+        pick_id: str,
+        close_price: Decimal,
+        status: PickStatus,
+        as_of: date | None = None,
+    ) -> ClosePickResult:
         """Close a pick, setting ``closed_at``, ``close_price``, ``status``, and
         ``realized_pnl``.
 
@@ -422,6 +574,9 @@ class MVPStore:
             close_price: The price at which the pick was closed.
             status: The terminal status (``TARGET_HIT``, ``SL_HIT``, or
                 ``MANUAL_CLOSE``).
+            as_of: Basis date of ``close_price`` (defaults to today, UTC).
+                ``avg_cost``/``total_qty`` are restated to this basis via
+                the symbol's corporate actions before computing P&L.
 
         Returns:
             The computed ``realized_pnl`` plus ``total_qty``/``deployed_capital``/
@@ -436,6 +591,8 @@ class MVPStore:
             raise ValueError(f"close_pick requires a terminal status, got {status}")
 
         now = datetime.now(timezone.utc).isoformat()
+        stored = self.get_pick(pick_id)
+        basis = self.get_adjusted_pick(stored, as_of) if stored is not None else None
         with connect(self.db_path) as conn:
             row = conn.execute(
                 "SELECT avg_cost, total_qty, deployed_capital FROM mvp_recommendations"
@@ -446,11 +603,11 @@ class MVPStore:
             total_qty = 0
             deployed_capital = Decimal("0")
             avg_cost: Decimal | None = None
-            if row is not None:
-                total_qty = row["total_qty"]
+            if row is not None and basis is not None:
+                total_qty = basis.total_qty
                 deployed_capital = Decimal(row["deployed_capital"])
-                if row["avg_cost"] is not None:
-                    avg_cost = Decimal(row["avg_cost"])
+                if basis.avg_cost is not None:
+                    avg_cost = basis.avg_cost
                     realized_pnl = (
                         close_price * (1 - COST_BPS / Decimal("10000")) - avg_cost
                     ) * total_qty
@@ -527,11 +684,13 @@ class MVPStore:
             ).fetchall()
             all_rows = conn.execute(
                 """
-                SELECT status, deployed_capital, avg_cost, total_qty, instrument_key
+                SELECT pick_id, symbol, status, deployed_capital, avg_cost, total_qty,
+                       instrument_key
                 FROM mvp_recommendations WHERE category_id = ?
                 """,
                 (category_id,),
             ).fetchall()
+        split_symbols = {a.symbol for a in self.get_corporate_actions()}
 
         pnls = [Decimal(row["realized_pnl"]) for row in closed_rows]
         closed_count = len(pnls)
@@ -554,7 +713,12 @@ class MVPStore:
             if row["instrument_key"]:
                 ltp = ltp_map.get(row["instrument_key"])
             if ltp is not None and row["avg_cost"] is not None:
-                current += ltp * row["total_qty"]
+                qty = row["total_qty"]
+                if row["symbol"] in split_symbols:
+                    stored = self.get_pick(row["pick_id"])
+                    if stored is not None:
+                        qty = self.get_adjusted_pick(stored).total_qty
+                current += ltp * qty
             else:
                 current += deployed_capital
 

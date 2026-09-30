@@ -2,9 +2,11 @@
 
 import re
 from dataclasses import dataclass
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
-from src.mvp.models import Category, CategoryStats, Pick, PickStatus
+from src.mvp.adjustment import adjust_level
+from src.mvp.models import Category, CategoryStats, CorporateAction, Pick, PickStatus
 from src.notifications.formatting import format_money, format_pct
 from src.notifications.markdown import escape_markdown
 
@@ -23,25 +25,40 @@ class MVPEvent:
 def check_prices(
     picks: list[Pick],
     ltp_map: dict[str, Decimal],
+    actions_by_symbol: dict[str, list[CorporateAction]] | None = None,
+    as_of: date | None = None,
 ) -> list[MVPEvent]:
     """Detect target/stop-loss breaches for open picks.
+
+    Stored target/stop-loss levels are raw (set on ``pick_date``); they are
+    restated to today's price basis via the symbol's corporate actions
+    (``level / M``) before comparing against the live LTP.
 
     Args:
         picks: Picks to evaluate.
         ltp_map: Last traded price keyed by instrument_key.
+        actions_by_symbol: Corporate actions keyed by symbol. Missing symbol
+            or ``None`` means no adjustment.
+        as_of: Evaluation date; defaults to today (UTC).
 
     Returns:
         MVPEvent list, one per breach. Empty if none.
     """
     events: list[MVPEvent] = []
+    actions_by_symbol = actions_by_symbol or {}
+    as_of = as_of or datetime.now(timezone.utc).date()
     for pick in picks:
         if pick.status != PickStatus.OPEN:
             continue
         if pick.instrument_key is None or pick.instrument_key not in ltp_map:
             continue
         ltp = ltp_map[pick.instrument_key]
+        actions = actions_by_symbol.get(pick.symbol, [])
+        pick_date = date.fromisoformat(pick.pick_date[:10])
+        target = adjust_level(pick.target_price, actions, pick_date, as_of)
+        stop_loss = adjust_level(pick.stop_loss, actions, pick_date, as_of)
 
-        if pick.target_price is not None and ltp >= pick.target_price:
+        if target is not None and ltp >= target:
             events.append(
                 MVPEvent(
                     pick_id=pick.pick_id,
@@ -51,7 +68,7 @@ def check_prices(
                     entry_price=pick.entry_price,
                 )
             )
-        elif pick.stop_loss is not None and ltp <= pick.stop_loss:
+        elif stop_loss is not None and ltp <= stop_loss:
             events.append(
                 MVPEvent(
                     pick_id=pick.pick_id,
