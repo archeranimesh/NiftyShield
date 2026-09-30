@@ -841,3 +841,41 @@ Fix was tracked as plan tasks, not here — `docs/plan/telegram-message-unificat
 - [x] **B051.3** — Re-run the entry check for the existing `ENGINERSIN` pick (`b08f6661…`) once the fix lands, so it advances out of PENDING if warranted.
 - [x] **B051.4** — Suite green + real `@code-reviewer` clean.
 - [x] **B051.5** — Flip `bugs.md` BUG-051 status to ✅ Fixed + SHA; move both sections to `docs/archive/bugs/{bugs,task}.md`; `TODOS.md` session-log line. | SHA `61b18ee`
+
+## BUG-061 — Missing LTP persisted as a zero P&L snapshot; 1-day overlay P&L diffed against it
+
+Detail: `docs/bugs/bugs.md` BUG-061.
+
+- [x] **B061.1** — Failing test: overlay leg with no LTP today and a real mark yesterday must not produce a fabricated 1-day loss. (`tests/unit/scripts/`) | SHA `7b671db`
+- [x] **B061.2** — Skip or carry-forward-and-flag the price-less leg snapshot; `_compute_overlay_pnl_snapshots` returns `None` for it and the digest renders "n/a". Tests for both branches. | SHA `7b671db`
+
+## BUG-062 — `record_paper_trade` leaves closed legs in state `OPEN`
+
+Detail: `docs/bugs/bugs.md` BUG-062.
+
+- [x] **B062.1** — Failing test: a closing insert that nets the position to 0 leaves both rows `OPEN` today. (`tests/unit/paper/test_record_paper_trade.py`) | SHA `ac4d163`
+- [x] **B062.2** — Call `mark_trade_closed` after a successful insert when the net position is 0. Tests: full close → `CLOSED`, partial close → `OPEN`, dry run → no change. | SHA `ac4d163`
+
+## BUG-058 — Silent duplicate-insert skip in `record_paper_trade`; entry verification/alert conflates "never recorded" with "closed by another actor"
+
+Detail: `docs/bugs/bugs.md` BUG-058.
+
+- [x] **B058.1** — `record_paper_trade` reports a skipped duplicate insert explicitly (stderr `SKIPPED: duplicate ...`) and exits non-zero on the non-dry-run open path; audit `--close` callers first. | SHA `17501ec`
+- [x] **B058.2** — Entry verification separates "no trade rows today" from "opened then closed" via trade history; alert text names the case and the closer. Tests for both branches in v1 and v2. | SHA `17501ec`
+
+## BUG-052 — `mvp update`/`close` silently no-op on a truncated pick_id instead of erroring
+
+- [x] **B052.1** — Confirm whether `close_pick` has the identical silent-no-op shape as `update_pick` (trace `src/mvp/store.py::close_pick` + `scripts/mvp.py::_close`). | SHA `d8205a6`
+- [x] **B052.2** — Implement prefix-match ID resolution in `scripts/mvp.py` (or switch `list`'s displayed ID to the full UUID) so a truncated/ambiguous/nonexistent pick_id errors clearly instead of
+  silently no-op'ing. | SHA `d8205a6`
+- [x] **B052.3** — Add tests: truncated ID on `update`/`close` raises or prints a clear error; full UUID still works; ambiguous prefix (if resolution is chosen) errors with the candidate list. | SHA `d8205a6`
+
+## BUG-038 — `OverlayCloser`'s three `self._notifier.send()` calls are unawaited (never sent)
+
+- [x] **B038.1** — `trace_path` both methods' callers (`close_collar_all`, `monetize_collar_put`) to confirm no caller already runs inside an event loop before picking sync-vs-async fix. | SHA `acd8181`
+- [x] **B038.2** — Fix: make both methods `async def` + `await` the send (or a sync-dispatch wrapper if callers require sync). Update callers. | SHA `acd8181`
+- [x] **B038.3** — Add a repro test using a `TelegramNotifier`-shaped (async-`send`) test double, not the current sync `MockNotifier`/`notifier` fixture, so this class of bug is caught in future. | SHA `acd8181`
+- [x] **B038.4** — Separately: repro-test `escape_markdown()` against a literal backslash in the input (see `bugs.md` BUG-038 note) — scope a fix in `src/notifications/markdown.py` if confirmed,
+  coordinate with `docs/plan/telegram-markdown-migration/` MD-6's baseline if it touches escaped call sites. | SHA `2af4090`
+- [x] **B038.5** — Review: real `code-reviewer` (mandatory — financial-logic notification paths).
+- [x] **B038.6** — Commit, update `bugs.md` BUG-038 status to ✅ Fixed + SHA, update `TODOS.md`. | SHA `acd8181`

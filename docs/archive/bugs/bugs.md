@@ -2266,3 +2266,134 @@ already-OPEN pick skips the walk entirely. Full suite: `tests/unit/mvp/test_mvp_
 `PENDING` → `OPEN`, entered at ₹285.25 on 2026-09-21 (first day after reco where close beat ₹273.0).
 
 ---
+
+## BUG-061 — A missing LTP is persisted as a zero P&L leg snapshot and the 1-day overlay P&L is diffed against it, printing a fictitious loss
+
+| Field | Value |
+|---|---|
+| Severity | **High** — wrong P&L in the daily Telegram digest and in `paper_overlay_pnl_snapshots`, and today's bad row corrupts tomorrow's 1-day diff; same class as BUG-028's silent zero |
+| Status | ✅ Fixed — SHA `7b671db` |
+| Discovered | 2026-09-30 — same investigation as BUG-060 |
+| Location | `scripts/strategies/three_track/paper_3track_snapshot.py::_compute_overlay_leg_totals` (L1436) / `_save_overlay_leg_snapshots`; `_compute_overlay_pnl_snapshots` (L1215) |
+
+**Symptom:** at 15:35:08 the snapshot logged `overlay_leg_totals.ltp_unavailable instrument_key=NSE_FO|73994 leg_role=overlay_collar_put` and saved the leg with `ltp=NULL`, `unrealized_pnl=0`,
+`total_pnl=0`. `_compute_overlay_pnl_snapshots` computes `pnl_1d_abs = today_total_pnl − prev_total_pnl` = `0 − 45,001.125`, so the collar row read `-45,001` and the digest showed `Collar -45001
+(-565%)` against NiftyBees `-7,972`. The other overlays and the base tracks were fine.
+
+**Root cause:** the missing-price path returns zero instead of "unknown", and the diff treats zero as a real observation. BUG-028 Phase 2 fixed this class only for a *missing snapshot row* (`None` vs
+`Decimal("0")`); a row present with a zeroed, price-less leg still reads as data.
+
+**Fix (not yet implemented):** when a leg's LTP is unavailable, do not write a zero snapshot: either skip the leg's row, or carry forward the previous mark and flag it stale, and make
+`_compute_overlay_pnl_snapshots` yield `None` (rendered "n/a" in the digest) instead of a diff against a priceless row. Tests: LTP-missing leg produces no fabricated loss; a leg with a real price is
+unchanged; the digest renders "n/a", not a percentage.
+
+---
+
+## BUG-062 — `record_paper_trade` records a closing trade but leaves the leg's `paper_trades` rows in state `OPEN`
+
+| Field | Value |
+|---|---|
+| Severity | **Medium** — closed legs keep reading as open marker legs to state-based gates; needs a manual `mark_trade_closed` per leg |
+| Status | ✅ Fixed — SHA `ac4d163` |
+| Discovered | 2026-09-30 — while repairing BUG-060 |
+| Location | `scripts/record/record_paper_trade.py` (no `mark_trade_closed` call) |
+
+**Symptom:** after `record_paper_trade --leg overlay_collar_put ... --action SELL --no-dry-run` reported `position closed (net qty = 0)`, trades 178 (BUY) and 405 (SELL) were both still
+`state='OPEN'`. Every other close path routes through `PaperStore.mark_trade_closed` (`cc_overlay_v1`, `pp_overlay_v1`, `overlay_closer`, `csp_roll_executor`, `ic_close_executor`,
+`paper_3track_roll`); a grep of `record_paper_trade.py` finds no call. This is the BUG-035 pattern on the one path that fix did not wire, and `backfill_mark_trade_closed_overlay` was written to repair
+exactly this state after the fact.
+
+**Fix (not yet implemented):** after a successful insert, when the resulting `get_position(...).net_qty == 0`, call `mark_trade_closed(strategy, leg_role, instrument_key)`. Tests: a closing insert
+flips both rows to `CLOSED`; a partial close leaves them `OPEN`; a dry run changes nothing. Note BUG-058's item to re-audit `--close` callers before changing exit codes applies to the same file.
+
+---
+
+## BUG-058 — `record_paper_trade` silently skips duplicate inserts (prints "position closed", exits 0); entry alert conflates "never recorded" with "closed by another actor"
+
+| Field | Value |
+|---|---|
+| Severity | **Medium** — misleading operator signal; caused ~1h of misdiagnosis on 2026-09-30 |
+| Status | ✅ Fixed — SHA `17501ec` |
+| Discovered | 2026-09-30 — see BUG-057; and the 11:31 re-entry attempt |
+| Location | `scripts/record/record_paper_trade.py` (~L1063-1092); `src/paper/store.py::record_trade`; `scripts/strategies/ic/paper_ic_entry.py` + `_v2.py` verification |
+
+**Symptom A (silent skip):** `paper_trades` is unique on (`strategy_name`, `leg_role`, `instrument_key`, `trade_date`, `action`) and `record_trade` uses an ignore-on-conflict insert returning
+`rowcount == 1`. A same-day re-entry into the same strikes (11:31 retry picked the identical 51309/51287/51392/51418) inserts nothing; `record_paper_trade` then falls through to
+`store.get_position(...)`, sees net 0 and prints `<strategy> / <leg>: position closed (net qty = 0)` and exits 0 — indistinguishable from a genuine close. The parent's verification catches it
+(`legs_not_persisted`, all four legs) but the child logs nothing that says "duplicate skipped".
+
+**Symptom B (alert wording):** verification only tests `get_position(...).net_qty == 0`, so a leg that *was* recorded and then closed by the monitor (BUG-057) is reported as "NOT persisted". The alert
+should say which case it is.
+
+**Fix (not yet implemented):** (1) when `record_trade` returns False, `record_paper_trade` prints an explicit `SKIPPED: duplicate (strategy, leg, key, date, action)` to stderr and exits non-zero on
+the non-dry-run entry path (check `--close` callers first — an idempotent re-run of a close may rely on exit 0); (2) entry verification distinguishes "no trade rows for the leg today" from "opened and
+since closed" using trade history, and the alert text names the case and, for the latter, the closer (`notes`). Same-day re-entry after a manual unwind remains blocked by the unique constraint — that
+is a deliberate ledger invariant, out of scope here; the runbook should say so.
+
+---
+
+## BUG-052 — `mvp update`/`close` accept the truncated 8-char pick_id shown by `list`, but silently no-op instead of erroring
+
+| | |
+|---|---|
+| Status | ✅ Fixed — SHA `d8205a6` |
+| Discovered | 2026-09-24 — manual session adding a new pick (Dynamic Cables / DYCL) and tagging it with provider/category. |
+| Location | `scripts/mvp.py::_update` (and likely `_close`, same shape) → `src/mvp/store.py::MVPStore.update_pick` / `close_pick`. |
+
+**Symptom:** `python -m scripts.mvp list` displays pick IDs truncated to 8 characters (e.g. `0fa62dca`). Running `python -m scripts.mvp update 0fa62dca -p dsij -c value_picks` with that truncated ID
+prints `✓ Updated.` — no error — but the row is completely unchanged. Confirmed live: `mvp_recommendations.category_id` stayed empty across two separate `update` invocations with the truncated ID,
+each printing success; the fix was to re-run with the full UUID (`0fa62dca-66f0-4135-a9f4-e5b5d4d41119`), which updated correctly and was verified via direct `sqlite3` read.
+
+**Root cause:** `MVPStore.update_pick` (`src/mvp/store.py:335`) does `SELECT status, capital_allotted FROM mvp_recommendations WHERE pick_id = ?` with an **exact-match** `pick_id` and, per its own
+docstring, "Silently no-ops if `pick_id` does not exist" when that row lookup returns `None`. `scripts/mvp.py::_update` (line ~175) never checks `update_pick`'s (lack of) return value or re-fetches
+the pick to confirm the write landed — it unconditionally prints `✓ Updated.` right after calling it. Nothing in `scripts/mvp.py` or `MVPStore` does prefix expansion from the truncated display ID back
+to the full UUID — the truncation is display-only, done in the `list` formatter, but users naturally copy that shorter string back into other commands since it's the only ID shown.
+
+**Suspected same shape in `close`:** `close_pick` (`src/mvp/store.py:412`) was not traced in this session but takes the same `pick_id` exact-match pattern per its signature; likely has the identical
+silent-no-op risk if called with a truncated ID. Needs confirmation before fixing.
+
+**Suggested fix:** Either (a) make `list`'s displayed ID the full UUID (simplest, but hurts terminal readability), or (b) add prefix-match resolution in the CLI layer (`scripts/mvp.py`) that expands a
+short ID to the full UUID before calling into `MVPStore` — erroring clearly if the prefix is ambiguous or matches zero rows — or (c) at minimum, make `update_pick`/`close_pick` return a bool/raise
+when no row matched, and have the CLI check it instead of printing `✓ Updated.` unconditionally. (b) is closest to how git/docker CLIs handle this and avoids ever silently no-op'ing on a real user
+mistake. Any fix should add a test asserting a truncated/non-existent ID surfaces an error rather than a silent success.
+
+**Impact so far:** Low — caught immediately in this session by manually re-querying the DB after an `update` "succeeded" but the `list --all -p -c` filter still didn't show the pick under its
+provider/category. Could otherwise leave a pick permanently untagged (or, for `close`, a position that a user believes is closed but the store still reports as `OPEN`) with no visible error.
+
+---
+
+## BUG-038 — `OverlayCloser`'s three `self._notifier.send()` calls are unawaited coroutines (never actually sent)
+
+| Field | Value |
+|---|---|
+| Severity | **High** — silent notification loss on financial-logic paths (collar close/monetize write failures, incomplete-collar abort) |
+| Status | ✅ Fixed — SHA `acd8181` |
+| Discovered | 2026-08-25, incidentally — see **Discovery** below the table |
+| Location | `src/strategy/overlay_closer.py::OverlayCloser.close_collar_all`, `OverlayCloser.monetize_collar_put` |
+
+**Discovery:** general-purpose code-reviewer-persona pass on `docs/plan/telegram-markdown-migration/` MD-7.3's diff (`src/strategy/overlay_closer.py`) flagged it as unverifiable from the diff alone;
+confirmed by reading `src/notifications/telegram.py::TelegramNotifier.send` (`async def send`) against the three call sites in `overlay_closer.py` (`close_collar_all` ~L269, `monetize_collar_put`
+~L330/~L395), all in **synchronous** methods calling `self._notifier.send(...)` with no `await` and no `asyncio.run(...)`/`create_task(...)` wrapper
+
+**Root cause (not yet fixed — out of MD-7.3's scope, which is escaping only):** `TelegramNotifier.send()` is `async def`. Calling it without `await` from a sync method constructs a coroutine object
+and immediately discards it — Python schedules nothing, so the message is never sent. No exception is raised (matches the non-fatal contract's outward behavior), so this fails completely silently; the
+only surfacing symptom is a `RuntimeWarning: coroutine 'TelegramNotifier.send' was never awaited` if warnings are enabled, which is not part of the normal cron/strategy logging path. Net effect: the
+"Collar close failed", "Collar monetize aborted", and "Collar monetize failed" alerts — all three fire on a paths where a human needs to intervene (DB write failure leaving legs open, or an incomplete
+collar structure) — have likely never reached Telegram in production.
+
+**Why this wasn't caught by MD-7.3's tests:** the test suite's `MockNotifier`/`notifier` test double used in `tests/unit/strategy/test_overlay_closer.py` implements `send()` as a plain synchronous
+method (appends to `sent_messages`), so calling it unawaited works correctly in tests — the mock doesn't reproduce the real notifier's `async def` signature, masking the bug.
+
+**Scope note:** MD-7.3 only changed message *content* (added `escape_markdown()`/`mdcode()` wrapping) — it did not touch these call sites' `await`/no-`await` structure, so this predates that task and
+is not a regression it introduced. Filed here rather than fixed inline to keep MD-7.3's diff scoped to escaping only, per its story spec ("Do NOT change message wording/structure").
+
+**Also surfaced in the same review, not yet independently confirmed:** `src/notifications/markdown.py::escape_markdown`'s `MARKDOWNV2_RESERVED` set (`_*[]()~\`>#+-=|{}.!`) does not include the
+backslash character itself. A dynamic value containing a literal `\` (e.g. a Windows-style path or a regex/JSON error message inside `str(exc)`) would pass through unescaped, potentially producing a
+malformed MarkdownV2 escape sequence and a 400 from Telegram — silently swallowed by the non-fatal send contract. Needs a repro test (`escape_markdown("C:\\foo")` or similar) before scoping a fix;
+likely belongs in a follow-up to `MD-1`/`MD-6` rather than this bug, since it's in the shared helper, not `overlay_closer.py`/`auto_close.py` specifically.
+
+**Fix (not yet scoped):** either make `close_collar_all`/`monetize_collar_put` `async def` and `await self._notifier.send(...)` (matches `auto_close.py`'s pattern), or wrap the send in
+`asyncio.create_task(...)`/a sync-dispatch helper if these methods must stay synchronous for their other callers. Needs a graph trace (`trace_path`) of both methods' callers before picking an approach
+— check whether any caller already runs inside an event loop.
+
+---

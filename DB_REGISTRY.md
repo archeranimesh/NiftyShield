@@ -67,6 +67,7 @@ positions/holdings mirror. Third broker surface — do not conflate with `dhan_*
 | `paper_action_audit` | `PaperStore` → adjustment/roll scripts | Append-only audit trail of executed adjustment actions (price, qty, rationale). |
 | `gate_violations` | `PaperStore.record_gate_violation()` → `paper_ic_entry.py` / `_v2.py`, `ic_entry_gates.py` | THRESHOLD entry-gate violations under `--log-only-gates` — see note below. |
 | `warn_signal_state` | `PaperStore` | Dedup/state tracking so a WARN-severity signal doesn't re-fire every cron tick. |
+| `mvp_corporate_actions` | `MVPStore.add_corporate_action()` (manual CLI) | MVP split/bonus ledger, read-time adjustment (BUG-054). `UNIQUE(symbol, ex_date, action_type)`. |
 | `signal_responses` | `SignalStore` → `morning_signal.py` | One row per `(trade_date, provider)` — raw multi-LLM directional response via OpenRouter; also token counts + `cost_usd` (see note). |
 | `paper_margin_snapshots` | `PaperStore` → IC entry scripts, `capture_entry_margin()` | One row per `(strategy_name, entry_date)` — margin at entry. **IC-only** — see note below. |
 | `paper_proxy_delta_log` | `PaperStore` → 3-track proxy monitoring | Daily log of Proxy deep-ITM-call delta breach state. |

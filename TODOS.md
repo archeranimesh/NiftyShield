@@ -64,7 +64,6 @@ Snapshot (authoritative list: `bugs.md`) —
 - **BUG-030** — `_overlay_type_groups` elif-precedence orphans the `overlay_cc` leg when `overlay_collar_put` is also present same-day. Next: **B030.1** (entry-side tagging question, blocks the
   grouping fix).
 - **BUG-037** — `mark_trade_closed()` never wired into CSP / IC v1 / v2 close paths; 54 stale flat legs found live. Next: **B037.6** (`code-reviewer` on the B037.3 / B037.4 fix).
-- **BUG-038** — `OverlayCloser`'s three `self._notifier.send()` calls are unawaited coroutines (never actually sent). Next: **B038.1** (`trace_path` the three send methods).
 - **BUG-019** — diagnostic-only, not actionable (awaiting a live trading day's data before a fix is scoped).
 
 Feature-vs-bug priority is chosen at session start via `/work`. A bug urgent enough to pre-empt all feature work should be raised with Animesh directly — it is not expressed by reordering either list.
@@ -92,6 +91,11 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-09-30] Four-lane bug sweep, merged serially (`01c6a49`, `0f504c0`, `681cde6`, `2cf7c74`, guard-baseline resync `f70fe36`). Fixed and archived: BUG-062 (`ac4d163`), BUG-058 (`17501ec`), BUG-061
+  (`7b671db`), BUG-052 (`d8205a6`), BUG-038 (`acd8181`; plus a confirmed `escape_markdown` literal-backslash fix `2af4090`). BUG-054 B054.1–7 landed (`ba73df5`…`2881db1`); BUG-042 only B042.1 + B042.4
+  (`84980a3`). Real `@code-reviewer` per lane, 0 CRITICAL/ERROR. Open for Animesh: B042.2 fix-approach decision; BUG-054 manual split-row inserts (BECTORFOOD/UCOBANK, after
+  `scripts.dev.mvp_split_audit`); BUG-040 live-host `morning_signal` run; BUG-060 B060.1 settle-source decision. Follow-ups not ticketed: `get_category_day_change`/`get_category_high_low`/`mvp list`
+  not split-adjusted; `mvp_watch.run` sends are now invisible to the escaping guard (callees do escape).
 - [2026-09-29] BUG-056 found + fixed — the signals prompt (`src/signals/prompt.py`) asked GPT-4o/Grok/Gemini for `entry_premium_low`/`high` with no real premium anywhere in the input; Grok returned
   `null` rather than invent one, crashing the unguarded `Decimal(str(...))` cast in `_parse_response`. Added `OptionChainSummary.premiums` (real CE/PE LTP for ATM-1/ATM/ATM+1, already fetched but
   previously discarded by `_summarize_option_chain`) and rendered a "Live premiums" line + explicit instruction in the prompt. Missing legs render "N/A", never a bare 0 the LLM could mistake for a
