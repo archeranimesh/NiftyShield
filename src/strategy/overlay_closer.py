@@ -6,6 +6,8 @@ Handles atomic execution of close actions for CC, PP, and Collar overlays.
 
 from __future__ import annotations
 
+import asyncio
+import inspect
 import re
 from datetime import date, datetime, timezone
 from decimal import Decimal
@@ -33,6 +35,16 @@ _EXPIRY_RE = re.compile(
     r"NSE_FO\|NIFTY(\d{2}[A-Za-z]{3}\d{4})(PE|CE)",
     re.IGNORECASE,
 )
+
+_NOTIFY_TIMEOUT_S = 15.0
+# Strong refs so fire-and-forget tasks are not garbage-collected mid-flight.
+_PENDING_NOTIFICATIONS: set[asyncio.Task[Any]] = set()
+
+
+async def _as_coro(awaitable: Any) -> Any:
+    """Wrap any awaitable so ``wait_for`` / ``create_task`` accept it."""
+    return await awaitable
+
 
 SHORT_CALL_ROLE = "overlay_collar_call"
 LONG_PUT_ROLE = "overlay_collar_put"
@@ -64,6 +76,40 @@ class OverlayCloser:
         self._simulator = simulator
         self._notifier = notifier
         self._instrument_lookup = instrument_lookup
+
+    def _notify(self, text: str) -> None:
+        """Deliver an alert through the notifier from this synchronous class.
+
+        ``TelegramNotifier.send`` / ``TelegramGateway.send_plain_message`` are
+        ``async def``; calling them bare only builds a discarded coroutine
+        (BUG-038). Callers run either in a worker thread (``monitor_daemon``
+        via ``asyncio.to_thread``) or a plain sync context, so an awaitable
+        result is driven to completion with ``asyncio.run`` when no loop is
+        running in this thread, else scheduled on the running loop. A sync
+        ``send`` (test doubles) is simply called. ``send_plain_message`` is
+        preferred when present because ``TelegramGateway`` (what
+        ``monitor_daemon`` injects) has no ``send`` method.
+
+        Args:
+            text: MarkdownV2-escaped message body.
+        """
+        if not self._notifier:
+            return
+        send = getattr(self._notifier, "send_plain_message", None) or self._notifier.send
+        try:
+            result = send(text)
+            if not inspect.isawaitable(result):
+                return
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                asyncio.run(asyncio.wait_for(_as_coro(result), _NOTIFY_TIMEOUT_S))
+            else:
+                task = loop.create_task(_as_coro(result))
+                _PENDING_NOTIFICATIONS.add(task)
+                task.add_done_callback(_PENDING_NOTIFICATIONS.discard)
+        except Exception as exc:  # Intentional: notifier must never abort the caller
+            log.warning("overlay_closer.notify_failed", error=str(exc))
 
     def _resolve_instrument_lookup(self) -> InstrumentLookup | None:
         """Lazily construct and cache the InstrumentLookup used for leg resolution.
@@ -265,11 +311,10 @@ class OverlayCloser:
                 # record_trades rolls back the entire batch on any exception;
                 # no application-level delete is needed.
                 log.error("collar_close_all.write_failed", error=str(e))
-                if self._notifier:
-                    self._notifier.send(
-                        f"{escape_markdown('Collar close failed: could not write close trades. Error:')} "
-                        f"{escape_markdown(str(e))}"
-                    )
+                self._notify(
+                    f"{escape_markdown('Collar close failed: could not write close trades. Error:')} "
+                    f"{escape_markdown(str(e))}"
+                )
                 return False
 
             for closed_trade in trades_to_write:
@@ -326,12 +371,11 @@ class OverlayCloser:
                 put_qty=put_qty,
                 note="Aborting — put leg missing, cannot monetize without leaving naked call",
             )
-            if self._notifier:
-                self._notifier.send(
-                    f"{escape_markdown('Collar monetize aborted for')} {mdcode(strategy_name)}"
-                    f"{escape_markdown(':')} "
-                    f"{escape_markdown('put leg is flat but call leg is open — incomplete collar structure.')}"
-                )
+            self._notify(
+                f"{escape_markdown('Collar monetize aborted for')} {mdcode(strategy_name)}"
+                f"{escape_markdown(':')} "
+                f"{escape_markdown('put leg is flat but call leg is open — incomplete collar structure.')}"
+            )
             return
 
         # Build all close trades first, then write atomically so a failure on
@@ -391,11 +435,10 @@ class OverlayCloser:
             except Exception as e:
                 # record_trades rolls back the entire batch on any exception.
                 log.error("collar_put_monetize.write_failed", error=str(e))
-                if self._notifier:
-                    self._notifier.send(
-                        f"{escape_markdown('Collar monetize failed: could not write close trades. Error:')} "
-                        f"{escape_markdown(str(e))}"
-                    )
+                self._notify(
+                    f"{escape_markdown('Collar monetize failed: could not write close trades. Error:')} "
+                    f"{escape_markdown(str(e))}"
+                )
                 return
 
             for closed_trade in trades_to_write:
