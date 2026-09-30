@@ -1,8 +1,8 @@
 Read `CONTEXT.md` and state `CONTEXT.md ✓` before doing anything else. Then read `docs/plan/full-repo-review-followups/greeks-parity-validation/tasks.md` and find the first unchecked box. That is your
 **only task** for this session. Do not look at any other unchecked item. One task. Complete it fully. Stop.
 
-**Origin:** Spawned from `docs/plan/full-repo-review/findings/FR-7_synthesis.md` (Chairman Synthesis), FR-7 row 6 (CRITICAL, contested — see D1) — FR-5 GREEKS-1/PARITY-1, FR-2 F7. Independently
-re-verified against the live repo before this story was created — see FR-9's commit message for the verification method.
+**Origin:** Spawned from `docs/archive/plan/full-repo-review/findings/FR-7_synthesis.md` (Chairman Synthesis), FR-7 row 6 (CRITICAL, contested — see D1) — FR-5 GREEKS-1/PARITY-1, FR-2 F7.
+Independently re-verified against the live repo before this story was created — see FR-9's commit message for the verification method.
 
 No independent correctness check exists anywhere in the repo for Greeks or option-chain data: confirmed zero references to put-call parity or a Black-Scholes reference model anywhere in `src/` or
 `tests/` (`grep -rli "put.call.parity|black.scholes|black_scholes|bs_price"` returns nothing). Upstox's own feed is the uninspected ground truth. FR-7's chairman keeps this CRITICAL over FR-2's

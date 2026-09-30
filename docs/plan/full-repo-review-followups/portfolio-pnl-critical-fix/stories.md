@@ -1,6 +1,6 @@
 # Portfolio P&L Critical Fix — Story
 
-**Source:** `docs/plan/full-repo-review/findings/FR-7_synthesis.md`, FR-7 row 1 (CRITICAL) — FR-2 F1, F2.
+**Source:** `docs/archive/plan/full-repo-review/findings/FR-7_synthesis.md`, FR-7 row 1 (CRITICAL) — FR-2 F1, F2.
 
 ## T1
 

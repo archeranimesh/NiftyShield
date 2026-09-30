@@ -9,4 +9,4 @@
 
 ---
 
-**Source:** `docs/plan/full-repo-review/findings/FR-7_synthesis.md`, FR-7 row 10 (ERROR, downgraded from FR-4's CRITICAL per FR-7 divergence D2) — FR-4 §3, §4.
+**Source:** `docs/archive/plan/full-repo-review/findings/FR-7_synthesis.md`, FR-7 row 10 (ERROR, downgraded from FR-4's CRITICAL per FR-7 divergence D2) — FR-4 §3, §4.

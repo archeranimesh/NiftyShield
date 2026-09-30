@@ -1,7 +1,7 @@
 Read `CONTEXT.md` and state `CONTEXT.md ✓` before doing anything else. Then read `docs/plan/full-repo-review-followups/protocol-standards-reconciliation/tasks.md` and find the first unchecked box.
 That is your **only task** for this session. Do not look at any other unchecked item. One task. Complete it fully. Stop.
 
-**Origin:** Spawned from `docs/plan/full-repo-review/findings/FR-7_synthesis.md` (Chairman Synthesis), FR-7 rows 4, 5, 11 (CRITICAL + ERROR) — FR-1 F-C1, F-C2, F-E1, F-E2, F-E3. Independently
+**Origin:** Spawned from `docs/archive/plan/full-repo-review/findings/FR-7_synthesis.md` (Chairman Synthesis), FR-7 rows 4, 5, 11 (CRITICAL + ERROR) — FR-1 F-C1, F-C2, F-E1, F-E2, F-E3. Independently
 re-verified against the live repo before this story was created — see FR-9's commit message for the verification method.
 
 Three protocol-layer contradictions confirmed live: (1) root CLAUDE.md's AutoTrigger table states `test-runner`/`code-reviewer` are "Blocking? Yes" and "not optional", but `ANTIGRAVITY.md` line 91

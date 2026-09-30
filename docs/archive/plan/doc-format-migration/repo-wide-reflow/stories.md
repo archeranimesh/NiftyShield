@@ -10,7 +10,7 @@
 **Files to change:** whitespace only, across (roughly, confirm with `git ls-files '*.md'`):
 - root `.md` — `CLAUDE.md`, `AGENTS.md`, `CONTEXT.md`, `CONTEXT_TREE.md`, `DECISIONS.md`, `REFERENCES.md`, `DB_REGISTRY.md`, `LOGGING.md`, `FORMATTING.md`, `REVIEW.md`, `TODOS.md`, `PLANNER.md`,
   `README.md`, `ANTIGRAVITY.md`, `LITERATURE.md`, `BACKTEST_PLAN*.md`, `GEMINI.md`, `MEMORY*.md`, … — whatever `git ls-files ':(glob)*.md'` returns.
-- `docs/**` except `docs/plan/**` and `docs/archive/**` — `docs/bugs/*.md`, `docs/council/*.md`, `docs/antigravity/*.md`, `docs/GLOSSARY.md`, `docs/plan/full-repo-review/findings/*.md` is under
+- `docs/**` except `docs/plan/**` and `docs/archive/**` — `docs/bugs/*.md`, `docs/council/*.md`, `docs/antigravity/*.md`, `docs/GLOSSARY.md`, `docs/archive/plan/full-repo-review/findings/*.md` is under
   `plan/` so it belongs to `plan-folders/` — double-check the boundary.
 - `.claude/**/*.md` — every `SKILL.md`, agent definition, `.claude/*.md`.
 - `.github/**/*.md`, and any `*.md` under `src/` / `scripts/` / `tests/`.

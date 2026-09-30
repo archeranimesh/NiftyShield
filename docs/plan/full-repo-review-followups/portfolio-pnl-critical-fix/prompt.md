@@ -1,8 +1,8 @@
 Read `CONTEXT.md` and state `CONTEXT.md ✓` before doing anything else. Then read `docs/plan/full-repo-review-followups/portfolio-pnl-critical-fix/tasks.md` and find the first unchecked box. That is
 your **only task** for this session. Do not look at any other unchecked item. One task. Complete it fully. Stop.
 
-**Origin:** Spawned from `docs/plan/full-repo-review/findings/FR-7_synthesis.md` (Chairman Synthesis), FR-7 row 1 (CRITICAL) — FR-2 F1, F2. Independently re-verified against the live repo before this
-story was created — see FR-9's commit message for the verification method.
+**Origin:** Spawned from `docs/archive/plan/full-repo-review/findings/FR-7_synthesis.md` (Chairman Synthesis), FR-7 row 1 (CRITICAL) — FR-2 F1, F2. Independently re-verified against the live repo
+before this story was created — see FR-9's commit message for the verification method.
 
 Reconciliation against the live `finideas_ilts` position surfaced two accounting bugs: `src/portfolio/store.py::get_position()` returns `average_price = Decimal("0")` whenever `buy_qty == 0`
 (short-first legs — sell-only trades never populate `buy_value`/`buy_qty`), and `src/portfolio/tracker.py::apply_trade_positions()` drops legs with zero net quantity as "fully closed" with no

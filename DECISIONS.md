@@ -686,7 +686,7 @@ wrong. Deferred fix — absorb in `parse_upstox_option_chain` by accepting `list
   _(source: council-refactor)_
 - **2026-06-07** — entry_date is None fallback to days_held = 0 with a warning log to prevent silent gaps. _(source: council-refactor)_
 - **2026-07-06** — Full-repo-review epic (FR-0..FR-9) closed — 7 CRITICAL + 8 ERROR findings, 9 fix stories spawned under `docs/plan/`; `CLAUDE.md` gained the 3 promoted review rules
-  (severity-by-mission-impact, verify-own-citations, state-uncovered-perspective). Full write-up in the worklog archive. _(source: `docs/plan/full-repo-review/findings/FR-7_synthesis.md`)_
+  (severity-by-mission-impact, verify-own-citations, state-uncovered-perspective). Full write-up in the worklog archive. _(source: `docs/archive/plan/full-repo-review/findings/FR-7_synthesis.md`)_
 - **2026-08-05** — IC time-stop de-tiered: `time_stop_dte` / `dte_warn` no longer scale to entry-DTE. Monthly / leaps / yearly all `time_stop_dte=7`, `dte_warn=14` (`ic_expiry_config.py`); weekly
   unchanged at `2` / `4`. **Noted, deferred:** the `7` is a Phase 0 research default paired with DT-3 counterfactual logging — review after 6 monthly cycles. _(source:
   `docs/council/2026-08-05_ic-time-stop-dte-tiering.md`)_

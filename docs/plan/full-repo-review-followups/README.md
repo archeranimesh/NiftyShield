@@ -1,8 +1,8 @@
 # Full-Repo-Review Follow-ups — Epic Index
 
-Spawned from `docs/plan/full-repo-review/findings/FR-7_synthesis.md` (Chairman Synthesis) by FR-9. Each folder below is a self-contained story — start from its `prompt.md`. All 7 CRITICAL findings
-that fed these stories were independently re-derived against the live repo (not re-read) before the folder was created; see `DECISIONS.md` 2026-07-06 for the verification method and the two severity
-divergences (D1, D2) that were preserved rather than collapsed.
+Spawned from `docs/archive/plan/full-repo-review/findings/FR-7_synthesis.md` (Chairman Synthesis) by FR-9. Each folder below is a self-contained story — start from its `prompt.md`. All 7 CRITICAL
+findings that fed these stories were independently re-derived against the live repo (not re-read) before the folder was created; see `DECISIONS.md` 2026-07-06 for the verification method and the two
+severity divergences (D1, D2) that were preserved rather than collapsed.
 
 Do not start a P2 story before its P0/P1 blockers close where a dependency is noted below — everything else in a tier can run in any order or in parallel.
 

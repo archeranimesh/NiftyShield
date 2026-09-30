@@ -1,6 +1,6 @@
 # SQLite Portfolio DB Backup Cron — Story
 
-**Source:** `docs/plan/full-repo-review/findings/FR-7_synthesis.md`, FR-7 row 2 (CRITICAL) — FR-6 S-4.
+**Source:** `docs/archive/plan/full-repo-review/findings/FR-7_synthesis.md`, FR-7 row 2 (CRITICAL) — FR-6 S-4.
 
 ## T1
 

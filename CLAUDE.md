@@ -245,8 +245,8 @@ A phase is not complete until all three are done. Never move to the next phase m
 
 **5a — Update docs** (targeted `Edit` calls only, never `Write`): `CONTEXT.md` "What Exists" if new files were added · `DECISIONS.md` for any new architecture decision · `TODOS.md` to mark completed
 items and add a session-log entry · `docs/plan/README.md` status column for the story/epic just touched (a stale epic is almost always this file being skipped — FR-7 row 15,
-`docs/plan/full-repo-review/findings/FR-7_synthesis.md`) · the relevant `src/<module>/CLAUDE.md` if module invariants changed. A completed `tasks.md` checkbox carries a `| Owner: … | Model: … |
-Review: … | SHA: …` tail (`Owner`/`Model`/`Review` set at authoring time, `SHA` on the closing commit); `TODOS.md` backlog items stay pointer-only. Full rules: `docs/plan/README.md` §Conventions.
+`docs/archive/plan/full-repo-review/findings/FR-7_synthesis.md`) · the relevant `src/<module>/CLAUDE.md` if module invariants changed. A completed `tasks.md` checkbox carries a `| Owner: … | Model: …
+| Review: … | SHA: …` tail (`Owner`/`Model`/`Review` set at authoring time, `SHA` on the closing commit); `TODOS.md` backlog items stay pointer-only. Full rules: `docs/plan/README.md` §Conventions.
 
 **5b — Verify tests green:** run `python -m pytest tests/unit/ --tb=no -q` — all must pass before committing.
 

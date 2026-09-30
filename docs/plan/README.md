@@ -135,8 +135,8 @@ outcome message (marked `won't-do` in the archived `signals_tasks.md`). Go-live 
 `SignalOutcome` baseline), `morning_signal.py` reduced to orchestration + Telegram via `src/signals/pipeline.py::run_morning_signal_pipeline`, `signal_paper_entry.py` kept as a manual backfill tool
 (keep-or-delete deferred pending a live track record). Live crontab confirmed matching the final two-cron state as part of SEC-6.
 
-**`full-repo-review/`** · ✅ Complete — see `full-repo-review-followups/` One-time multi-model, multi-persona review of design docs, source, tests, the AI-collaboration protocol, and per-job-type
-surface routing (FR-1..9).
+**`full-repo-review/`** · ✅ Archived 2026-09-30 → `docs/archive/plan/full-repo-review/` (follow-ups: `full-repo-review-followups/`) One-time multi-model, multi-persona review of design docs, source,
+tests, the AI-collaboration protocol, and per-job-type surface routing (FR-1..9).
 
 **`ic-time-stop-dte-tiering/`** · ✅ Shipped/Archived 2026-08-05 (DT-1..4) → `docs/archive/plan/ic-time-stop-dte-tiering/` Council-ruled fix (`docs/council/2026-08-05_...`): de-tier per-bucket
 `time_stop_dte`/`dte_warn` to a uniform terminal rule; forward-only counterfactual DTE-mark logging on `paper_exit_events`.

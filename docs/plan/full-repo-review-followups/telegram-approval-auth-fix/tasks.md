@@ -7,4 +7,4 @@
 
 ---
 
-**Source:** `docs/plan/full-repo-review/findings/FR-7_synthesis.md`, FR-7 row 9 (ERROR) — FR-6 S-2.
+**Source:** `docs/archive/plan/full-repo-review/findings/FR-7_synthesis.md`, FR-7 row 9 (ERROR) — FR-6 S-2.

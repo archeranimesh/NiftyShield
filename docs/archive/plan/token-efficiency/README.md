@@ -129,7 +129,7 @@ task and stop.
 
 ## Supersession / coordination
 
-- **`full-repo-review/` FR-8 (`docs/plan/full-repo-review/findings/FR-8_practitioner-devex.md`)**
+- **`full-repo-review/` FR-8 (`docs/archive/plan/full-repo-review/findings/FR-8_practitioner-devex.md`)**
   — the job-type → surface/model routing guide. `fixed-overhead/` FIX-1 touches the same
   practitioner-experience surface; cross-check FR-8 before moving protocol text so the two do
   not contradict each other on which model runs what.

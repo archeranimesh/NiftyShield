@@ -1,6 +1,6 @@
 # Paper P&L Golden Test Addition — Story
 
-**Source:** `docs/plan/full-repo-review/findings/FR-7_synthesis.md`, FR-7 row 13 (ERROR) — FR-5 PNL-1.
+**Source:** `docs/archive/plan/full-repo-review/findings/FR-7_synthesis.md`, FR-7 row 13 (ERROR) — FR-5 PNL-1.
 
 ## T1
 

@@ -35,7 +35,7 @@ content, and rebases onto FIX-3.
 
 - Epic `README.md` — the Baseline section (from `measurement/` MEAS-2) is the number every
   task here quotes its delta against. Read it.
-- `docs/plan/full-repo-review/findings/FR-8_practitioner-devex.md` — the surface/model
+- `docs/archive/plan/full-repo-review/findings/FR-8_practitioner-devex.md` — the surface/model
   routing guide; FIX-1 must not contradict it when moving protocol text.
 - `.claude/skills/session-close/SKILL.md` — read fully before FIX-3.
 - Whichever module you trim in FIX-2: that module's current `CLAUDE.md` and its code, to

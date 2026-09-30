@@ -1,8 +1,8 @@
 Read `CONTEXT.md` and state `CONTEXT.md ✓` before doing anything else. Then read `docs/plan/full-repo-review-followups/telegram-approval-auth-fix/tasks.md` and find the first unchecked box. That is
 your **only task** for this session. Do not look at any other unchecked item. One task. Complete it fully. Stop.
 
-**Origin:** Spawned from `docs/plan/full-repo-review/findings/FR-7_synthesis.md` (Chairman Synthesis), FR-7 row 9 (ERROR) — FR-6 S-2. Independently re-verified against the live repo before this story
-was created — see FR-9's commit message for the verification method.
+**Origin:** Spawned from `docs/archive/plan/full-repo-review/findings/FR-7_synthesis.md` (Chairman Synthesis), FR-7 row 9 (ERROR) — FR-6 S-2. Independently re-verified against the live repo before
+this story was created — see FR-9's commit message for the verification method.
 
 The Telegram callback auth guard for approving/rejecting real trading decisions uses OR logic where it should use AND — any member of a group chat the bot is ever added to could approve/reject real
 trading decisions. Currently masked only by 1:1-DM topology living in the deployer's head, not enforced in code.

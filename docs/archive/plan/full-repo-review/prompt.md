@@ -1,4 +1,4 @@
-Read `CONTEXT.md` and state `CONTEXT.md ✓` before doing anything else. Then read `docs/plan/full-repo-review/tasks.md` and find the first unchecked box. That is your **only task** for this session. Do
+Read `CONTEXT.md` and state `CONTEXT.md ✓` before doing anything else. Then read `docs/archive/plan/full-repo-review/tasks.md` and find the first unchecked box. That is your **only task** for this session. Do
 not look at any other unchecked item. One task. Complete it fully. Stop.
 
 **Operating philosophy for this entire epic — read this before any task, every time:** Animesh and Claude are co-invested in NiftyShield's outcome, not in a client/vendor or grader/gradee
@@ -60,7 +60,7 @@ does not otherwise cover. Do not skip this even if nothing comes to mind; write 
 self-reported gaps — a persona that every single task says "none identified" for is itself a signal the panel may be too narrow or the prompt too leading.
 
 **Output contract:** FR-0 runs first and creates the `findings/` directory, writing `findings/FR-0_model-validation-pilot.md`. Each of FR-1 through FR-6 then writes one file to
-`docs/plan/full-repo-review/findings/<task-id>_<persona-slug>.md` — FR-1, FR-3, and FR-7 each check FR-0's recommendation before running, per the ordering note in `stories.md`. FR-7 reads all six
+`docs/archive/plan/full-repo-review/findings/<task-id>_<persona-slug>.md` — FR-1, FR-3, and FR-7 each check FR-0's recommendation before running, per the ordering note in `stories.md`. FR-7 reads all six
 (FR-1..FR-6) and writes `findings/FR-7_synthesis.md`. FR-8 (tooling/ Antigravity-handoff usage guide) reads FR-1's output specifically and writes `findings/FR-8_practitioner-devex.md`. FR-9 is the
 only task that edits files outside this folder, and only per its own spec. **Nothing appears in `findings/` until a task is actually run — this folder of prompts is a spec, not a job queue; no
 automation fires on its own.**
@@ -77,7 +77,7 @@ automation fires on its own.**
    Either way, the file landing at the right path is a manual step you must not skip after the model responds.
 
 Whichever mechanism is used, **the task is not complete until the file physically exists at the stated path** — a good response in a chat window that never gets saved to
-`docs/plan/full-repo-review/findings/` has produced nothing `tasks.md` can be ticked for.
+`docs/archive/plan/full-repo-review/findings/` has produced nothing `tasks.md` can be ticked for.
 
 **Test gate:** none of FR-1–FR-7 touch code, so no `pytest` run is required for them. FR-8 may add new story stubs to `docs/plan/` (docs only) — no code, so still no test gate.
 

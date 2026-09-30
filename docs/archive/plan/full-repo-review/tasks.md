@@ -1,7 +1,7 @@
 # Full Repo Review — Task Checklist
 
 > Find the first unchecked `- [ ]` line. That is your only task for this session. Tick the box and append `| SHA: <sha> | Model: <model used>` when done. Add one line to `TODOS.md`. Full spec + model
-> assignment + persona + prompt text for each task: `docs/plan/full-repo-review/stories.md`. FR-0 runs before everything — it validates whether Fable is actually worth its cost premium over Opus for
+> assignment + persona + prompt text for each task: `docs/archive/plan/full-repo-review/stories.md`. FR-0 runs before everything — it validates whether Fable is actually worth its cost premium over Opus for
 > this epic's three Fable-assigned tasks (FR-1, FR-3, FR-7), so the rest of the epic runs on a checked assumption rather than an untested one. FR-1 runs second even though it's a meta/protocol task,
 > not a content-review task — it has no dependency on any other task's output (beyond FR-0) and decides whether this epic's own process (including the co-investor "Operating philosophy" in
 > `prompt.md`) is sound before the other tasks execute under it. See `stories.md`'s ordering note for the full reasoning.

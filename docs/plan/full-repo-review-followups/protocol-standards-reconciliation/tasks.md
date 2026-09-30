@@ -12,4 +12,4 @@
 
 ---
 
-**Source:** `docs/plan/full-repo-review/findings/FR-7_synthesis.md`, FR-7 rows 4, 5, 11 (CRITICAL + ERROR) — FR-1 F-C1, F-C2, F-E1, F-E2, F-E3.
+**Source:** `docs/archive/plan/full-repo-review/findings/FR-7_synthesis.md`, FR-7 rows 4, 5, 11 (CRITICAL + ERROR) — FR-1 F-C1, F-C2, F-E1, F-E2, F-E3.

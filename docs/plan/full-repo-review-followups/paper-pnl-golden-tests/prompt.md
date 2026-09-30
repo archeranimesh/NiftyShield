@@ -1,8 +1,8 @@
 Read `CONTEXT.md` and state `CONTEXT.md ✓` before doing anything else. Then read `docs/plan/full-repo-review-followups/paper-pnl-golden-tests/tasks.md` and find the first unchecked box. That is your
 **only task** for this session. Do not look at any other unchecked item. One task. Complete it fully. Stop.
 
-**Origin:** Spawned from `docs/plan/full-repo-review/findings/FR-7_synthesis.md` (Chairman Synthesis), FR-7 row 13 (ERROR) — FR-5 PNL-1. Independently re-verified against the live repo before this
-story was created — see FR-9's commit message for the verification method.
+**Origin:** Spawned from `docs/archive/plan/full-repo-review/findings/FR-7_synthesis.md` (Chairman Synthesis), FR-7 row 13 (ERROR) — FR-5 PNL-1. Independently re-verified against the live repo before
+this story was created — see FR-9's commit message for the verification method.
 
 `_compute_leg_unrealized_pnl`'s targeted property-test file (`tests/unit/test_pnl_hypothesis.py`) has no golden (exact-value) assertion — only property-based (magnitude-preserving) tests, which pass
 even for a sign-flip bug. Currently mitigated one layer up by golden tests in `test_tracker.py`, but the unit closest to the math is not self-verifying.

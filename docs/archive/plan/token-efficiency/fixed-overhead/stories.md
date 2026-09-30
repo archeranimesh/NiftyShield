@@ -19,7 +19,7 @@
 - `.claude/skills/protocol-reference/` — any supporting file the skill splits out
 
 **Before any code:**
-- Read `CLAUDE.md` in full and `docs/plan/full-repo-review/findings/FR-8_practitioner-devex.md`.
+- Read `CLAUDE.md` in full and `docs/archive/plan/full-repo-review/findings/FR-8_practitioner-devex.md`.
 - `ls .claude/skills/` and read one existing `SKILL.md` for the house format.
 - Run `token_audit.py` on 2–3 recent sessions and note the current `project_docs` bucket
   number — that is the before figure.

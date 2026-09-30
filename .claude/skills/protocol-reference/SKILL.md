@@ -93,7 +93,7 @@ Step 2b.
 | Completed council decisions | `docs/council/YYYY-MM-DD_<topic>.md` |
 | Antigravity operating protocol | `ANTIGRAVITY.md` |
 | Claude–Antigravity workflow division | `docs/antigravity/ai_collaboration_plan.md` |
-| Which surface (Claude Code / Cowork / Antigravity) + model to use, by job type | `docs/plan/full-repo-review/findings/FR-8_practitioner-devex.md` |
+| Which surface (Claude Code / Cowork / Antigravity) + model to use, by job type | `docs/archive/plan/full-repo-review/findings/FR-8_practitioner-devex.md` |
 
 ---
 
@@ -106,7 +106,7 @@ Antigravity may have authored uncommitted or recently committed code. Review it 
 `REVIEW.md`.
 
 - Workflow division by phase: `docs/antigravity/ai_collaboration_plan.md`
-- Job-type → surface/model routing: `docs/plan/full-repo-review/findings/FR-8_practitioner-devex.md`
+- Job-type → surface/model routing: `docs/archive/plan/full-repo-review/findings/FR-8_practitioner-devex.md`
 
 ### Handoff prompt — the four mandatory elements
 
@@ -135,7 +135,7 @@ Antigravity's scope ceiling is 3–5 files; beyond 5, decompose into sub-phases 
 
 ## §4 — Rules for any review or handoff
 
-Promoted from the full-repo-review epic per its FR-1 finding that these three generalize beyond the epic itself (`docs/plan/full-repo-review/findings/FR-1_protocol-reviewer.md` Step 5).
+Promoted from the full-repo-review epic per its FR-1 finding that these three generalize beyond the epic itself (`docs/archive/plan/full-repo-review/findings/FR-1_protocol-reviewer.md` Step 5).
 
 1. **Rate severity by mission impact, not by finding volume.** Severity is tied to actual business impact (does this expose capital, does this cost a real decision-quality point) — not to how many
    findings make a review look thorough. A padded list of INFO-level nitpicks is as useless as a review that rubber-stamps everything.

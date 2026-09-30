@@ -16,8 +16,8 @@ load-bearing check — that `commit_sha` matches `git log --oneline -1`. If all 
 fix session with the failure details per Step 3b — if the fix needs the `code-reviewer`/`test-runner` AutoTrigger gates, run those yourself in Claude Code rather than re-handing to Antigravity (FR-1
 F-C1: Antigravity cannot spawn those subagents).
 
-**Origin:** Spawned from `docs/plan/full-repo-review/findings/FR-7_synthesis.md` (Chairman Synthesis), FR-7 row 2 (CRITICAL) — FR-6 S-4. Independently re-verified against the live repo before this
-story was created — see FR-9's commit message for the verification method.
+**Origin:** Spawned from `docs/archive/plan/full-repo-review/findings/FR-7_synthesis.md` (Chairman Synthesis), FR-7 row 2 (CRITICAL) — FR-6 S-4. Independently re-verified against the live repo before
+this story was created — see FR-9's commit message for the verification method.
 
 No backup mechanism of any kind exists for `data/portfolio/portfolio.sqlite` — the single store of record for all trade history, paper P&L, approvals, and risk state. Confirmed: no `backup` reference
 anywhere in `scripts/`, no crontab entry, no doc. The DB also sits on a FUSE-artifact-littered mount, raising torn-copy risk for any naive `cp`-based backup.

@@ -16,8 +16,8 @@ load-bearing check — that `commit_sha` matches `git log --oneline -1`. If all 
 fix session with the failure details per Step 3b — if the fix needs the `code-reviewer`/`test-runner` AutoTrigger gates, run those yourself in Claude Code rather than re-handing to Antigravity (FR-1
 F-C1: Antigravity cannot spawn those subagents).
 
-**Origin:** Spawned from `docs/plan/full-repo-review/findings/FR-7_synthesis.md` (Chairman Synthesis), FR-7 row 7 (CRITICAL) — FR-4 §1. Independently re-verified against the live repo before this
-story was created — see FR-9's commit message for the verification method.
+**Origin:** Spawned from `docs/archive/plan/full-repo-review/findings/FR-7_synthesis.md` (Chairman Synthesis), FR-7 row 7 (CRITICAL) — FR-4 §1. Independently re-verified against the live repo before
+this story was created — see FR-9's commit message for the verification method.
 
 Confirmed: 21 files under `src/` use bare `logging.getLogger(__name__)` instead of `structlog.get_logger(__name__)` (`src/paper/track_snapshot.py`, `src/paper/overlay_selector.py`,
 `src/paper/tracker.py`, `src/mf/nav_fetcher.py`, `src/mf/tracker.py`, `src/models/portfolio.py`, `src/backtest/bhavcopy_ingest.py`, `src/backtest/bhavcopy_loader.py`, `src/backtest/vix_ingest.py`,

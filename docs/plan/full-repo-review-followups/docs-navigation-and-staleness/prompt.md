@@ -15,8 +15,8 @@ load-bearing check — that `commit_sha` matches `git log --oneline -1`. If all 
 fix session with the failure details per Step 3b — if the fix needs the `code-reviewer`/`test-runner` AutoTrigger gates, run those yourself in Claude Code rather than re-handing to Antigravity (FR-1
 F-C1: Antigravity cannot spawn those subagents).
 
-**Origin:** Spawned from `docs/plan/full-repo-review/findings/FR-7_synthesis.md` (Chairman Synthesis), FR-7 rows 3, 8, 14 (CRITICAL + ERROR) — FR-3 F1, FR-1 F-E6/F12a/F12b, FR-3 F5, FR-3.1 F10, FR-3
-F2. Independently re-verified against the live repo before this story was created — see FR-9's commit message for the verification method.
+**Origin:** Spawned from `docs/archive/plan/full-repo-review/findings/FR-7_synthesis.md` (Chairman Synthesis), FR-7 rows 3, 8, 14 (CRITICAL + ERROR) — FR-3 F1, FR-1 F-E6/F12a/F12b, FR-3 F5, FR-3.1
+F10, FR-3 F2. Independently re-verified against the live repo before this story was created — see FR-9's commit message for the verification method.
 
 Three converging staleness issues in the docs layer, all root-caused by FR-7 row 15 (docs/plan/README.md not in Step 5a's mandatory update list): (1) `docs/plan/README.md`'s status table shows
 `dev-foundation`, `council-refactor`, `paper-backbone`, `ic-nifty-v2` as "Not started" when DECISIONS.md and `docs/archive/plan/` confirm all four are shipped/archived. (2) `docs/council/README.md`

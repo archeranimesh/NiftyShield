@@ -1,8 +1,8 @@
 Read `CONTEXT.md` and state `CONTEXT.md ✓` before doing anything else. Then read `docs/plan/full-repo-review-followups/suppression-hygiene-triage/tasks.md` and find the first unchecked box. That is
 your **only task** for this session. Do not look at any other unchecked item. One task. Complete it fully. Stop.
 
-**Origin:** Spawned from `docs/plan/full-repo-review/findings/FR-7_synthesis.md` (Chairman Synthesis), FR-7 row 10 (ERROR, downgraded from FR-4's CRITICAL per FR-7 divergence D2) — FR-4 §3, §4.
-Independently re-verified against the live repo before this story was created — see FR-9's commit message for the verification method.
+**Origin:** Spawned from `docs/archive/plan/full-repo-review/findings/FR-7_synthesis.md` (Chairman Synthesis), FR-7 row 10 (ERROR, downgraded from FR-4's CRITICAL per FR-7 divergence D2) — FR-4 §3,
+§4. Independently re-verified against the live repo before this story was created — see FR-9's commit message for the verification method.
 
 26/26 `# type: ignore` and 80/89 `# noqa` suppressions lack the explanatory comment REVIEW.md's meta-rule mandates; 2 literal `assert`s exist in `src/` (G6 violation); 183 `except Exception` sites are
 only partially audited (10+ confirmed bare, no intent comment). FR-4 rated this CRITICAL per the letter of the rule; FR-7's chairman downgrades to ERROR because most bare `E402`/`F401` codes are

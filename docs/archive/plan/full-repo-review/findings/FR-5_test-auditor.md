@@ -130,7 +130,7 @@ the Greeks themselves. Upstox's own `option_greeks.delta` value is treated as gr
 spot/strike/IV/DTE/rate and checking Upstox's reported value is within tolerance). If Upstox's Greeks feed has a sign error, a stale-IV bug, or a unit mismatch (e.g. theta per-day vs per-year) on
 their side, nothing in this repo's test suite would catch it — the fixture *is* the (uninspected) ground truth.
 
-**Cross-reference with FR-2:** `docs/plan/full-repo-review/findings/FR-2_quant-reviewer.md` Finding 7 independently confirms the same gap ("No golden-value test exists anywhere for a
+**Cross-reference with FR-2:** `docs/archive/plan/full-repo-review/findings/FR-2_quant-reviewer.md` Finding 7 independently confirms the same gap ("No golden-value test exists anywhere for a
 Black-Scholes-derived Greek") and additionally notes it is the reason two other FR-2 findings (financial-logic errors) went undetected until manual ground-truth reconciliation — FR-2 rates the absence
 itself **WARNING** (absence of a test is not itself a wrong result) while treating the *downstream* undetected errors as the higher-severity findings. This review rates GREEKS-1 **CRITICAL** because
 it is scoped to "is the correctness-checking test missing for financial logic" per the FR-5 rating rubric, not to whether the absence has yet produced a known bad number in production — the two
