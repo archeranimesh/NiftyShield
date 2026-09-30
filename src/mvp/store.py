@@ -12,6 +12,8 @@ from src.mvp.models import (
     Category,
     CategoryStats,
     ClosePickResult,
+    CorporateAction,
+    CorporateActionType,
     MVPSnapshot,
     Pick,
     PickStatus,
@@ -121,6 +123,26 @@ class MVPStore:
                 """
             )
             conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS mvp_corporate_actions (
+                    action_id     TEXT PRIMARY KEY,
+                    symbol        TEXT NOT NULL,
+                    ex_date       TEXT NOT NULL,
+                    action_type   TEXT NOT NULL,
+                    new_shares    INTEGER NOT NULL CHECK (new_shares > 0),
+                    old_shares    INTEGER NOT NULL CHECK (old_shares > 0),
+                    source        TEXT NOT NULL,
+                    notes         TEXT,
+                    created_at    TEXT NOT NULL,
+                    UNIQUE (symbol, ex_date, action_type)
+                )
+                """
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_mvp_ca_symbol "
+                "ON mvp_corporate_actions (symbol, ex_date)"
+            )
+            conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_mvp_snapshots_pick "
                 "ON mvp_snapshots (pick_id, captured_at)"
             )
@@ -151,6 +173,75 @@ class MVPStore:
                     provider.created_at,
                 ),
             )
+
+    def add_corporate_action(self, action: CorporateAction) -> None:
+        """Insert a corporate action.
+
+        Args:
+            action: The event to persist.
+
+        Raises:
+            ValueError: If an action with the same ``(symbol, ex_date,
+                action_type)`` already exists (idempotency guard).
+        """
+        try:
+            with connect(self.db_path) as conn:
+                conn.execute(
+                    """
+                    INSERT INTO mvp_corporate_actions
+                        (action_id, symbol, ex_date, action_type, new_shares,
+                         old_shares, source, notes, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        action.action_id,
+                        action.symbol,
+                        action.ex_date,
+                        action.action_type.value,
+                        action.new_shares,
+                        action.old_shares,
+                        action.source,
+                        action.notes,
+                        action.created_at,
+                    ),
+                )
+        except sqlite3.IntegrityError as exc:
+            raise ValueError(
+                f"Corporate action already exists: {action.symbol} "
+                f"{action.ex_date} {action.action_type.value}"
+            ) from exc
+
+    def get_corporate_actions(self, symbol: str | None = None) -> list[CorporateAction]:
+        """List corporate actions ordered by ``(symbol, ex_date)``.
+
+        Args:
+            symbol: If given, only actions for this symbol (case-insensitive).
+
+        Returns:
+            The matching actions.
+        """
+        query = "SELECT * FROM mvp_corporate_actions"
+        params: tuple[str, ...] = ()
+        if symbol is not None:
+            query += " WHERE symbol = ?"
+            params = (symbol.upper(),)
+        query += " ORDER BY symbol, ex_date"
+        with connect(self.db_path) as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [
+            CorporateAction(
+                action_id=r["action_id"],
+                symbol=r["symbol"],
+                ex_date=r["ex_date"],
+                action_type=CorporateActionType(r["action_type"]),
+                new_shares=r["new_shares"],
+                old_shares=r["old_shares"],
+                source=r["source"],
+                notes=r["notes"],
+                created_at=r["created_at"],
+            )
+            for r in rows
+        ]
 
     def get_provider(self, slug: str) -> Provider | None:
         """Fetch a provider by slug.

@@ -714,3 +714,62 @@ def test_close_truncated_id_closes_and_unknown_errors(tmp_path: Path, capsys) ->
     with pytest.raises(SystemExit):
         _close(store, argparse.Namespace(pick_id="deadbeef", price=50.0))
     assert "Closed" in capsys.readouterr().out
+
+
+def _ca_args(**over: Any) -> argparse.Namespace:
+    base: dict[str, Any] = dict(
+        symbol="bectorfood",
+        ex_date="2025-12-15",
+        type="split",
+        new=5,
+        old=1,
+        source="manual: test",
+        notes=None,
+    )
+    base.update(over)
+    return argparse.Namespace(**base)
+
+
+def test_corporate_action_cli_add_list_round_trip(tmp_path: Path, capsys) -> None:
+    from scripts.mvp import _corporate_action_add, _corporate_action_list
+
+    store = MVPStore(tmp_path / "ca.db")
+    store.init_db()
+    _corporate_action_add(store, _ca_args())
+    _corporate_action_list(store, argparse.Namespace(symbol=None))
+    out = capsys.readouterr().out
+    assert "BECTORFOOD | 2025-12-15 | SPLIT | 5:1" in out
+
+
+def test_corporate_action_cli_rejects_duplicate_and_bad_shares(tmp_path: Path) -> None:
+    from scripts.mvp import _corporate_action_add
+
+    store = MVPStore(tmp_path / "ca.db")
+    store.init_db()
+    _corporate_action_add(store, _ca_args())
+    with pytest.raises(SystemExit):
+        _corporate_action_add(store, _ca_args())
+    with pytest.raises(SystemExit):
+        _corporate_action_add(store, _ca_args(ex_date="2025-12-16", new=0))
+    assert len(store.get_corporate_actions()) == 1
+
+
+def test_corporate_action_cli_rejects_bare_ratio() -> None:
+    from scripts.mvp import build_parser
+
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(
+            [
+                "corporate-action",
+                "add",
+                "X",
+                "--ex-date",
+                "2025-12-15",
+                "--type",
+                "split",
+                "--ratio",
+                "1:5",
+                "--source",
+                "s",
+            ]
+        )

@@ -6,7 +6,16 @@ from pathlib import Path
 
 import pytest
 
-from src.mvp.models import Category, MVPSnapshot, Pick, PickStatus, Provider, ProviderSource
+from src.mvp.models import (
+    Category,
+    CorporateAction,
+    CorporateActionType,
+    MVPSnapshot,
+    Pick,
+    PickStatus,
+    Provider,
+    ProviderSource,
+)
 from src.mvp.store import MVPStore
 
 
@@ -667,3 +676,51 @@ def test_get_category_high_low_forward_fills_unsampled_picks(tmp_path: Path) -> 
 
     # 21st: a only, 0%; 22nd: 240000/200000 = +20%; 23rd: (90000+120000)/200000 = +5%
     assert store.get_category_high_low("cat-1") == (Decimal("20"), Decimal("0"))
+
+
+def _make_action(
+    symbol: str = "BECTORFOOD",
+    ex_date: str = "2025-12-15",
+    action_id: str = "ca-1",
+    new_shares: int = 5,
+    old_shares: int = 1,
+) -> CorporateAction:
+    return CorporateAction(
+        action_id=action_id,
+        symbol=symbol,
+        ex_date=ex_date,
+        action_type=CorporateActionType.SPLIT,
+        new_shares=new_shares,
+        old_shares=old_shares,
+        source="manual: test",
+        created_at="2026-09-30T00:00:00Z",
+    )
+
+
+def test_corporate_action_round_trip(tmp_path: Path) -> None:
+    store = MVPStore(tmp_path / "t.db")
+    store.init_db()
+    store.add_corporate_action(_make_action())
+    store.add_corporate_action(_make_action(symbol="UCOBANK", action_id="ca-2"))
+    assert [a.symbol for a in store.get_corporate_actions()] == ["BECTORFOOD", "UCOBANK"]
+    got = store.get_corporate_actions("bectorfood")
+    assert len(got) == 1 and got[0].new_shares == 5 and got[0].action_type.value == "SPLIT"
+
+
+def test_corporate_action_duplicate_rejected(tmp_path: Path) -> None:
+    store = MVPStore(tmp_path / "t.db")
+    store.init_db()
+    store.add_corporate_action(_make_action())
+    with pytest.raises(ValueError, match="already exists"):
+        store.add_corporate_action(_make_action(action_id="ca-other"))
+
+
+@pytest.mark.parametrize("new,old", [(0, 1), (5, 0), (-1, 1)])
+def test_corporate_action_invalid_shares_rejected(new: int, old: int) -> None:
+    with pytest.raises(ValueError):
+        _make_action(new_shares=new, old_shares=old)
+
+
+def test_corporate_action_invalid_ex_date_rejected() -> None:
+    with pytest.raises(ValueError):
+        _make_action(ex_date="15-12-2025")

@@ -14,6 +14,8 @@ Usage:
     python -m scripts.mvp summary [-p <provider_slug>] [-c <category_slug>]
     python -m scripts.mvp summary <SYMBOL>
     python -m scripts.mvp stats
+    python -m scripts.mvp corporate-action add <SYMBOL> --ex-date YYYY-MM-DD --type <split|bonus|consolidation> --new N --old N --source TEXT [--notes TEXT]
+    python -m scripts.mvp corporate-action list [--symbol SYMBOL]
 """
 
 from __future__ import annotations
@@ -29,7 +31,15 @@ from scripts.lookup.instrument_lookup import DEFAULT_BOD_PATH
 from src.instruments.lookup import InstrumentLookup
 from src.mvp.analytics import compute_category_returns, compute_category_volatility
 from src.mvp.backfill import fetch_historical_closes
-from src.mvp.models import Category, Pick, PickStatus, Provider, ProviderSource
+from src.mvp.models import (
+    Category,
+    CorporateAction,
+    CorporateActionType,
+    Pick,
+    PickStatus,
+    Provider,
+    ProviderSource,
+)
 from src.mvp.store import MVPStore
 
 DB_PATH = Path("data/portfolio/portfolio.sqlite")
@@ -319,6 +329,42 @@ def _backfill(store: MVPStore, args: argparse.Namespace) -> None:
         print("Pick not found after backfill.")
 
 
+def _corporate_action_add(store: MVPStore, args: argparse.Namespace) -> None:
+    try:
+        action = CorporateAction(
+            action_id=str(uuid.uuid4()),
+            symbol=args.symbol.upper(),
+            ex_date=args.ex_date,
+            action_type=CorporateActionType(args.type.upper()),
+            new_shares=args.new,
+            old_shares=args.old,
+            source=args.source,
+            notes=args.notes,
+            created_at=_now(),
+        )
+        store.add_corporate_action(action)
+    except ValueError as exc:
+        print(f"✗ {exc}")
+        sys.exit(1)
+    print(
+        f"✓ Corporate action added: {action.symbol} {action.action_type.value} "
+        f"{action.new_shares} for {action.old_shares} ex {action.ex_date}"
+    )
+
+
+def _corporate_action_list(store: MVPStore, args: argparse.Namespace) -> None:
+    actions = store.get_corporate_actions(args.symbol)
+    if not actions:
+        print("No corporate actions.")
+        return
+    print("SYMBOL | EX_DATE | TYPE | NEW:OLD | SOURCE")
+    for a in actions:
+        print(
+            f"{a.symbol} | {a.ex_date} | {a.action_type.value} | "
+            f"{a.new_shares}:{a.old_shares} | {a.source}"
+        )
+
+
 def _pnl_and_return(pick: Pick, ltp_map: dict[str, Decimal] | None = None) -> tuple[str, str]:
     """Compute display strings for P&L and return% on a pick.
 
@@ -593,6 +639,25 @@ def build_parser() -> argparse.ArgumentParser:
         "stats", help="Blended return + inflow-corrected volatility per provider/category."
     )
     stats_parser.set_defaults(func=_stats)
+
+    ca_parser = subparsers.add_parser("corporate-action", help="Manage corporate actions.")
+    ca_sub = ca_parser.add_subparsers(dest="ca_command", required=True)
+
+    ca_add = ca_sub.add_parser("add", help="Record a split/bonus/consolidation.")
+    ca_add.add_argument("symbol")
+    ca_add.add_argument("--ex-date", required=True, help="First trading day on new basis.")
+    ca_add.add_argument(
+        "--type", required=True, choices=["split", "bonus", "consolidation"], type=str.lower
+    )
+    ca_add.add_argument("--new", type=int, required=True, help="Shares held AFTER.")
+    ca_add.add_argument("--old", type=int, required=True, help="Shares held BEFORE.")
+    ca_add.add_argument("--source", required=True)
+    ca_add.add_argument("--notes", default=None)
+    ca_add.set_defaults(func=_corporate_action_add)
+
+    ca_list = ca_sub.add_parser("list", help="List corporate actions.")
+    ca_list.add_argument("--symbol", default=None)
+    ca_list.set_defaults(func=_corporate_action_list)
 
     return parser
 
