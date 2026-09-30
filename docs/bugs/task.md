@@ -35,6 +35,8 @@
 
 > BUG-038 closed 2026-09-30 (SHA `acd8181`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
+> BUG-040 closed 2026-09-30 (SHA `50a5ce4` + `680778b`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
+
 ## BUG-060 — Expired paper overlay legs are never settled or closed
 
 Detail: `docs/bugs/bugs.md` BUG-060. Settle-price source decision comes first.
@@ -102,17 +104,6 @@ Design ruled by council 2026-09-25 (`docs/council/2026-09-25_mvp-corporate-actio
 - [ ] **B042.5** — Tests: one 400/entity-parse regression test per fixed caller (or one for `send()`'s default-escape path); no network.
 - [ ] **B042.6** — Suite green + real `@code-reviewer` clean; one manual live send per fixed entrypoint (or user-confirmed next cron run lands).
 - [ ] **B042.7** — Flip `bugs.md` BUG-042 status to ✅ Fixed + SHA; move both sections to `docs/archive/bugs/{bugs,task}.md`.
-
-## BUG-040 — signals `_fetch_prev_ohlc` crash: `get_ohlc` shape is fictional + `1d` `prev_ohlc` null intraday
-
-- [x] **B040.1** — Scratch-verify (read-only) the three candidate endpoints and survey how other NIFTY strategies source daily OHLC — `scratch/data_probes/2026-09-08_signals_ohlc_probe.py`. Decide the
-  fix's data source. | SHA `5efb464`
-- [x] **B040.2** — Implemented `get_historical_candles_sync` + async delegation; v2 day-candle form. | SHA `50a5ce4` + `680778b`
-- [x] **B040.3** — Rewrote `_fetch_prev_ohlc` onto `get_historical_candles` (positional-list rows, prev-session guard). | SHA `50a5ce4` + `680778b`
-- [x] **B040.4** — Replaced stale `{"ohlc": {...}}` fixtures; added fetcher + guard tests. | SHA `50a5ce4` + `680778b`
-- [x] **B040.5** — Flipped `src/client/CLAUDE.md` row; `get_ohlc` marked unused (kept, docstrings corrected). | SHA `50a5ce4`
-- [ ] **B040.6** — Suite green (3322) + real `@code-reviewer` clean (0 CRITICAL/ERROR). Blocked on live host: one manual `python -m scripts.morning_signal` run (logs + Telegram).
-- [ ] **B040.7** — Flip `bugs.md` BUG-040 status to ✅ Fixed + SHA; move both sections to `docs/archive/bugs/{bugs,task}.md`; `TODOS.md` session-log line. Then S5.5 rollout walkthrough can resume.
 
 ## BUG-037 — `mark_trade_closed()` also never wired into CSP/IC v1/v2 close paths (54 stale flat legs)
 
