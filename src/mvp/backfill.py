@@ -5,6 +5,7 @@ Reads M0's ingested equity Parquet (``data/offline/equity_ohlcv/``) — no live 
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -14,7 +15,8 @@ import pyarrow.parquet as pq
 import structlog
 
 from src.market_calendar.holidays import is_trading_day
-from src.mvp.models import MVPSnapshot, PickStatus
+from src.mvp.adjustment import adjust_level
+from src.mvp.models import CorporateAction, MVPSnapshot, PickStatus
 
 if TYPE_CHECKING:
     from src.mvp.models import Pick
@@ -116,13 +118,20 @@ def fetch_historical_index_closes(
 
 
 def enter_backfill_pick(
-    pick: Pick, equity_closes: dict[date, Decimal]
+    pick: Pick,
+    equity_closes: dict[date, Decimal],
+    actions: Sequence[CorporateAction] = (),
 ) -> tuple[date, Decimal] | None:
     """Determine the entry date and price for a past backfilled pick.
 
     The rule: scan trading days after reco_date in ascending order and enter
     at the first day's CLOSE that exceeds reco_price. If no such day exists
     in the provided equity_closes, the pick stays PENDING (returns None).
+
+    ``equity_closes`` are raw (unadjusted) bhavcopy closes, so each day's raw
+    close is compared to ``reco_price`` restated to that day's price basis
+    (``reco_price / M(reco_date, day)``) using the symbol's corporate
+    ``actions``. The returned price is the raw close on the entry day.
     """
     if pick.reco_price is None:
         return None
@@ -131,7 +140,7 @@ def enter_backfill_pick(
 
     for candidate_date in sorted(d for d in equity_closes if d > reco_date):
         close = equity_closes[candidate_date]
-        if close > pick.reco_price:
+        if close > adjust_level(pick.reco_price, actions, reco_date, candidate_date):
             return (candidate_date, close)
 
     return None
@@ -159,10 +168,12 @@ def run_backfill(
     pick = store.get_pick(pick_id)
     if not pick:
         return
+    actions = store.get_corporate_actions(pick.symbol)
+    pick_date = date.fromisoformat(pick.pick_date[:10])
 
     entry_date: date | None = None
     if pick.status == PickStatus.PENDING:
-        entry = enter_backfill_pick(pick, equity_closes)
+        entry = enter_backfill_pick(pick, equity_closes, actions)
         if not entry:
             return
         entry_date, entry_price = entry
@@ -218,15 +229,17 @@ def run_backfill(
         )
         store.record_snapshot(snapshot)
 
-        # Check for auto-exit
+        # Check for auto-exit against levels restated to this day's price basis
+        target = adjust_level(pick.target_price, actions, pick_date, current_date)
+        stop_loss = adjust_level(pick.stop_loss, actions, pick_date, current_date)
         terminal_status = None
-        if pick.target_price is not None and close_price >= pick.target_price:
+        if target is not None and close_price >= target:
             terminal_status = PickStatus.TARGET_HIT
-        elif pick.stop_loss is not None and close_price <= pick.stop_loss:
+        elif stop_loss is not None and close_price <= stop_loss:
             terminal_status = PickStatus.SL_HIT
 
         if terminal_status is not None:
-            store.close_pick(pick_id, close_price, terminal_status)
+            store.close_pick(pick_id, close_price, terminal_status, as_of=current_date)
             break
 
         current_date += timedelta(days=1)
