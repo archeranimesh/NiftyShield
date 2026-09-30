@@ -28,9 +28,11 @@ load_dotenv()
 
 from src.client.factory import create_client  # noqa: E402
 from src.config import settings  # noqa: E402
+from src.mvp.detection import detect_overnight_gap, format_gap_warning  # noqa: E402
 from src.mvp.models import (  # noqa: E402
     CategoryStats,
     ClosePickResult,
+    CorporateAction,
     MVPSnapshot,
     Pick,
     PickStatus,
@@ -54,6 +56,46 @@ from src.utils.logging import setup_logging  # noqa: E402
 
 _SCRIPT_NAME = "scripts.mvp_watch"
 logger = structlog.get_logger(_SCRIPT_NAME)
+
+
+def _gap_interlock(
+    store: MVPStore,
+    picks: list[Pick],
+    ltp_map: dict[str, Decimal],
+    actions_by_symbol: dict[str, list[CorporateAction]],
+    today: date,
+) -> tuple[set[str], list[str]]:
+    """Ratio-match interlock: suppress SL/target evaluation on a split-like gap.
+
+    Stateless: each tick re-derives the verdict from the prior session's last
+    snapshot and today's earliest one, so suppression holds for the whole day
+    (and until an action row covering the gap is recorded). The Telegram
+    warning is emitted only on the first tick of the day (no snapshot dated
+    ``today`` yet). Never inserts a corporate-action row.
+
+    Returns:
+        ``(suppressed pick_ids, warning messages for first-tick matches)``.
+    """
+    suppressed: set[str] = set()
+    warnings: list[str] = []
+    for pick in picks:
+        ltp = ltp_map.get(pick.instrument_key) if pick.instrument_key else None
+        if ltp is None:
+            continue
+        snaps = store.get_snapshots(pick.pick_id, limit=50)
+        match = detect_overnight_gap(snaps, today, ltp, actions_by_symbol.get(pick.symbol, []))
+        if match is None:
+            continue
+        suppressed.add(pick.pick_id)
+        logger.warning(
+            "mvp_watch.gap_interlock",
+            pick_id=pick.pick_id,
+            symbol=pick.symbol,
+            pattern=match.label,
+        )
+        if not any(s.captured_at[:10] == today.isoformat() for s in snaps):
+            warnings.append(format_gap_warning(pick.symbol, match))
+    return suppressed, warnings
 
 
 async def run() -> None:
@@ -85,6 +127,21 @@ async def run() -> None:
     broker = create_client(settings.upstox_env)
     ltp_map = await broker.get_ltp(list(keyed_picks))
 
+    # Interlock must read prior snapshots BEFORE this tick's snapshot is recorded.
+    actions_by_symbol = {
+        symbol: actions
+        for symbol in {p.symbol for p in keyed_picks.values()}
+        if (actions := await asyncio.to_thread(store.get_corporate_actions, symbol))
+    }
+    suppressed, gap_warnings = await asyncio.to_thread(
+        _gap_interlock,
+        store,
+        list(keyed_picks.values()),
+        ltp_map,
+        actions_by_symbol,
+        datetime.now(timezone.utc).date(),
+    )
+
     now = datetime.now(timezone.utc).isoformat()
     for instrument_key, pick in keyed_picks.items():
         ltp = ltp_map.get(instrument_key)
@@ -102,12 +159,8 @@ async def run() -> None:
 
     picks_by_id: dict[str, Pick] = {pick.pick_id: pick for pick in keyed_picks.values()}
 
-    actions_by_symbol = {
-        symbol: actions
-        for symbol in {p.symbol for p in keyed_picks.values()}
-        if (actions := await asyncio.to_thread(store.get_corporate_actions, symbol))
-    }
-    events = check_prices(list(keyed_picks.values()), ltp_map, actions_by_symbol)
+    evaluable = [p for p in keyed_picks.values() if p.pick_id not in suppressed]
+    events = check_prices(evaluable, ltp_map, actions_by_symbol)
     close_results: dict[str, ClosePickResult] = {}
     for event in events:
         close_results[event.pick_id] = await asyncio.to_thread(
@@ -126,6 +179,8 @@ async def run() -> None:
 
     notifier = build_notifier()
     if notifier is not None:
+        for warning in gap_warnings:
+            await notifier.send(escape_markdown(warning))
         providers = await asyncio.to_thread(store.list_providers)
         provider_names = {provider.provider_id: provider.display_name for provider in providers}
         categories = []
