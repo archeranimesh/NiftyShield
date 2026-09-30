@@ -286,6 +286,45 @@ def test_closed_position_prints_closed_message(tmp_path: Path) -> None:
     assert "closed" in out or "net qty" in out
 
 
+# ── BUG-062: closing insert flips paper_trades rows to CLOSED ─────────────────
+
+
+def _close_args(qty: str, extra: list[str] | None = None) -> list[str]:
+    return [
+        "--strategy", _STRATEGY, "--leg", _LEG, "--key", _KEY, "--date", _DATE,
+        "--close", "--qty", qty, "--price", "60.00", "--no-dry-run",
+    ] + (extra or [])  # fmt: skip
+
+
+def _states(db: Path) -> list[str]:
+    return [t.state.value for t in PaperStore(db).get_trades(_STRATEGY)]
+
+
+def test_full_close_marks_all_rows_closed(tmp_path: Path) -> None:
+    db = tmp_path / "db.sqlite"
+    _run(_base_args("SELL") + ["--no-dry-run"], db)
+    code, _, err = _run(_close_args(_QTY), db)
+    assert code == 0, f"stderr: {err}"
+    assert _states(db) == ["CLOSED", "CLOSED"]
+
+
+def test_partial_close_leaves_rows_open(tmp_path: Path) -> None:
+    db = tmp_path / "db.sqlite"
+    _run(_base_args("SELL") + ["--no-dry-run"], db)
+    code, _, err = _run(_close_args("25"), db)
+    assert code == 0, f"stderr: {err}"
+    assert _states(db) == ["OPEN", "OPEN"]
+
+
+def test_dry_run_close_leaves_rows_open(tmp_path: Path) -> None:
+    db = tmp_path / "db.sqlite"
+    _run(_base_args("SELL") + ["--no-dry-run"], db)
+    args = [a for a in _close_args(_QTY) if a != "--no-dry-run"]
+    code, _, err = _run(args, db)
+    assert code == 0, f"stderr: {err}"
+    assert _states(db) == ["OPEN"]
+
+
 # ── Chain mode ────────────────────────────────────────────────────────────────
 
 
