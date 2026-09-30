@@ -8,6 +8,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from src.db import connect
+from src.mvp.adjustment import Fill, adjusted_pick
 from src.mvp.models import (
     Category,
     CategoryStats,
@@ -500,7 +501,67 @@ class MVPStore:
                 (*values, pick_id),
             )
 
-    def close_pick(self, pick_id: str, close_price: Decimal, status: PickStatus) -> ClosePickResult:
+    def get_fills(self, pick: Pick) -> list[Fill]:
+        """Fills backing a pick's position, each on its own raw price basis.
+
+        Uses filled ``mvp_tranches`` rows when present. Otherwise the M-A
+        lump-sum fill (``avg_cost`` x ``total_qty``) is dated by the pick's
+        earliest snapshot (the entry day for backfilled picks; the first
+        watch tick after entry for live picks), falling back to ``pick_date``.
+
+        Args:
+            pick: The pick whose fills are wanted.
+
+        Returns:
+            Fills in ascending fill-date order; empty when nothing is filled.
+        """
+        with connect(self.db_path) as conn:
+            rows = conn.execute(
+                """
+                SELECT fill_price, qty, filled_at FROM mvp_tranches
+                WHERE pick_id = ? AND fill_price IS NOT NULL AND qty IS NOT NULL
+                  AND filled_at IS NOT NULL
+                ORDER BY filled_at
+                """,
+                (pick.pick_id,),
+            ).fetchall()
+            first_snap = conn.execute(
+                "SELECT MIN(captured_at) AS c FROM mvp_snapshots WHERE pick_id = ?",
+                (pick.pick_id,),
+            ).fetchone()
+        if rows:
+            return [
+                Fill(Decimal(r["fill_price"]), r["qty"], date.fromisoformat(r["filled_at"][:10]))
+                for r in rows
+            ]
+        if pick.avg_cost is None or not pick.total_qty:
+            return []
+        stamp = first_snap["c"] if first_snap and first_snap["c"] else pick.pick_date
+        return [Fill(pick.avg_cost, pick.total_qty, date.fromisoformat(stamp[:10]))]
+
+    def get_adjusted_pick(self, pick: Pick, as_of: date | None = None) -> Pick:
+        """Read-time view of ``pick`` on the ``as_of`` price basis.
+
+        Args:
+            pick: The stored (raw) pick.
+            as_of: Evaluation date; defaults to today (UTC).
+
+        Returns:
+            ``pick`` unchanged when its symbol has no corporate actions.
+        """
+        actions = self.get_corporate_actions(pick.symbol)
+        if not actions:
+            return pick
+        as_of = as_of or datetime.now(timezone.utc).date()
+        return adjusted_pick(pick, actions, as_of, self.get_fills(pick))
+
+    def close_pick(
+        self,
+        pick_id: str,
+        close_price: Decimal,
+        status: PickStatus,
+        as_of: date | None = None,
+    ) -> ClosePickResult:
         """Close a pick, setting ``closed_at``, ``close_price``, ``status``, and
         ``realized_pnl``.
 
@@ -513,6 +574,9 @@ class MVPStore:
             close_price: The price at which the pick was closed.
             status: The terminal status (``TARGET_HIT``, ``SL_HIT``, or
                 ``MANUAL_CLOSE``).
+            as_of: Basis date of ``close_price`` (defaults to today, UTC).
+                ``avg_cost``/``total_qty`` are restated to this basis via
+                the symbol's corporate actions before computing P&L.
 
         Returns:
             The computed ``realized_pnl`` plus ``total_qty``/``deployed_capital``/
@@ -527,6 +591,8 @@ class MVPStore:
             raise ValueError(f"close_pick requires a terminal status, got {status}")
 
         now = datetime.now(timezone.utc).isoformat()
+        stored = self.get_pick(pick_id)
+        basis = self.get_adjusted_pick(stored, as_of) if stored is not None else None
         with connect(self.db_path) as conn:
             row = conn.execute(
                 "SELECT avg_cost, total_qty, deployed_capital FROM mvp_recommendations"
@@ -537,11 +603,11 @@ class MVPStore:
             total_qty = 0
             deployed_capital = Decimal("0")
             avg_cost: Decimal | None = None
-            if row is not None:
-                total_qty = row["total_qty"]
+            if row is not None and basis is not None:
+                total_qty = basis.total_qty
                 deployed_capital = Decimal(row["deployed_capital"])
-                if row["avg_cost"] is not None:
-                    avg_cost = Decimal(row["avg_cost"])
+                if basis.avg_cost is not None:
+                    avg_cost = basis.avg_cost
                     realized_pnl = (
                         close_price * (1 - COST_BPS / Decimal("10000")) - avg_cost
                     ) * total_qty

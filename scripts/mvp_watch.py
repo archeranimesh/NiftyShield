@@ -102,7 +102,12 @@ async def run() -> None:
 
     picks_by_id: dict[str, Pick] = {pick.pick_id: pick for pick in keyed_picks.values()}
 
-    events = check_prices(list(keyed_picks.values()), ltp_map)
+    actions_by_symbol = {
+        symbol: actions
+        for symbol in {p.symbol for p in keyed_picks.values()}
+        if (actions := await asyncio.to_thread(store.get_corporate_actions, symbol))
+    }
+    events = check_prices(list(keyed_picks.values()), ltp_map, actions_by_symbol)
     close_results: dict[str, ClosePickResult] = {}
     for event in events:
         close_results[event.pick_id] = await asyncio.to_thread(
