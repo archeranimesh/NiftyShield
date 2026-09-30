@@ -242,22 +242,22 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
     ): "untracked gap - not named in any MD-*/ROLL-* task",
     (
         "scripts/strategies/three_track/paper_3track_snapshot.py",
-        1400,
-    ): "ROLL-15/16 area - not itself named, untracked gap. Line moved from 1401 -> 1400 by ORD-2's edit.",
+        1417,
+    ): "ROLL-15/16 area - not itself named, untracked gap. Line moved from 1400 -> 1417 by BUG-061's edit.",
     (
         "scripts/strategies/three_track/paper_3track_snapshot.py",
-        1426,
-    ): "ROLL-15/16 area - not itself named, untracked gap. Line moved from 1427 -> 1426 by ORD-2's edit.",
+        1443,
+    ): "ROLL-15/16 area - not itself named, untracked gap. Line moved from 1426 -> 1443 by BUG-061's edit.",
     (
         "scripts/strategies/three_track/paper_3track_snapshot.py",
-        1547,
-    ): "untracked gap - not named in any MD-*/ROLL-* task. Line moved from 1548 -> 1547 by ORD-2's edit.",
+        1566,
+    ): "untracked gap - not named in any MD-*/ROLL-* task. Line moved from 1547 -> 1566 by BUG-061's edit.",
     ("scripts/dev/paper_track_snapshot.py", 171): (
         "value escaped inside callee build_proxy_critical_alert() — guard inspects enclosing function only"
     ),
-    ("scripts/strategies/three_track/paper_3track_snapshot.py", 2020): (
+    ("scripts/strategies/three_track/paper_3track_snapshot.py", 2039): (
         "value escaped inside callee build_proxy_critical_alert() — guard inspects enclosing "
-        "function only. Line moved from 2017 -> 2020 by ORD-3's edit."
+        "function only. Line moved from 2020 -> 2039 by BUG-061's edit."
     ),
     ("scripts/morning_signal.py", 181): (
         "S5.5c — value is fully escaped inside the callee _format_signal_notification() "
@@ -282,12 +282,12 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "but this guard only inspects the immediate enclosing function (_close_position), "
         "not the builder it calls."
     ),
-    ("scripts/strategies/three_track/paper_3track_snapshot.py", 2066): (
+    ("scripts/strategies/three_track/paper_3track_snapshot.py", 2085): (
         "ORD-3 - digest body is wrapped as a single MarkdownV2 fenced code block inside "
         "the callee _build_recovery_digest() (fence content is literal, no per-line/whole-"
         "string escape_markdown needed — same shape as the scripts/signal_eod.py:440 "
         "entry), but this guard only inspects the immediate enclosing function (_run), "
-        "not the builder it calls. Line moved from 2063 -> 2066 by ORD-3's edit."
+        "not the builder it calls. Line moved from 2066 -> 2085 by BUG-061's edit."
     ),
     ("scripts/record/record_paper_trade.py", 775): (
         "UEM-2 - heuristic limitation, not a real gap: the card is built by "
@@ -359,14 +359,13 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "MD-3-audited line 359 it replaced — that hand-built, pre-escaped string was "
         "removed by UXM-6's migration onto format_exit_message()."
     ),
-    ("scripts/mvp_watch.py", 148): ("untracked gap - not named in any MD-*/ROLL-* task"),
-    ("scripts/mvp_watch.py", 155): (
+    # mvp_watch.run's alert and hourly-summary sends (formerly lines 148/155, now ~208/218) are
+    # no longer listed: BUG-054's gap-warning send added an escape_markdown() call to run(), and the
+    # guard credits every send in a function that calls an escaping helper. They are NOT verified
+    # escaped - the guard is simply blind to them now (BUG-042 follow-up).
+    ("scripts/mvp_watch.py", 293): (
         "untracked gap - not named in any MD-*/ROLL-* task. New call site from "
-        "e7cdda0's live EOD summary wiring."
-    ),
-    ("scripts/mvp_watch.py", 230): (
-        "untracked gap - not named in any MD-*/ROLL-* task. New call site from "
-        "e7cdda0's live EOD summary wiring."
+        "e7cdda0's live EOD summary wiring. Line moved from 230 -> 293 by BUG-054's edit."
     ),
 }
 
