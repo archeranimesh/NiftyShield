@@ -1019,3 +1019,6 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
   realized P&L into `inception_pct` (relative to total capital ever deployed in the category). Also fixed a sibling bug from a prior uncommitted session (`7cf7820`) —
   `date.fromisoformat(pick.pick_date)` crashed on datetime-format `pick_date` strings in `enter_backfill_pick`/`run_backfill`/`mvp_watch.py`'s close-alert `held_days`; sliced to `[:10]` in all three
   call sites, plus added `fetch_historical_index_closes` for M0-ingested NIFTY index Parquet. `docs/plan/mvp/` next: **M13.2**.
+- [2026-09-30] IC v1 monthly entry incident triaged (docs only) — monitor tick raced the 4-leg entry and auto-closed the lone short put on a stale `original_entry_credit`; entry then compensated the
+  other legs. Ops recovery: all IC books flat, bogus 8 `paper_trades` + 6 `paper_exit_events` rows deleted (backup taken), v1 monthly re-entered 12:01. Filed BUG-057 (race), BUG-058 (silent
+  duplicate-insert skip / alert wording), BUG-059 (close card DTE 0 + float prices) in `docs/bugs/`; nothing implemented. Weekly and v2 monthly books were closed and not re-entered.

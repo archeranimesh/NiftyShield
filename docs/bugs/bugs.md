@@ -12,6 +12,79 @@
 
 ---
 
+## BUG-057 — IC entry builds the 4-leg basket while the monitor is live; a half-built basket is scored against the previous cycle's stale `original_entry_credit` and fires a false `LOSS_STOP`
+
+| Field | Value |
+|---|---|
+| Severity | **High** — auto-closes a real position mid-entry, the entry script then compensates the other legs, and the cycle is lost (paper-only today; live-money path if IC ever goes live) |
+| Status | 🔴 Open |
+| Discovered | 2026-09-30 — `paper_ic_nifty_v1_monthly` 10:30 cron entry; Telegram `1/4 legs NOT persisted: short_put` |
+| Location | `scripts/strategies/ic/paper_ic_entry.py` + `_v2.py` (`set_original_entry_credit`, after the leg loop); `src/strategy/ic_nifty_v1.py` LOSS_STOP ~L365-430 |
+
+**Symptom:** the entry recorded `short_put` SELL @72.75 at 10:30:20; the monitor tick at 10:30:22 (`logs/monitor_daemon.log`) evaluated a lone short put, fired `LOSS_STOP`, `CLOSE_FULL` dispatched,
+and `ic_close_executor` bought the put back @72.55 (`paper_trades` id 369, notes `ic_nifty_v1 auto-close: CLOSE_FULL`). The entry script kept recording the remaining three legs, its post-run
+verification saw `short_put` net qty 0, reported it "NOT persisted", and compensated the three legs it had opened. End state flat, no naked exposure, no cycle. Both jobs started together only because
+the laptop woke from sleep and cron caught up — but the monitor ticks every ~30s all day and the basket takes ~26s to build, so the window exists on every entry.
+
+**Root cause (mechanism confirmed from code + log; the stale value itself is inferred):** `ic_nifty_v1.py` scores `LOSS_STOP` as `combined_mark / entry_credit >= loss_stop_pct` (2.0×) and prefers the
+persisted `paper_strategies.original_entry_credit` over the recomputed credit (BUG-021). The entry script writes the new cycle's credit only after all four leg subprocesses return, so throughout the
+build the column still holds the **previous** cycle's net credit. Prior cycle (2026-09-23) net credit was 44.975 − 22.175 + 21.90 − 8.975 = 35.725; the lone short put marked 72.5 → 72.5 / 35.725 =
+2.03 ≥ 2.0 → `LOSS_STOP`. The overwritten column value can't be re-read now (it holds today's 53.85), hence "inferred", but the arithmetic reproduces the trigger exactly.
+
+**Fix (recommended, not yet implemented):** in both entry scripts, clear `original_entry_credit` (set to NULL) *before* the leg subprocesses run, so `ic_nifty_v1` falls back to the recompute path
+(lone short put: mark ≈ credit → ratio ≈ 1.0, no stop) until the new credit is written. Smallest change, no monitor edit, no new lock. Alternatives considered: an `entry_in_progress` marker the
+monitor honours (more robust against other partial-state signals, but needs a schema column, a stale-marker timeout, and a monitor change); a "skip combined signals unless 4 legs open" guard in the
+strategy (rejected — legitimate partial closes such as `CLOSE_CALL_SPREAD` leave 2 legs and must keep their loss stop). Council checkpoint (CLAUDE.md Step 2b) not warranted: one defensible approach,
+cheap to reverse.
+
+**Cross-refs:** BUG-058 (the misleading alert this race produced), BUG-021 (why the persisted credit is preferred).
+
+---
+
+## BUG-058 — `record_paper_trade` silently skips duplicate inserts (prints "position closed", exits 0); entry alert conflates "never recorded" with "closed by another actor"
+
+| Field | Value |
+|---|---|
+| Severity | **Medium** — misleading operator signal; caused ~1h of misdiagnosis on 2026-09-30 |
+| Status | 🔴 Open |
+| Discovered | 2026-09-30 — see BUG-057; and the 11:31 re-entry attempt |
+| Location | `scripts/record/record_paper_trade.py` (~L1063-1092); `src/paper/store.py::record_trade`; `scripts/strategies/ic/paper_ic_entry.py` + `_v2.py` verification |
+
+**Symptom A (silent skip):** `paper_trades` is unique on (`strategy_name`, `leg_role`, `instrument_key`, `trade_date`, `action`) and `record_trade` uses an ignore-on-conflict insert returning
+`rowcount == 1`. A same-day re-entry into the same strikes (11:31 retry picked the identical 51309/51287/51392/51418) inserts nothing; `record_paper_trade` then falls through to
+`store.get_position(...)`, sees net 0 and prints `<strategy> / <leg>: position closed (net qty = 0)` and exits 0 — indistinguishable from a genuine close. The parent's verification catches it
+(`legs_not_persisted`, all four legs) but the child logs nothing that says "duplicate skipped".
+
+**Symptom B (alert wording):** verification only tests `get_position(...).net_qty == 0`, so a leg that *was* recorded and then closed by the monitor (BUG-057) is reported as "NOT persisted". The alert
+should say which case it is.
+
+**Fix (not yet implemented):** (1) when `record_trade` returns False, `record_paper_trade` prints an explicit `SKIPPED: duplicate (strategy, leg, key, date, action)` to stderr and exits non-zero on
+the non-dry-run entry path (check `--close` callers first — an idempotent re-run of a close may rely on exit 0); (2) entry verification distinguishes "no trade rows for the leg today" from "opened and
+since closed" using trade history, and the alert text names the case and, for the latter, the closer (`notes`). Same-day re-entry after a manual unwind remains blocked by the unique constraint — that
+is a deliberate ledger invariant, out of scope here; the runbook should say so.
+
+---
+
+## BUG-059 — IC v1 close card shows `DTE: 0` for a 27-DTE position and formats prices through `float`
+
+| Field | Value |
+|---|---|
+| Severity | **Low** — cosmetic/reporting, but money is passing through `float` (violates the Decimal-for-money rule) |
+| Status | 🔴 Open — one hypothesis needs a repro test before the fix is scoped |
+| Discovered | 2026-09-30 — close card for the mid-entry auto-close (see BUG-057) |
+| Location | `src/strategy/ic_nifty_v1.py` ~L836-885 (`CloseLegRow(entry=float(entry), exit=float(exit_price))`, `dte = ... if expiry is not None else 0`) |
+
+**Symptom:** the card read `DTE: 0`, entry/exit `72.8` / `72.5` for actual `72.75` / `72.55` (2-decimal figures on the cycle line of the same card were right).
+
+**Root cause (partly confirmed):** *Price rounding — confirmed:* `float(entry)`/`float(exit_price)` are built into `CloseLegRow`; 72.55 as a float is 72.5499…, so a one-decimal format gives 72.5 where
+Decimal half-even/half-up gives 72.6. *DTE — hypothesis:* `dte` falls back to `0` when `expiry is None`, and `expiry` is derived from `positions` via `_parse_expiry`; if `positions` is the post-close
+(empty) list, every close card reports `DTE: 0`. Not yet checked which list is passed — needs a unit test that closes a leg and asserts the card's DTE before anything is changed.
+
+**Fix (not yet implemented):** carry `Decimal` through `CloseLegRow` and format with an explicit quantize; derive DTE from the closed trades' instrument keys rather than the (possibly empty) open
+list.
+
+---
+
 ## BUG-056 [MOVED] — see `docs/archive/bugs/bugs.md` (closed 2026-09-29, SHA `2c17a85`)
 
 ## BUG-055 [MOVED] — see `docs/archive/bugs/bugs.md` (closed 2026-09-29, SHA `6e6b6aa`)

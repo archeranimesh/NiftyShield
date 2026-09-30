@@ -25,6 +25,29 @@
 
 > BUG-053 closed 2026-09-24 (SHA `1042312`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
+## BUG-057 — IC entry races the monitor: half-built basket scored against stale `original_entry_credit`
+
+Detail: `docs/bugs/bugs.md` BUG-057 (root cause, recommended fix, alternatives rejected).
+
+- [ ] **B057.1** — Repro test: strategy with a stale `original_entry_credit` and only one open leg emits `LOSS_STOP`; same state with the credit cleared does not. (`tests/unit/strategy/`)
+- [ ] **B057.2** — `paper_ic_entry.py` and `paper_ic_entry_v2.py` clear `original_entry_credit` before the leg subprocesses run; new credit still written after. Tests: cleared before first leg,
+  restored after success, left NULL on failure.
+
+## BUG-058 — Silent duplicate-insert skip in `record_paper_trade`; entry verification/alert conflates "never recorded" with "closed by another actor"
+
+Detail: `docs/bugs/bugs.md` BUG-058.
+
+- [ ] **B058.1** — `record_paper_trade` reports a skipped duplicate insert explicitly (stderr `SKIPPED: duplicate ...`) and exits non-zero on the non-dry-run open path; audit `--close` callers first.
+- [ ] **B058.2** — Entry verification separates "no trade rows today" from "opened then closed" via trade history; alert text names the case and the closer. Tests for both branches in v1 and v2.
+
+## BUG-059 — IC v1 close card: `DTE: 0` and float price formatting
+
+Detail: `docs/bugs/bugs.md` BUG-059. Repro-test the DTE hypothesis first.
+
+- [ ] **B059.1** — Failing test: close card DTE for a closed 27-DTE leg (confirms or kills the empty-`positions` hypothesis).
+- [ ] **B059.2** — Carry `Decimal` through `CloseLegRow`; quantize explicitly when formatting; derive DTE from the closed trades' keys. Tests: 72.55 renders per the formatter's rounding rule, DTE
+  correct.
+
 ## BUG-054 — MVP tracker has no stock-split/corporate-action adjustment for entry/target/SL prices
 
 Design ruled by council 2026-09-25 (`docs/council/2026-09-25_mvp-corporate-actions.md`, unanimous): read-time `mvp_corporate_actions` event ledger, not in-place rebase. Full detail:
