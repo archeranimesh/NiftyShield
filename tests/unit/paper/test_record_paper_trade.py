@@ -286,6 +286,35 @@ def test_closed_position_prints_closed_message(tmp_path: Path) -> None:
     assert "closed" in out or "net qty" in out
 
 
+# ── BUG-058: duplicate insert is reported, not silently swallowed ─────────────
+
+
+def test_duplicate_open_reports_skipped_and_exits_nonzero(tmp_path: Path) -> None:
+    db = tmp_path / "db.sqlite"
+    _run(_base_args("SELL") + ["--no-dry-run"], db)
+    code, out, err = _run(_base_args("SELL") + ["--no-dry-run"], db)
+    assert code == 1
+    assert "SKIPPED: duplicate" in err
+    assert "position closed" not in out
+    assert len(PaperStore(db).get_trades(_STRATEGY)) == 1
+
+
+def test_first_open_still_exits_zero(tmp_path: Path) -> None:
+    code, _, err = _run(_base_args("SELL") + ["--no-dry-run"], tmp_path / "db.sqlite")
+    assert code == 0, f"stderr: {err}"
+    assert "SKIPPED" not in err
+
+
+def test_duplicate_close_reports_skipped_but_exits_zero(tmp_path: Path) -> None:
+    """--close re-runs stay idempotent (exit 0) but are no longer silent."""
+    db = tmp_path / "db.sqlite"
+    _run(_base_args("SELL") + ["--no-dry-run"], db)
+    _run(_close_args(_QTY), db)
+    code, _, err = _run(_close_args(_QTY), db)
+    assert code == 0, f"stderr: {err}"
+    assert "SKIPPED: duplicate" in err
+
+
 # ── BUG-062: closing insert flips paper_trades rows to CLOSED ─────────────────
 
 

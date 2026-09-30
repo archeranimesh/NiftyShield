@@ -39,6 +39,7 @@ from scripts.strategies.ic.ic_entry_gates import (
     _post_expiry_gate,
     capture_entry_margin,
     check_duplicate,
+    describe_missing_legs,
     make_gate_violation,
     resolve_expiry,
     resolve_ivr,
@@ -632,20 +633,23 @@ async def run() -> None:
                 subprocess_detail = (
                     f"Leg subprocess failed ({subprocess_error}). " if subprocess_error else ""
                 )
+                missing_desc = (
+                    describe_missing_legs(store, strategy_name, legs, missing_legs, date.today())
+                    if missing_legs
+                    else ""
+                )
                 if not persisted_legs:
-                    detail = f"{subprocess_detail}No legs were persisted — nothing to compensate."
+                    detail = f"{subprocess_detail}{missing_desc} No open legs — nothing to compensate."
                 elif compensation_failed:
                     detail = (
-                        f"{subprocess_detail}{len(missing_legs)}/4 legs NOT persisted: "
-                        f"{', '.join(missing_legs)}. Compensation FAILED for "
+                        f"{subprocess_detail}{missing_desc} Compensation FAILED for "
                         f"{', '.join(compensation_failed)} — MANUAL INTERVENTION REQUIRED, "
                         f"naked exposure remains on those legs. "
                         f"Compensated OK: {', '.join(compensated) or 'none'}."
                     )
                 else:
                     detail = (
-                        f"{subprocess_detail}{len(missing_legs)}/4 legs NOT persisted: "
-                        f"{', '.join(missing_legs)}. Compensating closes succeeded for all "
+                        f"{subprocess_detail}{missing_desc} Compensating closes succeeded for all "
                         f"{len(persisted_legs)} already-persisted legs "
                         f"({', '.join(compensated) or 'none'}) — no naked exposure remains."
                     )

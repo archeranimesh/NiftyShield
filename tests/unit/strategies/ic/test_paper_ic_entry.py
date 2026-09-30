@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from datetime import date
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -1422,3 +1423,78 @@ async def test_gate_alert_blanket_escaping():
 
         # The dynamic value is the strategy name: paper_ic_nifty_v1_monthly
         assert "paper\\_ic\\_nifty\\_v1\\_monthly" in sent_msg
+
+
+# ---------------------------------------------------------------------------
+# BUG-058 — verification separates "never recorded" from "opened then closed"
+# ---------------------------------------------------------------------------
+
+
+def _bug058_trades(mock_subprocess, closed: bool):
+    """Build a get_trades side_effect from the entry subprocess commands."""
+    from src.paper.models import PaperTrade
+
+    def _get_trades(strategy_name, leg_role=None):
+        if not closed:
+            return []
+        for call in mock_subprocess.call_args_list:
+            cmd = call.args[0]
+            if cmd[cmd.index("--leg") + 1] != leg_role:
+                continue
+            action = cmd[cmd.index("--action") + 1]
+            common = dict(
+                strategy_name=strategy_name,
+                leg_role=leg_role,
+                instrument_key=cmd[cmd.index("--key") + 1],
+                trade_date=date.today(),
+                quantity=65,
+                price=Decimal("20.0"),
+            )
+            return [
+                PaperTrade(action=action, **common),
+                PaperTrade(
+                    action="BUY" if action == "SELL" else "SELL",
+                    notes="monitor stop loss hit",
+                    **common,
+                ),
+            ]
+        return []
+
+    return _get_trades
+
+
+async def _bug058_run(argv0, expiry, mock_store, mock_subprocess, closed: bool):
+    mock_store.get_position.return_value = PaperPosition(
+        strategy_name="paper_ic_nifty_v1_weekly",
+        leg_role="mock_leg",
+        net_qty=0,
+        avg_cost=Decimal("0"),
+        avg_sell_price=Decimal("0"),
+        instrument_key="NSE_FO|MOCK",
+    )
+    mock_store.get_trades.side_effect = _bug058_trades(mock_subprocess, closed)
+    argv = [argv0, "--expiry-type", expiry, "--no-dry-run", "--bod-path", "dummy.json"]
+    with patch.object(sys, "argv", argv), pytest.raises(SystemExit) as excinfo:
+        await run()
+    assert excinfo.value.code == 1
+
+
+@pytest.mark.asyncio
+async def test_bug058_never_recorded_alert_names_case(
+    mock_vix_data, mock_store, mock_lookup, mock_market_client, mock_subprocess, mock_telegram
+) -> None:
+    await _bug058_run("paper_ic_entry.py", "weekly", mock_store, mock_subprocess, closed=False)
+    sent_msg = mock_telegram.send_notification.call_args[0][0]
+    assert "no trade rows today" in sent_msg
+    assert "opened then CLOSED" not in sent_msg
+
+
+@pytest.mark.asyncio
+async def test_bug058_opened_then_closed_alert_names_closer(
+    mock_vix_data, mock_store, mock_lookup, mock_market_client, mock_subprocess, mock_telegram
+) -> None:
+    await _bug058_run("paper_ic_entry.py", "weekly", mock_store, mock_subprocess, closed=True)
+    sent_msg = mock_telegram.send_notification.call_args[0][0]
+    assert "opened then CLOSED" in sent_msg
+    assert "monitor stop loss hit" in sent_msg
+    assert "no trade rows today" not in sent_msg

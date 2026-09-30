@@ -1063,6 +1063,16 @@ def main() -> None:
 
     store = PaperStore(args.db_path)
     inserted = store.record_trade(trade)
+    if not inserted:
+        # BUG-058: unique (strategy, leg, key, date, action) hit — say so loudly.
+        print(
+            f"SKIPPED: duplicate ({trade.strategy_name}, {trade.leg_role}, "
+            f"{trade.instrument_key}, {trade.trade_date}, {trade.action.value}) "
+            "— nothing inserted",
+            file=sys.stderr,
+        )
+        if not args.close:
+            sys.exit(1)  # entry path: caller must not treat this as recorded
     if inserted:
         if ivr_at_entry is not None and ivr_at_entry < float(args.ivr_gate) and args.force_entry:
             try:
