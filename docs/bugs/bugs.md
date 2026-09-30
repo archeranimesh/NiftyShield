@@ -21,6 +21,10 @@
 | Discovered | 2026-09-30 — investigating a -45,001 Collar line (-565%) in the "NiftyBees vs overlays" digest |
 | Location | `paper_trades` lifecycle (no expiry-settlement path); `scripts/strategies/three_track/paper_3track_overlay_entry.py::_has_open_overlay_leg` (L1234) and its bootstrap gate (L1470) |
 
+**Current state (2026-09-30 EOD):** nothing implemented; the one expired collar put was closed by hand (trade 405). BUG-061's fix (`7b671db`) now keeps an unpriced leg from printing a fictitious loss,
+so this bug is no longer urgent for P&L display but still blocks collar re-entry and will recur at PP/CC expiries. **Next (2026-10-01, decision first):** B060.1 — choose the settlement price source,
+NSE final settle vs last recorded mark, then record it in `DECISIONS.md` before B060.2.
+
 **Symptom:** the collar put `NSE_FO|73994` (trade 178, BUY 65 @ 91.825 on 2026-08-12, expiry 2026-09-29) was still `OPEN` on 2026-09-30. Upstox returns no LTP for an expired contract, so every
 snapshot afterwards had nothing to mark. The 2026-09-30 10:30 `--auto-collar` cron logged `bootstrap_skipped overlay_type=collar leg_role=overlay_collar_put` because the expired put still counted as
 an open marker leg — the collar was not re-entered.
@@ -119,6 +123,11 @@ list.
 | Discovered | 2026-09-25 — pick `e30d0a11` (BECTORFOOD), `PENDING` since 2025-09-08, had a 1:5 split (record date 2025-12-12) — see Symptom below |
 | Location | `src/mvp/models.py` (`Pick`, `PickStatus`), `src/mvp/tracker.py::check_prices`, `src/mvp/store.py::update_pick` (PENDING→OPEN side effect) |
 | Council decision | [`docs/council/2026-09-25_mvp-corporate-actions.md`](../council/2026-09-25_mvp-corporate-actions.md) — see **Fix Design (council-ruled)** below |
+
+**Current state (2026-09-30 EOD):** B054.1–B054.7 are merged and tested (`ba73df5`…`2881db1`, code-reviewer clean). No corporate-action row exists in the live DB yet, so the watch interlock will
+suppress SL/target checks and warn on any split-sized overnight gap until one is added. **Next (2026-10-01, manual):** run `python -m scripts.dev.mvp_split_audit`, confirm each candidate externally
+(BECTORFOOD 1:5 needs its exact ex-date; UCOBANK stays a candidate until a real split is confirmed), then insert rows via `scripts.mvp corporate-action add`. Known gaps, not yet ticketed:
+`get_category_day_change`, `get_category_high_low` and `mvp list`/`summary` are not split-adjusted; a pick entered the day before an ex-date with no earlier snapshot is treated as filled post-split.
 
 **Symptom:** BECTORFOOD pick `e30d0a11` carries pre-split absolute levels (`entry_price=1418.0`, `target_price=2836.0`) from 2025-09-08. The underlying did a 1:5 split (record date 2025-12-12,
 https://www.angelone.in/news/stocks/mrs-bectors-food-specialities-1-5-stock-split-record-date-on-dec-12-what-you-need-to-know), so post-split LTP is ~1/5 of these levels. There is no mechanism
@@ -232,6 +241,11 @@ logic). Then standardise every close notification to two lines with fixed labels
 | Status | 🟡 Fix in progress — B042.1 (enumeration) and B042.4 (400 body logged, `84980a3`) done 2026-09-30; B042.2 fix-approach decision pending (council checkpoint). |
 | Discovered | 2026-09-09 |
 | Location | `src/notifications/telegram.py::TelegramNotifier.send` + unmigrated callers |
+
+**Current state (2026-09-30 EOD):** B042.1 and B042.4 done (`84980a3` logs the Telegram 400 body, so the next failure names its entity-parse offset). Still unescaped, so a live 400 is expected:
+`paper_3track_snapshot.py` (action/EXIT-WARN batch and the BUG-032 alerts, about 5 sites), `paper_3track_overlay_entry.py` bootstrap-failure alert, `mvp_watch.py` EOD send; these are the
+`_BASELINE_UNESCAPED` "untracked gap" entries. `mvp_watch.run`'s alert and summary sends are now hidden from the guard (callees do escape). **Next (2026-10-01, decision first):** B042.2 — recommended:
+per-caller escaping of those sites plus a one-shot retry in `send()` on a "can't parse entities" 400 with a loud log; then B042.3 and B042.5.
 
 **Severity detail:** multiple daily/weekly cron notifications have not reached Telegram on any trading day since 2026-08-25. Confirmed dead so far: covered-call entry (`logs/cc_entry.log`),
 protective-put entry (`logs/pp_entry.log`), paper snapshot 15:35 (`logs/paper_snapshot.log`), monitor daemon alerts (`logs/monitor_daemon.log`), pre-market brief 09:00 (`logs/pre_market_brief.log`).
