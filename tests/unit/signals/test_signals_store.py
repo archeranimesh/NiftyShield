@@ -1,3 +1,4 @@
+import json
 import sqlite3
 from datetime import date
 from decimal import Decimal
@@ -299,6 +300,20 @@ def test_get_recent_snapshots_fewer_rows_than_requested(store: SignalStore) -> N
     store.record_snapshot(_snapshot())
     got = store.get_recent_snapshots(5)
     assert len(got) == 1
+
+
+def test_get_recent_snapshots_loads_legacy_row_without_premiums(store: SignalStore) -> None:
+    """Rows stored before BUG-056 added ``premiums`` must still deserialize."""
+    legacy = json.loads(_snapshot().model_dump_json())
+    del legacy["option_chain"]["premiums"]
+    with connect(store.db_path) as conn:
+        conn.execute(
+            "INSERT INTO signal_inputs (trade_date, snapshot_json) VALUES (?, ?)",
+            ("2026-09-28", json.dumps(legacy)),
+        )
+    got = store.get_recent_snapshots(5)
+    assert len(got) == 1
+    assert got[0].option_chain.premiums == []
 
 
 def test_get_recent_snapshots_non_positive_n_returns_empty(store: SignalStore) -> None:

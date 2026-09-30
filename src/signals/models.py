@@ -4,7 +4,7 @@ from datetime import date
 from decimal import Decimal
 from enum import Enum
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class Direction(str, Enum):
@@ -57,7 +57,9 @@ class OptionChainSummary(BaseModel, frozen=True):
     # 2026-09-29). premiums carries CE/PE LTP for every permitted strike
     # (ATM-1, ATM, ATM+1) so the LLM can ground its premium estimate in a
     # real quote instead of guessing.
-    premiums: list[StrikePremium]  # ATM-1, ATM, ATM+1, ascending by strike
+    # Defaults to [] so signal_inputs rows stored before this field existed still load
+    # (get_recent_snapshots re-validates the last 5 for the VIX trend).
+    premiums: list[StrikePremium] = Field(default_factory=list)  # ATM-1, ATM, ATM+1, ascending
 
 
 class FIIData(BaseModel, frozen=True):
