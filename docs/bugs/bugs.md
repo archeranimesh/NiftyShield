@@ -12,6 +12,73 @@
 
 ---
 
+## BUG-060 — Expired paper overlay legs are never settled or closed; they stay `OPEN` in `paper_trades` after expiry and block the next bootstrap entry
+
+| Field | Value |
+|---|---|
+| Severity | **High** — an expired leg silently poisons P&L (BUG-061) and blocks collar re-entry; PP and CC will hit the same path at their own expiries |
+| Status | 🔴 Open |
+| Discovered | 2026-09-30 — investigating a -45,001 Collar line (-565%) in the "NiftyBees vs overlays" digest |
+| Location | `paper_trades` lifecycle (no expiry-settlement path); `scripts/strategies/three_track/paper_3track_overlay_entry.py::_has_open_overlay_leg` (L1234) and its bootstrap gate (L1470) |
+
+**Symptom:** the collar put `NSE_FO|73994` (trade 178, BUY 65 @ 91.825 on 2026-08-12, expiry 2026-09-29) was still `OPEN` on 2026-09-30. Upstox returns no LTP for an expired contract, so every
+snapshot afterwards had nothing to mark. The 2026-09-30 10:30 `--auto-collar` cron logged `bootstrap_skipped overlay_type=collar leg_role=overlay_collar_put` because the expired put still counted as
+an open marker leg — the collar was not re-entered.
+
+**Root cause:** nothing in the paper stack settles or closes a leg at expiry. `CCOverlayV1`/`PPOverlayV1`/`OverlayCloser` close only on their exit signals and roll thresholds; a leg that reaches
+expiry without triggering one just stops quoting. The collar put here was a put-only entry whose call was an existing `overlay_cc` on the same key (the `_validate_collar_pairs` dedup exemption), so
+both legs expired together with no signal on either side.
+
+**Manual repair applied (2026-09-30):** closing SELL recorded via `record_paper_trade` (trade 405, 65 @ 784.15, dated 2026-09-29, last expiry-day mark, not the official NSE settle), then
+`PaperStore.mark_trade_closed`. Snapshot re-run then wrote collar `pnl_1d_abs=0`, `pnl_inception_abs=45001.125`.
+
+**Fix (not yet implemented):** an expiry-settlement step run from the daily snapshot (or its own cron) that, for every `OPEN`/`DEFENDED` leg with expiry < today, records a closing trade at intrinsic
+value against the underlying's settlement price and calls `mark_trade_closed`. Decide first whether the settlement price comes from the NSE final settle (preferred, needs a source) or the last
+recorded mark. Repro test: an open leg with a past expiry ends flat and `CLOSED` after the step; a leg expiring today or later is untouched.
+
+---
+
+## BUG-061 — A missing LTP is persisted as a zero P&L leg snapshot and the 1-day overlay P&L is diffed against it, printing a fictitious loss
+
+| Field | Value |
+|---|---|
+| Severity | **High** — wrong P&L in the daily Telegram digest and in `paper_overlay_pnl_snapshots`, and today's bad row corrupts tomorrow's 1-day diff; same class as BUG-028's silent zero |
+| Status | 🔴 Open |
+| Discovered | 2026-09-30 — same investigation as BUG-060 |
+| Location | `scripts/strategies/three_track/paper_3track_snapshot.py::_compute_overlay_leg_totals` (L1436) / `_save_overlay_leg_snapshots`; `_compute_overlay_pnl_snapshots` (L1215) |
+
+**Symptom:** at 15:35:08 the snapshot logged `overlay_leg_totals.ltp_unavailable instrument_key=NSE_FO|73994 leg_role=overlay_collar_put` and saved the leg with `ltp=NULL`, `unrealized_pnl=0`,
+`total_pnl=0`. `_compute_overlay_pnl_snapshots` computes `pnl_1d_abs = today_total_pnl − prev_total_pnl` = `0 − 45,001.125`, so the collar row read `-45,001` and the digest showed `Collar -45001
+(-565%)` against NiftyBees `-7,972`. The other overlays and the base tracks were fine.
+
+**Root cause:** the missing-price path returns zero instead of "unknown", and the diff treats zero as a real observation. BUG-028 Phase 2 fixed this class only for a *missing snapshot row* (`None` vs
+`Decimal("0")`); a row present with a zeroed, price-less leg still reads as data.
+
+**Fix (not yet implemented):** when a leg's LTP is unavailable, do not write a zero snapshot: either skip the leg's row, or carry forward the previous mark and flag it stale, and make
+`_compute_overlay_pnl_snapshots` yield `None` (rendered "n/a" in the digest) instead of a diff against a priceless row. Tests: LTP-missing leg produces no fabricated loss; a leg with a real price is
+unchanged; the digest renders "n/a", not a percentage.
+
+---
+
+## BUG-062 — `record_paper_trade` records a closing trade but leaves the leg's `paper_trades` rows in state `OPEN`
+
+| Field | Value |
+|---|---|
+| Severity | **Medium** — closed legs keep reading as open marker legs to state-based gates; needs a manual `mark_trade_closed` per leg |
+| Status | 🔴 Open |
+| Discovered | 2026-09-30 — while repairing BUG-060 |
+| Location | `scripts/record/record_paper_trade.py` (no `mark_trade_closed` call) |
+
+**Symptom:** after `record_paper_trade --leg overlay_collar_put ... --action SELL --no-dry-run` reported `position closed (net qty = 0)`, trades 178 (BUY) and 405 (SELL) were both still
+`state='OPEN'`. Every other close path routes through `PaperStore.mark_trade_closed` (`cc_overlay_v1`, `pp_overlay_v1`, `overlay_closer`, `csp_roll_executor`, `ic_close_executor`,
+`paper_3track_roll`); a grep of `record_paper_trade.py` finds no call. This is the BUG-035 pattern on the one path that fix did not wire, and `backfill_mark_trade_closed_overlay` was written to repair
+exactly this state after the fact.
+
+**Fix (not yet implemented):** after a successful insert, when the resulting `get_position(...).net_qty == 0`, call `mark_trade_closed(strategy, leg_role, instrument_key)`. Tests: a closing insert
+flips both rows to `CLOSED`; a partial close leaves them `OPEN`; a dry run changes nothing. Note BUG-058's item to re-audit `--close` callers before changing exit codes applies to the same file.
+
+---
+
 ## BUG-057 — IC entry builds the 4-leg basket while the monitor is live; a half-built basket is scored against the previous cycle's stale `original_entry_credit` and fires a false `LOSS_STOP`
 
 | Field | Value |

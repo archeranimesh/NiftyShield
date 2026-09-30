@@ -1022,3 +1022,8 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
 - [2026-09-30] IC v1 monthly entry incident triaged (docs only) — monitor tick raced the 4-leg entry and auto-closed the lone short put on a stale `original_entry_credit`; entry then compensated the
   other legs. Ops recovery: all IC books flat, bogus 8 `paper_trades` + 6 `paper_exit_events` rows deleted (backup taken), v1 monthly re-entered 12:01. Filed BUG-057 (race), BUG-058 (silent
   duplicate-insert skip / alert wording), BUG-059 (close card DTE 0 + float prices) in `docs/bugs/`; nothing implemented. Weekly and v2 monthly books were closed and not re-entered.
+- [2026-09-30] Collar P&L anomaly triaged (`Collar -45001 (-565%)` in the overlays digest) — the collar put `NSE_FO|73994` expired 2026-09-29 but stayed `OPEN`, so the 15:35 snapshot had no LTP,
+  stored a zero P&L leg and diffed against it. Ops repair: closing SELL trade 405 at 784.15 (last expiry-day mark, not the official NSE settle) + `mark_trade_closed`, snapshot re-run gives collar 1d 0
+  / inception +45,001. Collar re-entry is the `--auto-collar` cron, next Wed 2026-10-07 10:30. Filed BUG-060 (no expiry settlement), BUG-061 (missing LTP → zero P&L), BUG-062 (`record_paper_trade`
+  leaves closed legs `OPEN`) in `docs/bugs/`; nothing implemented. Unconfirmed, not filed: `eod_summary` errors `strategy_id not mapped to a bucket: 'paper_signal_track_v1'` (also on 09-29);
+  `daily_snapshot` warns `NAV missing for 150799`; a new collar may add a second short call beside the open standalone CC.

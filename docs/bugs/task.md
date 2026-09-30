@@ -25,6 +25,28 @@
 
 > BUG-053 closed 2026-09-24 (SHA `1042312`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
+## BUG-060 — Expired paper overlay legs are never settled or closed
+
+Detail: `docs/bugs/bugs.md` BUG-060. Settle-price source decision comes first.
+
+- [ ] **B060.1** — Decide the settlement price source (NSE final settle vs last recorded mark) and record it in `DECISIONS.md`.
+- [ ] **B060.2** — Expiry-settlement step: every `OPEN`/`DEFENDED` leg with expiry < today gets a closing trade at intrinsic value and `mark_trade_closed`. Tests: expired leg ends flat and `CLOSED`; a
+  leg expiring today or later is untouched.
+
+## BUG-061 — Missing LTP persisted as a zero P&L snapshot; 1-day overlay P&L diffed against it
+
+Detail: `docs/bugs/bugs.md` BUG-061.
+
+- [ ] **B061.1** — Failing test: overlay leg with no LTP today and a real mark yesterday must not produce a fabricated 1-day loss. (`tests/unit/scripts/`)
+- [ ] **B061.2** — Skip or carry-forward-and-flag the price-less leg snapshot; `_compute_overlay_pnl_snapshots` returns `None` for it and the digest renders "n/a". Tests for both branches.
+
+## BUG-062 — `record_paper_trade` leaves closed legs in state `OPEN`
+
+Detail: `docs/bugs/bugs.md` BUG-062.
+
+- [ ] **B062.1** — Failing test: a closing insert that nets the position to 0 leaves both rows `OPEN` today. (`tests/unit/paper/test_record_paper_trade.py`)
+- [ ] **B062.2** — Call `mark_trade_closed` after a successful insert when the net position is 0. Tests: full close → `CLOSED`, partial close → `OPEN`, dry run → no change.
+
 ## BUG-057 — IC entry races the monitor: half-built basket scored against stale `original_entry_credit`
 
 Detail: `docs/bugs/bugs.md` BUG-057 (root cause, recommended fix, alternatives rejected).
