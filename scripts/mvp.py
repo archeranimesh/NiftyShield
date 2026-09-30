@@ -175,7 +175,28 @@ def _add(store: MVPStore, args: argparse.Namespace) -> None:
     print(f"✓ Pick added: {pick.pick_id[:8]} — {pick.symbol} (PENDING)")
 
 
+def _resolve_pick_id(store: MVPStore, prefix: str) -> str:
+    """Expand a full or truncated (``list``-style) pick_id to the full UUID.
+
+    Exits with a clear error on zero matches or an ambiguous prefix (listing
+    the candidates), so ``update``/``close`` never silently no-op.
+    """
+    picks = store.list_picks()
+    exact = [p for p in picks if p.pick_id == prefix]
+    matches = exact or [p for p in picks if p.pick_id.startswith(prefix)]
+    if not matches:
+        print(f"✗ No pick found matching id '{prefix}'.")
+        sys.exit(1)
+    if len(matches) > 1:
+        print(f"✗ Ambiguous pick id '{prefix}' matches {len(matches)} picks:")
+        for p in matches:
+            print(f"  {p.pick_id} — {p.symbol} ({p.status.value})")
+        sys.exit(1)
+    return matches[0].pick_id
+
+
 def _update(store: MVPStore, args: argparse.Namespace) -> None:
+    pick_id = _resolve_pick_id(store, args.pick_id)
     category_id = _resolve_category_id(store, args.provider, args.category)
     fields: dict[str, object] = {}
     if args.price is not None:
@@ -193,12 +214,13 @@ def _update(store: MVPStore, args: argparse.Namespace) -> None:
     if not fields:
         print("Nothing to update.")
         return
-    store.update_pick(args.pick_id, **fields)
+    store.update_pick(pick_id, **fields)
     print("✓ Updated.")
 
 
 def _close(store: MVPStore, args: argparse.Namespace) -> None:
-    store.close_pick(args.pick_id, Decimal(str(args.price)), PickStatus.MANUAL_CLOSE)
+    pick_id = _resolve_pick_id(store, args.pick_id)
+    store.close_pick(pick_id, Decimal(str(args.price)), PickStatus.MANUAL_CLOSE)
     print(f"✓ Closed at {args.price}.")
 
 

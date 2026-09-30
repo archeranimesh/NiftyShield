@@ -5,7 +5,16 @@ from typing import Any
 
 import pytest
 
-from scripts.mvp import _add, _backfill, _list, _summary_by_symbol, _summary_grouped
+from scripts.mvp import (
+    _add,
+    _backfill,
+    _close,
+    _list,
+    _resolve_pick_id,
+    _summary_by_symbol,
+    _summary_grouped,
+    _update,
+)
 from src.mvp.models import Category, Pick, PickStatus, Provider, ProviderSource
 from src.mvp.store import MVPStore
 
@@ -626,3 +635,82 @@ def test_backfill_create_path_guards_duplicate_pending(tmp_path: Path, monkeypat
     assert "--resume existing-pending-1" in captured.out
     picks = store.list_picks()
     assert len(picks) == 1
+
+
+_FULL_A = "0fa62dca-66f0-4135-a9f4-e5b5d4d41119"
+_FULL_B = "0fa62dcb-1111-4222-8333-444455556666"
+
+
+def _store_with_picks(tmp_path: Path) -> MVPStore:
+    store = MVPStore(tmp_path / "ids.db")
+    store.init_db()
+    for pid, sym in ((_FULL_A, "AAA"), (_FULL_B, "BBB")):
+        store.add_pick(
+            Pick(
+                pick_id=pid,
+                category_id=None,
+                symbol=sym,
+                pick_date="2024-01-01",
+                created_at="2024-01-01",
+                updated_at="2024-01-01",
+            )
+        )
+    return store
+
+
+def _update_args(pick_id: str) -> argparse.Namespace:
+    return argparse.Namespace(
+        pick_id=pick_id,
+        price=None,
+        reco_price=None,
+        target=123.0,
+        sl=None,
+        provider=None,
+        category=None,
+        notes=None,
+    )
+
+
+def test_resolve_pick_id_unique_prefix_and_full_uuid(tmp_path: Path) -> None:
+    store = _store_with_picks(tmp_path)
+    assert _resolve_pick_id(store, "0fa62dca") == _FULL_A
+    assert _resolve_pick_id(store, _FULL_A) == _FULL_A
+
+
+def test_resolve_pick_id_ambiguous_lists_candidates(tmp_path: Path, capsys) -> None:
+    store = _store_with_picks(tmp_path)
+    with pytest.raises(SystemExit):
+        _resolve_pick_id(store, "0fa62dc")
+    out = capsys.readouterr().out
+    assert "Ambiguous" in out and _FULL_A in out and _FULL_B in out
+
+
+def test_resolve_pick_id_nonexistent_errors(tmp_path: Path, capsys) -> None:
+    store = _store_with_picks(tmp_path)
+    with pytest.raises(SystemExit):
+        _resolve_pick_id(store, "deadbeef")
+    assert "No pick found" in capsys.readouterr().out
+
+
+def test_update_truncated_id_applies_to_full_pick(tmp_path: Path) -> None:
+    store = _store_with_picks(tmp_path)
+    _update(store, _update_args("0fa62dca"))
+    pick = store.get_pick(_FULL_A)
+    assert pick is not None and pick.target_price == Decimal("123.0")
+
+
+def test_update_nonexistent_id_errors_not_silent(tmp_path: Path, capsys) -> None:
+    store = _store_with_picks(tmp_path)
+    with pytest.raises(SystemExit):
+        _update(store, _update_args("deadbeef"))
+    assert "Updated" not in capsys.readouterr().out
+
+
+def test_close_truncated_id_closes_and_unknown_errors(tmp_path: Path, capsys) -> None:
+    store = _store_with_picks(tmp_path)
+    _close(store, argparse.Namespace(pick_id="0fa62dca", price=50.0))
+    pick = store.get_pick(_FULL_A)
+    assert pick is not None and pick.status == PickStatus.MANUAL_CLOSE
+    with pytest.raises(SystemExit):
+        _close(store, argparse.Namespace(pick_id="deadbeef", price=50.0))
+    assert "Closed" in capsys.readouterr().out
