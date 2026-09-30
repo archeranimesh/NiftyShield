@@ -13,10 +13,15 @@ helpers.
 from __future__ import annotations
 
 MARKDOWNV2_RESERVED = "_*[]()~`>#+-=|{}.!"
+# Telegram also requires a literal backslash to be written as ``\\``: an
+# unescaped ``\`` swallows/escapes the next character (dropping it or, before a
+# reserved char, un-escaping that char and causing a 400). Kept out of
+# MARKDOWNV2_RESERVED, which is the documented 18-char entity set.
+_ESCAPED_CHARS = MARKDOWNV2_RESERVED + "\\"
 
 
 def escape_markdown(text: str) -> str:
-    """Backslash-escape MarkdownV2 reserved characters in free text.
+    """Backslash-escape MarkdownV2 reserved characters (and ``\\``) in free text.
 
     Args:
         text: Arbitrary text that may contain any of MARKDOWNV2_RESERVED and
@@ -31,7 +36,7 @@ def escape_markdown(text: str) -> str:
         MarkdownV2-formatted message without risk of unescaped entities
         from this substring specifically.
     """
-    return "".join(f"\\{ch}" if ch in MARKDOWNV2_RESERVED else ch for ch in text)
+    return "".join(f"\\{ch}" if ch in _ESCAPED_CHARS else ch for ch in text)
 
 
 def mdcode(value: str) -> str:

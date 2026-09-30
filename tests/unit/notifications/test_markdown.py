@@ -59,3 +59,19 @@ def test_mdcode_falls_back_when_value_contains_backslash() -> None:
 
 def test_mdcode_empty_string() -> None:
     assert mdcode("") == "``"
+
+
+def test_escape_markdown_escapes_literal_backslash() -> None:
+    # BUG-038: an unescaped '\' escapes the next char in MarkdownV2 (dropping
+    # it, or un-escaping a reserved char and triggering a 400).
+    assert escape_markdown("C:\\foo") == "C:\\\\foo"
+
+
+def test_escape_markdown_backslash_before_reserved_char() -> None:
+    # 'a\.b' must become 'a\\\.b' (escaped backslash, then escaped dot);
+    # the old behaviour produced 'a\\.b' -> literal '\' + unescaped '.' -> 400.
+    assert escape_markdown("a\\.b") == "a\\\\\\.b"
+
+
+def test_escape_markdown_trailing_backslash() -> None:
+    assert escape_markdown("end\\") == "end\\\\"
