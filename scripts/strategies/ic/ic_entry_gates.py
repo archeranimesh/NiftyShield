@@ -193,6 +193,55 @@ def check_duplicate(
 _MAX_VIX_WINDOW_STALENESS_DAYS = 7
 
 
+def describe_missing_legs(
+    store: PaperStore,
+    strategy_name: str,
+    legs: list[tuple[str, str, str, Decimal]],
+    missing_roles: list[str],
+    today: date,
+) -> str:
+    """Split net-zero legs into "never recorded" vs "opened then closed" (BUG-058).
+
+    A leg with net qty 0 after entry is either absent from ``paper_trades`` today
+    or was recorded and then closed by another actor (e.g. the monitor). The trade
+    history tells them apart; the closer's ``notes`` name who closed it.
+
+    Args:
+        store: Open PaperStore instance.
+        strategy_name: Exact DB strategy name.
+        legs: ``(role, action, instrument_key, price)`` tuples for all four legs.
+        missing_roles: Roles whose post-entry net quantity was 0.
+        today: Entry date the opening trades would carry.
+
+    Returns:
+        Alert sentence, e.g. ``"1/4 legs NOT persisted (no trade rows today): a."``.
+    """
+    by_role = {role: (action, key) for role, action, key, _price in legs}
+    never: list[str] = []
+    closed: list[str] = []
+    for role in missing_roles:
+        action, key = by_role[role]
+        rows = [
+            t
+            for t in store.get_trades(strategy_name, role)
+            if t.instrument_key == key and t.trade_date >= today
+        ]
+        opened = any(t.action.value == action for t in rows)
+        closers = [t for t in rows if t.action.value != action]
+        if opened and closers:
+            closed.append(f"{role} (closer: {closers[-1].notes or 'no notes recorded'})")
+        else:
+            never.append(role)
+    parts = []
+    if never:
+        parts.append(f"{len(never)}/4 legs NOT persisted (no trade rows today): {', '.join(never)}")
+    if closed:
+        parts.append(
+            f"{len(closed)}/4 legs opened then CLOSED before verification: {', '.join(closed)}"
+        )
+    return "; ".join(parts) + "."
+
+
 def _is_vix_window_stale(series: pd.Series, today: date) -> bool:
     """Return True if the VIX window's most recent date lags *today* too far.
 

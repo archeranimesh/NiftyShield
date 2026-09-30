@@ -1062,7 +1062,18 @@ def main() -> None:
         return
 
     store = PaperStore(args.db_path)
-    if store.record_trade(trade):
+    inserted = store.record_trade(trade)
+    if not inserted:
+        # BUG-058: unique (strategy, leg, key, date, action) hit — say so loudly.
+        print(
+            f"SKIPPED: duplicate ({trade.strategy_name}, {trade.leg_role}, "
+            f"{trade.instrument_key}, {trade.trade_date}, {trade.action.value}) "
+            "— nothing inserted",
+            file=sys.stderr,
+        )
+        if not args.close:
+            sys.exit(1)  # entry path: caller must not treat this as recorded
+    if inserted:
         if ivr_at_entry is not None and ivr_at_entry < float(args.ivr_gate) and args.force_entry:
             try:
                 from datetime import datetime, timezone
@@ -1087,6 +1098,9 @@ def main() -> None:
 
     pos = store.get_position(trade.strategy_name, trade.leg_role, instrument_key=instrument_key)
     if pos.net_qty == 0:
+        if inserted:
+            # BUG-062: flip the leg's OPEN rows so state-based gates stop seeing it.
+            store.mark_trade_closed(trade.strategy_name, trade.leg_role, trade.instrument_key)
         print(f"{trade.strategy_name} / {trade.leg_role}: position closed (net qty = 0)")
         _send_close_card_if_requested(trade, store, args)
     else:
