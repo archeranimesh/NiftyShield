@@ -195,14 +195,18 @@ def _pnl_per_lot(entry: Decimal | None, exit_premium: Decimal | None) -> Decimal
 def _high_low_pnl_per_lot(
     trade_id: int | None, entry_premium: Decimal | None
 ) -> tuple[Decimal | None, Decimal | None]:
-    """Profit high/low per lot from the trade's mark history, or ``(None, None)``.
+    """Whole-session profit high/low per lot, or ``(None, None)``.
 
-    Sourced from the last (most recent) ``paper_signal_marks`` row's
-    ``mfe_pct`` / ``mae_pct`` — both are running extremes since entry.
+    Sourced from the last row's ``mfe_pct`` / ``mae_pct`` — running extremes since entry.
+    Post-exit shadow marks (to 15:00) are seeded from the live series' last row, so when
+    they exist their last row already spans entry → 15:00; otherwise the live series'
+    last row (a trade held to the time exit) is the whole session. The exit-time extremes
+    stay recoverable from ``paper_signal_marks`` alone.
     """
     if trade_id is None or entry_premium is None:
         return None, None
-    marks = PaperStore(settings.db_path).get_marks(trade_id)
+    store = PaperStore(settings.db_path)
+    marks = store.get_shadow_marks(trade_id) or store.get_marks(trade_id)
     if not marks:
         return None, None
     last = marks[-1]
