@@ -12,6 +12,55 @@
 
 ---
 
+## BUG-063 — `signal_eod.py` records the EOD-time LTP as `exit_premium`, not the `SignalTrackV1` exit fill; the outcome message and `signal_outcomes` P&L are wrong for every executed day
+
+| Field | Value |
+|---|---|
+| Severity | **High** — the headline outcome P&L, the high/low line context and the inception win/loss stats are built on a price that was never traded; target/stop days are the most wrong |
+| Status | 🔴 Open |
+| Discovered | 2026-10-01 — user asked why the outcome message showed exit 329.40 when the target was 397.84 |
+| Location | `scripts/signal_eod.py::main` auto-price block (~L505–L525, `_fetch_ltp` → `exit_premium`), `_pnl_per_lot` (L183), `format_outcome_message` (L205) |
+
+**Symptom:** 2026-10-01 trade 408 (BUY 65 NIFTY 22550 PE @ 265.225, target 397.84) hit its target at 12:54:14 IST (mark 400.0). `SignalTrackV1` closed it: `paper_exit_events` id 218 `PROFIT_TARGET`,
+SELL trade 409 @ 399.0 (≈ +₹8,700 / lot). The 16:00 outcome message instead reported `Exit ₹329.40 · P&L +₹4,171.38` — 329.40 is the option's LTP when the EOD cron ran.
+
+**Root cause:** `signal_eod.py --auto` never reads the position ledger. It fetches a fresh LTP for the recommended option and stores it as `exit_premium`, then derives `pnl_per_lot` from it. The
+tracker's actual exit (SELL row in `paper_trades`, reason in `paper_exit_events`) is ignored; `high_pnl_per_lot` alone comes from `paper_signal_marks`, so the message can show a realised P&L far below
+its own reported high.
+
+**Blast radius (queried 2026-10-01):** every executed `signal_outcomes` row from 2026-09-21 to 2026-10-01 disagrees with its SELL fill — 09-29 stored 201.60 vs 221.275, 09-22 330.00 vs 310.675, 09-28
+315.95 vs 318.925, 09-21 391.60 vs 389.95, 10-01 329.40 vs 399.0. Rows up to 2026-09-17 have no matching SELL or predate the tracker and are out of scope for the backfill.
+
+**Suggested fix:** when a closing SELL exists for the signal's trade, use its fill as `exit_premium` and carry the exit reason (TARGET / STOP_LOSS / TIME_EXIT) into the message; fall back to LTP only
+while the position is still open. Then backfill 2026-09-21 → 2026-10-01 via a tested `scripts/dev/` CLI, dry-run by default.
+
+**Related:** the new exit Telegram (BUG-063 task B063.3) shares the same exit-price source.
+
+---
+
+## BUG-064 — `SignalTrackV1` ticks stop mid-session on some days; the position then misses the 15:00 time exit and is carried overnight
+
+| Field | Value |
+|---|---|
+| Severity | **High** — an intraday-only paper signal is held overnight, exposed to gaps, and its recorded exit/P&L reflects the next morning, not the intended same-day close |
+| Status | 🔴 Open |
+| Discovered | 2026-10-01 — scoping BUG-063; a join on 2026-09-16 first looked like a double exit and turned out to be an overnight carry |
+| Location | `StrategyMonitor` daemon tick loop (`src/strategy/`), `SignalTrackV1` / `signal_exit.evaluate`; `daemon_heartbeat` |
+
+**Symptom:** `paper_signal_marks` for trade 295 (entered 2026-09-15 10:27) ends at 12:52 on 09-15; the next mark is 09-16 09:15, where `LOSS_STOP` fired on the gap (exit fill 137.10, event 170). Trade
+315 (entered 2026-09-17 09:31) has marks only until 10:59 on 09-17, then resumes 09-18 09:15 and exits `TIME_STOP` at 15:00 on 09-18 (event 179, fill 479.05). Neither received its same-day 15:00 time
+exit. Healthy days (e.g. trade 298 on 09-16, trade 408 on 10-01) tick continuously.
+
+**Root cause:** not yet confirmed — ticks simply stop for hours on two of the days. Candidates: monitor daemon process died or the host slept, a tick-loop exception swallowed without restart, or a
+broker-quote failure path that skips marks. `daemon_heartbeat.last_beat` and the daemon log for 2026-09-15 and 2026-09-17 are the first things to check.
+
+**Suggested fix:** B064.1 confirms the cause from daemon logs/heartbeat. Then either make the loop self-heal, or add a guard that a missed 15:00 exit is executed at the first tick after the window
+instead of waiting for the next session, and alert via Telegram when a signal position has no tick for N minutes during market hours.
+
+**Related:** BUG-063 (outcome exit price), exit Telegram (B063.3).
+
+---
+
 ## BUG-060 — Expired paper overlay legs are never settled or closed; they stay `OPEN` in `paper_trades` after expiry and block the next bootstrap entry
 
 | Field | Value |

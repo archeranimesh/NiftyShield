@@ -37,6 +37,21 @@
 
 > BUG-040 closed 2026-09-30 (SHA `50a5ce4` + `680778b`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
+## BUG-063 — `signal_eod.py` records EOD LTP, not the tracker exit fill, as `exit_premium`
+
+Detail: `docs/bugs/bugs.md` BUG-063.
+
+- [ ] **B063.1** — `signal_eod.py` uses the closing SELL fill (and its exit reason) as `exit_premium`; LTP only while open. Tests: target/stop/time exit use the fill; open position falls back.
+- [ ] **B063.2** — Backfill `signal_outcomes` 2026-09-21 → 2026-10-01 via a tested `scripts/dev/` CLI, dry-run default.
+- [ ] **B063.3** — Exit Telegram fired on target / stop-loss / 15:00 time exit, showing the exit fill and reason; EOD summary reports the same exit price and reason.
+
+## BUG-064 — `SignalTrackV1` ticks stop mid-session; position misses the 15:00 time exit and is carried overnight
+
+Detail: `docs/bugs/bugs.md` BUG-064. Confirm the cause first.
+
+- [ ] **B064.1** — Confirm why ticks stopped on 2026-09-15 (12:52) and 2026-09-17 (10:59) from daemon logs and `daemon_heartbeat`; record the cause in `bugs.md`.
+- [ ] **B064.2** — Fix per the confirmed cause, plus a missed-time-exit guard and a no-tick alert. Tests: a late first tick after 15:00 still executes the time exit.
+
 ## BUG-060 — Expired paper overlay legs are never settled or closed
 
 Detail: `docs/bugs/bugs.md` BUG-060. Settle-price source decision comes first.
