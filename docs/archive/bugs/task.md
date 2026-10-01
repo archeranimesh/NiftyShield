@@ -905,3 +905,19 @@ Detail: `docs/bugs/bugs.md` BUG-065.
 - [x] **B065.1** — Route the exit message through a working send path and isolate send failures from the strategy. Tests: gateway-shaped double without `send` still delivers; a failing send does not
   raise. | SHA `6793e54`
 - [x] **B065.2** — Check `open_signal_paper_entry` for the same notifier-API assumption. | SHA `6793e54`
+
+## BUG-064 — `SignalTrackV1` ticks stop mid-session; position misses the 15:00 time exit and is carried overnight
+
+Detail: `docs/bugs/bugs.md` BUG-064. Confirm the cause first.
+
+- [x] **B064.1** — Confirm why ticks stopped on 2026-09-15 (12:52) and 2026-09-17 (10:59) from daemon logs and `daemon_heartbeat`; record the cause in `bugs.md`. | SHA `710e33d`
+- [x] **B064.2** — Fix per the confirmed cause, plus a missed-time-exit guard and a no-tick alert. Tests: a late first tick after 15:00 still executes the time exit. | SHA `5f15cc8`
+
+## BUG-063 — `signal_eod.py` records EOD LTP, not the tracker exit fill, as `exit_premium`
+
+Detail: `docs/bugs/bugs.md` BUG-063.
+
+- [x] **B063.1** — `signal_eod.py` uses the closing SELL fill (and its exit reason) as `exit_premium`; LTP only while open. Tests: target/stop/time exit use the fill; open position falls back. | SHA
+  `7e72438`
+- [x] **B063.2** — Backfill `signal_outcomes` 2026-09-21 → 2026-10-01 via a tested `scripts/dev/` CLI, dry-run default. | SHA `0fb1acd`
+- [x] **B063.3** — EOD summary shows the exit fill and reason (SL hit / target hit / time exit price) alongside the corrected P&L. | SHA `7e72438`

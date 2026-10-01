@@ -1007,6 +1007,12 @@ day. Monitor cadence shipped at the ruled **30 s** for `paper_signal_track_v1` (
 never triggered — 30 s proved practical on chain-fetch latency, so it remains undeployed, documented-only insurance per the ruling, not a shipped code path. Go-live gate (SPT-7) and the go-live pilot
 remain unexercised — the 6-month evaluation window has not yet elapsed.
 
+**Chain-outage LTP fallback (2026-10-01, BUG-064).** `StrategyMonitor` fetches one option chain per expiry and, when that fails, skips strategy evaluation. A strategy may opt in with an async
+`check_without_chain()` method; the monitor calls it from both the `no_chains_available` and `no_chain_for_expiry` branches and swallows its errors. `SignalTrackV1` implements it by pricing its one
+open option off `broker.get_ltp` (mark = LTP, no bid/ask) and running the same `evaluate` / `_close_position` path, so SL, target and the 15:00 time exit fire during a chain outage rather than
+carrying the position overnight. If LTP also fails, a 5-minute no-price outage raises one Telegram alert. Outcome and exit prices written during an outage are therefore LTP-based, not bid/ask-mid
+based. Separately, `signal_eod.py` takes `exit_premium` from the closing SELL fill (`PaperStore.get_signal_exit`), never from the 16:00 LTP, once the position has closed (BUG-063).
+
 ---
 
 ## B002.3 — `PaperPosition.option_type` resolution strategy (2026-07-02)

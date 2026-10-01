@@ -87,6 +87,9 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-01] BUG-063 (`7e72438`, backfill `0fb1acd` applied to 5 rows) and BUG-064 (`5f15cc8`) fixed and archived. `signal_eod` now reports the tracker exit fill + reason; `SignalTrackV1` manages
+  the position on LTP when the option chain is down (09-15 / 09-17 overnight carries) and alerts after 5 min blind. Escaping-guard baseline re-pointed again (line-number fragility). Not covered: dead
+  monitor process.
 - [2026-10-01] BUG-065 fixed (`6793e54`) — `SignalTrackV1` exit Telegram never sent because `monitor_daemon` injects `TelegramGateway` (no `send()`); now dispatched via `send_notification`. Logged
   BUG-063 (signal_eod records EOD LTP not the exit fill) and BUG-064 (ticks stop mid-session, 15:00 time exit missed on 09-15 / 09-17). Next: BUG-063 phase (B063.1 / B063.3).
 - [2026-10-01] `paper-pnl-golden-tests/` T1 done — three exact-`Decimal` golden tests (short profit, short loss, long profit) added to `tests/unit/paper/test_pnl_hypothesis.py`; 3805 unit tests green,

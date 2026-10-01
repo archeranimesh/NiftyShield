@@ -39,20 +39,9 @@
 
 > BUG-065 closed 2026-10-01 (SHA `6793e54`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
-## BUG-063 — `signal_eod.py` records EOD LTP, not the tracker exit fill, as `exit_premium`
+> BUG-063 closed 2026-10-01 (SHA `7e72438`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
-Detail: `docs/bugs/bugs.md` BUG-063.
-
-- [ ] **B063.1** — `signal_eod.py` uses the closing SELL fill (and its exit reason) as `exit_premium`; LTP only while open. Tests: target/stop/time exit use the fill; open position falls back.
-- [ ] **B063.2** — Backfill `signal_outcomes` 2026-09-21 → 2026-10-01 via a tested `scripts/dev/` CLI, dry-run default.
-- [ ] **B063.3** — EOD summary shows the exit fill and reason (SL hit / target hit / time exit price) alongside the corrected P&L.
-
-## BUG-064 — `SignalTrackV1` ticks stop mid-session; position misses the 15:00 time exit and is carried overnight
-
-Detail: `docs/bugs/bugs.md` BUG-064. Confirm the cause first.
-
-- [x] **B064.1** — Confirm why ticks stopped on 2026-09-15 (12:52) and 2026-09-17 (10:59) from daemon logs and `daemon_heartbeat`; record the cause in `bugs.md`. | SHA `PENDING`
-- [ ] **B064.2** — Fix per the confirmed cause, plus a missed-time-exit guard and a no-tick alert. Tests: a late first tick after 15:00 still executes the time exit.
+> BUG-064 closed 2026-10-01 (SHA `5f15cc8`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
 ## BUG-060 — Expired paper overlay legs are never settled or closed
 
