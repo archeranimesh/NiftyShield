@@ -152,6 +152,9 @@ def _cycle_line(msg: ExitMessage) -> str | None:
     if msg.cycle_decay_pct is None:
         return f"🔁 *Cycle \\#{idx}:* {pnl}  ·  {held}d"
 
+    assert (
+        msg.cycle_short_credit is not None and msg.cycle_short_buyback is not None
+    )  # __post_init__
     credit = escape_markdown(format_money(msg.cycle_short_credit))
     buyback = escape_markdown(format_money(msg.cycle_short_buyback))
     decay = escape_markdown(f"{msg.cycle_decay_pct:.0f}")
