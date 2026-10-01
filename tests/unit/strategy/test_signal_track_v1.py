@@ -510,3 +510,47 @@ def test_mfe_mae_monotonic_across_ticks() -> None:
     )
     assert m3.mfe_pct == Decimal("0.1")  # still the m1 high-water mark
     assert m3.mae_pct == Decimal("-0.1")  # still the m2 low-water mark
+
+
+# ---------------------------------------------------------------------------
+# BUG-065 — exit message delivery through the daemon's TelegramGateway
+# ---------------------------------------------------------------------------
+
+
+class _GatewayShapedNotifier:
+    """Mirrors the ``TelegramGateway`` surface the strategy uses: ``send_notification``, no ``send``."""
+
+    def __init__(self, fail: bool = False) -> None:
+        self.messages: list[str] = []
+        self._fail = fail
+
+    async def send_notification(self, message: str) -> None:
+        if self._fail:
+            raise RuntimeError("telegram down")
+        self.messages.append(message)
+
+
+async def test_exit_message_delivered_via_gateway_shaped_notifier(store: PaperStore) -> None:
+    _open_entry(store, sl_price="35", tgt_price="60", premium="40")
+    notifier = _GatewayShapedNotifier()
+    strategy = SignalTrackV1(
+        store=store, notifier=notifier, clock=lambda: _dt(2026, 9, 10, 10, 0, tzinfo=_IST)
+    )
+
+    await strategy.check_signals(_chain(bid="30.00", ask="30.00", ltp="30.00"), [])
+
+    assert len(notifier.messages) == 1
+    assert "SIGNAL EXIT" in notifier.messages[0]
+
+
+async def test_exit_notify_failure_does_not_raise_or_undo_close(store: PaperStore) -> None:
+    _open_entry(store, sl_price="35", tgt_price="60", premium="40")
+    strategy = SignalTrackV1(
+        store=store,
+        notifier=_GatewayShapedNotifier(fail=True),
+        clock=lambda: _dt(2026, 9, 10, 10, 0, tzinfo=_IST),
+    )
+
+    await strategy.check_signals(_chain(bid="30.00", ask="30.00", ltp="30.00"), [])
+
+    assert store.get_open_signal_entry() is None  # position closed despite send failure

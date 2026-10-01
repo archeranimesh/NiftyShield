@@ -100,6 +100,22 @@ def _spot(value: Decimal) -> str:
     return f"{int(value.to_integral_value(rounding=ROUND_HALF_UP)):,}"
 
 
+async def _deliver_exit_message(notifier: Any, text: str) -> None:
+    """Send the exit message via the daemon's gateway or a plain notifier; never raises.
+
+    ``monitor_daemon`` injects a ``TelegramGateway`` (``send_notification``); the
+    ``build_notifier()`` fallback is a ``TelegramNotifier`` (``send``). The position is
+    already closed when this runs, so a delivery failure is logged, not propagated.
+    """
+    try:
+        if hasattr(notifier, "send_notification"):
+            await notifier.send_notification(text)
+        else:
+            await notifier.send(text)
+    except Exception as exc:  # Intentional: notification must not fail the strategy tick
+        logger.warning("signal_track.exit_notify_failed", error=str(exc))
+
+
 def _instrument_label(strike: int, expiry_label: str, opt_type: str) -> str:
     """``NIFTY 23000 29 SEP 26 PE`` — CE/PE last, matching the EOD PT summary table."""
     return f"{_UNDERLYING} {strike} {expiry_label} {opt_type}"
@@ -642,7 +658,7 @@ class SignalTrackV1:
             message = build_signal_exit_message(
                 entry, label, reason, exit_price, pnl, now, underlying_spot, cumulative
             )
-            await notifier.send(message)
+            await _deliver_exit_message(notifier, message)
 
     def describe_context(self, event: Any, market: Any, positions: Any) -> str:
         """No council context — this strategy never routes through approval."""
