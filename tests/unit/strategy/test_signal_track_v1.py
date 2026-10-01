@@ -554,3 +554,103 @@ async def test_exit_notify_failure_does_not_raise_or_undo_close(store: PaperStor
     await strategy.check_signals(_chain(bid="30.00", ask="30.00", ltp="30.00"), [])
 
     assert store.get_open_signal_entry() is None  # position closed despite send failure
+
+
+# ---------------------------------------------------------------------------
+# BUG-064 — degraded tick when the option-chain fetch is down
+# ---------------------------------------------------------------------------
+
+_SPOT_KEY = "NSE_INDEX|Nifty 50"
+
+
+class _LtpBroker:
+    """Chain endpoint is down; only ``get_ltp`` answers (or raises when ``fail``)."""
+
+    def __init__(self, ltp: str = "40", *, fail: bool = False) -> None:
+        self._ltp = Decimal(ltp)
+        self._fail = fail
+
+    async def get_ltp(self, instruments: list[str]) -> dict[str, Decimal]:
+        if self._fail:
+            raise RuntimeError("upstox down")
+        return {_SYM_KEY: self._ltp, _SPOT_KEY: Decimal("23041")}
+
+
+async def test_no_chain_stop_loss_closes_on_ltp(store: PaperStore) -> None:
+    _open_entry(store, sl_price="35", tgt_price="60", premium="40")
+    strategy = SignalTrackV1(
+        store=store,
+        broker=_LtpBroker("30"),
+        clock=lambda: _dt(2026, 9, 10, 10, 0, tzinfo=_IST),
+    )
+
+    await strategy.check_without_chain()
+
+    assert store.get_open_signal_entry() is None
+    sells = [t for t in store.get_trades(STRATEGY_SIGNAL_TRACK) if t.action.value == "SELL"]
+    assert len(sells) == 1 and sells[0].price == Decimal("29.0")  # ltp 30 - 1.0 slippage
+
+
+async def test_no_chain_time_exit_fires_at_1500_on_ltp(store: PaperStore) -> None:
+    _open_entry(store, sl_price="35", tgt_price="60", premium="40")
+    strategy = SignalTrackV1(
+        store=store,
+        broker=_LtpBroker("45"),
+        clock=lambda: _dt(2026, 9, 10, 15, 0, 10, tzinfo=_IST),
+    )
+
+    await strategy.check_without_chain()
+
+    assert store.get_open_signal_entry() is None
+    exit_ev = store.get_signal_exit(1)
+    assert exit_ev is not None and exit_ev.reason.value == "TIME_STOP"
+
+
+async def test_no_chain_hold_records_mark_and_keeps_position(store: PaperStore) -> None:
+    trade_id = _open_entry(store, sl_price="35", tgt_price="60", premium="40")
+    strategy = SignalTrackV1(
+        store=store,
+        broker=_LtpBroker("42"),
+        clock=lambda: _dt(2026, 9, 10, 11, 0, tzinfo=_IST),
+    )
+
+    await strategy.check_without_chain()
+
+    assert store.get_open_signal_entry() is not None
+    assert len(store.get_marks(trade_id)) == 1
+
+
+async def test_no_chain_price_failure_alerts_once_after_five_minutes(store: PaperStore) -> None:
+    _open_entry(store, sl_price="35", tgt_price="60", premium="40")
+    notifier = _FakeNotifier()
+    now = [_dt(2026, 9, 10, 11, 0, tzinfo=_IST)]
+    strategy = SignalTrackV1(
+        store=store, broker=_LtpBroker(fail=True), notifier=notifier, clock=lambda: now[0]
+    )
+
+    await strategy.check_without_chain()  # blind starts, no alert yet
+    now[0] += _timedelta(minutes=6)
+    await strategy.check_without_chain()  # 6 min blind -> alert
+    now[0] += _timedelta(minutes=1)
+    await strategy.check_without_chain()  # same outage -> no second alert
+
+    assert store.get_open_signal_entry() is not None  # no exception, position untouched
+    assert len(notifier.messages) == 1
+    assert "no price" in notifier.messages[0].lower() or "unmanaged" in notifier.messages[0].lower()
+
+
+async def test_chain_recovery_resets_outage_clock(store: PaperStore) -> None:
+    _open_entry(store, sl_price="35", tgt_price="60", premium="40")
+    notifier = _FakeNotifier()
+    now = [_dt(2026, 9, 10, 11, 0, tzinfo=_IST)]
+    strategy = SignalTrackV1(
+        store=store, broker=_LtpBroker(fail=True), notifier=notifier, clock=lambda: now[0]
+    )
+    await strategy.check_without_chain()  # outage clock starts
+    now[0] += _timedelta(minutes=3)
+    await strategy.check_signals(_chain(bid="40.00", ask="40.00", ltp="40.00"), [])  # chain back
+    now[0] += _timedelta(minutes=4)  # 7 min since first failure, but only 4 since recovery
+
+    await strategy.check_without_chain()  # new outage: clock restarts, no alert yet
+
+    assert notifier.messages == []

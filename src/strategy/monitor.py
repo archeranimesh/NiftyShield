@@ -231,6 +231,8 @@ class StrategyMonitor:
         chains = await self._fetch_chains(all_positions)
         if not chains:
             log.warning("strategy_monitor.no_chains_available")
+            for strategy in due_strategies:
+                await self._ltp_fallback(strategy)
             self._write_heartbeat(os.getpid())
             return
 
@@ -272,6 +274,7 @@ class StrategyMonitor:
                         strategy=strategy.strategy_name,
                         expiry=str(expiry_date),
                     )
+                    await self._ltp_fallback(strategy)
                     continue
                 try:
                     events = await strategy.check_signals(chain, expiry_positions)
@@ -593,6 +596,22 @@ class StrategyMonitor:
             if exp is not None:
                 groups.setdefault(exp, []).append(pos)
         return groups
+
+    async def _ltp_fallback(self, strategy: PaperStrategy) -> None:
+        """Let a strategy manage its position off LTP when its option chain is unavailable.
+
+        Only strategies defining ``check_without_chain`` (BUG-064: ``SignalTrackV1``) opt in;
+        a failure inside the hook is logged and never breaks the tick loop.
+        """
+        hook = getattr(strategy, "check_without_chain", None)
+        if hook is None:
+            return
+        try:
+            await hook()
+        except Exception:
+            log.exception(
+                "strategy_monitor.check_without_chain_error", strategy=strategy.strategy_name
+            )
 
     async def _fetch_chains(self, positions: list[PaperPosition]) -> dict[date, OptionChain]:
         """Fetch one OptionChain per unique expiry found in positions.

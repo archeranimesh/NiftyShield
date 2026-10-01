@@ -267,20 +267,20 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "Line moved from 295 -> 181 by SEC-4's extraction of the pipeline body into "
         "src/signals/pipeline.py::run_morning_signal_pipeline."
     ),
-    ("src/strategy/signal_track_v1.py", 394): (
+    ("src/strategy/signal_track_v1.py", 397): (
         "SPT-3 — value is fully escaped inside the callee build_signal_entry_message() "
         "(the message-builder owns the MarkdownV2 boundary: escape_markdown() per dynamic "
         "value + literal * for bold, fenced table content passed through verbatim), but "
         "this guard only inspects the immediate enclosing function (open_signal_paper_entry), "
         "not the builder it calls — same shape as the scripts/morning_signal.py:282 entry. "
-        "Line moved from 293 -> 379 by SPT-5's new imports/helpers above it, then 379 -> 394 by BUG-065's _deliver_exit_message helper."
+        "Line moved from 293 -> 379 by SPT-5's new imports/helpers above it, then 379 -> 394 by BUG-065's _deliver_exit_message helper, then 394 -> 397 by BUG-064's new imports."
     ),
-    ("src/strategy/signal_track_v1.py", 114): (
+    ("src/strategy/signal_track_v1.py", 117): (
         "SPT-5 — value is fully escaped inside the callee build_signal_exit_message() "
         "(same MarkdownV2-boundary shape as the SPT-3 entry above: escape_markdown() per "
         "dynamic value + literal * for bold, fenced table content passed through verbatim), "
         "but this guard only inspects the immediate enclosing function, not the builder it "
-        "calls. BUG-065 moved the send into _deliver_exit_message (line 645 -> 114), which "
+        "calls. BUG-065 moved the send into _deliver_exit_message (line 645 -> 114, then 114 -> 117 by BUG-064's new imports), which "
         "receives the already-escaped build_signal_exit_message() text."
     ),
     ("scripts/strategies/three_track/paper_3track_snapshot.py", 2085): (

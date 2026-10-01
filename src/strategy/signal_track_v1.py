@@ -23,6 +23,7 @@ Exit-policy numbers (SL −30 % / target +50 %) live in
 from __future__ import annotations
 
 import asyncio
+import re
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
@@ -31,6 +32,7 @@ from zoneinfo import ZoneInfo
 
 import structlog
 
+from src.models.options import OptionLeg
 from src.models.portfolio import TradeAction as PaperTradeAction
 from src.notifications.formatting import build_position_table
 from src.notifications.markdown import escape_markdown
@@ -55,12 +57,13 @@ from src.strategy.signal_exit import (
 if TYPE_CHECKING:
     from src.client.protocol import BrokerClient
     from src.instruments.lookup import InstrumentLookup
-    from src.models.options import OptionChain, OptionLeg
+    from src.models.options import OptionChain
     from src.notifications.telegram import TelegramNotifier
     from src.paper.models import PaperPosition
     from src.signals.models import DailySignal, MarketSnapshot
 
 _STALE_AFTER = 30  # seconds — quote_ts older than this behind `now` marks stale=1.
+_BLIND_ALERT_AFTER = timedelta(minutes=5)  # no-price outage length before the Telegram alert.
 _GAP_PCT = Decimal("0.20")  # |mark - prev_mark| / E threshold for gap_event.
 
 logger = structlog.get_logger(__name__)
@@ -489,6 +492,9 @@ class SignalTrackV1:
         # logged this process lifetime, so a stray re-tick before SPT-5 wires
         # the actual close never re-fires the same exit decision.
         self._exit_fired_trade_ids: set[int] = set()
+        # BUG-064: start of the current no-price outage (chain AND LTP down) + alert dedup.
+        self._blind_since: datetime | None = None
+        self._blind_alerted = False
 
     async def check_signals(self, market: OptionChain, positions: list[PaperPosition]) -> list[Any]:
         """Per-tick mark-path telemetry + exit-decision routing (SPT-4/SPT-5).
@@ -518,6 +524,7 @@ class SignalTrackV1:
         if entry.trade_id in self._exit_fired_trade_ids:
             return []
 
+        self._blind_since, self._blind_alerted = None, False  # chain is back: outage over
         leg = find_option_leg(entry.instrument_key, market, self._lookup)
         if leg is None:
             logger.warning(
@@ -527,6 +534,18 @@ class SignalTrackV1:
             )
             return []
 
+        await self._process_leg(entry, leg, market.underlying_spot)
+        return []
+
+    async def _process_leg(
+        self, entry: SignalPaperEntry, leg: OptionLeg, underlying_spot: Decimal
+    ) -> None:
+        """Mark the open position off ``leg`` and close it when the exit ruleset fires.
+
+        Shared by the chain path (``check_signals``) and the LTP fallback
+        (``check_without_chain``); ``self._store`` is non-None here.
+        """
+        assert self._store is not None  # callers return early on a missing store
         prior_marks = await asyncio.to_thread(self._store.get_marks, entry.trade_id)
         prev = prior_marks[-1] if prior_marks else None
         prev_mark = prev.mark if prev is not None else None
@@ -554,7 +573,7 @@ class SignalTrackV1:
                 trade_id=entry.trade_id,
                 instrument_key=entry.instrument_key,
             )
-            return []
+            return
 
         await asyncio.to_thread(self._store.record_mark, mark_row)
 
@@ -568,10 +587,77 @@ class SignalTrackV1:
                 mark=str(mark_row.mark),
             )
             await self._close_position(
-                entry, leg, market.underlying_spot, decision.reason, mark_row.mark, now
+                entry, leg, underlying_spot, decision.reason, mark_row.mark, now
             )
 
-        return []
+    async def check_without_chain(self) -> None:
+        """Degraded tick (BUG-064): manage the open position off LTP when the chain is down.
+
+        ``StrategyMonitor`` calls this when the option-chain fetch failed, so SL / target
+        / the 15:00 time exit still fire instead of the position being carried overnight.
+        The mark is the option's LTP (no bid/ask); the spot comes from the same
+        ``get_ltp`` call. If even that fails, an outage clock starts and a Telegram alert
+        is sent once after ``_BLIND_ALERT_AFTER``.
+        """
+        if self._store is None or self._broker is None:
+            return
+        entry = await asyncio.to_thread(self._store.get_open_signal_entry)
+        if entry is None or entry.trade_id in self._exit_fired_trade_ids:
+            return
+        try:
+            ltps = await self._broker.get_ltp([entry.instrument_key, _NIFTY_KEY])
+        except Exception as exc:  # Intentional: a quote failure must not break the tick loop
+            logger.warning("signal_track.fallback_ltp_failed", error=str(exc))
+            ltps = {}
+        ltp, spot = ltps.get(entry.instrument_key), ltps.get(_NIFTY_KEY)
+        if ltp is None or spot is None or ltp <= 0:
+            await self._note_blind(entry)
+            return
+        self._blind_since, self._blind_alerted = None, False
+        logger.warning("signal_track.chain_down_ltp_fallback", trade_id=entry.trade_id)
+        leg = OptionLeg(
+            ltp=ltp,
+            bid=ltp,
+            ask=ltp,
+            oi=0,
+            volume=0,
+            delta=None,
+            gamma=None,
+            theta=None,
+            vega=None,
+            iv=None,
+            strike=self._strike_of(entry.instrument_key),
+        )
+        await self._process_leg(entry, leg, spot)
+
+    def _strike_of(self, instrument_key: str) -> Decimal:
+        """Strike for the exit-message label: symbolic key first, then BOD lookup, else 0."""
+        m = re.search(r"NIFTY(\d+)(?:PE|CE)", instrument_key, re.IGNORECASE)
+        if m:
+            return Decimal(m.group(1))
+        inst = self._lookup.get_by_key(instrument_key) if self._lookup is not None else None
+        if inst is not None and inst.get("strike_price") is not None:
+            return Decimal(str(inst["strike_price"]))
+        logger.warning("signal_track.fallback_strike_unresolved", key=instrument_key)
+        return Decimal("0")
+
+    async def _note_blind(self, entry: SignalPaperEntry) -> None:
+        """Track a no-price outage and alert once it has lasted ``_BLIND_ALERT_AFTER``."""
+        now = self._clock()
+        if self._blind_since is None:
+            self._blind_since = now
+        if self._blind_alerted or now - self._blind_since < _BLIND_ALERT_AFTER:
+            return
+        self._blind_alerted = True
+        minutes = int((now - self._blind_since).total_seconds() // 60)
+        logger.error("signal_track.unmanaged_position", trade_id=entry.trade_id, minutes=minutes)
+        notifier = self._notifier or build_notifier()
+        if notifier:
+            text = escape_markdown(
+                f"⚠️ Signal position unmanaged: no price for {minutes} min "
+                f"(chain and LTP both failing). Check the monitor and exit manually if needed."
+            )
+            await _deliver_exit_message(notifier, text)
 
     async def _close_position(
         self,

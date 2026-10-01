@@ -1697,3 +1697,58 @@ async def test_strategy_without_due_interval_runs_every_tick_backward_compat() -
 
     assert a.calls == 3
     assert b.calls == 3
+
+
+# ---------------------------------------------------------------------------
+# BUG-064 — LTP fallback hook when no chain is available
+# ---------------------------------------------------------------------------
+
+
+async def _tick_with_failing_chain(strategy: MockStrategy) -> MagicMock:
+    from datetime import date
+
+    pos = PaperPosition(
+        strategy_name="paper_csp_nifty_v1",
+        leg_role="short_put",
+        net_qty=-65,
+        avg_cost=Decimal("0"),
+        avg_sell_price=Decimal("100"),
+        instrument_key="NIFTY30JUN2026PE23000",
+        entry_date=date(2026, 6, 1),
+    )
+    store = _make_store(positions=[pos])
+    broker = MagicMock()
+    broker.get_option_chain = AsyncMock(side_effect=DataFetchError("timeout"))
+    monitor = _make_monitor(broker=broker, store=store, strategies=[strategy])
+    with (
+        patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
+        patch(
+            "src.strategy.monitor.datetime",
+            **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
+        ),
+    ):
+        await monitor._tick()
+    return store
+
+
+async def test_tick_no_chains_calls_strategy_ltp_fallback() -> None:
+    strategy = MockStrategy()
+    strategy.check_signals = AsyncMock(return_value=[])
+    strategy.check_without_chain = AsyncMock()
+
+    store = await _tick_with_failing_chain(strategy)
+
+    strategy.check_without_chain.assert_awaited_once()
+    strategy.check_signals.assert_not_called()
+    store.write_heartbeat.assert_called_once()
+
+
+async def test_tick_no_chains_fallback_error_does_not_break_tick() -> None:
+    strategy = MockStrategy()
+    strategy.check_without_chain = AsyncMock(side_effect=RuntimeError("boom"))
+
+    store = await _tick_with_failing_chain(strategy)
+
+    strategy.check_without_chain.assert_awaited_once()
+    store.write_heartbeat.assert_called_once()
