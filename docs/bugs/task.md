@@ -51,7 +51,7 @@ Detail: `docs/bugs/bugs.md` BUG-063.
 
 Detail: `docs/bugs/bugs.md` BUG-064. Confirm the cause first.
 
-- [ ] **B064.1** — Confirm why ticks stopped on 2026-09-15 (12:52) and 2026-09-17 (10:59) from daemon logs and `daemon_heartbeat`; record the cause in `bugs.md`.
+- [x] **B064.1** — Confirm why ticks stopped on 2026-09-15 (12:52) and 2026-09-17 (10:59) from daemon logs and `daemon_heartbeat`; record the cause in `bugs.md`. | SHA `PENDING`
 - [ ] **B064.2** — Fix per the confirmed cause, plus a missed-time-exit guard and a no-tick alert. Tests: a late first tick after 15:00 still executes the time exit.
 
 ## BUG-060 — Expired paper overlay legs are never settled or closed

@@ -55,11 +55,14 @@ while the position is still open. Then backfill 2026-09-21 → 2026-10-01 via a 
 315 (entered 2026-09-17 09:31) has marks only until 10:59 on 09-17, then resumes 09-18 09:15 and exits `TIME_STOP` at 15:00 on 09-18 (event 179, fill 479.05). Neither received its same-day 15:00 time
 exit. Healthy days (e.g. trade 298 on 09-16, trade 408 on 10-01) tick continuously.
 
-**Root cause:** not yet confirmed — ticks simply stop for hours on two of the days. Candidates: monitor daemon process died or the host slept, a tick-loop exception swallowed without restart, or a
-broker-quote failure path that skips marks. `daemon_heartbeat.last_beat` and the daemon log for 2026-09-15 and 2026-09-17 are the first things to check.
+**Root cause (confirmed 2026-10-01 from `logs/monitor_daemon.log`):** `StrategyMonitor._tick` fetches one option chain per expiry and, when the Upstox chain call fails (read timeout / DNS or
+connectivity errors), logs `strategy_monitor.no_chains_available` (or `no_chain_for_expiry`) and skips `check_signals` for every strategy — so `SignalTrackV1` neither marks nor evaluates SL / target /
+the 15:00 time exit while the chain endpoint is down. 2026-09-15: last good fetch 12:52:31, then an outage with minutes-long stalled ticks until 15:37. 2026-09-17: last good fetch 10:59:31, then 533
+consecutive `no_chains_available` ticks (all `Read timed out` on the 2026-10-27 chain) until 15:29. Healthy days (09-16: 0 failures, 10-01: 1) exit correctly. The per-option LTP endpoint still worked
+on those days (`signal_eod`'s 16:00 LTP fetch succeeded), so the position was priceable throughout.
 
-**Suggested fix:** B064.1 confirms the cause from daemon logs/heartbeat. Then either make the loop self-heal, or add a guard that a missed 15:00 exit is executed at the first tick after the window
-instead of waiting for the next session, and alert via Telegram when a signal position has no tick for N minutes during market hours.
+**Suggested fix:** when the chain is unavailable, evaluate the open signal position off the per-option LTP (`broker.get_ltp`) so SL / target / the 15:00 time exit still fire; alert via Telegram when a
+signal position has had no mark for N minutes in market hours.
 
 **Related:** BUG-063 (outcome exit price), exit Telegram (B063.3).
 
