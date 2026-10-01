@@ -303,3 +303,60 @@ def test_close_sets_trade_state_closed(store: PaperStore) -> None:
         ).fetchone()
     assert state == TradeState.CLOSED.value
     assert n_events == 1
+
+
+# ── get_signal_exit (BUG-063) ─────────────────────────────────────────────────
+
+
+def _close_cycle_get_id(
+    store: PaperStore, day: date, key: str, entry_px: str, exit_px: str, reason: ExitSignal
+) -> int:
+    tid = _open_buy_row(store, key=key, day=day, price=entry_px)
+    store.open_signal_entry(
+        _entry(tid, signal_date=day, instrument_key=key, entry_premium=Decimal(entry_px))
+    )
+    store.record_trade(
+        PaperTrade(
+            strategy_name=STRATEGY_SIGNAL_TRACK,
+            leg_role=_LEG,
+            instrument_key=key,
+            trade_date=day,
+            action=TradeAction.SELL,
+            quantity=LOT_SIZE,
+            price=Decimal(exit_px),
+        )
+    )
+    store.close_signal_entry(tid, _exit_event(tid).model_copy(update={"exit_signal": reason}))
+    return tid
+
+
+def test_get_signal_exit_returns_fill_and_reason(store: PaperStore) -> None:
+    tid = _close_cycle_get_id(
+        store, date(2026, 9, 10), _KEY, "40.25", "60.00", ExitSignal.PROFIT_TARGET
+    )
+
+    got = store.get_signal_exit(tid)
+
+    assert got is not None
+    assert got.exit_price == Decimal("60.00")
+    assert got.reason is ExitSignal.PROFIT_TARGET
+
+
+def test_get_signal_exit_picks_own_sell_across_cycles(store: PaperStore) -> None:
+    _close_cycle_get_id(store, date(2026, 9, 10), _KEY, "40", "30", ExitSignal.LOSS_STOP)
+    tid2 = _close_cycle_get_id(
+        store, date(2026, 9, 11), "NSE_FO|66666", "50", "55", ExitSignal.TIME_STOP
+    )
+
+    got = store.get_signal_exit(tid2)
+
+    assert got is not None
+    assert got.exit_price == Decimal("55")
+    assert got.reason is ExitSignal.TIME_STOP
+
+
+def test_get_signal_exit_none_while_position_open(store: PaperStore) -> None:
+    tid = _open_buy_row(store, day=date(2026, 9, 10), price="40.25")
+    store.open_signal_entry(_entry(tid))
+
+    assert store.get_signal_exit(tid) is None

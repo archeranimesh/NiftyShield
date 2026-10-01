@@ -573,6 +573,20 @@ class SignalPaperEntry(BaseModel):
     model_config = {"frozen": True}
 
 
+class SignalExit(BaseModel):
+    """Realised exit of a signals-paper-track position, as the monitor closed it.
+
+    Attributes:
+        exit_price: The simulated SELL fill price (``paper_trades`` SELL leg).
+        reason: Why it closed — ``PROFIT_TARGET``, ``LOSS_STOP`` or ``TIME_STOP``.
+    """
+
+    exit_price: Decimal = Field(..., ge=0)
+    reason: ExitSignal
+
+    model_config = {"frozen": True}
+
+
 class SignalMark(BaseModel):
     """One monitor-tick telemetry row for a signals-paper-track position.
 

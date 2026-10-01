@@ -53,6 +53,11 @@ load_dotenv()
 _NIFTY_SPOT_KEY = "NSE_INDEX|Nifty 50"
 _ACTION_LABEL = {TradeAction.BUY_CALL: "BUY CALL", TradeAction.BUY_PUT: "BUY PUT"}
 _DIRECTION_EMOJI = {"BULLISH": "📈", "BEARISH": "📉"}
+_EXIT_REASON_LABEL = {
+    "PROFIT_TARGET": "Target hit",
+    "LOSS_STOP": "SL hit",
+    "TIME_STOP": "Time exit",
+}
 _E = escape_markdown
 
 _SIGNIFICANCE_THRESHOLD = 50
@@ -204,8 +209,10 @@ def _high_low_pnl_per_lot(
     return last.mfe_pct * entry_premium * LOT_SIZE, last.mae_pct * entry_premium * LOT_SIZE
 
 
-def _format_outcome_notification(outcome: SignalOutcome, signal: DailySignal) -> str:
-    """Render the daily outcome as MarkdownV2-ready Telegram message text.\n\n    S5.5c vertical layout (reference renderer ``format_outcome_notification``,\n    validated on-device 2026-09-08): bold header + blank line + one\n    emoji-prefixed line per field. This formatter owns its escaping — every\n    dynamic part is escaped per value and literal ``*`` is emitted for bold — so\n    the caller sends the result WITHOUT re-wrapping it in ``escape_markdown``.\n\n    Would-be P&L for the not-taken case is derived here from\n    ``entry_premium``/``exit_premium`` (both populated by ``--auto`` even when\n    ``executed`` is False) — no ``SignalOutcome`` change.\n\n    Args:\n        outcome: The persisted ``SignalOutcome`` for the trading day.\n        signal: The aggregated ``DailySignal`` — direction of the trade call.\n\n    Returns:\n        Fully-escaped message text. One of: an executed block, a not-taken\n        (would-be P&L) block, a NO_TRADE line, or a close-only fallback when a\n        premium leg is missing.\n"""
+def _format_outcome_notification(
+    outcome: SignalOutcome, signal: DailySignal, exit_reason: str | None = None
+) -> str:
+    """Render the daily outcome as MarkdownV2-ready Telegram message text.\n\n    S5.5c vertical layout (reference renderer ``format_outcome_notification``,\n    validated on-device 2026-09-08): bold header + blank line + one\n    emoji-prefixed line per field. This formatter owns its escaping — every\n    dynamic part is escaped per value and literal ``*`` is emitted for bold — so\n    the caller sends the result WITHOUT re-wrapping it in ``escape_markdown``.\n\n    Would-be P&L for the not-taken case is derived here from\n    ``entry_premium``/``exit_premium`` (both populated by ``--auto`` even when\n    ``executed`` is False) — no ``SignalOutcome`` change.\n\n    Args:\n        outcome: The persisted ``SignalOutcome`` for the trading day.\n        signal: The aggregated ``DailySignal`` — direction of the trade call.\n        exit_reason: ``ExitSignal`` value of the tracker's exit (maps to a label via\n            ``_EXIT_REASON_LABEL``); ``None`` keeps the plain ``Exit`` label.\n\n    Returns:\n        Fully-escaped message text. One of: an executed block, a not-taken\n        (would-be P&L) block, a NO_TRADE line, or a close-only fallback when a\n        premium leg is missing.\n"""
     day = outcome.trade_date.strftime("%d %b")
     close = _E(f"🏁 Nifty close: {outcome.nifty_close:,.0f}")
     entry, exit_ = outcome.entry_premium, outcome.exit_premium
@@ -230,7 +237,8 @@ def _format_outcome_notification(outcome: SignalOutcome, signal: DailySignal) ->
     range_line = ""
     if outcome.executed:
         header = _E(f"📊 SIGNAL OUTCOME · {day}")
-        prem = _E(f"💰 Entry {format_money(entry)} → Exit {format_money(exit_)}")
+        exit_label = _EXIT_REASON_LABEL.get(exit_reason or "", "Exit")
+        prem = _E(f"💰 Entry {format_money(entry)} → {exit_label} {format_money(exit_)}")
         if outcome.high_pnl_per_lot is not None and outcome.low_pnl_per_lot is not None:
             range_line = "\n" + _E(
                 f"📈 High {format_money(outcome.high_pnl_per_lot, signed=True)} / "
@@ -246,13 +254,15 @@ def _format_outcome_notification(outcome: SignalOutcome, signal: DailySignal) ->
     )
 
 
-def _notify_outcome(outcome: SignalOutcome, signal: DailySignal) -> None:
+def _notify_outcome(
+    outcome: SignalOutcome, signal: DailySignal, exit_reason: str | None = None
+) -> None:
     """Push the outcome to Telegram; non-fatal when no notifier is configured."""
     notifier = build_notifier()
     if notifier is None:
         return
     try:
-        asyncio.run(notifier.send(_format_outcome_notification(outcome, signal)))
+        asyncio.run(notifier.send(_format_outcome_notification(outcome, signal, exit_reason)))
     except Exception as exc:  # noqa: BLE001
         logger.warning("signal_outcome_notify_failed", error=str(exc))
 
@@ -532,6 +542,14 @@ def run_record_phase(args: argparse.Namespace) -> None:
             raise RuntimeError("Nifty spot LTP unavailable — pass --nifty-close.")
         nifty_close = spot.quantize(Decimal("0.01"))
 
+    exit_reason: str | None = None
+    if is_trade and trade_id is not None:
+        # BUG-063: the tracker's real exit fill beats the EOD LTP once the position has closed.
+        tracker_exit = PaperStore(settings.db_path).get_signal_exit(trade_id)
+        if tracker_exit is not None:
+            exit_premium = tracker_exit.exit_price
+            exit_reason = tracker_exit.reason.value
+
     if not is_trade:
         entry_premium = exit_premium = None
         executed = False
@@ -554,7 +572,7 @@ def run_record_phase(args: argparse.Namespace) -> None:
         notes=args.notes,
     )
     store.record_outcome(outcome)
-    _notify_outcome(outcome, signal)
+    _notify_outcome(outcome, signal, exit_reason)
 
     logger.info(
         "signal_outcome_recorded",

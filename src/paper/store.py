@@ -43,6 +43,7 @@ from src.paper.models import (
     PaperPosition,
     PaperTrade,
     ProtectionRecoverySnapshot,
+    SignalExit,
     SignalMark,
     SignalPaperEntry,
     TrackComparisonSnapshot,
@@ -2317,6 +2318,37 @@ class PaperStore:
             if cur.lastrowid is None:
                 raise ValueError("Failed to insert paper exit event")
             return cur.lastrowid
+
+    def get_signal_exit(self, trade_id: int) -> SignalExit | None:
+        """Return the realised exit of a signals-paper-track position, or ``None`` if still open.
+
+        The closing SELL leg is the first ``paper_trades`` SELL for the strategy after the
+        opening BUY row — sound because ``open_signal_entry`` allows one position at a time.
+        The reason comes from the ``paper_exit_events`` row ``close_signal_entry`` wrote.
+
+        Args:
+            trade_id: ``paper_trades.id`` of the opening BUY leg.
+
+        Returns:
+            The exit fill and reason, or ``None`` when no exit event or SELL leg exists yet.
+        """
+        with _connect(self.db_path) as conn:
+            event = conn.execute(
+                """SELECT exit_signal FROM paper_exit_events
+                   WHERE strategy_name = ? AND trade_id = ? ORDER BY id DESC LIMIT 1""",
+                (STRATEGY_SIGNAL_TRACK, str(trade_id)),
+            ).fetchone()
+            sell = conn.execute(
+                """SELECT price FROM paper_trades
+                   WHERE strategy_name = ? AND action = 'SELL' AND id > ?
+                   ORDER BY id LIMIT 1""",
+                (STRATEGY_SIGNAL_TRACK, trade_id),
+            ).fetchone()
+        if event is None or sell is None:
+            return None
+        return SignalExit(
+            exit_price=Decimal(sell["price"]), reason=ExitSignal(event["exit_signal"])
+        )
 
     def get_entries(self, from_: date, to: date) -> list[SignalPaperEntry]:
         """Return every signals-paper-track entry with ``signal_date`` in ``[from_, to]``."""

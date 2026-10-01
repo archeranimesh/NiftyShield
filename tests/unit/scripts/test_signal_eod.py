@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from scripts import signal_eod
 from src.paper.constants import LOT_SIZE
+from src.paper.models import ExitSignal, SignalExit
 from src.signals.models import (
     DailySignal,
     Direction,
@@ -371,6 +372,7 @@ def test_executed_detected_from_live_paper_entry(
     live_entry.entry_premium = Decimal("120.00")
     live_entry.trade_id = 42
     mock_paper_store_cls.return_value.get_entries.return_value = [live_entry]
+    mock_paper_store_cls.return_value.get_signal_exit.return_value = None
     mock_paper_store_cls.return_value.get_marks.return_value = []
 
     signal_eod.main()
@@ -444,6 +446,7 @@ def test_executed_outcome_computes_high_low_from_marks(
     live_entry.entry_premium = Decimal("120.00")
     live_entry.trade_id = 42
     mock_paper_store_cls.return_value.get_entries.return_value = [live_entry]
+    mock_paper_store_cls.return_value.get_signal_exit.return_value = None
 
     early_mark = MagicMock()
     early_mark.mfe_pct = Decimal("0.10")
@@ -593,6 +596,7 @@ def test_executed_with_no_marks_leaves_high_low_none(
     live_entry.entry_premium = Decimal("120.00")
     live_entry.trade_id = 42
     mock_paper_store_cls.return_value.get_entries.return_value = [live_entry]
+    mock_paper_store_cls.return_value.get_signal_exit.return_value = None
     mock_paper_store_cls.return_value.get_marks.return_value = []
 
     signal_eod.main()
@@ -751,3 +755,129 @@ def test_record_exception_allows_report_phase_to_run(
 
     mock_record.assert_called_once()
     mock_report.assert_called_once()
+
+
+# --- BUG-063: tracker exit fill + reason in the outcome ---------------------
+
+
+@pytest.mark.parametrize(
+    ("reason", "label"),
+    [("PROFIT_TARGET", "Target hit"), ("LOSS_STOP", "SL hit"), ("TIME_STOP", "Time exit")],
+)
+def test_executed_outcome_labels_exit_reason(reason: str, label: str) -> None:
+    msg = _FMT_OUTCOME(_OUT_EXEC, _SIGNAL_BUY, reason)
+
+    assert f"💰 Entry ₹65\\.50 → {label} ₹92\\.00" in msg
+
+
+def test_executed_outcome_without_reason_keeps_plain_exit_label() -> None:
+    msg = _FMT_OUTCOME(_OUT_EXEC, _SIGNAL_BUY, None)
+
+    assert "→ Exit ₹92\\.00" in msg
+
+
+def _run_main_with_live_entry(
+    mock_paper_store_cls: MagicMock,
+    mock_store_cls: MagicMock,
+    mock_parse_args: MagicMock,
+    mock_market_today: MagicMock,
+    mock_guard: MagicMock,
+    mock_notifier: MagicMock,
+    mock_fetch_ltp: MagicMock,
+    mock_resolve: MagicMock,
+    tracker_exit: SignalExit | None,
+) -> MagicMock:
+    mock_parse_args.return_value = MagicMock(
+        auto=True,
+        report_only=False,
+        from_date=None,
+        to_date=None,
+        phase=None,
+        entry_premium=None,
+        exit_premium=None,
+        executed=False,
+        nifty_close=None,
+        bod_path=Path("/fake/bod.json"),
+        notes="",
+        trade_date="2026-09-08",
+    )
+    mock_market_today.return_value = date(2026, 9, 8)
+    mock_notifier.return_value = None
+    mock_guard.return_value = False
+    mock_store = MagicMock()
+    mock_store_cls.return_value = mock_store
+    mock_store.get_signal.return_value = DailySignal(
+        trade_date=date(2026, 9, 8),
+        responses=[],
+        consensus_direction=Direction.BULLISH,
+        consensus_confidence=Decimal("4"),
+        trade_action=TradeAction.BUY_CALL,
+        recommended_strike=24800,
+        entry_premium=None,
+        agreeing_models=[],
+        dissenting_models=[],
+    )
+    mock_resolve.return_value = "NSE_FO|12345"
+    mock_fetch_ltp.return_value = {
+        "NSE_FO|12345": Decimal("150.00"),
+        "NSE_INDEX|Nifty 50": Decimal("24850.00"),
+    }
+    live_entry = MagicMock(entry_premium=Decimal("120.00"), trade_id=42)
+    paper = mock_paper_store_cls.return_value
+    paper.get_entries.return_value = [live_entry]
+    paper.get_marks.return_value = []
+    paper.get_signal_exit.return_value = tracker_exit
+    signal_eod.main()
+    return mock_store
+
+
+_MAIN_PATCHES = [
+    "scripts.signal_eod.PaperStore",
+    "scripts.signal_eod.SignalStore",
+    "scripts.signal_eod._parse_args",
+    "scripts.signal_eod.market_today",
+    "scripts.signal_eod.guard_trading_day",
+    "scripts.signal_eod.build_notifier",
+    "scripts.signal_eod._fetch_ltp",
+    "scripts.signal_eod._resolve_option_key",
+]
+
+
+def test_outcome_uses_tracker_exit_fill_not_eod_ltp() -> None:
+    exit_ = SignalExit(exit_price=Decimal("180.00"), reason=ExitSignal.PROFIT_TARGET)
+    with (
+        patch(_MAIN_PATCHES[0]) as paper,
+        patch(_MAIN_PATCHES[1]) as sig,
+        patch(_MAIN_PATCHES[2]) as args,
+        patch(_MAIN_PATCHES[3]) as today,
+        patch(_MAIN_PATCHES[4]) as guard,
+        patch(_MAIN_PATCHES[5]) as notifier,
+        patch(_MAIN_PATCHES[6]) as ltp,
+        patch(_MAIN_PATCHES[7]) as resolve,
+    ):
+        store = _run_main_with_live_entry(
+            paper, sig, args, today, guard, notifier, ltp, resolve, exit_
+        )
+
+    outcome = store.record_outcome.call_args[0][0]
+    assert outcome.exit_premium == Decimal("180.00")  # tracker fill, not the 150.00 EOD LTP
+    assert outcome.pnl_per_lot == (Decimal("180.00") - Decimal("120.00")) * LOT_SIZE
+
+
+def test_outcome_falls_back_to_eod_ltp_when_position_still_open() -> None:
+    with (
+        patch(_MAIN_PATCHES[0]) as paper,
+        patch(_MAIN_PATCHES[1]) as sig,
+        patch(_MAIN_PATCHES[2]) as args,
+        patch(_MAIN_PATCHES[3]) as today,
+        patch(_MAIN_PATCHES[4]) as guard,
+        patch(_MAIN_PATCHES[5]) as notifier,
+        patch(_MAIN_PATCHES[6]) as ltp,
+        patch(_MAIN_PATCHES[7]) as resolve,
+    ):
+        store = _run_main_with_live_entry(
+            paper, sig, args, today, guard, notifier, ltp, resolve, None
+        )
+
+    outcome = store.record_outcome.call_args[0][0]
+    assert outcome.exit_premium == Decimal("150.00")
