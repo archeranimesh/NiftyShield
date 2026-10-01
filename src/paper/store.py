@@ -330,6 +330,29 @@ CREATE TABLE IF NOT EXISTS paper_signal_marks (
 
 CREATE INDEX IF NOT EXISTS idx_paper_signal_marks_trade
     ON paper_signal_marks(trade_id, ts);
+
+-- Post-exit telemetry: same shape as paper_signal_marks, kept in its own table so the
+-- live-series readers (and the exit-time MFE/MAE they take from the last row) never
+-- see prices after the position closed.
+CREATE TABLE IF NOT EXISTS paper_signal_shadow_marks (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    trade_id       INTEGER NOT NULL REFERENCES paper_trades(id),
+    ts             TEXT NOT NULL,
+    quote_ts       TEXT,
+    stale          INTEGER NOT NULL DEFAULT 0,
+    ltp            TEXT NOT NULL,
+    bid            TEXT NOT NULL,
+    ask            TEXT NOT NULL,
+    mark           TEXT NOT NULL,
+    unrealised_pct TEXT NOT NULL,
+    mfe_pct        TEXT NOT NULL,
+    mae_pct        TEXT NOT NULL,
+    gap_event      INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(trade_id, ts)
+);
+
+CREATE INDEX IF NOT EXISTS idx_paper_signal_shadow_marks_trade
+    ON paper_signal_shadow_marks(trade_id, ts);
 """
 
 
@@ -2224,9 +2247,21 @@ class PaperStore:
 
     def record_mark(self, mark: SignalMark) -> None:
         """Persist one monitor-tick telemetry row. Idempotent on ``(trade_id, ts)``."""
+        self._insert_signal_mark("paper_signal_marks", mark)
+
+    def record_shadow_mark(self, mark: SignalMark) -> None:
+        """Persist one post-exit shadow tick. Idempotent on ``(trade_id, ts)``.
+
+        Written after the position closed (to 15:00 IST) so the session high/low can
+        include prices the trade no longer held; never read by the live-series callers.
+        """
+        self._insert_signal_mark("paper_signal_shadow_marks", mark)
+
+    def _insert_signal_mark(self, table: str, mark: SignalMark) -> None:
+        """Insert ``mark`` into ``table`` (a module-constant table name, never user input)."""
         with _connect(self.db_path) as conn:
             conn.execute(
-                """INSERT INTO paper_signal_marks
+                f"""INSERT INTO {table}
                    (trade_id, ts, quote_ts, stale, ltp, bid, ask, mark,
                     unrealised_pct, mfe_pct, mae_pct, gap_event)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -2255,6 +2290,27 @@ class PaperStore:
                 (trade_id,),
             ).fetchall()
         return [_row_to_signal_mark(r) for r in rows]
+
+    def get_shadow_marks(self, trade_id: int) -> list[SignalMark]:
+        """Return every post-exit shadow row for a position, oldest first."""
+        with _connect(self.db_path) as conn:
+            rows = conn.execute(
+                "SELECT * FROM paper_signal_shadow_marks WHERE trade_id = ? ORDER BY ts",
+                (trade_id,),
+            ).fetchall()
+        return [_row_to_signal_mark(r) for r in rows]
+
+    def get_closed_signal_entry(self, signal_date: date) -> SignalPaperEntry | None:
+        """Return the most recent CLOSED signal entry for ``signal_date``, or ``None``."""
+        with _connect(self.db_path) as conn:
+            row = conn.execute(
+                """SELECT e.* FROM paper_signal_entries e
+                   JOIN paper_trades t ON t.id = e.trade_id
+                   WHERE t.state = 'CLOSED' AND e.signal_date = ?
+                   ORDER BY e.trade_id DESC LIMIT 1""",
+                (signal_date.isoformat(),),
+            ).fetchone()
+        return _row_to_signal_entry(row) if row is not None else None
 
     def close_signal_entry(self, trade_id: int, exit_event: PaperExitEvent) -> int:
         """Close a signals-paper-track position: mark the leg CLOSED + log the exit.

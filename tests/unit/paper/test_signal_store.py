@@ -199,6 +199,40 @@ def test_record_mark_idempotent_on_trade_id_ts(store: PaperStore) -> None:
     assert len(store.get_marks(tid)) == 1
 
 
+# ── shadow marks (post-exit telemetry) ────────────────────────────────────────
+
+
+def test_shadow_marks_round_trip_and_isolated_from_live_series(store: PaperStore) -> None:
+    tid = _open_buy_row(store, day=date(2026, 9, 10), price="40.25")
+    store.open_signal_entry(_entry(tid))
+    store.record_mark(_mark(tid, ts=datetime(2026, 9, 10, 9, 33)))
+    store.record_shadow_mark(
+        _mark(tid, ts=datetime(2026, 9, 10, 13, 0), mark=Decimal("33.00"), ltp=Decimal("33.00"))
+    )
+    (shadow,) = store.get_shadow_marks(tid)
+    assert shadow.mark == Decimal("33.00")
+    assert [m.ts for m in store.get_marks(tid)] == [datetime(2026, 9, 10, 9, 33)]
+
+
+def test_record_shadow_mark_idempotent_and_empty_when_none(store: PaperStore) -> None:
+    tid = _open_buy_row(store, day=date(2026, 9, 10), price="40.25")
+    store.open_signal_entry(_entry(tid))
+    assert store.get_shadow_marks(tid) == []
+    store.record_shadow_mark(_mark(tid))
+    store.record_shadow_mark(_mark(tid))
+    assert len(store.get_shadow_marks(tid)) == 1
+
+
+def test_get_closed_signal_entry_returns_closed_for_date(store: PaperStore) -> None:
+    tid = _open_buy_row(store, day=date(2026, 9, 10), price="40.25")
+    store.open_signal_entry(_entry(tid))
+    assert store.get_closed_signal_entry(date(2026, 9, 10)) is None  # still open
+    store.close_signal_entry(tid, _exit_event(tid))
+    got = store.get_closed_signal_entry(date(2026, 9, 10))
+    assert got is not None and got.trade_id == tid
+    assert store.get_closed_signal_entry(date(2026, 9, 11)) is None  # other day
+
+
 # ── cumulative_pnl ────────────────────────────────────────────────────────────
 
 
