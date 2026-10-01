@@ -654,3 +654,84 @@ async def test_chain_recovery_resets_outage_clock(store: PaperStore) -> None:
     await strategy.check_without_chain()  # new outage: clock restarts, no alert yet
 
     assert notifier.messages == []
+
+
+# ---------------------------------------------------------------------------
+# Post-exit shadow marking (session high/low to 15:00 IST)
+# ---------------------------------------------------------------------------
+
+
+async def _close_on_target(store: PaperStore, now: list[_dt]) -> int:
+    """Open a 40 → 55 target trade and close it on the chain path; return its trade_id."""
+    trade_id = _open_entry(store, sl_price="20", tgt_price="55", premium="40")
+    strategy = SignalTrackV1(store=store, clock=lambda: now[0])
+    await strategy.check_signals(_chain(bid="55.00", ask="55.00", ltp="55.00"), [])
+    assert store.get_open_signal_entry() is None
+    return trade_id
+
+
+async def test_shadow_marks_continue_after_exit_and_track_session_extremes(
+    store: PaperStore,
+) -> None:
+    now = [_dt(2026, 9, 10, 12, 54, tzinfo=_IST)]
+    trade_id = await _close_on_target(store, now)
+    strategy = SignalTrackV1(store=store, clock=lambda: now[0])
+
+    for minutes, px in ((1, "62.00"), (2, "30.00")):
+        now[0] = _dt(2026, 9, 10, 12, 54, tzinfo=_IST) + _timedelta(minutes=minutes)
+        await strategy.check_signals(_chain(bid=px, ask=px, ltp=px), [])
+
+    shadow = store.get_shadow_marks(trade_id)
+    assert [m.mark for m in shadow] == [Decimal("62.00"), Decimal("30.00")]
+    # running extremes are seeded from the live series (mfe 0.375 at the exit tick)
+    assert shadow[0].mfe_pct == Decimal("0.55")
+    assert shadow[-1].mfe_pct == Decimal("0.55") and shadow[-1].mae_pct == Decimal("-0.25")
+    assert len(store.get_marks(trade_id)) == 1  # live series untouched
+
+
+async def test_shadow_uses_ltp_when_chain_is_down(store: PaperStore) -> None:
+    now = [_dt(2026, 9, 10, 12, 54, tzinfo=_IST)]
+    trade_id = await _close_on_target(store, now)
+    now[0] += _timedelta(minutes=1)
+    strategy = SignalTrackV1(store=store, broker=_LtpBroker("48"), clock=lambda: now[0])
+
+    await strategy.check_without_chain()
+
+    (shadow,) = store.get_shadow_marks(trade_id)
+    assert shadow.mark == Decimal("48")
+
+
+async def test_shadow_stops_at_1500_ist(store: PaperStore) -> None:
+    now = [_dt(2026, 9, 10, 12, 54, tzinfo=_IST)]
+    trade_id = await _close_on_target(store, now)
+    now[0] = _dt(2026, 9, 10, 15, 0, tzinfo=_IST)
+    strategy = SignalTrackV1(store=store, broker=_LtpBroker("48"), clock=lambda: now[0])
+
+    await strategy.check_without_chain()
+
+    assert store.get_shadow_marks(trade_id) == []
+
+
+async def test_shadow_skips_without_quote_or_closed_entry(store: PaperStore) -> None:
+    now = [_dt(2026, 9, 10, 12, 54, tzinfo=_IST)]
+    strategy = SignalTrackV1(store=store, broker=_LtpBroker("48"), clock=lambda: now[0])
+    await strategy.check_without_chain()  # nothing opened today: silent no-op
+
+    trade_id = await _close_on_target(store, now)
+    now[0] += _timedelta(minutes=1)
+    failing = SignalTrackV1(store=store, broker=_LtpBroker(fail=True), clock=lambda: now[0])
+    await failing.check_without_chain()  # quote failure must not raise or write
+
+    assert store.get_shadow_marks(trade_id) == []
+
+
+async def test_shadow_falls_back_to_ltp_when_chain_lacks_the_leg(store: PaperStore) -> None:
+    now = [_dt(2026, 9, 10, 12, 54, tzinfo=_IST)]
+    trade_id = await _close_on_target(store, now)
+    now[0] += _timedelta(minutes=1)
+    strategy = SignalTrackV1(store=store, broker=_LtpBroker("47"), clock=lambda: now[0])
+
+    await strategy.check_signals(parse_upstox_option_chain([]), [])  # other-expiry / empty chain
+
+    (shadow,) = store.get_shadow_marks(trade_id)
+    assert shadow.mark == Decimal("47")

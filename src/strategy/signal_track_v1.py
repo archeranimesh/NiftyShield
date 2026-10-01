@@ -25,7 +25,7 @@ from __future__ import annotations
 import asyncio
 import re
 from collections.abc import Callable
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
@@ -69,6 +69,8 @@ _GAP_PCT = Decimal("0.20")  # |mark - prev_mark| / E threshold for gap_event.
 logger = structlog.get_logger(__name__)
 
 _IST = ZoneInfo("Asia/Kolkata")
+# Post-exit shadow marking stops here (deliberately the 15:00 square-off, not market close).
+_SHADOW_END = time(15, 0)
 _UNDERLYING = "NIFTY"
 _LEG_ROLE = "signal_long"
 _NIFTY_KEY = "NSE_INDEX|Nifty 50"
@@ -520,6 +522,7 @@ class SignalTrackV1:
 
         entry = await asyncio.to_thread(self._store.get_open_signal_entry)
         if entry is None:
+            await self._shadow_tick(market)
             return []
         if entry.trade_id in self._exit_fired_trade_ids:
             return []
@@ -602,7 +605,10 @@ class SignalTrackV1:
         if self._store is None or self._broker is None:
             return
         entry = await asyncio.to_thread(self._store.get_open_signal_entry)
-        if entry is None or entry.trade_id in self._exit_fired_trade_ids:
+        if entry is None:
+            await self._shadow_tick(None)
+            return
+        if entry.trade_id in self._exit_fired_trade_ids:
             return
         try:
             ltps = await self._broker.get_ltp([entry.instrument_key, _NIFTY_KEY])
@@ -615,7 +621,12 @@ class SignalTrackV1:
             return
         self._blind_since, self._blind_alerted = None, False
         logger.warning("signal_track.chain_down_ltp_fallback", trade_id=entry.trade_id)
-        leg = OptionLeg(
+        leg = self._leg_from_ltp(entry.instrument_key, ltp)
+        await self._process_leg(entry, leg, spot)
+
+    def _leg_from_ltp(self, instrument_key: str, ltp: Decimal) -> OptionLeg:
+        """Chain-less ``OptionLeg`` carrying only the LTP (bid = ask = ltp, no Greeks)."""
+        return OptionLeg(
             ltp=ltp,
             bid=ltp,
             ask=ltp,
@@ -626,9 +637,63 @@ class SignalTrackV1:
             theta=None,
             vega=None,
             iv=None,
-            strike=self._strike_of(entry.instrument_key),
+            strike=self._strike_of(instrument_key),
         )
-        await self._process_leg(entry, leg, spot)
+
+    async def _shadow_tick(self, market: OptionChain | None) -> None:
+        """Keep marking today's already-closed position until 15:00 IST (shadow telemetry).
+
+        The exit rules close the trade on a target / stop / time hit, but the option keeps
+        trading; these ``paper_signal_shadow_marks`` rows record what it did afterwards so
+        the session high/low (and any later trail / target study) sees the whole day. Never
+        touches the position, the live ``paper_signal_marks`` series or the Telegram exit.
+        The leg comes from ``market`` when it carries it, else from an LTP quote; a missing
+        quote just skips the tick. The running MFE/MAE are seeded from the latest row so the
+        last shadow row holds the session extremes.
+
+        Args:
+            market: Current chain, or ``None`` on the chain-down path.
+        """
+        assert self._store is not None  # callers return early on a missing store
+        now = self._clock()
+        now_ist = now.astimezone(_IST)
+        if now_ist.time() >= _SHADOW_END:
+            return
+        entry = await asyncio.to_thread(self._store.get_closed_signal_entry, now_ist.date())
+        if entry is None:
+            return
+        leg = (
+            find_option_leg(entry.instrument_key, market, self._lookup)
+            if market is not None
+            else None
+        )
+        if leg is None and self._broker is not None:
+            try:
+                ltps = await self._broker.get_ltp([entry.instrument_key])
+            except Exception as exc:  # Intentional: a quote failure must not break the tick loop
+                logger.warning("signal_track.shadow_ltp_failed", error=str(exc))
+                return
+            ltp = ltps.get(entry.instrument_key)
+            leg = self._leg_from_ltp(entry.instrument_key, ltp) if ltp and ltp > 0 else None
+        if leg is None:
+            return
+        marks = await asyncio.to_thread(self._store.get_shadow_marks, entry.trade_id)
+        marks = marks or await asyncio.to_thread(self._store.get_marks, entry.trade_id)
+        prev = marks[-1] if marks else None
+        try:
+            mark_row = _compute_mark(
+                entry,
+                leg,
+                now=now,
+                quote_ts=None,
+                prev_mark=prev.mark if prev is not None else None,
+                prev_mfe_pct=prev.mfe_pct if prev is not None else Decimal("0"),
+                prev_mae_pct=prev.mae_pct if prev is not None else Decimal("0"),
+            )
+        except ValueError:
+            logger.warning("signal_track.shadow_no_valid_price", trade_id=entry.trade_id)
+            return
+        await asyncio.to_thread(self._store.record_shadow_mark, mark_row)
 
     def _strike_of(self, instrument_key: str) -> Decimal:
         """Strike for the exit-message label: symbolic key first, then BOD lookup, else 0."""
