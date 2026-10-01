@@ -37,13 +37,7 @@
 
 > BUG-040 closed 2026-09-30 (SHA `50a5ce4` + `680778b`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
-## BUG-065 — `SignalTrackV1` exit Telegram never sends: gateway has no `send()`
-
-Detail: `docs/bugs/bugs.md` BUG-065.
-
-- [ ] **B065.1** — Route the exit message through a working send path and isolate send failures from the strategy. Tests: gateway-shaped double without `send` still delivers; a failing send does not
-  raise.
-- [ ] **B065.2** — Check `open_signal_paper_entry` for the same notifier-API assumption.
+> BUG-065 closed 2026-10-01 (SHA `6793e54`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
 ## BUG-063 — `signal_eod.py` records EOD LTP, not the tracker exit fill, as `exit_premium`
 

@@ -87,6 +87,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-01] BUG-065 fixed (`6793e54`) — `SignalTrackV1` exit Telegram never sent because `monitor_daemon` injects `TelegramGateway` (no `send()`); now dispatched via `send_notification`. Logged
+  BUG-063 (signal_eod records EOD LTP not the exit fill) and BUG-064 (ticks stop mid-session, 15:00 time exit missed on 09-15 / 09-17). Next: BUG-063 phase (B063.1 / B063.3).
 - [2026-10-01] `paper-pnl-golden-tests/` T1 done — three exact-`Decimal` golden tests (short profit, short loss, long profit) added to `tests/unit/paper/test_pnl_hypothesis.py`; 3805 unit tests green,
   `@code-reviewer` clean. Unblocks `strategy-refactor-blueprint` BP-2. Story docs cite the wrong test path (`tests/unit/` not `tests/unit/paper/`) — not fixed.
 - [2026-10-01] `project-template-blueprint/` PTB-9 done, story archived — Animesh reviewed `project-scaffold`'s README and TIERS.md and confirmed it ready to use (`99b90c4`). Re-check before close:

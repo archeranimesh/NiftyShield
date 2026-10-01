@@ -697,12 +697,12 @@ split mirrors BUG-020's precedent — each phase independently working and teste
   `test_describe_context` assertions + 3 test fixtures' hardcoded `_STRATEGY` literals updated to derive from the real constant. 262 tests green (3 unrelated pre-existing pyarrow-missing failures in
   `test_overlay_entry.py`). SHA `ea5df81` (same commit as B031.2).
 - [x] **B031.4** — Manual action, independent of the code fix: review every currently-open CC/PP/Collar leg for exit-eligibility by hand (delta/premium/profit-target/DTE) — nothing has been doing this
-  automatically since 2026-07-29. **Closed 2026-08-24.** Delta/premium coverage: live run of `scratch/diagnostics_db/2026-08-24_bug031_manual_exit_review.py` against the real broker/DB found 5 open legs (not 2 as
-  originally scoped — 3 `overlay_pp`, 1 `overlay_cc`, 1 `overlay_collar_put`), zero delta/premium-based signals fired at current market levels. DTE coverage was blocked by **BUG-033**/**BUG-034**
-  (DTE-gated signals and, for PP/CC, the entire `check_signals()` path dead for real positions) — resolved for PP specifically by Animesh's decision to close all 3 `overlay_pp` legs by hand
-  (`scratch/diagnostics_db/2026-08-24_close_all_pp_legs.py --execute`, confirmed 0 open `overlay_pp` positions afterward) rather than wait on the DTE fix — this eliminates `NSE_FO|61604`'s near-expiry exposure
-  entirely rather than just reviewing it. **Residual, not closed by this**: the still-open `overlay_cc` (`NSE_FO|74391`) and `overlay_collar_put` (`NSE_FO|73994`) legs had their delta/premium checked
-  clean but their DTE was never actually verifiable (same BUG-033/034 blockers) — re-run the review script against them once those bugs ship.
+  automatically since 2026-07-29. **Closed 2026-08-24.** Delta/premium coverage: live run of `scratch/diagnostics_db/2026-08-24_bug031_manual_exit_review.py` against the real broker/DB found 5 open
+  legs (not 2 as originally scoped — 3 `overlay_pp`, 1 `overlay_cc`, 1 `overlay_collar_put`), zero delta/premium-based signals fired at current market levels. DTE coverage was blocked by
+  **BUG-033**/**BUG-034** (DTE-gated signals and, for PP/CC, the entire `check_signals()` path dead for real positions) — resolved for PP specifically by Animesh's decision to close all 3 `overlay_pp`
+  legs by hand (`scratch/diagnostics_db/2026-08-24_close_all_pp_legs.py --execute`, confirmed 0 open `overlay_pp` positions afterward) rather than wait on the DTE fix — this eliminates
+  `NSE_FO|61604`'s near-expiry exposure entirely rather than just reviewing it. **Residual, not closed by this**: the still-open `overlay_cc` (`NSE_FO|74391`) and `overlay_collar_put` (`NSE_FO|73994`)
+  legs had their delta/premium checked clean but their DTE was never actually verifiable (same BUG-033/034 blockers) — re-run the review script against them once those bugs ship.
 - [x] **B031.5** — Review: real `code-reviewer` or `general-purpose` + `REVIEW.md` substitute (mandatory — governs live-capital-adjacent auto-execution: `MONETIZE_PP`, `ROLL_PP`, `CLOSE_CC`,
   `CLOSE_AND_REENTER_COLLAR`). `general-purpose` + `REVIEW.md` substitute run against the B031.2/B031.3 diff (no real `code-reviewer` subagent on this Cowork surface) — clean bill of health, no
   CRITICAL/ERROR, confirmed no leftover stale-constant references and that the two new `StrategyMonitor` tests assert real call-arg content, not vacuous. No council checkpoint triggered — this diff is
@@ -732,10 +732,10 @@ split mirrors BUG-020's precedent — each phase independently working and teste
 - [x] **B033.3** — Review: real `code-reviewer` or `general-purpose` + `REVIEW.md` substitute (mandatory — same live-capital-adjacent auto-execution bar as B031.5). | SHA ef1c341
 - [x] **B033.4** — Manual action, independent of the code fix and time-sensitive: `overlay_pp` leg `NSE_FO|61604` expires 2026-08-25 — decide whether to roll/close it by hand before expiry rather than
   wait for this fix to land. Closed by Animesh (2026-08-24) — all PP positions closed manually, ahead of expiry.
-- [x] **B033.5** — Commit, update `bugs.md` BUG-033 status to ✅ Fixed + SHA, update `TODOS.md`. Re-run `scratch/diagnostics_db/2026-08-24_bug031_manual_exit_review.py` afterward to close out BUG-031's B031.4 with
-  real DTE coverage. Re-run done 2026-08-24 (Animesh, live, post-BUG-034): 2 open overlay legs (`overlay_cc` `NSE_FO|74391` dte=36, `overlay_collar_put` `NSE_FO|73994` dte=36). `CCOverlayV1` fired a
-  real `PROFIT_TARGET` (auto_execute=True, auto_action=CLOSE_CC) — confirms DTE/delta/premium logic is now reachable end-to-end for a real `overlay_cc` position, closing out BUG-031's B031.4 with real
-  coverage. No signal on the Collar leg (expected — not DTE-gated at dte=36, and Collar's own roles were never affected by BUG-034). | SHA ef1c341
+- [x] **B033.5** — Commit, update `bugs.md` BUG-033 status to ✅ Fixed + SHA, update `TODOS.md`. Re-run `scratch/diagnostics_db/2026-08-24_bug031_manual_exit_review.py` afterward to close out BUG-031's
+  B031.4 with real DTE coverage. Re-run done 2026-08-24 (Animesh, live, post-BUG-034): 2 open overlay legs (`overlay_cc` `NSE_FO|74391` dte=36, `overlay_collar_put` `NSE_FO|73994` dte=36).
+  `CCOverlayV1` fired a real `PROFIT_TARGET` (auto_execute=True, auto_action=CLOSE_CC) — confirms DTE/delta/premium logic is now reachable end-to-end for a real `overlay_cc` position, closing out
+  BUG-031's B031.4 with real coverage. No signal on the Collar leg (expected — not DTE-gated at dte=36, and Collar's own roles were never affected by BUG-034). | SHA ef1c341
 
 ## BUG-032 — `get_position()`'s ambiguous-match fallback silently drops one leg's
 P&L whenever an overlay role has two open positions
@@ -847,7 +847,8 @@ Fix was tracked as plan tasks, not here — `docs/plan/telegram-message-unificat
 Detail: `docs/bugs/bugs.md` BUG-061.
 
 - [x] **B061.1** — Failing test: overlay leg with no LTP today and a real mark yesterday must not produce a fabricated 1-day loss. (`tests/unit/scripts/`) | SHA `7b671db`
-- [x] **B061.2** — Skip or carry-forward-and-flag the price-less leg snapshot; `_compute_overlay_pnl_snapshots` returns `None` for it and the digest renders "n/a". Tests for both branches. | SHA `7b671db`
+- [x] **B061.2** — Skip or carry-forward-and-flag the price-less leg snapshot; `_compute_overlay_pnl_snapshots` returns `None` for it and the digest renders "n/a". Tests for both branches. | SHA
+  `7b671db`
 
 ## BUG-062 — `record_paper_trade` leaves closed legs in state `OPEN`
 
@@ -860,21 +861,26 @@ Detail: `docs/bugs/bugs.md` BUG-062.
 
 Detail: `docs/bugs/bugs.md` BUG-058.
 
-- [x] **B058.1** — `record_paper_trade` reports a skipped duplicate insert explicitly (stderr `SKIPPED: duplicate ...`) and exits non-zero on the non-dry-run open path; audit `--close` callers first. | SHA `17501ec`
-- [x] **B058.2** — Entry verification separates "no trade rows today" from "opened then closed" via trade history; alert text names the case and the closer. Tests for both branches in v1 and v2. | SHA `17501ec`
+- [x] **B058.1** — `record_paper_trade` reports a skipped duplicate insert explicitly (stderr `SKIPPED: duplicate ...`) and exits non-zero on the non-dry-run open path; audit `--close` callers first.
+  | SHA `17501ec`
+- [x] **B058.2** — Entry verification separates "no trade rows today" from "opened then closed" via trade history; alert text names the case and the closer. Tests for both branches in v1 and v2. | SHA
+  `17501ec`
 
 ## BUG-052 — `mvp update`/`close` silently no-op on a truncated pick_id instead of erroring
 
 - [x] **B052.1** — Confirm whether `close_pick` has the identical silent-no-op shape as `update_pick` (trace `src/mvp/store.py::close_pick` + `scripts/mvp.py::_close`). | SHA `d8205a6`
 - [x] **B052.2** — Implement prefix-match ID resolution in `scripts/mvp.py` (or switch `list`'s displayed ID to the full UUID) so a truncated/ambiguous/nonexistent pick_id errors clearly instead of
   silently no-op'ing. | SHA `d8205a6`
-- [x] **B052.3** — Add tests: truncated ID on `update`/`close` raises or prints a clear error; full UUID still works; ambiguous prefix (if resolution is chosen) errors with the candidate list. | SHA `d8205a6`
+- [x] **B052.3** — Add tests: truncated ID on `update`/`close` raises or prints a clear error; full UUID still works; ambiguous prefix (if resolution is chosen) errors with the candidate list. | SHA
+  `d8205a6`
 
 ## BUG-038 — `OverlayCloser`'s three `self._notifier.send()` calls are unawaited (never sent)
 
-- [x] **B038.1** — `trace_path` both methods' callers (`close_collar_all`, `monetize_collar_put`) to confirm no caller already runs inside an event loop before picking sync-vs-async fix. | SHA `acd8181`
+- [x] **B038.1** — `trace_path` both methods' callers (`close_collar_all`, `monetize_collar_put`) to confirm no caller already runs inside an event loop before picking sync-vs-async fix. | SHA
+  `acd8181`
 - [x] **B038.2** — Fix: make both methods `async def` + `await` the send (or a sync-dispatch wrapper if callers require sync). Update callers. | SHA `acd8181`
-- [x] **B038.3** — Add a repro test using a `TelegramNotifier`-shaped (async-`send`) test double, not the current sync `MockNotifier`/`notifier` fixture, so this class of bug is caught in future. | SHA `acd8181`
+- [x] **B038.3** — Add a repro test using a `TelegramNotifier`-shaped (async-`send`) test double, not the current sync `MockNotifier`/`notifier` fixture, so this class of bug is caught in future. |
+  SHA `acd8181`
 - [x] **B038.4** — Separately: repro-test `escape_markdown()` against a literal backslash in the input (see `bugs.md` BUG-038 note) — scope a fix in `src/notifications/markdown.py` if confirmed,
   coordinate with `docs/plan/telegram-markdown-migration/` MD-6's baseline if it touches escaped call sites. | SHA `2af4090`
 - [x] **B038.5** — Review: real `code-reviewer` (mandatory — financial-logic notification paths).
@@ -889,4 +895,13 @@ Detail: `docs/bugs/bugs.md` BUG-058.
 - [x] **B040.4** — Replaced stale `{"ohlc": {...}}` fixtures; added fetcher + guard tests. | SHA `50a5ce4` + `680778b`
 - [x] **B040.5** — Flipped `src/client/CLAUDE.md` row; `get_ohlc` marked unused (kept, docstrings corrected). | SHA `50a5ce4`
 - [x] **B040.6** — Suite green (3322) + real `@code-reviewer` clean (0 CRITICAL/ERROR). Blocked on live host: one manual `python -m scripts.morning_signal` run (logs + Telegram). | SHA `680778b`
-- [x] **B040.7** — Flip `bugs.md` BUG-040 status to ✅ Fixed + SHA; move both sections to `docs/archive/bugs/{bugs,task}.md`; `TODOS.md` session-log line. Then S5.5 rollout walkthrough can resume. | SHA `680778b`
+- [x] **B040.7** — Flip `bugs.md` BUG-040 status to ✅ Fixed + SHA; move both sections to `docs/archive/bugs/{bugs,task}.md`; `TODOS.md` session-log line. Then S5.5 rollout walkthrough can resume. |
+  SHA `680778b`
+
+## BUG-065 — `SignalTrackV1` exit Telegram never sends: gateway has no `send()`
+
+Detail: `docs/bugs/bugs.md` BUG-065.
+
+- [x] **B065.1** — Route the exit message through a working send path and isolate send failures from the strategy. Tests: gateway-shaped double without `send` still delivers; a failing send does not
+  raise. | SHA `6793e54`
+- [x] **B065.2** — Check `open_signal_paper_entry` for the same notifier-API assumption. | SHA `6793e54`
