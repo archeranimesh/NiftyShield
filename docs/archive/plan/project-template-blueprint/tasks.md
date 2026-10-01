@@ -3,7 +3,7 @@
 
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task spec.
 
-**Open: PTB-9.**
+**Open: none — story complete (2026-10-01).**
 
 **Re-planned 2026-09-26 (after PTB-4):** the story's end state is now a self-contained `project-scaffold` — every tier's files, the `python/` overlay, a per-item `scaffold.sh`, and the tier/trigger
 guide itself all live there, so nothing a consuming project needs is left behind in NiftyShield. PTB-5 no longer hands off to a separate build story (the repo already exists, Tier 0/1 are committed in
@@ -25,8 +25,15 @@ it); PTB-7..PTB-9 added. SHAs below are NiftyShield commits; `project-scaffold` 
   | SHA: c76a659 (project-scaffold); eec250e (NiftyShield)
 - [x] **PTB-8** — Write Tier 3 (Rule 0 bundle, `md-organize`, `state_doc_freshness`, `weekly-audit`) into `project-scaffold`, genericized, in PTB-5's fragment shape | Owner: Claude | Model:
   claude-sonnet-5 | Review: none | SHA: 5a6f498 (project-scaffold); d1622fa (NiftyShield)
-- [ ] **PTB-9** — Make `project-scaffold` self-documenting (root README + shipped trigger guide), end-to-end validation, archive this story | Owner: Claude | Model: claude-opus-5-5 | Review: none |
-  SHA: <—>
+- [x] **PTB-9** — Make `project-scaffold` self-documenting (root README + shipped trigger guide), end-to-end validation, archive this story | Owner: Claude | Model: claude-opus-5-5 | Review: none |
+  SHA: 99b90c4 (project-scaffold); closing commit of this archive move (NiftyShield)
+  - **Status 2026-09-29 — build + validation DONE, awaiting Animesh's review; do NOT redo.** `project-scaffold` commit `99b90c4` holds `README.md` (usage, sample trees, first steps, full guide, open
+    questions), `tier0/TIERS.md` (shipped trigger list) and the `tier0/CLAUDE.md` pointer. The three reference configurations plus an all-pieces run were validated: no NiftyShield references, valid
+    `settings.json`, executable `.sh` hooks, re-run no-op. Note `scaffold.sh` is flag-only, no interactive mode.
+  - **Remaining:** (1) Animesh reviews `README.md` / `TIERS.md` and confirms `project-scaffold` is ready to use; fix anything found as a new commit on top of `99b90c4`. (2) Confirm the open-question
+    split: mark `scratch/` subfolder timing and template location resolved in `plan.md` §Open questions, keep the other five open (they are already in the README). (3) Then close out: `plan.md` final
+    status + pointer to the README, tick this box with SHA `99b90c4 (project-scaffold); <NiftyShield SHA>`, `docs/plan/README.md`, `TODOS.md` session log, archive per §Conventions *Completion →
+    archive*, and the session-close audit.
 
 ## Story done when
 

@@ -359,14 +359,15 @@ outside `project-scaffold/`, not committed anywhere, safe to `rm -rf` and re-run
 holds one flat set of skill folders, and no duplicate/stale files remain from a prior run (re-run with `--force` after `rm -rf`ing the destination first if in doubt, since the script does not prune
 files a later run no longer produces).
 
-## Open questions (carried from `prompt.md` §"Perspectives not covered" — not resolved here)
+## Open questions (carried from `prompt.md` §"Perspectives not covered"; two resolved at PTB-9 close, 2026-10-01 — the other four stay open and are listed in `project-scaffold/README.md`)
 
 - Whether TaxCalculation's correctness stakes actually warrant Tier 2 (council) despite its small size — needs Animesh's judgment on how costly a tax-calc mistake actually is versus the overhead of a
   council question. **PTB-4 update:** against the Tier 2a project-level checklist it qualifies (output lands outside the code, nothing downstream catches it). What stays open is whether to use it.
 - Whether CardLedger's statement-parser and rewards-optimizer are truly one system or two — changes whether "twin projects" reasoning applies to it or to TaxCalculation.
 - Antigravity's actual fit for a small, single-operator project — the handoff pattern was designed for NiftyShield's scale; untested whether it's worth the overhead below Tier 2.
-- `scratch/` subfolder timing for a new project (see above, under the scratch/tmp section) — open for PTB-2.
-- Where the template repo itself should live, and whether it ever needs an "update flow" back into existing consumers or is genuinely copy-once — open for PTB-5.
+- ~~`scratch/` subfolder timing for a new project~~ — **resolved (PTB-2):** stay flat until ~50 files.
+- ~~Where the template repo itself should live~~ — **resolved (PTB-5):** `/Users/abhadra/myWork/myCode/AI/project-scaffold/`, copy-once, local-only (`DECISIONS.md`).
+  Whether an update flow is ever needed stays open (template drift; untested until a second consumer exists).
 
 ## Full inventory — everything present in NiftyShield, classified by tier
 
@@ -554,3 +555,8 @@ graph project id from the cwd (override with `--project`), while the Rule 0 `CLA
 NiftyShield, with a `BLOCK_ON_REPEAT` constant to demote it; `weekly-audit` reads `session_audit.jsonl` with an inline `python3` snippet against Tier 0's row schema (`avoidable_rereads`,
 `output_discipline_flags`, `suggestions_count`) — NiftyShield's richer graph/subagent columns do not exist in the scaffold. Every hook needs `python3` (Tier 3 is not language-agnostic; none is gated
 on the project being Python). `state-freshness` is seeded with Tier 0/1 docs only; `CONTEXT_TREE.md` is noted in the conf as an add-on for projects that adopt `rule0`. Next: PTB-9.
+
+**PTB-9 closed (2026-10-01):** `project-scaffold` commit `99b90c4` holds `README.md` (usage, sample trees, first steps, the full tier/trigger guide, open questions), `tier0/TIERS.md` (the compact
+trigger list every scaffolded project ships) and the `tier0/CLAUDE.md` pointer. Validated 2026-09-29 and re-checked 2026-10-01 (plain Tier 0, CardLedger-shaped, TaxCalculation-shaped, all pieces): no
+NiftyShield references, valid `settings.json`, every registered hook file exists and is executable, a re-run is a byte-identical no-op. Animesh read the README and TIERS.md and confirmed
+`project-scaffold` is ready to use. The README is now the guide's canonical copy; this file is the design record. Story archived.

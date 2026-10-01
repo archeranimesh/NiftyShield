@@ -1134,8 +1134,8 @@ session (−27.25% over 11 months on a live `gtf`/`diwali-picks` pick) but the c
 
 ## `project-template-blueprint` — distribution decision + per-piece scaffold mechanics (PTB-5, 2026-09-26)
 
-Distribution stays a **copy-once template repo**, not a submodule and not an installable package — reaffirms the PTB-1/PTB-2 conclusion (`docs/plan/project-template-blueprint/plan.md` §"Distribution
-mechanism"): most of what's templated is static harness config Claude Code reads at session start, not runtime code with a version story. `project-scaffold`
+Distribution stays a **copy-once template repo**, not a submodule and not an installable package — reaffirms the PTB-1/PTB-2 conclusion (`docs/archive/plan/project-template-blueprint/plan.md`
+§"Distribution mechanism"): most of what's templated is static harness config Claude Code reads at session start, not runtime code with a version story. `project-scaffold`
 (`/Users/abhadra/myWork/myCode/AI/project-scaffold/`) **stays local-only for now** (Animesh, this session) — no GitHub remote, not marked a template repository; revisit once a second real consumer
 project needs `gh repo create --template`. Reconciled `plan.md`'s stale mechanism text (the `py-project-tier0` name and `new_project_from_tier0` script were superseded by `project-scaffold` +
 `scaffold.sh`).

@@ -171,10 +171,20 @@ files), `data/`, `logs/`, `config/`, `.venv/` (gitignored, never committed), `py
   0 can't assume that. `check_story_structure`/`check_checkbox_consistency` are **not** part of this list — they check `docs/plan/` folder shape, a Tier 1 concept, not a Python concept; see PTB-6b.
 - `Makefile`: generic targets ported (`test`, `test-serial`, `lint`, `fmt`, `security`, `ci`, `clean`, `help`); `coverage`'s pass threshold becomes a placeholder value, not NiftyShield's `80`; `index`
   (codebase-memory-mcp) stays out — that's Tier 3/`rule0` territory; `dupes`/`dead-code` (pylint-similarities, vulture) ship as advisory-only, commented-out targets, not active.
-- Design principles: a compact 3-4 bullet addition to `tier0/CLAUDE.md`'s existing "Python conventions" section naming the concrete patterns this codebase validated — `Protocol`-based dependency
+- Design principles (**revised 2026-09-27**, superseding the original "not a general SOLID essay" framing below): the concrete patterns this codebase validated — `Protocol`-based dependency
   injection (the `BrokerClient` pattern: depend on an interface, swap implementations for testing), frozen `dataclass`/Pydantic for immutable domain models, pure functions separated from I/O
-  (`Store`/`Tracker` split). Not a general SOLID essay — `tier0/CLAUDE.md`'s own governing principle is to stay thin, and a generic design-patterns lecture doesn't change behavior the way naming
-  concrete, enforced patterns does.
+  (`Store`/`Tracker` split) — plus a dedicated, trigger-loaded `python/PYTHON_DESIGN.md` (not folded into `tier0/CLAUDE.md`, to keep it resident-thin per the same governing principle) covering: the
+  Zen of Python (PEP 20) as the top-level frame; SOLID stated as five *concrete, checkable triggers* rather than an essay (e.g. OCP's trigger is "adding a new `elif` branch to an existing decision
+  method" → extract a `Protocol` implementer instead — this is the actual mechanism that would have prevented `ic_nifty_v1.py`/`v2.py` crossing 1000+ LOC each, per 2026-09-27 discussion; generic SRP
+  framing alone did not catch it, the concrete OCP trigger does); a small named pattern set (Strategy, Factory Method, Template Method, Decorator, Observer-if-needed) mapped onto the
+  `EntryRule`/`ExitRule`/`RollPolicy`/`PositionSizer`/`LegStore` seam example; and two reference links for edge cases (`testdriven.io/blog/clean-code-python`, `refactoring.guru/design-patterns/python`)
+  — consulted only when the concrete rules above don't resolve the case at hand, not required reading. **Already written** (2026-09-27, ahead of the rest of this task): `project-scaffold/python/PYTHON_DESIGN.md`.
+  Original framing, kept for the record: not a general SOLID essay — `tier0/CLAUDE.md`'s own governing principle is to stay thin, and a generic design-patterns lecture doesn't change behavior the
+  way naming concrete, enforced patterns does. That principle still holds — it's *why* the content went to a separate trigger-loaded doc instead of `tier0/CLAUDE.md` itself, and why SOLID is stated
+  as triggers, not prose.
+- `ruff N` (pep8-naming): **not yet enabled** — deferred. When added to `project-scaffold`'s `pyproject.toml` template, must ship with a documented exception for math-notation variable names
+  (`S`, `K`, `T`, `IV`-style Black-Scholes/Greeks notation) — confirmed by running `ruff check --select N` against NiftyShield itself (2026-09-27): 53 violations, nearly all (`N806`/`N803`, 46 of 53)
+  in option-pricing variable names, not naming carelessness. **No `ruff`/`pyproject.toml` change has been made to NiftyShield** — this note is for the `project-scaffold` template only.
 
 **What to implement:**
 

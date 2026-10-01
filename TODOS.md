@@ -15,45 +15,43 @@ Forward spec work only — one `docs/plan/` story per line, pointer-only (title 
 starting the next story here; this list only decides *which story is next*. Bugs are **not** here — see `## Open Bugs`. Cross-references use folder names, never list positions, so renumbering can't
 rot them.
 
-2. **Greeks Black-Scholes fallback** — `docs/plan/greeks-bs-fallback/` — next **GF-1** (read-only audit scope).
-5. **Variance gate — CSP v1 deployment gate observation** — `docs/plan/variance-gate/` — next **VG0** (spec reconciliation; the remaining tasks are human checkpoints, not build tasks).
-6. **Options Income strategy** — `docs/plan/options_income/` — next **S0** (data audit).
-7. **Backtest Engine** — `docs/plan/backtest-engine/` (`phase1..4/`) — next **1.3a / 1.4** (parallel, `phase1/`). Four chained phases; each phase's GATE task blocks the next dir. Gated on
-   `variance-gate`. `BACKTEST_PLAN_PHASE1.md` is the canonical spec; the phase dirs are thin status pointers.
-9. **backtest-eval-core** — `docs/plan/backtest-eval-core/` — next **B1.1**. Blocked until `backtest-engine` tasks 1.3 + 1.4 land.
-10. **signals-eval-core** — `docs/plan/signals-eval-core/` — next **SE1.1**. Blocked until `backtest-eval-core` + `backtest-engine` 1.12. Covers Track A (swing) + Track B (investment), SE1–SE8.
-11. **risk-gamma-phase-a** — `docs/plan/risk-gamma-phase-a/` — next **B2.2** (chain fetch + field computation). Track A + B1 / B2.1 shipped.
-12. **greeks-parity-validation** — `docs/plan/full-repo-review-followups/greeks-parity-validation/` — next **T1**. P3, council-gated: do not implement directly — needs an `options-strategist` /
-    `greeks-analyst` consult first (tolerance-band decision).
-13. **paper-pnl-golden-tests** — `docs/plan/full-repo-review-followups/paper-pnl-golden-tests/` — next **T1** (exact-value golden assertions for `_compute_leg_unrealized_pnl`). P3.
-14. **suppression-hygiene-triage** — `docs/plan/full-repo-review-followups/suppression-hygiene-triage/` — next **T1** (REVIEW.md carve-out for self-describing `# noqa` codes). P3.
-15. **Fix dead IC EOD report query** — `scripts/strategies/ic/paper_ic_snapshot.py` (no story folder) — the "Intraday actions" query is dead code, found in the DT-3a audit.
-16. **Chain delta/decay analysis** — `docs/plan/chain-decay-analysis/` — next **CDA-1**. Exploratory / read-only, independent. Monthly bucket only (yearly excluded — see `greeks-bs-fallback` GF-1
-    findings).
-18. **Entry event filter R4** — `docs/plan/entry-event-filter/` — next **EF-1**. Good-to-have, not compulsory; soft-warning only (logged, non-blocking, mirrors `GateViolation`). `events.yaml` needs
-    ad-hoc upkeep. Revisit once entries run unattended on live capital (post `backtest-engine` Phase 2), and reconsider hard-block then.
-19. **Broker abstraction** — `docs/plan/broker-abstraction/` — next **BA-0** (probe scripts + decision matrix). LOW priority; storage format frozen, only fetch + parse change. BA-14 / BA-15 blocked
-    until `src/execution/` (`phase2-integrations` OE-1) exists. Do not start until the Phase 0.8 gate clears.
-20. **Historical data abstraction** — `docs/plan/historical-data-abstraction/` — next **HD-0** (cost-bounded probe scripts). LOW priority. `HistoricalCandleFetcher` protocol so VIX + OHLC fetching can
-    switch brokers without touching storage. HD-6 / HD-7 conditional on the HD-0 decision matrix. Do not start until the Phase 0.8 gate clears.
-21. **Phase 2 — Research Pipelines & Integrations** — `docs/plan/phase2-integrations/` — next **PV-1** (P&L visualization — not gated, can be pulled forward). ZK-1 / OE-1 / PT-1 gated per the story
-    file. 2027+. Excludes the swing / investment signal pipelines — those are `signals`.
+2. **Variance gate — start the observation clock** — `docs/plan/variance-gate/` — next **VG0** (spec reconciliation, Animesh). Cheap, but VG2.A needs ≥9 calendar months of observation, so it is the
+   longest wall-clock pole. Do VG0/VG1 now; the Gate A–D tasks are human checkpoints that accrue passively while the items below are built.
+3. **paper-pnl-golden-tests** — `docs/plan/full-repo-review-followups/paper-pnl-golden-tests/` — next **T1**. P3, but it is the precondition for `strategy-refactor-blueprint` BP-2 (which extends its
+   scope to `ic_nifty_v1`/`v2`), so it goes before the refactor story.
+4. **suppression-hygiene-triage** — `docs/plan/full-repo-review-followups/suppression-hygiene-triage/` — next **T1** (REVIEW.md carve-out for self-describing `# noqa` codes). P3, policy wording only.
+5. **Risk gamma phase A** — `docs/plan/risk-gamma-phase-a/` — next **B2.2** (chain fetch + field computation), then B2.3..B2.5. In progress, independent of everything else; finish before starting new
+   stories.
+6. **Fix dead IC EOD report query** — `scripts/strategies/ic/paper_ic_snapshot.py` (no story folder) — the "Intraday actions" query is dead code, found in the DT-3a audit. Small; fold in whenever
+   `paper_ic_snapshot.py` is next touched.
+7. **IC payoff charts on Telegram** — `docs/plan/ic-payoff-charts/` — next **PC-2** (`src/strategy/payoff.py`). `chart-core/` (PC-2..15, no option model) ships now; `chart-model-overlay/` (MO-1..9) is
+   blocked on `greeks-bs-fallback` GF-2 + GF-3, so it waits for item 8.
+8. **Greeks Black-Scholes fallback** — `docs/plan/greeks-bs-fallback/` — next **GF-1** (read-only audit scope). Needs Animesh's three modeling decisions (rate / DTE convention / delta tolerance)
+   before GF-2. Unblocks delta-based IC entry for the yearly bucket and `ic-payoff-charts` `chart-model-overlay/`.
+9. **greeks-parity-validation** — `docs/plan/full-repo-review-followups/greeks-parity-validation/` — next **T1**. P3, council-gated: do not implement directly — needs an `options-strategist` /
+   `greeks-analyst` consult first (tolerance-band decision). Sequence after item 8 so it validates the pricer that actually ships.
+10. **Portfolio snapshot slimdown** — `docs/plan/portfolio-snapshot-slimdown/` — next **FD-1** (pre-delete audit). Epic, fixed order: `finideas-decommission/` (FD-1..7) → `dhan-holdings-removal/`
+    (DHR-1..4); both rework `_build_portfolio_summary` + `_format_combined_summary`, so never interleave. No `schema.md`. Requested by Animesh 2026-09-10.
+11. **Strategy module refactor & AI-collaboration blueprint** — `docs/plan/strategy-refactor-blueprint/` — next **BP-1** (`/md-organize` run), then BP-2 (after item 3), BP-3 council, BP-4, BP-5.
+    Planning-only, no `src/` code. Requested by Animesh 2026-09-26.
+12. **Backtest Engine** — `docs/plan/backtest-engine/` (`phase1..4/`) — next **1.3a / 1.4** (parallel, `phase1/`; 1.1 is the Animesh-only Stockmock task, see below). Each phase's GATE task blocks the
+    next dir. `BACKTEST_PLAN_PHASE1.md` is the canonical spec; the phase dirs are thin status pointers. Runs alongside the item 2 observation clock; 1.11/1.12 feed Gate D.
+13. **Chain delta/decay analysis** — `docs/plan/chain-decay-analysis/` — next **CDA-1**. Exploratory / read-only, independent. Monthly bucket only (yearly excluded — see `greeks-bs-fallback` GF-1
+    findings). Slot anywhere after item 8 if wanted.
+14. **backtest-eval-core** — `docs/plan/backtest-eval-core/` — next **B1.1**. Blocked until `backtest-engine` tasks 1.3 + 1.4 land.
+15. **signals-eval-core** — `docs/plan/signals-eval-core/` — next **SE1.1**. Blocked until `backtest-eval-core` + `backtest-engine` 1.12. Covers Track A (swing) + Track B (investment), SE1–SE8.
+16. **Options Income strategy** — `docs/plan/options_income/` — next **S0** (data audit). No code shipped; start after the Phase 0.8 gate direction is clear.
+17. **Entry event filter R4** — `docs/plan/entry-event-filter/` — next **EF-1**. Good-to-have; soft-warning only. Gated on ES12 shipping; revisit once entries run unattended on live capital (post
+    `backtest-engine` Phase 2) and reconsider hard-block then.
+18. **Phase 2 — Research Pipelines & Integrations** — `docs/plan/phase2-integrations/` — next **PV-1** (P&L visualization). Not gated, but its Dhan ETF panel is removed by `dhan-holdings-removal/`, so
+    do it after item 10. ZK-1 / OE-1 / PT-1 gated per the story file. 2027+.
+19. **Broker abstraction** — `docs/plan/broker-abstraction/` — next **BA-0**. LOW priority; BA-14 / BA-15 blocked until `src/execution/` (`phase2-integrations` OE-1) exists. Do not start until the
+    Phase 0.8 gate clears.
+20. **Historical data abstraction** — `docs/plan/historical-data-abstraction/` — next **HD-0**. LOW priority; HD-6 / HD-7 conditional on the HD-0 decision matrix. Do not start until the Phase 0.8 gate
+    clears.
 21. **Technical Debt** — `docs/plan/technical-debt/` — DEBT-3 / 5 / 6a / 6b / 6c / 7. Opportunistic, **not sequential** — each item fires only when its named file / module is already being touched for
     another story's task. See `prompt.md` for the per-item trigger.
-22. **IC payoff charts on Telegram** — `docs/plan/ic-payoff-charts/` — next **PC-2** (`src/strategy/payoff.py` — `ICPayoff` + `compute_ic_payoff`). Epic: `chart-core/` (expiry payoff PNG + `sendPhoto`
-    plumbing + wire into entry / EOD audit / close, one chart per IC variation — no option model, ships now) → `chart-model-overlay/` (T+0 curve + ±1σ/±2σ bands + POP — blocked on
-    `greeks-bs-fallback/` GF-2 + GF-3). Priority relative to items 13–21 is Animesh's call.
-23. **Strategy module refactor & AI-collaboration blueprint** — `docs/plan/strategy-refactor-blueprint/` — next **BP-1** (`/md-organize` run). Planning-only across several sessions: safe,
-    golden-test-gated decomposition of `ic_nifty_v1.py`/`ic_nifty_v2.py` (14,255 LOC `src/strategy/` total, these two files ~30% of it) without disturbing live paper-trading cycles, plus a generalized
-    Claude/Antigravity/council routing blueprint drawn from the case study. Requested by Animesh 2026-09-26. 24a. **Cross-project Claude template blueprint** — `docs/plan/project-template-blueprint/`
-    — next **PTB-5** (distribution decision + `scaffold.sh` per-piece selection and merging); PTB-5..PTB-9 end with a self-contained `project-scaffold`. Multi-session: abstract NiftyShield's Python
-    conventions + Claude-Code harness (skills/hooks/agents) + `docs/plan/` scaffolding into a trigger-gated tier system (Bootstrap / Recurring work / Correctness-critical / Scale) other future
-    projects (CardLedger, TaxCalculation) can selectively inherit. Requested by Animesh 2026-09-26.
-24. **Portfolio snapshot slimdown** — `docs/plan/portfolio-snapshot-slimdown/` — next **FD-1** (pre-delete audit). Epic, two sequenced sub-stories that both rework `_build_portfolio_summary` +
-    `_format_combined_summary`: `finideas-decommission/` (FD-1..7 — full removal of `finideas_ilts` + `finrakshak`: the `src/portfolio/strategies/` provider layer, the options / hedge / ETF snapshot
-    terms, and every Finideas row in `strategies` / `legs` / `trades` / `daily_snapshots` via a `scripts/dev/decommission_finideas.py` CLI — history option A, hard delete) → `dhan-holdings-removal/`
-    (DHR-1..4 — remove Dhan holdings / P&L / the Dhan Options block from the snapshot; keep the Dhan login flow + client + tables wired). No `schema.md`. `/work` routes via the epic `prompt.md`.
-    Requested by Animesh 2026-09-10.
+
 ## Open Bugs
 
 Confirmed defects in shipped code live in **[`docs/bugs/`](docs/bugs/)** — registry `bugs.md` (status `🔴 Open` → `🟡 Fix in progress` → `✅ Fixed`), tasks `docs/bugs/task.md`. `/work` → Bug branch reads
@@ -91,6 +89,10 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-01] `project-template-blueprint/` PTB-9 done, story archived — Animesh reviewed `project-scaffold`'s README and TIERS.md and confirmed it ready to use (`99b90c4`). Re-check before close:
+  four scaffold configurations (plain, CardLedger-, TaxCalculation-shaped, all pieces) clean — no NiftyShield refs, valid `settings.json`, all 8 hook files present, re-run a byte-identical no-op. Open
+  questions split: `scratch/` timing and template location resolved in `plan.md`; the other four stay open in the scaffold README. Not done: README does not yet warn that deleting a `<!-- INSERT: name
+  -->` marker stops that piece being added later (offered, not requested).
 - [2026-09-30] Four-lane bug sweep, merged serially (`01c6a49`, `0f504c0`, `681cde6`, `2cf7c74`, guard-baseline resync `f70fe36`). Fixed and archived: BUG-062 (`ac4d163`), BUG-058 (`17501ec`), BUG-061
   (`7b671db`), BUG-052 (`d8205a6`), BUG-038 (`acd8181`; plus a confirmed `escape_markdown` literal-backslash fix `2af4090`). BUG-054 B054.1–7 landed (`ba73df5`…`2881db1`); BUG-042 only B042.1 + B042.4
   (`84980a3`). Real `@code-reviewer` per lane, 0 CRITICAL/ERROR. Open for Animesh: B042.2 fix-approach decision; BUG-054 manual split-row inserts (BECTORFOOD/UCOBANK, after

@@ -4,6 +4,12 @@
 
 ---
 
+## 2026-10-01 — `project-template-blueprint` story archived
+
+Moved to `docs/archive/plan/project-template-blueprint/`. Abstracted NiftyShield's Python conventions, Claude-Code harness and `docs/plan/` scaffolding into a trigger-gated, per-piece template at
+`/Users/abhadra/myWork/myCode/AI/project-scaffold/` (Tier 0 always; tier1, `python/`, tier2/{stakes,test-runner,multi-surface}, tier3/{rule0,md-organize,state-freshness,weekly-audit} opt-in via
+`scaffold.sh --piece`), with the tier/trigger guide in its README and a compact trigger list shipped into every scaffolded project. PTB-1..PTB-9 all done; `project-scaffold` final SHA `99b90c4`.
+
 ## 2026-09-24 — `mvp` story archived
 
 Moved to `docs/archive/plan/mvp/`. Multi-bagger Value Picks Tracker: records tipster/analyst picks per provider/category, simulates a fixed ₹1,00,000 lump-sum notional deployment per pick, watches
