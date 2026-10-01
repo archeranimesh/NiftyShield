@@ -132,3 +132,21 @@ def test_realized_pnl_no_trades(tmp_path):
     result = _compute_realized_pnl(store, "paper_test")
     assert result == Decimal("0")
     assert isinstance(result, Decimal)
+
+
+def test_unrealized_short_ce_golden():
+    """Short CE profits as LTP falls: (120.50 - 95.25) * 75 = 1893.75."""
+    pos = build_paper_position(net_qty=-75, avg_sell_price=Decimal("120.50"))
+    assert _compute_leg_unrealized_pnl(pos, Decimal("95.25")) == Decimal("1893.75")
+
+
+def test_unrealized_short_ce_loss_golden():
+    """Short CE loses as LTP rises — sign must be negative: (120.50 - 150.00) * 75."""
+    pos = build_paper_position(net_qty=-75, avg_sell_price=Decimal("120.50"))
+    assert _compute_leg_unrealized_pnl(pos, Decimal("150.00")) == Decimal("-2212.50")
+
+
+def test_unrealized_long_golden():
+    """Long leg profits as LTP rises: (112.40 - 100.00) * 65 = 806.00."""
+    pos = build_paper_position(net_qty=65, avg_cost=Decimal("100.00"))
+    assert _compute_leg_unrealized_pnl(pos, Decimal("112.40")) == Decimal("806.00")

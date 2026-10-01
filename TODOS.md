@@ -15,8 +15,6 @@ Forward spec work only — one `docs/plan/` story per line, pointer-only (title 
 starting the next story here; this list only decides *which story is next*. Bugs are **not** here — see `## Open Bugs`. Cross-references use folder names, never list positions, so renumbering can't
 rot them.
 
-2. **paper-pnl-golden-tests** — `docs/plan/full-repo-review-followups/paper-pnl-golden-tests/` — next **T1**. P3, but it is the precondition for `strategy-refactor-blueprint` BP-2 (which extends its
-   scope to `ic_nifty_v1`/`v2`), so it goes before the refactor story.
 3. **suppression-hygiene-triage** — `docs/plan/full-repo-review-followups/suppression-hygiene-triage/` — next **T1** (REVIEW.md carve-out for self-describing `# noqa` codes). P3, policy wording only.
 4. **Risk gamma phase A** — `docs/plan/risk-gamma-phase-a/` — next **B2.2** (chain fetch + field computation), then B2.3..B2.5. In progress, independent of everything else; finish before starting new
    stories.
@@ -89,6 +87,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-01] `paper-pnl-golden-tests/` T1 done — three exact-`Decimal` golden tests (short profit, short loss, long profit) added to `tests/unit/paper/test_pnl_hypothesis.py`; 3805 unit tests green,
+  `@code-reviewer` clean. Unblocks `strategy-refactor-blueprint` BP-2. Story docs cite the wrong test path (`tests/unit/` not `tests/unit/paper/`) — not fixed.
 - [2026-10-01] `project-template-blueprint/` PTB-9 done, story archived — Animesh reviewed `project-scaffold`'s README and TIERS.md and confirmed it ready to use (`99b90c4`). Re-check before close:
   four scaffold configurations (plain, CardLedger-, TaxCalculation-shaped, all pieces) clean — no NiftyShield refs, valid `settings.json`, all 8 hook files present, re-run a byte-identical no-op. Open
   questions split: `scratch/` timing and template location resolved in `plan.md`; the other four stay open in the scaffold README. Not done: README does not yet warn that deleting a `<!-- INSERT: name
