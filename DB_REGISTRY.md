@@ -80,6 +80,7 @@ positions/holdings mirror. Third broker surface — do not conflate with `dhan_*
 | `mf_transactions` | `MFStore` | Append-only MF buy/sell ledger, keyed `(amfi_code, transaction_date, transaction_type)`. |
 | `paper_signal_entries` | `PaperStore.open_signal_entry()` → `signal_track_v1.py` | Frozen entry metadata (levels, confidence, VIX, DTE) for `paper_signal_track_v1`, `trade_id` FK — note below. |
 | `paper_signal_marks` | `PaperStore.record_mark()` → `SignalTrackV1` tick (30 s) | Per-tick mark telemetry while a signal-track position is open — Phase 2 / SPT-7 gate input, note below. |
+| `paper_signal_shadow_marks` | `PaperStore.record_shadow_mark()` → `SignalTrackV1._shadow_tick` | Post-exit marks (closed trade, to 15:00 IST), same shape as `paper_signal_marks` — note below. |
 
 **Note — `paper_trades`:** `paper_nav_snapshots` / `paper_leg_snapshots` are derived from `paper_trades`, not the reverse. The full writer set is `PaperStore` → `scripts/record/record_paper_trade.py`
 plus the entry/roll/exit scripts.
@@ -92,6 +93,11 @@ landed — no backfill (envelopes not retained). `get_signal_cost()` therefore u
 deploy; cost aggregates are trustworthy from that date on. The sibling `signal_inputs` / `daily_signals` / `signal_outcomes` tables are not yet registered here.
 
 **Note — `paper_margin_snapshots`:** **IC-only** — 3-track futures notional is computed separately (`qty * 1.0`), never from this table.
+
+**Note — `paper_signal_shadow_marks` (2026-10-01):** after the exit rules close the trade (target / stop / 15:00), `SignalTrackV1` keeps marking the same leg into this table until 15:00 IST, off the
+chain leg when present else an LTP quote. Rows are seeded from the live series' last row, so the last shadow row's `mfe_pct` / `mae_pct` are the whole-session extremes. It is a separate table so the
+live-series readers (`get_marks`, whose last row is the exit-time MFE/MAE) never see post-exit prices. `signal_outcomes.high_pnl_per_lot` / `low_pnl_per_lot` carry the whole-session values for trades
+recorded from 2026-10-02 on; earlier rows hold the exit-time extremes. Retention: no rolling purge.
 
 **Note — `paper_signal_entries` / `paper_signal_marks`:** the `paper_signal_track_v1` position itself still rides `paper_trades` (`strategy_name = 'paper_signal_track_v1'`, `leg_role = 'signal_long'`)
 — these two tables carry only the signals-specific frozen entry levels and the per-tick mark telemetry, never the position ledger itself. `quote_ts` in `paper_signal_marks` is currently always `NULL`

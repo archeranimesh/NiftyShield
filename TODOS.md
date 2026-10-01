@@ -87,6 +87,9 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-01] Signal-track post-exit shadow marking: `paper_signal_shadow_marks` + `SignalTrackV1._shadow_tick` (marks a closed trade to 15:00 IST, SL exits included) and `signal_eod` High/Low is now
+  whole-session. Trade 408 (target 12:54) is the motivating case. Not covered: no backfill of earlier outcome rows (exit-time semantic); a monitor-restart gap leaves a hole in the shadow series; the
+  next step is analysing target-vs-trail on the accumulated shadow data.
 - [2026-10-01] BUG-063 (`7e72438`, backfill `0fb1acd` applied to 5 rows) and BUG-064 (`5f15cc8`) fixed and archived. `signal_eod` now reports the tracker exit fill + reason; `SignalTrackV1` manages
   the position on LTP when the option chain is down (09-15 / 09-17 overnight carries) and alerts after 5 min blind. Escaping-guard baseline re-pointed again (line-number fragility). Not covered: dead
   monitor process.

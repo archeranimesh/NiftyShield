@@ -1167,6 +1167,17 @@ in `scaffold.sh` (`project-scaffold` SHA `70d3762`); re-validated — no `.gitke
 
 ---
 
+## Signal-track post-exit shadow marking: separate table, whole-session high/low (2026-10-01)
+
+**Decision:** `SignalTrackV1` keeps marking a closed position (target, stop or time exit) until 15:00 IST into `paper_signal_shadow_marks`, and the SIGNAL OUTCOME message's High / Low is the whole
+session (entry → 15:00), not the exit-time extremes. **Why:** the exit truncated the series at the fill (trade 408: High +₹8,760.38 was the 12:54 mark, hiding a ~₹4,500/lot afternoon giveback), and
+the paper phase exists to study a safe profit target and stop width, which needs post-exit paths — SL exits included, since a stopped trade can reverse. **Why a separate table:** `get_marks`' last row
+is the exit-time MFE/MAE and three readers rely on it; mixing post-exit rows into that series would silently change their meaning. The shadow series is seeded from that last row, so its last row is
+the session extreme. **Consequence:** `signal_outcomes` high/low switch from exit-time to whole-session for trades recorded from 2026-10-02 on (exit-time values stay derivable from
+`paper_signal_marks`). Shadow ends at 15:00 by choice, not market close — the last 30 min is deliberately untraded. Related analysis: `docs/strategies/profit_preservation_at_target.md`.
+
+---
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/` (except 0.6c), `src/streaming/` — all empty
