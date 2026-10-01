@@ -37,13 +37,21 @@
 
 > BUG-040 closed 2026-09-30 (SHA `50a5ce4` + `680778b`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
+## BUG-065 — `SignalTrackV1` exit Telegram never sends: gateway has no `send()`
+
+Detail: `docs/bugs/bugs.md` BUG-065.
+
+- [ ] **B065.1** — Route the exit message through a working send path and isolate send failures from the strategy. Tests: gateway-shaped double without `send` still delivers; a failing send does not
+  raise.
+- [ ] **B065.2** — Check `open_signal_paper_entry` for the same notifier-API assumption.
+
 ## BUG-063 — `signal_eod.py` records EOD LTP, not the tracker exit fill, as `exit_premium`
 
 Detail: `docs/bugs/bugs.md` BUG-063.
 
 - [ ] **B063.1** — `signal_eod.py` uses the closing SELL fill (and its exit reason) as `exit_premium`; LTP only while open. Tests: target/stop/time exit use the fill; open position falls back.
 - [ ] **B063.2** — Backfill `signal_outcomes` 2026-09-21 → 2026-10-01 via a tested `scripts/dev/` CLI, dry-run default.
-- [ ] **B063.3** — Exit Telegram fired on target / stop-loss / 15:00 time exit, showing the exit fill and reason; EOD summary reports the same exit price and reason.
+- [ ] **B063.3** — EOD summary shows the exit fill and reason (SL hit / target hit / time exit price) alongside the corrected P&L.
 
 ## BUG-064 — `SignalTrackV1` ticks stop mid-session; position misses the 15:00 time exit and is carried overnight
 

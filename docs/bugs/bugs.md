@@ -12,6 +12,30 @@
 
 ---
 
+## BUG-065 — `SignalTrackV1` exit Telegram never sends: the daemon injects a `TelegramGateway`, whose API has no `send()`; every target / stop-loss / time exit raises `AttributeError`
+
+| Field | Value |
+|---|---|
+| Severity | **High** — no exit notification has ever been delivered for any signal-track exit, and the exception surfaces as `check_signals_error` on the tick that closes the position |
+| Status | 🔴 Open |
+| Discovered | 2026-10-01 — user: "no telegram message ever comes for exit be it target, sl or time exit" |
+| Location | `src/strategy/signal_track_v1.py::_close_position` (L636–L645, `await notifier.send(message)`); `scripts/monitor_daemon.py` L348 (`SignalTrackV1(..., notifier=gateway)`) |
+
+**Symptom:** 2026-10-01 12:54:14 trade 408 closed on TARGET (SELL 399.0, `signal_track.exit_closed` logged) but no Telegram arrived. `logs/monitor_daemon.log` holds 8 occurrences of `AttributeError:
+'TelegramGateway' object has no attribute 'send'` raised from `signal_track_v1.py` line 645, caught by `monitor.py::_tick` as `strategy_monitor.check_signals_error`.
+
+**Root cause:** `SignalTrackV1` was written against the `TelegramNotifier.send(text)` API (its fallback is `build_notifier()`), but `monitor_daemon.py` passes the shared `TelegramGateway`, which
+exposes `send_plain_message` / `send_notification` instead. The ledger writes (SELL trade, `paper_exit_events`, `close_signal_entry`) all happen before the send, so the position closes correctly and
+only the notification is lost. The unit tests inject a notifier double with `send`, which hid the mismatch.
+
+**Suggested fix:** send through the gateway method that carries MarkdownV2 (`send_notification`, since `build_signal_exit_message` is self-escaped) or build a `TelegramNotifier` inside the strategy;
+guard the send so a notification failure can never surface as a strategy error. Add a test using a real-shaped `TelegramGateway` double with no `send` attribute. Check the sibling entry path
+(`open_signal_paper_entry`) for the same assumption.
+
+**Related:** BUG-063 (EOD exit price), BUG-064 (missed time exit).
+
+---
+
 ## BUG-063 — `signal_eod.py` records the EOD-time LTP as `exit_premium`, not the `SignalTrackV1` exit fill; the outcome message and `signal_outcomes` P&L are wrong for every executed day
 
 | Field | Value |
