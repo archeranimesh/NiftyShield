@@ -243,6 +243,112 @@ async def test_send_does_not_raise_on_any_failure() -> None:
         assert result is False
 
 
+# ── TelegramNotifier.send — BUG-042 plain-text fallback ──────────
+
+
+def _make_resp(status: int, data: dict | None = None, body: str = "") -> MagicMock:
+    """One context-managed aiohttp response with a JSON payload and text body."""
+    resp = MagicMock()
+    resp.status = status
+    resp.json = AsyncMock(return_value=data or {})
+    resp.text = AsyncMock(return_value=body)
+    resp.raise_for_status.return_value = None
+    resp.__aenter__ = AsyncMock(return_value=resp)
+    resp.__aexit__ = AsyncMock(return_value=None)
+    return resp
+
+
+def _make_session(*responses: MagicMock | Exception) -> MagicMock:
+    """Session whose successive post() calls yield ``responses`` in order."""
+    session = MagicMock()
+    session.post.side_effect = list(responses)
+    session.__aenter__ = AsyncMock(return_value=session)
+    session.__aexit__ = AsyncMock(return_value=None)
+    return session
+
+
+async def test_send_entity_parse_400_resends_once_as_plain_text() -> None:
+    session = _make_session(
+        _make_resp(400, body=_ENTITY_PARSE_ERROR_DESCRIPTION),
+        _make_resp(200, {"ok": True}),
+    )
+    with (
+        patch("src.notifications.telegram.aiohttp.ClientSession", return_value=session),
+        patch("src.notifications.telegram.logger") as mock_logger,
+    ):
+        notifier = TelegramNotifier(bot_token="tok", chat_id="789")
+        assert await notifier.send("P&L -11.08 (net)") is True
+
+    assert session.post.call_count == 2
+    first, second = (c.kwargs["json"] for c in session.post.call_args_list)
+    assert first["parse_mode"] == "MarkdownV2"
+    assert second == {"chat_id": "789", "text": "P&L -11.08 (net)"}  # same text, no escaping
+    mock_logger.error.assert_called_once()
+    assert mock_logger.error.call_args.args == ("telegram.entity_parse_plain_text_fallback",)
+    assert mock_logger.error.call_args.kwargs["body"] == _ENTITY_PARSE_ERROR_DESCRIPTION
+
+
+async def test_send_other_400_is_not_retried() -> None:
+    session = _make_session(_make_resp(400, body="Bad Request: chat not found"))
+    with (
+        patch("src.notifications.telegram.aiohttp.ClientSession", return_value=session),
+        patch("src.notifications.telegram.logger") as mock_logger,
+    ):
+        notifier = TelegramNotifier(bot_token="tok", chat_id="789")
+        assert await notifier.send("hello") is False
+    assert session.post.call_count == 1
+    mock_logger.error.assert_not_called()
+
+
+async def test_send_entity_parse_text_on_non_400_is_not_retried() -> None:
+    session = _make_session(_make_resp(500, body=_ENTITY_PARSE_ERROR_DESCRIPTION))
+    with patch("src.notifications.telegram.aiohttp.ClientSession", return_value=session):
+        notifier = TelegramNotifier(bot_token="tok", chat_id="789")
+        assert await notifier.send("hello") is False
+    assert session.post.call_count == 1
+
+
+async def test_send_success_posts_exactly_once() -> None:
+    session = _make_session(_make_resp(200, {"ok": True}))
+    with patch("src.notifications.telegram.aiohttp.ClientSession", return_value=session):
+        notifier = TelegramNotifier(bot_token="tok", chat_id="789")
+        assert await notifier.send("hello") is True
+    assert session.post.call_count == 1
+
+
+async def test_send_plain_text_resend_rejected_returns_false_no_second_retry() -> None:
+    session = _make_session(
+        _make_resp(400, body=_ENTITY_PARSE_ERROR_DESCRIPTION),
+        _make_resp(400, body=_ENTITY_PARSE_ERROR_DESCRIPTION),
+    )
+    with patch("src.notifications.telegram.aiohttp.ClientSession", return_value=session):
+        notifier = TelegramNotifier(bot_token="tok", chat_id="789")
+        assert await notifier.send("hello") is False
+    assert session.post.call_count == 2  # at most one retry
+
+
+async def test_send_plain_text_resend_raising_stays_non_fatal() -> None:
+    session = _make_session(
+        _make_resp(400, body=_ENTITY_PARSE_ERROR_DESCRIPTION),
+        aiohttp.ServerTimeoutError("timed out"),
+    )
+    with patch("src.notifications.telegram.aiohttp.ClientSession", return_value=session):
+        notifier = TelegramNotifier(bot_token="tok", chat_id="789")
+        assert await notifier.send("hello") is False
+
+
+async def test_send_plain_text_resend_does_not_burn_budget() -> None:
+    session = _make_session(
+        _make_resp(400, body=_ENTITY_PARSE_ERROR_DESCRIPTION),
+        _make_resp(200, {"ok": True}),
+        _make_resp(200, {"ok": True}),
+    )
+    with patch("src.notifications.telegram.aiohttp.ClientSession", return_value=session):
+        notifier = TelegramNotifier(bot_token="tok", chat_id="789", budget=2)
+        assert await notifier.send("a.b") is True
+        assert await notifier.send("second") is True
+
+
 # ── TelegramNotifier.send — budget limits ────────────────────────
 
 

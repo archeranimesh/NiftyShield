@@ -15,6 +15,7 @@ Usage:
 
 Design notes:
     - send() never raises — returns False on failure and logs a WARNING.
+      A 400 "can't parse entities" is resent once as plain text (BUG-042).
     - build_notifier() returns None when either env var is missing, so the
       caller can skip notification with a simple `if notifier:` guard.
     - Uses MarkdownV2 parse_mode. send() does NOT auto-escape the message
@@ -34,6 +35,10 @@ import structlog
 logger = structlog.get_logger(__name__)
 
 _TELEGRAM_API = "https://api.telegram.org/bot{token}/sendMessage"
+
+# Lower-cased marker in Telegram's 400 body for a MarkdownV2 entity-parse
+# rejection — the only failure send() retries (once, as plain text; BUG-042).
+_ENTITY_PARSE_ERROR = "can't parse entities"
 
 # Characters that must be escaped in MarkdownV2 plain text regions.
 _MDV2_SPECIAL = re.compile(r"([_*\[\]()~`>#+\-=|{}.!\\])")
@@ -99,15 +104,17 @@ class TelegramNotifier:
         via `escape_markdown()`/`mdcode()` (`src/notifications/markdown.py`)
         before calling this method. An unescaped reserved character causes
         Telegram to reject the send with a 400 ("can't parse entities"),
-        which this method treats as a normal failure (see Returns).
+        which this method resends exactly once as plain text (same text, no
+        ``parse_mode``) after logging an ERROR — the message still arrives,
+        markup shown literally. No other failure is retried.
 
         Args:
             text: MarkdownV2-formatted message content, already escaped by
                   the caller where required.
 
         Returns:
-            True if the API returned ok=True, False on any error (including
-            a MarkdownV2 entity-parse rejection) — never raises.
+            True if the API returned ok=True (first attempt or the plain-text
+            resend), False on any other outcome — never raises.
         """
         if self._messages_sent >= self._budget:
             logger.warning(
@@ -126,26 +133,55 @@ class TelegramNotifier:
         try:
             timeout = aiohttp.ClientTimeout(total=self._timeout)
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post(self._url, json=payload) as resp:
-                    if resp.status >= 400:
-                        # raise_for_status() discards Telegram's JSON body, which
-                        # carries the "can't parse entities ... byte offset N"
-                        # reason (BUG-042); capture it before the context exits.
-                        logger.warning(
-                            "Telegram notification rejected: status=%s body=%s",
-                            resp.status,
-                            await _read_error_body(resp),
-                        )
-                        return False
-                    resp.raise_for_status()
-                    data = await resp.json()
-                    if not data.get("ok"):
-                        logger.warning("Telegram API error: %s", data.get("description"))
-                        return False
-                    return True
+                ok, rejection = await self._post(session, payload)
+                if ok or _ENTITY_PARSE_ERROR not in rejection.lower():
+                    return ok
+                # BUG-042: an unescaped caller would otherwise lose the message
+                # silently. Resend the same text once with no parse_mode (it
+                # arrives with its markup shown literally, not escaped) and log
+                # loudly so the caller's escaping still gets fixed. No budget
+                # slot: same logical message, and the retry is bounded at one.
+                logger.error(
+                    "telegram.entity_parse_plain_text_fallback",
+                    body=rejection,
+                    text_head=text[:80],
+                )
+                ok, _ = await self._post(session, {"chat_id": self._chat_id, "text": text})
+                return ok
         except Exception as exc:  # Intentional: isolate all API failures
             logger.warning("Telegram notification failed: %s", exc)
             return False
+
+    async def _post(
+        self, session: aiohttp.ClientSession, payload: dict[str, str]
+    ) -> tuple[bool, str]:
+        """POST one sendMessage payload and classify the outcome.
+
+        Args:
+            session: Open aiohttp session.
+            payload: sendMessage JSON body.
+
+        Returns:
+            ``(ok, rejection_body)`` — ``rejection_body`` is Telegram's response
+            body for an HTTP 400 (where the "can't parse entities" reason
+            lives), else ``""``. Transport errors propagate; ``send()`` catches.
+        """
+        async with session.post(self._url, json=payload) as resp:
+            if resp.status >= 400:
+                # raise_for_status() discards Telegram's JSON body, which
+                # carries the "can't parse entities ... byte offset N"
+                # reason (BUG-042); capture it before the context exits.
+                body = await _read_error_body(resp)
+                logger.warning(
+                    "Telegram notification rejected: status=%s body=%s", resp.status, body
+                )
+                return False, body if resp.status == 400 else ""
+            resp.raise_for_status()
+            data = await resp.json()
+            if not data.get("ok"):
+                logger.warning("Telegram API error: %s", data.get("description"))
+                return False, ""
+            return True, ""
 
 
 def build_notifier() -> TelegramNotifier | None:
