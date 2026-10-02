@@ -23,7 +23,7 @@ rot them. (Item 3 closed 2026-10-02 — numbers kept stable because item text cr
    blocked on `greeks-bs-fallback` GF-2 + GF-3, so it waits for item 7.
 7. **Greeks Black-Scholes fallback** — `docs/plan/greeks-bs-fallback/` — next **GF-1** (read-only audit scope). Needs Animesh's three modeling decisions (rate / DTE convention / delta tolerance)
    before GF-2. Unblocks delta-based IC entry for the yearly bucket and `ic-payoff-charts` `chart-model-overlay/`.
-8. **greeks-parity-validation** — `docs/plan/full-repo-review-followups/greeks-parity-validation/` — next **T2** (parity fixture test). P3. T1 consult done — assumptions in `DECISIONS.md`
+8. **greeks-parity-validation** — `docs/plan/full-repo-review-followups/greeks-parity-validation/` — next **T3** (BS golden test). P3. T1 consult + T2 parity test done — assumptions in `DECISIONS.md`
    (2026-10-02). Sequence after item 7 so it validates the pricer that actually ships.
 9. **Portfolio snapshot slimdown** — `docs/plan/portfolio-snapshot-slimdown/` — next **FD-1** (pre-delete audit). Epic, fixed order: `finideas-decommission/` (FD-1..7) → `dhan-holdings-removal/`
    (DHR-1..4); both rework `_build_portfolio_summary` + `_format_combined_summary`, so never interleave. No `schema.md`. Requested by Animesh 2026-09-10.
@@ -1048,3 +1048,5 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
   Only `greeks-parity-validation/` T1 (council consult) remains.
 - [2026-10-02] greeks-parity-validation T1: `options-strategist` + `greeks-analyst` consult on the 2026-04-07 chain fixture, logged in `DECISIONS.md` (`6bfb74d`) — parity on mids vs chain-implied
   forward; BS reference pins Upstox's fitted convention (r=0.05, cal/365, carry-free theta). Added T2 (parity) / T3 (BS golden) to the story. No code.
+- [2026-10-02] greeks-parity-validation T2: put-call parity fixture test (`tests/helpers/bs_reference.py`, `tests/unit/test_option_parity.py`, 10 tests) through `parse_upstox_option_chain`. Amended
+  the DECISIONS entry: window is ±1500 (recorded stats only reproduce there, not ±2000); sign-bias is per-wing (whole-chain is vacuous under OLS); added `ask ≥ bid`.

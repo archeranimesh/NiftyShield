@@ -51,7 +51,7 @@ verification (SHA match, test count) per Step 3b before closing the phase — An
 | `telegram-approval-auth-fix/` | Fix OR-vs-AND callback bug in trade-approval auth | ✅ Done | — | `5cafc3c` |
 | `protocol-standards-reconciliation/` | Resolve reviewer/protocol contradictions | ✅ Done | — | `0a8d739` |
 | `logging-migration-completion/` | Migrate 21 bare loggers + 24 script entrypoints | ✅ Done | — | `344d98c`, `dc526eb`, `060b7d6`, `dedd962` |
-| `greeks-parity-validation/` | Resolve contested Greeks tolerance-band decision, then implement | 🔄 In progress | T1 consult done (`6bfb74d`); next T2 parity test | — |
+| `greeks-parity-validation/` | Resolve contested Greeks tolerance-band decision, then implement | 🔄 In progress | T1 consult done (`6bfb74d`); T2 parity test done; next T3 BS golden test | — |
 | `paper-pnl-golden-tests/` | Add golden tests for paper P&L (already mitigated one layer up) | ✅ Done | — | `4448315` |
 | `suppression-hygiene-triage/` | Triage suppression-hygiene policy carve-out | ✅ Done | — | `0ca92fe` |
 
