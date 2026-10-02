@@ -49,6 +49,8 @@
 
 > BUG-059 closed 2026-10-02 (SHA `49ce5fa`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
+> BUG-043 closed 2026-10-02 (SHA `0366fe5` + `94017b7`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
+
 ## BUG-067 — `PaperExecutor.apply` and `CollarOverlayV1._close_both_legs` close legs without `mark_trade_closed`
 
 Detail: `docs/bugs/bugs.md` BUG-067.
@@ -105,18 +107,6 @@ Design ruled by council 2026-09-25 (`docs/council/2026-09-25_mvp-corporate-actio
 - [x] **B054.7** — Retrofit: one-time audit script scanning `data/offline/equity_ohlcv/` day-over-day for every `OPEN`/`PENDING` pick for gaps matching a standard factor (candidates only, not
   auto-applied). Manually confirm and insert action rows for real splits found (BECTORFOOD `e30d0a11` 1:5 pending confirmation of exact ex-date; UCOBANK is a candidate only, per council ruling — do
   not insert its action row without external confirmation of an actual split). | SHA `2881db1`
-
-## BUG-043 — "Net P&L" in close notifications is inception-cumulative for IC v1/v2, cycle-only for collar, absent for CSP — no stable per-strategy contract
-
-- [x] **B043.1** — Add `reconstruct_cycles()` + `get_last_cycle_realized_pnl()` to `src/paper/` (all-legs-flat cycle boundaries from `paper_trades`); happy-path + open-trailing-cycle +
-  single-leg-overlay tests. Also shipped `scripts/dev/cycle_pnl_report.py`. | SHA `74bf1c4`
-- [ ] **B043.2** — Standardise the five close paths (`ic_nifty_v1`, `ic_nifty_v2`, `collar_overlay_v1`, `auto_close.py`, `csp_nifty_v1`) to fixed labels `Cycle P&L` + `Since inception`; add both to
-  the CSP close message.
-- [ ] **B043.3** — Tests: one per close path asserting both figures render with the standard labels; no network.
-- [x] **B043.6** — Carry `Decimal` through `CloseLegRow` (`src/notifications/formatting.py`) and all its constructors; quantize explicitly when formatting. Tests: 72.55 renders per the formatter's
-  rounding rule. (Moved from BUG-059 on 2026-10-02 — same close paths as B043.2.) | SHA `0366fe5`
-- [ ] **B043.4** — Suite green + real `@code-reviewer` clean (financial-logic notification path).
-- [ ] **B043.5** — Flip `bugs.md` BUG-043 status to ✅ Fixed + SHA; move both sections to `docs/archive/bugs/{bugs,task}.md`; `TODOS.md` session-log line.
 
 ## BUG-042 — `721daf9` MarkdownV2 switch broke every unmigrated `TelegramNotifier` cron caller — silent 400 since 2026-08-25
 

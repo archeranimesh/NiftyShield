@@ -88,6 +88,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-02] Batch 2 bug sweep: BUG-043 closed (`0366fe5` Decimal `CloseLegRow`, `94017b7` `Cycle P&L` / `Since inception` labels — DECISIONS); BUG-060 settlement step `1937469`; BUG-042 send
+  retry + call-site escaping `3b5947b` / `88578b4`; BUG-067 `c408c1e` + `d3ba54d`. Live-host steps open: B060.3–4, B042.6, B066.3, B067.3.
 - [2026-10-02] BUG-059 closed (`49ce5fa`): IC v1/v2 `_parse_expiry` delegate to `resolve_option_expiry(load_bod=True)`, so v1 TIME_STOP / DTE_WARN fire on live numeric keys (previously never).
   Follow-ups: cache the BOD lookup (0.25 s sync load per tick); `Decimal` `CloseLegRow` now B043.6.
 - [2026-10-02] BUG-057 closed (`df8d7a3` + `77dfc51`): IC entry clears `original_entry_credit` before the legs and aborts if the clear fails; `code-reviewer` clean. Deferred: fire-and-forget BLOCKED

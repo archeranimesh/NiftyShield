@@ -2737,3 +2737,55 @@ blocking per tick across the three v1 books) — pre-existing in v2; cache the l
 disables DTE signals for that leg. The `float` price-rounding half moved to BUG-043 (B043.6).
 
 ---
+
+## BUG-043 — "Net P&L" in close notifications has no stable meaning: inception-cumulative for IC v1/v2, cycle-only for collar, absent for CSP
+
+| Field | Value |
+|---|---|
+| Severity | **Medium** — no wrong trade action, but the headline number on every IC close Telegram is the lifetime total, read at a glance as the just-closed cycle's result |
+| Status | ✅ Fixed — SHA `0366fe5` (Decimal) + `94017b7` (labels, tests), 2026-10-02 |
+| Discovered | 2026-09-10 |
+| Location | five close paths under `src/strategy/` — see list below |
+
+Close paths affected (all in `src/strategy/`): `ic_nifty_v1.py::_send_close_notification` (~L824) · `ic_nifty_v2.py::_send_close_notification` (~L2224) · `collar_overlay_v1.py` collar close (~L720) ·
+`auto_close.py` overlay close (~L308) · `csp_nifty_v1.py::_reentry_notification` (~L635).
+
+**Severity detail:** Animesh read the line `Net P&L: ₹3,739.12` on a `paper_ic_nifty_v1_weekly` CLOSE_FULL message (2026-09-03 close) as that cycle's result. It is the cumulative realized P&L across
+all 8 closed cycles since inception; that cycle actually made +₹713.38. Trades and DB records are correct — only the notification label/semantics are wrong.
+
+**Discovered:** 2026-09-10, user asked for a per-cycle P&L breakdown of the weekly IC and noticed the close message's "Net P&L" matched the inception total, not the cycle.
+
+**Root cause:** no shared contract for what the close-notification P&L line reports. Current state per close path:
+
+| Close path | P&L line(s) shown | What "Net P&L" actually is |
+|---|---|---|
+| `ic_nifty_v1._send_close_notification` | `Net P&L:` | `get_strategy_realized_pnl()` — **inception cumulative** |
+| `ic_nifty_v2._send_close_notification` | `Net P&L:` | `get_strategy_realized_pnl()` — **inception cumulative** |
+| `auto_close.py` (CC / PP / Collar via `OverlayCloser`) | `Net P&L` **and** `Overlay P&L (total realized)` | per-leg entry−exit — **this cycle** (this path is the closest to correct) |
+| `collar_overlay_v1.py` collar close | `Net P&L:` | `call_pnl + put_pnl` — **this cycle only**, no inception figure |
+| `csp_nifty_v1._reentry_notification` | *(none)* | CSP close shows no P&L at all |
+
+There is no `get_last_cycle_realized_pnl` helper — cycle boundaries (all legs of the group back to net-zero) are reconstructable from `paper_trades` but nothing does it today.
+
+**Suggested fix:** add `reconstruct_cycles()` / `get_last_cycle_realized_pnl()` to `src/paper/` (shared with the `scripts/dev/` per-cycle report being built alongside this bug — same reconstruction
+logic). Then standardise every close notification to two lines with fixed labels, e.g. `Cycle P&L: <±figure>` and `Since inception: <±figure>`, and add them to the CSP close message. Keep
+`auto_close.py`'s existing dual line but rename to the standard labels.
+
+**Related:** the `scripts/dev/cycle_pnl_report.py` CLI (per-cycle P&L / exit reason / days in trade for IC-all / CC / PP / Collar) shares the cycle-reconstruction helper; build the helper under
+`src/paper/` first, then this bug's notification fix wires it into the five close paths.
+
+**Implementation progress (2026-10-02):** B043.6 — `CloseLegRow.entry/exit` are `Decimal`; new `_price_1dp()` quantizes to 1 dp `ROUND_HALF_UP` and raises `TypeError` on a non-`Decimal` (mirrors
+`format_money`). `float(...)` casts removed at every constructor (IC v1/v2, CSP, CC, PP, collar `_send_close_notification`, `auto_close`, `record_paper_trade` fallback → `Decimal("0")`). Tests: 72.55
+→ 72.6, 10.25 → 10.3; float rejected. Real `code-reviewer`: 0 CRITICAL / ERROR; deferred WARNING — `auto_close` legs are `list[dict[str, Any]]`, so mypy cannot see the `Decimal` contract (a
+`TypedDict` would). A non-`Decimal` reaching a card now drops that card with a logged warning rather than rendering. **B043.2 re-check:** all five paths already render through the shared
+`format_exit_message` with a cycle figure (`🔁 *Cycle #N:*`) and an inception figure (`📈 *Inception:*`), CSP included — the inconsistency this bug describes was fixed by the UXM epic. Open: the
+requested `Cycle P&L` / `Since inception` labels conflict with the later UXM spec (`docs/archive/plan/telegram-message-unification/unified-exit-message/stories.md` L115-116); the overlay-only `Overlay
+P&L (total realized)` line still duplicates Inception; B043.3 test gap is real either way (no Cycle-line assertion anywhere; collar and `auto_close` assert no footer).
+
+**B043.2 / B043.3 (2026-10-02, `94017b7`):** operator chose the B043.2 wording over the UXM labels. `format_exit_message` now renders `🔁 *Cycle P&L \(\#N\):*` and `📈 *Since inception:*` (built with
+`escape_markdown`). The overlay `📊 Overlay P&L (total realized)` row is removed — cc / pp / collar / `auto_close` always passed it the inception figure — along with the now-unused
+`ExitMessage.overlay_total_pnl` field and its four caller kwargs. The PP re-entry-eligible message (`auto_close.py` ~L453) keeps its line: it has no inception line, so it is not a duplicate.
+Escaping-guard pins shifted one line for four sites. Tests: one per close path (IC v1, IC v2, collar, CSP on a real two-cycle `PaperStore`, `auto_close` CC + collar strengthened) asserting both
+labelled figures; renderer footer tests replaced. Real `code-reviewer`: 0 CRITICAL / ERROR / WARNING.
+
+---

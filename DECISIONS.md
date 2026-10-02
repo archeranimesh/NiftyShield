@@ -1226,6 +1226,16 @@ and the log points at the offender. No council: single-discipline engineering ch
 
 ---
 
+## Close-card P&L labels: `Cycle P&L` + `Since inception`, overriding UXM (BUG-043, 2026-10-02)
+
+**Decision:** every close card rendered by `format_exit_message` labels its two P&L figures `Cycle P&L (#N)` (the just-closed round-trip cycle, from `src/paper/cycle_pnl.py`) and `Since inception`
+(cumulative realized), replacing the UXM epic's `Cycle #N` / `Inception` (`docs/archive/plan/telegram-message-unification/unified-exit-message/stories.md` L115-116). The overlay-only `Overlay P&L
+(total realized)` row is dropped — it always repeated the inception figure. **Why:** operator preference for self-describing labels; the bug's original complaint ("Net P&L" read at a glance as the
+cycle result) is best answered by naming both figures explicitly. **Consequence:** the archived UXM spec is now historical for these two strings; any new close path must use the shared renderer and
+these labels.
+
+---
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/` (except 0.6c), `src/streaming/` — all empty
