@@ -303,15 +303,15 @@ async def _send_close_notification(
                 CloseLegRow(
                     role="Short Call",
                     instrument=_label(call_leg["key"]),
-                    entry=float(call_leg["entry"]),
-                    exit=float(call_leg["exit"]),
+                    entry=call_leg["entry"],
+                    exit=call_leg["exit"],
                     pnl=Decimal(str(call_leg["pnl"])),
                 ),
                 CloseLegRow(
                     role="Long Put",
                     instrument=_label(put_leg["key"]),
-                    entry=float(put_leg["entry"]),
-                    exit=float(put_leg["exit"]),
+                    entry=put_leg["entry"],
+                    exit=put_leg["exit"],
                     pnl=Decimal(str(put_leg["pnl"])),
                 ),
             ]
@@ -327,8 +327,8 @@ async def _send_close_notification(
                 CloseLegRow(
                     role=role,
                     instrument=_label(leg["key"]),
-                    entry=float(leg["entry"]),
-                    exit=float(leg["exit"]),
+                    entry=leg["entry"],
+                    exit=leg["exit"],
                     pnl=Decimal(str(leg["pnl"])),
                 )
             ]

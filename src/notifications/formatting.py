@@ -266,6 +266,16 @@ def build_leg_table(legs: list[LegRow]) -> str:
     return "\n".join(lines)
 
 
+_ONE_DP = Decimal("0.1")
+
+
+def _price_1dp(value: Decimal) -> str:
+    """Close-table Entry/Exit cell: 1dp, ROUND_HALF_UP, no ``₹`` (FORMATTING.md §3)."""
+    if not isinstance(value, Decimal):
+        raise TypeError(f"close-table price must be Decimal, got {type(value).__name__}")
+    return str(value.quantize(_ONE_DP, rounding=ROUND_HALF_UP))
+
+
 @dataclass(frozen=True)
 class CloseLegRow:
     """One row of input for build_close_leg_table.
@@ -280,8 +290,8 @@ class CloseLegRow:
 
     role: str
     instrument: str
-    entry: float
-    exit: float
+    entry: Decimal
+    exit: Decimal
     pnl: Decimal
 
 
@@ -290,7 +300,9 @@ def build_close_leg_table(rows: list[CloseLegRow]) -> str:
     entry, exit, P&L — right-aligned numerics.
 
     Entry/Exit columns: 1dp, same locked-in exception as build_leg_table
-    (FORMATTING.md §3). P&L via format_money(signed=True) so a winning
+    (FORMATTING.md §3), quantized ROUND_HALF_UP on the Decimal (72.55 ->
+    72.6; float ``:.1f`` gave 72.5). A float price raises TypeError, as
+    format_money does. P&L via format_money(signed=True) so a winning
     leg shows a leading "+".
 
     Caller wraps the return value in a ```fenced block``` — this function
@@ -302,8 +314,8 @@ def build_close_leg_table(rows: list[CloseLegRow]) -> str:
     table_rows = []
     for row in rows:
         badge = "[S]" if row.role.startswith("Short") else "[B]"
-        entry_str = f"{row.entry:.1f}"
-        exit_str = f"{row.exit:.1f}"
+        entry_str = _price_1dp(row.entry)
+        exit_str = _price_1dp(row.exit)
         pnl_str = format_money(row.pnl, signed=True)
         table_rows.append((badge, row.instrument, entry_str, exit_str, pnl_str))
 

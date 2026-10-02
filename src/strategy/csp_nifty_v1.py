@@ -675,8 +675,8 @@ class CSPNiftyV1(ReEntryMixin):
             CloseLegRow(
                 role="Short Put",
                 instrument=label,
-                entry=float(entry),
-                exit=float(exit_price),
+                entry=entry,
+                exit=exit_price,
                 pnl=this_exit_pnl,
             )
         ]

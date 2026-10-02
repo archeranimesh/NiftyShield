@@ -809,8 +809,10 @@ def _send_close_card_if_requested(
             CloseLegRow(
                 role=trade.leg_role.replace("_", " ").title(),
                 instrument=trade.instrument_key or "",
-                entry=float(last.entry_credit_per_unit),
-                exit=float(last.exit_cost_per_unit) if last.exit_cost_per_unit is not None else 0.0,
+                entry=last.entry_credit_per_unit,
+                exit=(
+                    last.exit_cost_per_unit if last.exit_cost_per_unit is not None else Decimal("0")
+                ),
                 pnl=last.realized_pnl,
             )
         ]

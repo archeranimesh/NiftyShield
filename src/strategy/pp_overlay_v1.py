@@ -390,8 +390,8 @@ class PPOverlayV1(ReEntryMixin):
                 CloseLegRow(
                     role="Long Put",
                     instrument=label,
-                    entry=float(entry_debit),
-                    exit=float(exit_price),
+                    entry=entry_debit,
+                    exit=exit_price,
                     pnl=this_exit_pnl,
                 )
             ]

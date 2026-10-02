@@ -368,8 +368,8 @@ class CCOverlayV1(ReEntryMixin):
                 CloseLegRow(
                     role="Short Call",
                     instrument=label,
-                    entry=float(entry_credit),
-                    exit=float(exit_price),
+                    entry=entry_credit,
+                    exit=exit_price,
                     pnl=this_exit_pnl,
                 )
             ]

@@ -777,15 +777,15 @@ class CollarOverlayV1(ReEntryMixin):
                 CloseLegRow(
                     role="Short Call",
                     instrument=call_key,
-                    entry=float(call_entry),
-                    exit=float(call_exit),
+                    entry=call_entry,
+                    exit=call_exit,
                     pnl=call_pnl,
                 ),
                 CloseLegRow(
                     role="Long Put",
                     instrument=put_key,
-                    entry=float(put_entry),
-                    exit=float(put_exit),
+                    entry=put_entry,
+                    exit=put_exit,
                     pnl=put_pnl,
                 ),
             ]

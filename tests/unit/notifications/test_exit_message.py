@@ -12,7 +12,13 @@ from src.notifications.formatting import CloseLegRow, build_close_leg_table
 from src.paper.cycle_pnl import CycleStats
 
 _LEGS = [
-    CloseLegRow(role="Short", instrument="23500 PE", entry=103.4, exit=42.0, pnl=Decimal("61.40")),
+    CloseLegRow(
+        role="Short",
+        instrument="23500 PE",
+        entry=Decimal("103.4"),
+        exit=Decimal("42.0"),
+        pnl=Decimal("61.40"),
+    ),
 ]
 
 _STATS_5 = CycleStats(
@@ -159,10 +165,18 @@ def test_overlay_total_line_only_when_set() -> None:
 def test_close_leg_table_badges() -> None:
     rows = [
         CloseLegRow(
-            role="Short Put", instrument="23500 PE", entry=103.4, exit=42.0, pnl=Decimal("61.40")
+            role="Short Put",
+            instrument="23500 PE",
+            entry=Decimal("103.4"),
+            exit=Decimal("42.0"),
+            pnl=Decimal("61.40"),
         ),
         CloseLegRow(
-            role="Long Put", instrument="23000 PE", entry=21.2, exit=23.8, pnl=Decimal("-2.60")
+            role="Long Put",
+            instrument="23000 PE",
+            entry=Decimal("21.2"),
+            exit=Decimal("23.8"),
+            pnl=Decimal("-2.60"),
         ),
     ]
     table = build_close_leg_table(rows)
@@ -171,6 +185,38 @@ def test_close_leg_table_badges() -> None:
     assert lines[3].startswith("[B]")
     assert "+₹61.40" in lines[2]
     assert "-₹2.60" in lines[3]
+
+
+def test_close_leg_table_rounds_half_up() -> None:
+    """B043.6: Decimal 72.55 quantizes ROUND_HALF_UP to 72.6 (float :.1f gave 72.5)."""
+    rows = [
+        CloseLegRow(
+            role="Short Put",
+            instrument="23500 PE",
+            entry=Decimal("72.55"),
+            exit=Decimal("10.25"),
+            pnl=Decimal("62.30"),
+        )
+    ]
+    row_line = build_close_leg_table(rows).splitlines()[2]
+    assert " 72.6 " in row_line
+    assert " 10.3 " in row_line
+    assert "72.5 " not in row_line
+
+
+def test_close_leg_table_rejects_float_prices() -> None:
+    """A float price raises TypeError (as format_money does), never float-formatted."""
+    rows = [
+        CloseLegRow(
+            role="Short Put",
+            instrument="23500 PE",
+            entry=72.55,  # type: ignore[arg-type]
+            exit=Decimal("10"),
+            pnl=Decimal("0"),
+        )
+    ]
+    with pytest.raises(TypeError, match="Decimal"):
+        build_close_leg_table(rows)
 
 
 def test_close_leg_table_raises_on_empty() -> None:

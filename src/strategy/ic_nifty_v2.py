@@ -2246,8 +2246,8 @@ class IronCondorV2:
                 CloseLegRow(
                     role=_CLOSE_ROLE_LABELS.get(t.leg_role, t.leg_role),
                     instrument=label,
-                    entry=float(entry),
-                    exit=float(exit_price),
+                    entry=entry,
+                    exit=exit_price,
                     pnl=leg_pnl,
                 )
             )
