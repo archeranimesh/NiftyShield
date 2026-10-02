@@ -45,6 +45,15 @@
 
 > BUG-037 closed 2026-10-02 (SHA `5369c0e`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
+## BUG-067 — `PaperExecutor.apply` and `CollarOverlayV1._close_both_legs` close legs without `mark_trade_closed`
+
+Detail: `docs/bugs/bugs.md` BUG-067.
+
+- [ ] **B067.1** — Wire `mark_trade_closed` into both paths, guarded on the actual insert (same pattern as `5369c0e`). Tests per path: full close flips state, duplicate insert does not.
+- [ ] **B067.2** — Review: real `code-reviewer` (paper-trade state transitions).
+- [ ] **B067.3** — Dry-run `backfill_mark_trade_closed_overlay` to count stale legs from these paths; apply on the live host.
+- [ ] **B067.4** — Commit, flip BUG-067 to ✅ Fixed + SHA, archive entry, update `TODOS.md`.
+
 ## BUG-066 — `signal_track_v1` exit leaves its closing SELL leg `OPEN`
 
 Detail: `docs/bugs/bugs.md` BUG-066.
@@ -76,8 +85,9 @@ Detail: `docs/bugs/bugs.md` BUG-057 (root cause, recommended fix, alternatives r
 Detail: `docs/bugs/bugs.md` BUG-059. Repro-test the DTE hypothesis first.
 
 - [ ] **B059.1** — Failing test: close card DTE for a closed 27-DTE leg (confirms or kills the empty-`positions` hypothesis).
-- [ ] **B059.2** — Carry `Decimal` through `CloseLegRow`; quantize explicitly when formatting; derive DTE from the closed trades' keys. Tests: 72.55 renders per the formatter's rounding rule, DTE
-  correct.
+- [ ] **B059.2** — Shared `_parse_expiry` (regex first, BOD instrument-master fallback, from v2's `3435c5a`) called by both IC v1 and v2; numeric-key tests for v1 TIME_STOP, DTE_WARN and the close
+  card; lookup miss yields no DTE events.
+- [ ] **B059.3** — Real `code-reviewer` clean (strategy signal path); commit; flip BUG-059 to ✅ Fixed + SHA, archive.
 
 ## BUG-054 — MVP tracker has no stock-split/corporate-action adjustment for entry/target/SL prices
 
@@ -110,6 +120,8 @@ Design ruled by council 2026-09-25 (`docs/council/2026-09-25_mvp-corporate-actio
 - [ ] **B043.2** — Standardise the five close paths (`ic_nifty_v1`, `ic_nifty_v2`, `collar_overlay_v1`, `auto_close.py`, `csp_nifty_v1`) to fixed labels `Cycle P&L` + `Since inception`; add both to
   the CSP close message.
 - [ ] **B043.3** — Tests: one per close path asserting both figures render with the standard labels; no network.
+- [ ] **B043.6** — Carry `Decimal` through `CloseLegRow` (`src/notifications/formatting.py`) and all its constructors; quantize explicitly when formatting. Tests: 72.55 renders per the formatter's
+  rounding rule. (Moved from BUG-059 on 2026-10-02 — same close paths as B043.2.)
 - [ ] **B043.4** — Suite green + real `@code-reviewer` clean (financial-logic notification path).
 - [ ] **B043.5** — Flip `bugs.md` BUG-043 status to ✅ Fixed + SHA; move both sections to `docs/archive/bugs/{bugs,task}.md`; `TODOS.md` session-log line.
 
