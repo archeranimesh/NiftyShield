@@ -285,7 +285,7 @@ P&L (total realized)` line still duplicates Inception; B043.3 test gap is real e
 | Field | Value |
 |---|---|
 | Severity | **High** — see failing callers below |
-| Status | 🟡 Fix in progress — B042.1, B042.4 (`84980a3`) done 2026-09-30; B042.2 decided 2026-10-02: call-site escaping + plain-text retry in `send()`, no council (`DECISIONS.md`). |
+| Status | 🟡 Fix in progress — B042.3/B042.5 landed 2026-10-02 (`3b5947b`, `88578b4`); B042.6 live sends pending |
 | Discovered | 2026-09-09 |
 | Location | `src/notifications/telegram.py::TelegramNotifier.send` + unmigrated callers |
 
@@ -324,6 +324,16 @@ Recommend option 2 given how many entrypoints are currently broken; confirm no m
 **Related / out of scope here:** `TelegramGateway`'s parallel `eod_summary.py` regression (`cd1e554`) — noted in BUG-039, still unfixed, separate sender class. Fold it in if option 2 is chosen and
 `TelegramGateway` shares the escape path; otherwise its own bug.
 
+**Implementation progress (2026-10-02):** `TelegramNotifier.send()` (`3b5947b`): POST moved into `_post()` returning `(ok, body)`; on a 400 whose body contains "can't parse entities" it resends the
+same text once with no `parse_mode` and logs ERROR `telegram.entity_parse_plain_text_fallback`; no retry on other errors, at most one, no extra budget slot, still never raises. Call sites (`88578b4`)
+escaped with `escape_markdown`: `paper_3track_snapshot.py` EXIT SIGNAL action + EXIT WARN batch (`compute_and_record_exit_signals`), BUG-032 recovery + streak alerts
+(`_check_overlay_multi_instrument_alert`), missing-LTP alert (`_compute_overlay_leg_totals`); `paper_3track_overlay_entry.py::_alert_bootstrap_failure`. `mvp_watch.py` EOD left as is —
+`format_eod_summary` already escapes inside the builder (since `71bca0a`); its `_BASELINE_UNESCAPED` entry reclassified as a scanner heuristic limitation. Six baseline entries removed.
+`TelegramGateway.send_plain_message` routes through `send()` (gets the retry); `send_notification` / `send_approval_request` post directly (no retry). `eod_summary.py` now uses `TelegramNotifier`. 18
+tests (7 `send()`, 11 call-site MarkdownV2-safety via new `tests/helpers/mdv2.py`). Real `code-reviewer`: 0 CRITICAL / ERROR; deferred: pre-existing %-style log lines in `_post()`, and
+`test_send_returns_false_on_telegram_entity_parse_error`'s stale docstring (now exercises the generic-400 path). **B042.6 (operator):** live-verify the 15:35 snapshot on an ACTION/WARN day, an overlay
+bootstrap-failure alert, `mvp_watch --eod`, one deliberately unescaped test send (expect plain-text delivery + the ERROR line), and grep the cc_entry / pp_entry / monitor_daemon / pre_market_brief
+logs for the fallback event.
 ---
 
 ## BUG-040 [MOVED] — see `docs/archive/bugs/bugs.md` (closed 2026-09-30, SHA `50a5ce4` + `680778b`)
