@@ -90,7 +90,7 @@ different-`strategy_name` isolation case and a two-cycle stale-row test.
 | Field | Value |
 |---|---|
 | Severity | **High** — an expired leg silently poisons P&L (BUG-061) and blocks collar re-entry; PP and CC will hit the same path at their own expiries |
-| Status | 🟡 Fix in progress — B060.1 decided 2026-10-02: settle at intrinsic vs NSE final settlement (expiry-day NIFTY 50 close), fail-closed (`DECISIONS.md`). |
+| Status | 🟡 Fix in progress — B060.2 `1937469` landed 2026-10-02; live-host run + cron (B060.3) and trade-405 re-settle (B060.4) pending |
 | Discovered | 2026-09-30 — investigating a -45,001 Collar line (-565%) in the "NiftyBees vs overlays" digest |
 | Location | `paper_trades` lifecycle (no expiry-settlement path); `scripts/strategies/three_track/paper_3track_overlay_entry.py::_has_open_overlay_leg` (L1234) and its bootstrap gate (L1470) |
 
@@ -113,6 +113,14 @@ both legs expired together with no signal on either side.
 value against the underlying's settlement price and calls `mark_trade_closed`. Decide first whether the settlement price comes from the NSE final settle (preferred, needs a source) or the last
 recorded mark. Repro test: an open leg with a past expiry ends flat and `CLOSED` after the step; a leg expiring today or later is untouched.
 
+**Implementation progress (2026-10-02, B060.2):** `src/strategy/expiry_settlement.py` — pure `intrinsic_value` / `build_settlement_trade`, I/O `resolve_contract` / `find_expired_legs` /
+`fetch_index_close` / `settle_expired_legs`; entrypoint `scripts/strategies/three_track/paper_expiry_settle.py` (dry-run default, `--no-dry-run` to persist, repeatable `--contract
+KEY=STRIKE:CE|PE:YYYY-MM-DD` override, escaped Telegram report). Separate 09:20 entrypoint, not the 15:35 snapshot: an expired marker leg blocks the 10:30 `--auto-collar` bootstrap, and settlement
+covers every paper strategy. S = `BrokerClient.get_historical_candles` daily close for `NSE_INDEX|Nifty 50` dated exactly the expiry date; strike / type from one BOD lookup loaded per run.
+Fail-closed: missing close or unresolvable contract leaves the leg `OPEN` and warns. Idempotent (a settled leg is flat; a duplicate-guarded close is reported, not marked). **Deviation:** an OTM leg
+books ₹0.05, not 0 — `PaperTrade.price` must be > 0 (same as `ic_close_executor._OTM_EXPIRY_PRICE`; ₹3.25 per 65-lot). **Risk:** the Upstox master drops expired contracts, so a leg found only after
+the host BOD refresh needs `--contract`. 22 tests. Real `code-reviewer`: 0 CRITICAL / ERROR; strike-through-float and send-delivery-logging warnings fixed; deferred two narrow `# type:
+ignore[arg-type]` on the CE/PE `Literal` (runtime-guarded).
 ---
 
 ## BUG-061 [MOVED] — see `docs/archive/bugs/bugs.md` (closed 2026-09-30, SHA `7b671db`)

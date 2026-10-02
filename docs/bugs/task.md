@@ -76,8 +76,11 @@ Detail: `docs/bugs/bugs.md` BUG-066.
 Detail: `docs/bugs/bugs.md` BUG-060. Settle-price source decision comes first.
 
 - [x] **B060.1** — Decide the settlement price source (NSE final settle vs last recorded mark) and record it in `DECISIONS.md`. | SHA `6c76abf`
-- [ ] **B060.2** — Expiry-settlement step: every `OPEN`/`DEFENDED` leg with expiry < today gets a closing trade at intrinsic value and `mark_trade_closed`. Tests: expired leg ends flat and `CLOSED`; a
-  leg expiring today or later is untouched.
+- [x] **B060.2** — Expiry-settlement step: every `OPEN`/`DEFENDED` leg with expiry < today gets a closing trade at intrinsic value and `mark_trade_closed`. Tests: expired leg ends flat and `CLOSED`; a
+  leg expiring today or later is untouched. | SHA `1937469`
+- [ ] **B060.3** — Live host: dry-run `python -m scripts.strategies.three_track.paper_expiry_settle`, add `--contract` overrides for BOD-unresolvable keys, then `--no-dry-run`; install the 09:20 cron
+  line from `scripts/cron/paper_snapshot.cron.txt`.
+- [ ] **B060.4** — Re-settle trade 405 (collar put `NSE_FO|73994`, expiry 2026-09-29) at intrinsic vs the 2026-09-29 NIFTY 50 close (tested `scripts/dev/` CLI or one-off with operator sign-off).
 
 ## BUG-054 — MVP tracker has no stock-split/corporate-action adjustment for entry/target/SL prices
 
