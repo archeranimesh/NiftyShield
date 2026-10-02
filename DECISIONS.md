@@ -1205,6 +1205,27 @@ one snapshot cannot tell them apart below ~0.001 delta.
 
 ---
 
+## BUG-060 — expired paper legs settle at intrinsic vs NSE final settlement price (B060.1, 2026-10-02)
+
+**Decision:** the expiry-settlement step closes every `OPEN`/`DEFENDED` paper leg with expiry < today at intrinsic value — `max(0, K − S)` put, `max(0, S − K)` call — where `S` is the NSE final
+settlement price, i.e. the official NIFTY 50 index close on the expiry date (source: Upstox historical daily candle for `NSE_INDEX|Nifty 50`, or the `IndexBhavRecord` index-close ingest in
+`src/backtest/`). **Why:** that is how NSE cash-settles index options; the last recorded option mark carries residual time value and is as stale as the last snapshot, so settling there misstates
+realised P&L (the manual trade-405 repair at 784.15 is exactly that error). **Fail-closed:** if the expiry-date close cannot be fetched, leave the leg `OPEN` and Telegram-warn — never fall back to the
+last mark, which would book a wrong price silently. **Consequence:** trade 405 (collar put `NSE_FO|73994`, expiry 2026-09-29) is re-settled at true intrinsic as part of B060.2.
+
+---
+
+## BUG-042 — MarkdownV2 escaping stays at the call site; `send()` gains a plain-text retry (B042.2, 2026-10-02)
+
+**Decision:** escape the remaining unmigrated `TelegramNotifier` call sites individually (`paper_3track_snapshot.py`, `paper_3track_overlay_entry.py`, `mvp_watch.py` EOD — the `_BASELINE_UNESCAPED`
+gap entries), per `FORMATTING.md` §6 "escaping happens at the call site". Add one safety net in `TelegramNotifier.send()`: on a 400 whose body says "can't parse entities", resend the same text once
+with no `parse_mode` and log at ERROR naming the failure. **Rejected:** auto-escape by default in `send()` with a `raw=True` opt-out (the original BUG-042 suggestion) — it inverts a convention every
+migrated caller now follows, so each of them would need the flag or regress to literal backslashes; too wide a blast radius to fix ~7 sites. The retry deliberately does not escape — escaping would
+corrupt intentionally formatted callers; plain text always parses. **Why the retry:** it covers the "next new caller forgets" fragility of call-site escaping — the message still lands (unformatted)
+and the log points at the offender. No council: single-discipline engineering choice, operator-approved 2026-10-02.
+
+---
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/` (except 0.6c), `src/streaming/` — all empty

@@ -90,6 +90,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-02] Bug decisions recorded in `DECISIONS.md`: B060.1 — expired legs settle at intrinsic vs the NSE final settlement price (expiry-day NIFTY 50 close), fail-closed, no last-mark fallback;
+  B042.2 — call-site MarkdownV2 escaping plus a one-shot plain-text retry in `TelegramNotifier.send()`, auto-escape-by-default rejected. Unblocks B060.2 and B042.3.
 - [2026-10-02] BUG-037 live-DB re-check: 18 stale flat legs, none from the BUG-037-fixed paths. Filed BUG-066 (signal-track exit SELL leg left `OPEN` — the only live leak); the 11 IC legs are
   pre-`ac4d163` (BUG-062) residue. Added the LEAPS second instance to BUG-057. Read-only on the DB; no backfill run.
 - [2026-10-01] Signal-track post-exit shadow marking: `paper_signal_shadow_marks` + `SignalTrackV1._shadow_tick` (marks a closed trade to 15:00 IST, SL exits included) and `signal_eod` High/Low is now

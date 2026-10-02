@@ -60,7 +60,7 @@ and no executor log line, most likely manual `record_paper_trade` runs). Both wr
 | Field | Value |
 |---|---|
 | Severity | **High** — an expired leg silently poisons P&L (BUG-061) and blocks collar re-entry; PP and CC will hit the same path at their own expiries |
-| Status | 🔴 Open |
+| Status | 🟡 Fix in progress — B060.1 decided 2026-10-02: settle at intrinsic vs NSE final settlement (expiry-day NIFTY 50 close), fail-closed (`DECISIONS.md`). |
 | Discovered | 2026-09-30 — investigating a -45,001 Collar line (-565%) in the "NiftyBees vs overlays" digest |
 | Location | `paper_trades` lifecycle (no expiry-settlement path); `scripts/strategies/three_track/paper_3track_overlay_entry.py::_has_open_overlay_leg` (L1234) and its bootstrap gate (L1470) |
 
@@ -284,7 +284,7 @@ logic). Then standardise every close notification to two lines with fixed labels
 | Field | Value |
 |---|---|
 | Severity | **High** — see failing callers below |
-| Status | 🟡 Fix in progress — B042.1 (enumeration) and B042.4 (400 body logged, `84980a3`) done 2026-09-30; B042.2 fix-approach decision pending (council checkpoint). |
+| Status | 🟡 Fix in progress — B042.1, B042.4 (`84980a3`) done 2026-09-30; B042.2 decided 2026-10-02: call-site escaping + plain-text retry in `send()`, no council (`DECISIONS.md`). |
 | Discovered | 2026-09-09 |
 | Location | `src/notifications/telegram.py::TelegramNotifier.send` + unmigrated callers |
 
