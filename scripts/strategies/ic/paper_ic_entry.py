@@ -661,11 +661,23 @@ async def run() -> None:
         # build, so a tick can score a half-built basket. Clear the prior
         # cycle's persisted credit first so ic_nifty_v1 falls back to the
         # recompute path (no false LOSS_STOP) until the new credit is written
-        # after the legs are verified. Non-fatal, same as the write below.
+        # after the legs are verified. A failed clear aborts before any leg is
+        # placed — proceeding would reopen the exact false-LOSS_STOP window.
         try:
             store.clear_original_entry_credit(config.strategy_name)
-        except Exception as exc:  # noqa: BLE001 — must not block entry
-            logger.warning("ic_entry.original_credit_clear_failed", error=str(exc))
+        except Exception as exc:  # noqa: BLE001 — any failure must abort pre-leg
+            logger.error(
+                "ic_entry.original_credit_clear_failed",
+                strategy=config.strategy_name,
+                error=str(exc),
+                exc_info=True,
+            )
+            _gate_alert(
+                f"⚠️ IC Entry BLOCKED — {config.strategy_name}\n"
+                f"Gate: clear_entry_credit\n"
+                f"Reason: Could not clear prior cycle's entry credit ({exc})"
+            )
+            sys.exit(1)
         subprocess_error: str | None = None
         for cmd in cmds:
             print(f"Executing: {' '.join(cmd)}")

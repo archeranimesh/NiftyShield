@@ -1545,14 +1545,16 @@ async def test_entry_credit_left_cleared_when_leg_not_persisted(
 
 
 @pytest.mark.asyncio
-async def test_entry_credit_clear_failure_does_not_block_entry(
+async def test_entry_aborts_without_legs_when_credit_clear_fails(
     mock_vix_data, mock_store, mock_lookup, mock_market_client, mock_subprocess, mock_telegram
 ) -> None:
-    """BUG-057 edge case: a failing clear is logged, not fatal — legs still run."""
+    """BUG-057 edge case: a failing clear aborts the entry before any leg is
+    placed — proceeding would reopen the stale-credit false-LOSS_STOP window."""
     mock_store.clear_original_entry_credit.side_effect = RuntimeError("db locked")
 
-    with patch.object(sys, "argv", ["paper_ic_entry.py", "--expiry-type", "weekly", "--no-dry-run", "--bod-path", "dummy.json"]):
+    with patch.object(sys, "argv", ["paper_ic_entry.py", "--expiry-type", "weekly", "--no-dry-run", "--bod-path", "dummy.json"]), pytest.raises(SystemExit) as excinfo:
         await run()
 
-    assert mock_subprocess.call_count == 4
-    mock_store.set_original_entry_credit.assert_called_once()
+    assert excinfo.value.code == 1
+    mock_subprocess.assert_not_called()
+    mock_store.set_original_entry_credit.assert_not_called()
