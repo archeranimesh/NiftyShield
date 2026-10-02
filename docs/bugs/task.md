@@ -92,8 +92,7 @@ Detail: `docs/bugs/bugs.md` BUG-060. Settle-price source decision comes first.
 - [x] **B060.2** — Expiry-settlement step: every `OPEN`/`DEFENDED` leg with expiry < today gets a closing trade at intrinsic value and `mark_trade_closed`. Tests: expired leg ends flat and `CLOSED`; a
   leg expiring today or later is untouched. | SHA `1937469`
 - [x] **B060.3** — Daily settlement runs at monitor-daemon startup (no separate cron); live dry-run 2026-10-02 found nothing to settle. | SHA `bd687ac`
-- [ ] **B060.4** — Re-settle trade 405 (collar put `NSE_FO|73994`, expiry 2026-09-29) at intrinsic vs the 2026-09-29 NIFTY 50 close (tested `scripts/dev/` CLI or one-off with operator sign-off).
-  Operator decision first: CLI vs hand correction.
+- [x] **B060.4** — Trade 405 re-settled by hand at intrinsic 783.80 (was 784.15), operator sign-off 2026-10-02; DB-only change.
 - [ ] **B060.5** — Verify on the next daemon start (Mon 2026-10-05 09:15): `grep expiry_settlement logs/monitor_daemon.log | tail -2` shows `expiry_settlement_done`. Pending live host.
 
 ## BUG-054 — MVP tracker has no stock-split/corporate-action adjustment for entry/target/SL prices

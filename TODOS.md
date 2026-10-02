@@ -89,6 +89,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ## Session Log
 - [2026-10-02] BUG-060 settlement moved into monitor-daemon startup (`bd687ac`, no new cron). Filed BUG-068 (per-tick BOD load), BUG-069 (lost BLOCKED alert), BUG-070 (non-atomic close + state flip),
   BUG-071 (test-runner blocked by hook); B060.5 Monday log check and a session-handoff block added to `docs/bugs/task.md`.
+- [2026-10-02] BUG-060 B060.4: trade 405 hand-corrected 784.15 → 783.80 (strike 23500 − close 22716.20; ₹22.75 delta, DB-only, operator sign-off). Only B060.5 (live daemon start) remains.
 - [2026-10-02] BUG-066 + BUG-067 closed: live-host backfill marked 18 stale flat legs `CLOSED` (7 signal track, 11 pre-BUG-062 IC); re-run found 0.
 - [2026-10-02] Batch 2 bug sweep: BUG-043 closed (`0366fe5` Decimal `CloseLegRow`, `94017b7` `Cycle P&L` / `Since inception` labels — DECISIONS); BUG-060 settlement step `1937469`; BUG-042 send
   retry + call-site escaping `3b5947b` / `88578b4`; BUG-067 `c408c1e` + `d3ba54d`. Live-host steps open: B060.3–4, B042.6, B066.3, B067.3.

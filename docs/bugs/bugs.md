@@ -131,6 +131,9 @@ ignore[arg-type]` on the CE/PE `Literal` (runtime-guarded).
 `settle_expired_legs_at_startup` before its first tick: skipped with a WARNING when the BOD lookup is missing, settle bounded at 60 s and notify at 15 s, each failure logged with its own event, never
 blocks the daemon. `paper_expiry_settle` remains the manual tool (dry-run, `--contract`). Live dry-run 2026-10-02: `settled=0 left_open=0` (trade 405 had already flattened the only expired leg). Takes
 effect on the next daemon start.
+
+**B060.4 (2026-10-02, DB-only, no SHA):** trade 405 corrected by one hand `UPDATE` (operator sign-off, option 1 of 3): price 784.15 → 783.80 = strike 23500 − NIFTY 50 close 22716.20 (29-Sep). Delta
+₹22.75 (0.35 × 65), so collar inception P&L 45,001.13 → 44,978.38 on the next snapshot. A correction CLI was rejected as disproportionate. Pre-edit DB copy kept in the session scratchpad only.
 ---
 
 ## BUG-061 [MOVED] — see `docs/archive/bugs/bugs.md` (closed 2026-09-30, SHA `7b671db`)
