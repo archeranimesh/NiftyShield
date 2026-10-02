@@ -43,6 +43,8 @@
 
 > BUG-064 closed 2026-10-01 (SHA `5f15cc8`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
+> BUG-037 closed 2026-10-02 (SHA `5369c0e`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
+
 ## BUG-066 — `signal_track_v1` exit leaves its closing SELL leg `OPEN`
 
 Detail: `docs/bugs/bugs.md` BUG-066.
@@ -57,7 +59,7 @@ Detail: `docs/bugs/bugs.md` BUG-066.
 
 Detail: `docs/bugs/bugs.md` BUG-060. Settle-price source decision comes first.
 
-- [x] **B060.1** — Decide the settlement price source (NSE final settle vs last recorded mark) and record it in `DECISIONS.md`. | SHA <pending>
+- [x] **B060.1** — Decide the settlement price source (NSE final settle vs last recorded mark) and record it in `DECISIONS.md`. | SHA `6c76abf`
 - [ ] **B060.2** — Expiry-settlement step: every `OPEN`/`DEFENDED` leg with expiry < today gets a closing trade at intrinsic value and `mark_trade_closed`. Tests: expired leg ends flat and `CLOSED`; a
   leg expiring today or later is untouched.
 
@@ -114,31 +116,12 @@ Design ruled by council 2026-09-25 (`docs/council/2026-09-25_mvp-corporate-actio
 ## BUG-042 — `721daf9` MarkdownV2 switch broke every unmigrated `TelegramNotifier` cron caller — silent 400 since 2026-08-25
 
 - [x] **B042.1** — Grep `logs/` + callers of `TelegramNotifier.send` to enumerate every entrypoint still emitting unescaped MarkdownV2; list them in `bugs.md`.
-- [x] **B042.2** — Decide fix approach at Step 2b (per-caller call-site escaping vs. defensive auto-escape in `send()` with a `raw=` opt-out); record in `DECISIONS.md` if option 2. | SHA <pending>
+- [x] **B042.2** — Decide fix approach at Step 2b (per-caller call-site escaping vs. defensive auto-escape in `send()` with a `raw=` opt-out); record in `DECISIONS.md` if option 2. | SHA `6c76abf`
 - [ ] **B042.3** — Implement the chosen fix; audit already-migrated callers for regression to literal backslashes.
 - [x] **B042.4** — Surface the swallowed Telegram response body: log the 400 payload (entity-parse offset) in `send()`'s except block. | SHA `84980a3`
 - [ ] **B042.5** — Tests: one 400/entity-parse regression test per fixed caller (or one for `send()`'s default-escape path); no network.
 - [ ] **B042.6** — Suite green + real `@code-reviewer` clean; one manual live send per fixed entrypoint (or user-confirmed next cron run lands).
 - [ ] **B042.7** — Flip `bugs.md` BUG-042 status to ✅ Fixed + SHA; move both sections to `docs/archive/bugs/{bugs,task}.md`.
-
-## BUG-037 — `mark_trade_closed()` also never wired into CSP/IC v1/v2 close paths (54 stale flat legs)
-
-- [x] **B037.1** — Trace `close_csp_leg`/`close_ic_legs`/`roll_ic_legs` (and `roll_down_and_out`) call sites for any partial-close/roll scenario that can leave `net_qty != 0` on the leg being written
-  — CSP's `ROLL_DOWN_AND_OUT` and IC's spread-only closes are partial at the strategy level, unlike BUG-035's overlay legs. Confirms whether `mark_trade_closed()` can be called unconditionally per
-  closing trade or needs a flatness check first. See `docs/bugs/bugs.md` BUG-037. | SHA `b399a3e`
-- [x] **B037.2** — Trace `scripts/strategies/three_track/paper_3track_roll.py`'s futures/proxy roll-close write path for the same gap — the `base_futures` and `base_ditm_call` stale rows found may or
-  may not share this root cause; not yet confirmed (unlike CSP/IC, which are confirmed via grep). | SHA `b399a3e`
-- [x] **B037.3** — Add `store.mark_trade_closed(...)` (or the appropriate partial-close-safe equivalent per B037.1) to `close_csp_leg`, `close_ic_legs`, `roll_ic_legs`, and the futures/proxy
-  roll-close path (per B037.2, if confirmed in scope). | SHA `5369c0e`
-- [x] **B037.4** — Tests: regression coverage per call site mirroring BUG-035's B035.4 pattern (mark_trade_closed called on full close, not called on partial close/duplicate insert). | SHA `5369c0e`
-- [x] **B037.5** — Re-run `scripts/dev/backfill_mark_trade_closed_overlay.py` (already generalized, built for BUG-035) against the live DB once B037.3 lands — it already covers all 54 rows found in
-  this bug's discovery scan. Verified 2026-08-24 via `scratch/diagnostics_db/2026-08-24_check_stale_flat_legs.py` (identical read-only query) run both through the device bridge and directly by Animesh
-  on the live host — same file, same result: 0 stale flat legs, 134 total trade rows. Animesh confirms he ran the backfill script with `--dry-run` earlier — note `--dry-run` never writes, so it cannot
-  be the mechanism that resolved the 54 rows found at discovery; the actual cause is unconfirmed (possibly a prior `--apply` run, or the discovery-time count reflected DB state that's since moved on).
-  No open action either way — nothing stale remains to backfill.
-- [ ] **B037.6** — Review: real `code-reviewer` or `general-purpose` + `REVIEW.md` substitute (mandatory — touches live paper-trading state transitions across CSP/IC, the two highest-volume strategy
-  families).
-- [ ] **B037.7** — Commit, update `bugs.md` BUG-037 status to ✅ Fixed + SHA, update `TODOS.md`.
 
 ## BUG-019 — Investigation: does every strategy show a live-tick vs. EOD-snapshot P&L disparity?
 
