@@ -514,7 +514,9 @@ class NiftyTrackComparisonV1:
         Closes legs listed in ``action.legs_to_close`` by removing matching
         positions from the list, and persists the close (+ the replacement
         open from ``action.legs_to_open``) to ``paper_trades`` via a single
-        atomic ``store.record_trades()`` call when a store is configured
+        atomic ``store.record_trades()`` call when a store is configured, then
+        flips the inserted close-side legs to CLOSED via ``mark_trade_closed``
+        (a separate connection — not atomic with the insert)
         (2026-07-29, S4 — this method used to be in-memory-only, relying on
         an "executor" dispatch that never actually existed; auto-executing
         without this fix would compute a roll and never write it, the same
@@ -621,6 +623,7 @@ class NiftyTrackComparisonV1:
                 )
             )
 
+        n_close = len(trades)
         strategy_name = metadata.get("strategy_name") or (
             closed_positions[0].strategy_name if closed_positions else None
         )
@@ -651,8 +654,19 @@ class NiftyTrackComparisonV1:
                 )
             )
 
-        if trades:
-            self._store.record_trades(trades)
+        if not trades:
+            return
+        # Each close trade is a full close (quantity == abs(net_qty)), so an
+        # inserted close leaves the leg flat. Flip only close-side rows that
+        # actually landed — matched by identity so the replacement open legs
+        # from the same record_trades call stay OPEN (BUG-067, mirrors 5369c0e).
+        # Assumes a roll always changes instrument_key (new expiry/strike):
+        # mark_trade_closed flips every OPEN row for the (strategy, role, key)
+        # triple, so a same-key open leg would be flipped too.
+        close_ids = {id(t) for t in trades[:n_close]}
+        for t in self._store.record_trades(trades)[0]:
+            if id(t) in close_ids:
+                self._store.mark_trade_closed(t.strategy_name, t.leg_role, t.instrument_key)
 
     # ── Roll target selection ─────────────────────────────────────────────────
 

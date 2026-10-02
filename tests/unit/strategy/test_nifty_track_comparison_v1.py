@@ -875,6 +875,9 @@ class FakeStore:
         self.recorded_batches.append(list(trades))
         return (list(trades), [])
 
+    def mark_trade_closed(self, strategy_name: str, leg_role: str, instrument_key: str) -> None:
+        """No-op: state transitions are covered on a real PaperStore elsewhere."""
+
 
 def test_auto_execute_flag_is_true() -> None:
     """S4: NiftyTrackComparisonV1 is now a fully automated strategy, matching
