@@ -60,7 +60,9 @@ Snapshot (authoritative list: `bugs.md`) —
 
 - **BUG-030** — `_overlay_type_groups` elif-precedence orphans the `overlay_cc` leg when `overlay_collar_put` is also present same-day. Next: **B030.1** (entry-side tagging question, blocks the
   grouping fix).
-- **BUG-037** — `mark_trade_closed()` never wired into CSP / IC v1 / v2 close paths; 54 stale flat legs found live. Next: **B037.6** (`code-reviewer` on the B037.3 / B037.4 fix).
+- **BUG-037** — `mark_trade_closed()` never wired into CSP / IC v1 / v2 close paths; 54 stale flat legs found live. Next: **B037.6** (`code-reviewer` on the B037.3 / B037.4 fix) — live-DB re-check
+  2026-10-02: fix holds, no new stale rows from those paths.
+- **BUG-066** — `signal_track_v1` exit leaves its SELL leg `OPEN` (7 stale legs, +1 per exit); backfill also clears 11 pre-BUG-062 IC residue legs. Next: **B066.1**.
 - **BUG-019** — diagnostic-only, not actionable (awaiting a live trading day's data before a fix is scoped).
 
 Feature-vs-bug priority is chosen at session start via `/work`. A bug urgent enough to pre-empt all feature work should be raised with Animesh directly — it is not expressed by reordering either list.
@@ -88,6 +90,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-02] BUG-037 live-DB re-check: 18 stale flat legs, none from the BUG-037-fixed paths. Filed BUG-066 (signal-track exit SELL leg left `OPEN` — the only live leak); the 11 IC legs are
+  pre-`ac4d163` (BUG-062) residue. Added the LEAPS second instance to BUG-057. Read-only on the DB; no backfill run.
 - [2026-10-01] Signal-track post-exit shadow marking: `paper_signal_shadow_marks` + `SignalTrackV1._shadow_tick` (marks a closed trade to 15:00 IST, SL exits included) and `signal_eod` High/Low is now
   whole-session. Trade 408 (target 12:54) is the motivating case. Not covered: no backfill of earlier outcome rows (exit-time semantic); a monitor-restart gap leaves a hole in the shadow series; the
   next step is analysing target-vs-trail on the accumulated shadow data.

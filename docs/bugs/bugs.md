@@ -24,6 +24,37 @@
 
 ---
 
+## BUG-066 — `signal_track_v1` exit leaves its closing SELL leg `OPEN`; only the entry BUY row is flipped to `CLOSED`
+
+| Field | Value |
+|---|---|
+| Severity | **Low** — `paper_trades.state` staleness on flat legs, same category as BUG-035 / BUG-037; no live signal or P&L reads the SELL row's state today |
+| Status | 🔴 Open |
+| Discovered | 2026-10-02 — re-checking BUG-037 against the live DB (`backfill_mark_trade_closed_overlay --dry-run` found 18 stale flat legs, all post-`5369c0e`) |
+| Location | `src/strategy/signal_track_v1.py` exit path (~L773, `record_trade(sell_trade)` → `close_signal_entry`); `src/paper/store.py::close_signal_entry` (`UPDATE … WHERE id = ?`) |
+
+**Symptom:** every `paper_signal_track_v1` exit since the strategy went live (8 exits, 7 `signal_long` legs, 2026-09-15 → 2026-10-01) ends flat with the BUY entry row `CLOSED` and the SELL exit row
+(notes `signal_track_v1 exit (TIME_EXIT|TARGET|STOP_LOSS)`) still `OPEN`. Grows by one stale row per exit.
+
+**Root cause:** the exit path inserts the SELL with `PaperStore.record_trade` (default state `OPEN`), then calls `close_signal_entry(trade_id, …)`, whose state update is `UPDATE paper_trades SET state
+= 'CLOSED' WHERE id = ?` keyed to the **entry** row's id only. Neither step calls `mark_trade_closed`, so the SELL row is never transitioned. Not covered by BUG-037's fix (`5369c0e` wired CSP / IC v1
+/ v2 / 3-track roll only) — signal track shipped after it (SPT-3..5).
+
+**Why inert today:** `get_open_signal_entry` joins `paper_signal_entries` to `paper_trades` on the entry `trade_id` only, and flat legs drop out of `get_positions()`, so no reader sees the SELL row's
+state. Becomes a real defect the moment any state-based gate or report scans `paper_trades` by `state` without a net-qty check (the BUG-060 / BUG-062 failure shape).
+
+**Fix (recommended):** inside `close_signal_entry`'s existing transaction, also flip the leg's remaining `OPEN` rows for that `(strategy_name, leg_role, instrument_key)` — safe because the position is
+flat at that point (one lot in, one lot out). Keep it in the same transaction rather than a separate `mark_trade_closed` call so the "never half-closed" guarantee in its docstring still holds. Then
+re-run `scripts.dev.backfill_mark_trade_closed_overlay` (no `--dry-run`) to clear the backlog.
+
+**Backfill scope note:** the same dry-run also lists 11 IC legs from 2026-09-30 (`v1_leaps` ×3 — entry compensation after the BUG-057 race; `v1_weekly` ×4, `v2_monthly` ×4 — closes with empty notes
+and no executor log line, most likely manual `record_paper_trade` runs). Both wrote via `record_paper_trade`, which only started calling `mark_trade_closed` with BUG-062 (`ac4d163`, 2026-09-30 21:30)
+— after those 10:30 writes. They are pre-fix residue, not an open gap (zero non-signal stale rows since 2026-10-01); the one backfill run clears them too.
+
+**Cross-refs:** BUG-037 (same shape, different call sites), BUG-062 (the `record_paper_trade` fix that closed the compensation path), BUG-057 (the race that triggered the LEAPS compensation).
+
+---
+
 ## BUG-060 — Expired paper overlay legs are never settled or closed; they stay `OPEN` in `paper_trades` after expiry and block the next bootstrap entry
 
 | Field | Value |
@@ -88,6 +119,9 @@ strategy (rejected — legitimate partial closes such as `CLOSE_CALL_SPREAD` lea
 cheap to reverse.
 
 **Cross-refs:** BUG-058 (the misleading alert this race produced), BUG-021 (why the persisted credit is preferred).
+
+**Second instance (noted 2026-10-02):** the same 10:30 run also hit `paper_ic_nifty_v1_leaps` — monitor `LOSS_STOP` → `CLOSE_FULL` at 10:30:26 (trace `9159aa3d`) closed its lone `short_put` @179.00,
+and the entry then compensated the other three legs (`ic_entry.legs_not_persisted … missing_legs=['short_put']`). The fix must cover every IC entry, not just monthly.
 
 ---
 

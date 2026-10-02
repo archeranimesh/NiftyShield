@@ -43,6 +43,16 @@
 
 > BUG-064 closed 2026-10-01 (SHA `5f15cc8`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
+## BUG-066 — `signal_track_v1` exit leaves its closing SELL leg `OPEN`
+
+Detail: `docs/bugs/bugs.md` BUG-066.
+
+- [ ] **B066.1** — `close_signal_entry` also flips the leg's remaining `OPEN` rows for that `(strategy_name, leg_role, instrument_key)` in the same transaction. Tests: after exit both BUY and SELL
+  rows are `CLOSED`; a different open signal leg is untouched; bad `trade_id` still raises and writes nothing. (`tests/unit/paper/`)
+- [ ] **B066.2** — Review: real `code-reviewer` (touches paper-trade state transitions).
+- [ ] **B066.3** — Run `python -m scripts.dev.backfill_mark_trade_closed_overlay` (dry-run first: expect 18 legs — 7 signal track + 11 pre-BUG-062 IC residue); confirm a re-run finds 0.
+- [ ] **B066.4** — Commit, flip BUG-066 to ✅ Fixed + SHA, archive entry, update `TODOS.md`.
+
 ## BUG-060 — Expired paper overlay legs are never settled or closed
 
 Detail: `docs/bugs/bugs.md` BUG-060. Settle-price source decision comes first.
