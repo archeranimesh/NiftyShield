@@ -2704,3 +2704,36 @@ does not), store clear + no-op, and per script clear-before-legs call order, cre
 ERROR. Deferred WARNING: `_gate_alert` is fire-and-forget and `sys.exit(1)` follows at once, so the BLOCKED alert may not send — pre-existing across ~25 abort points in both scripts, not scoped here.
 
 ---
+
+## BUG-059 — IC v1 close card shows `DTE: 0` for a 27-DTE position and formats prices through `float`
+
+| Field | Value |
+|---|---|
+| Severity | **High** (raised 2026-10-02) — IC v1 TIME_STOP / DTE_WARN never fire on live numeric keys; the card's `DTE: 0` is the visible symptom |
+| Status | ✅ Fixed — SHA `49ce5fa` (repro `b261f92`), 2026-10-02 |
+| Discovered | 2026-09-30 — close card for the mid-entry auto-close (see BUG-057) |
+| Location | `src/strategy/ic_nifty_v1.py` ~L836-885 (`CloseLegRow(entry=float(entry), exit=float(exit_price))`, `dte = ... if expiry is not None else 0`) |
+
+**Symptom:** the card read `DTE: 0`, entry/exit `72.8` / `72.5` for actual `72.75` / `72.55` (2-decimal figures on the cycle line of the same card were right).
+
+**Root cause (partly confirmed):** *Price rounding — confirmed:* `float(entry)`/`float(exit_price)` are built into `CloseLegRow`; 72.55 as a float is 72.5499…, so a one-decimal format gives 72.5 where
+Decimal half-even/half-up gives 72.6. *DTE — hypothesis:* `dte` falls back to `0` when `expiry is None`, and `expiry` is derived from `positions` via `_parse_expiry`; if `positions` is the post-close
+(empty) list, every close card reports `DTE: 0`. Not yet checked which list is passed — needs a unit test that closes a leg and asserts the card's DTE before anything is changed.
+
+**Re-diagnosis (2026-10-02, B059.1):** the empty-`positions` hypothesis is wrong — `apply_action` passes the pre-close list, and date-embedded keys render `DTE: 27`. The real cause is
+`IronCondorV1._parse_expiry` (~L1390): it only parses date-embedded keys (`NSE_FO|NIFTY29MAY2026PE`) and returns `None` for numeric Upstox keys (`NSE_FO|51340`). Live DB: all 176 IC v1 `paper_trades`
+rows (weekly / monthly / leaps) are numeric. `check_signals` uses the same parser (L199, L526, L634), so v1 `dte` is always `None` live and TIME_STOP / DTE_WARN never fire — same root cause as
+BUG-018, fixed only in `ic_nifty_v2._parse_expiry` by `3435c5a` (BOD instrument-master fallback). Repro: `test_close_card_dte_for_numeric_upstox_keys` (`xfail(strict)`).
+
+**Fix (re-scoped 2026-10-02):** one shared regex-then-BOD `_parse_expiry` used by v1 and v2. The `float` price rounding half (`CloseLegRow.entry/exit` typed `float`,
+`src/notifications/formatting.py:270`, 8 constructors) moved to BUG-043 as B043.6 — same close paths as B043.2.
+
+**Implementation progress (2026-10-02):** no new helper — `resolve_option_expiry` (`src/strategy/_price_utils.py`, used by the CC/PP/Collar overlays since BUG-033) already mirrored v2's BUG-018 fix.
+It gained a `load_bod` keyword (regex miss with no lookup passed → load `DEFAULT_BOD_PATH`; load failure logs `resolve_option_expiry.bod_load_failed` and returns `None`) and its regex no longer
+requires `CE`/`PE` straight after the date (IC keys can carry a strike there). `IronCondorV1._parse_expiry` and `IronCondorV2._parse_expiry` keep their names and delegate to it; both private
+`_EXPIRY_RE` copies removed. Tests: un-xfailed numeric-key close-card DTE; v1 `check_signals` TIME_STOP (DTE 6) and DTE_WARN (DTE 13) on numeric keys; BOD miss → no DTE events; helper load / skip-file
+/ load-failure. Real `code-reviewer`: 0 CRITICAL / ERROR; double-log on BOD failure fixed. Deferred WARNING: `check_signals` loads the BOD file synchronously (measured 0.25 s per call, ~0.75 s
+blocking per tick across the three v1 books) — pre-existing in v2; cache the lookup per strategy instance as a follow-up. Note: a BOD file older than the contract listing returns `None` and silently
+disables DTE signals for that leg. The `float` price-rounding half moved to BUG-043 (B043.6).
+
+---

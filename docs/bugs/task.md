@@ -47,6 +47,8 @@
 
 > BUG-057 closed 2026-10-02 (SHA `df8d7a3` + `77dfc51`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
+> BUG-059 closed 2026-10-02 (SHA `49ce5fa`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
+
 ## BUG-067 — `PaperExecutor.apply` and `CollarOverlayV1._close_both_legs` close legs without `mark_trade_closed`
 
 Detail: `docs/bugs/bugs.md` BUG-067.
@@ -73,15 +75,6 @@ Detail: `docs/bugs/bugs.md` BUG-060. Settle-price source decision comes first.
 - [x] **B060.1** — Decide the settlement price source (NSE final settle vs last recorded mark) and record it in `DECISIONS.md`. | SHA `6c76abf`
 - [ ] **B060.2** — Expiry-settlement step: every `OPEN`/`DEFENDED` leg with expiry < today gets a closing trade at intrinsic value and `mark_trade_closed`. Tests: expired leg ends flat and `CLOSED`; a
   leg expiring today or later is untouched.
-
-## BUG-059 — IC v1 close card: `DTE: 0` and float price formatting
-
-Detail: `docs/bugs/bugs.md` BUG-059. Repro-test the DTE hypothesis first.
-
-- [ ] **B059.1** — Failing test: close card DTE for a closed 27-DTE leg (confirms or kills the empty-`positions` hypothesis).
-- [ ] **B059.2** — Shared `_parse_expiry` (regex first, BOD instrument-master fallback, from v2's `3435c5a`) called by both IC v1 and v2; numeric-key tests for v1 TIME_STOP, DTE_WARN and the close
-  card; lookup miss yields no DTE events.
-- [ ] **B059.3** — Real `code-reviewer` clean (strategy signal path); commit; flip BUG-059 to ✅ Fixed + SHA, archive.
 
 ## BUG-054 — MVP tracker has no stock-split/corporate-action adjustment for entry/target/SL prices
 

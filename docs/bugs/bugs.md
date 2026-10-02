@@ -125,28 +125,7 @@ recorded mark. Repro test: an open leg with a past expiry ends flat and `CLOSED`
 
 ---
 
-## BUG-059 — IC v1 close card shows `DTE: 0` for a 27-DTE position and formats prices through `float`
-
-| Field | Value |
-|---|---|
-| Severity | **High** (raised 2026-10-02) — IC v1 TIME_STOP / DTE_WARN never fire on live numeric keys; the card's `DTE: 0` is the visible symptom |
-| Status | 🟡 Fix in progress — B059.1 repro done 2026-10-02 (hypothesis killed, real cause found); B059.2 re-scoped |
-| Discovered | 2026-09-30 — close card for the mid-entry auto-close (see BUG-057) |
-| Location | `src/strategy/ic_nifty_v1.py` ~L836-885 (`CloseLegRow(entry=float(entry), exit=float(exit_price))`, `dte = ... if expiry is not None else 0`) |
-
-**Symptom:** the card read `DTE: 0`, entry/exit `72.8` / `72.5` for actual `72.75` / `72.55` (2-decimal figures on the cycle line of the same card were right).
-
-**Root cause (partly confirmed):** *Price rounding — confirmed:* `float(entry)`/`float(exit_price)` are built into `CloseLegRow`; 72.55 as a float is 72.5499…, so a one-decimal format gives 72.5 where
-Decimal half-even/half-up gives 72.6. *DTE — hypothesis:* `dte` falls back to `0` when `expiry is None`, and `expiry` is derived from `positions` via `_parse_expiry`; if `positions` is the post-close
-(empty) list, every close card reports `DTE: 0`. Not yet checked which list is passed — needs a unit test that closes a leg and asserts the card's DTE before anything is changed.
-
-**Re-diagnosis (2026-10-02, B059.1):** the empty-`positions` hypothesis is wrong — `apply_action` passes the pre-close list, and date-embedded keys render `DTE: 27`. The real cause is
-`IronCondorV1._parse_expiry` (~L1390): it only parses date-embedded keys (`NSE_FO|NIFTY29MAY2026PE`) and returns `None` for numeric Upstox keys (`NSE_FO|51340`). Live DB: all 176 IC v1 `paper_trades`
-rows (weekly / monthly / leaps) are numeric. `check_signals` uses the same parser (L199, L526, L634), so v1 `dte` is always `None` live and TIME_STOP / DTE_WARN never fire — same root cause as
-BUG-018, fixed only in `ic_nifty_v2._parse_expiry` by `3435c5a` (BOD instrument-master fallback). Repro: `test_close_card_dte_for_numeric_upstox_keys` (`xfail(strict)`).
-
-**Fix (re-scoped 2026-10-02):** one shared regex-then-BOD `_parse_expiry` used by v1 and v2. The `float` price rounding half (`CloseLegRow.entry/exit` typed `float`,
-`src/notifications/formatting.py:270`, 8 constructors) moved to BUG-043 as B043.6 — same close paths as B043.2.
+## BUG-059 [MOVED] — see `docs/archive/bugs/bugs.md` (closed 2026-10-02, SHA `49ce5fa`)
 
 ---
 

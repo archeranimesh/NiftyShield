@@ -949,3 +949,12 @@ Detail: `docs/bugs/bugs.md` BUG-057 (root cause, recommended fix, alternatives r
   `df8d7a3`
 - [x] **B057.2** — `paper_ic_entry.py` and `paper_ic_entry_v2.py` clear `original_entry_credit` before the leg subprocesses run; new credit still written after. Tests: cleared before first leg,
   restored after success, left NULL on failure. | SHA `df8d7a3` + `77dfc51`
+
+## BUG-059 — IC v1 close card: `DTE: 0` and float price formatting
+
+Detail: `docs/bugs/bugs.md` BUG-059. Repro-test the DTE hypothesis first.
+
+- [x] **B059.1** — Failing test: close card DTE for a closed 27-DTE leg (confirms or kills the empty-`positions` hypothesis). | SHA `b261f92`
+- [x] **B059.2** — Shared `_parse_expiry` (regex first, BOD instrument-master fallback, from v2's `3435c5a`) called by both IC v1 and v2; numeric-key tests for v1 TIME_STOP, DTE_WARN and the close
+  card; lookup miss yields no DTE events. | SHA `49ce5fa`
+- [x] **B059.3** — Real `code-reviewer` clean (strategy signal path); commit; flip BUG-059 to ✅ Fixed + SHA, archive. | SHA `49ce5fa`
