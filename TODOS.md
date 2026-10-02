@@ -60,7 +60,6 @@ Snapshot (authoritative list: `bugs.md`) —
 
 - **BUG-030** — `_overlay_type_groups` elif-precedence orphans the `overlay_cc` leg when `overlay_collar_put` is also present same-day. Next: **B030.1** (entry-side tagging question, blocks the
   grouping fix).
-- **BUG-066** — `signal_track_v1` exit leaves its SELL leg `OPEN` (7 stale legs, +1 per exit); backfill also clears 11 pre-BUG-062 IC residue legs. Next: **B066.3** (live-host backfill).
 - **BUG-019** — diagnostic-only, not actionable (awaiting a live trading day's data before a fix is scoped).
 
 Feature-vs-bug priority is chosen at session start via `/work`. A bug urgent enough to pre-empt all feature work should be raised with Animesh directly — it is not expressed by reordering either list.
@@ -88,6 +87,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-02] BUG-066 + BUG-067 closed: live-host backfill marked 18 stale flat legs `CLOSED` (7 signal track, 11 pre-BUG-062 IC); re-run found 0.
 - [2026-10-02] Batch 2 bug sweep: BUG-043 closed (`0366fe5` Decimal `CloseLegRow`, `94017b7` `Cycle P&L` / `Since inception` labels — DECISIONS); BUG-060 settlement step `1937469`; BUG-042 send
   retry + call-site escaping `3b5947b` / `88578b4`; BUG-067 `c408c1e` + `d3ba54d`. Live-host steps open: B060.3–4, B042.6, B066.3, B067.3.
 - [2026-10-02] BUG-059 closed (`49ce5fa`): IC v1/v2 `_parse_expiry` delegate to `resolve_option_expiry(load_bod=True)`, so v1 TIME_STOP / DTE_WARN fire on live numeric keys (previously never).

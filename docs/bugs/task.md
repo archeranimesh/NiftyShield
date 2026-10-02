@@ -51,6 +51,8 @@
 
 > BUG-043 closed 2026-10-02 (SHA `0366fe5` + `94017b7`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
+> BUG-066 closed 2026-10-02 (SHA `1bc9d29`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
+
 ## BUG-067 — `PaperExecutor.apply` and `CollarOverlayV1._close_both_legs` close legs without `mark_trade_closed`
 
 Detail: `docs/bugs/bugs.md` BUG-067.
@@ -62,16 +64,6 @@ Detail: `docs/bugs/bugs.md` BUG-067.
   closed legs, duplicate insert does not. | SHA `d3ba54d`
 - [ ] **B067.3** — Dry-run `backfill_mark_trade_closed_overlay` to count stale legs from these paths; apply on the live host.
 - [ ] **B067.4** — Commit, flip BUG-067 to ✅ Fixed + SHA, archive entry, update `TODOS.md`.
-
-## BUG-066 — `signal_track_v1` exit leaves its closing SELL leg `OPEN`
-
-Detail: `docs/bugs/bugs.md` BUG-066.
-
-- [x] **B066.1** — `close_signal_entry` also flips the leg's remaining `OPEN` rows for that `(strategy_name, leg_role, instrument_key)` in the same transaction. Tests: after exit both BUY and SELL
-  rows are `CLOSED`; a different open signal leg is untouched; bad `trade_id` still raises and writes nothing. (`tests/unit/paper/`) | SHA `1bc9d29`
-- [x] **B066.2** — Review: real `code-reviewer` (touches paper-trade state transitions). | SHA `1bc9d29`
-- [ ] **B066.3** — Run `python -m scripts.dev.backfill_mark_trade_closed_overlay` (dry-run first: expect 18 legs — 7 signal track + 11 pre-BUG-062 IC residue); confirm a re-run finds 0.
-- [ ] **B066.4** — Commit, flip BUG-066 to ✅ Fixed + SHA, archive entry, update `TODOS.md`.
 
 ## BUG-060 — Expired paper overlay legs are never settled or closed
 

@@ -2789,3 +2789,44 @@ Escaping-guard pins shifted one line for four sites. Tests: one per close path (
 labelled figures; renderer footer tests replaced. Real `code-reviewer`: 0 CRITICAL / ERROR / WARNING.
 
 ---
+
+## BUG-066 — `signal_track_v1` exit leaves its closing SELL leg `OPEN`; only the entry BUY row is flipped to `CLOSED`
+
+| Field | Value |
+|---|---|
+| Severity | **Low** — `paper_trades.state` staleness on flat legs, same category as BUG-035 / BUG-037; no live signal or P&L reads the SELL row's state today |
+| Status | ✅ Fixed — SHA `1bc9d29`, 2026-10-02 |
+| Discovered | 2026-10-02 — re-checking BUG-037 against the live DB (`backfill_mark_trade_closed_overlay --dry-run` found 18 stale flat legs, all post-`5369c0e`) |
+| Location | `src/strategy/signal_track_v1.py` exit path (~L773, `record_trade(sell_trade)` → `close_signal_entry`); `src/paper/store.py::close_signal_entry` (`UPDATE … WHERE id = ?`) |
+
+**Symptom:** every `paper_signal_track_v1` exit since the strategy went live (8 exits, 7 `signal_long` legs, 2026-09-15 → 2026-10-01) ends flat with the BUY entry row `CLOSED` and the SELL exit row
+(notes `signal_track_v1 exit (TIME_EXIT|TARGET|STOP_LOSS)`) still `OPEN`. Grows by one stale row per exit.
+
+**Root cause:** the exit path inserts the SELL with `PaperStore.record_trade` (default state `OPEN`), then calls `close_signal_entry(trade_id, …)`, whose state update is `UPDATE paper_trades SET state
+= 'CLOSED' WHERE id = ?` keyed to the **entry** row's id only. Neither step calls `mark_trade_closed`, so the SELL row is never transitioned. Not covered by BUG-037's fix (`5369c0e` wired CSP / IC v1
+/ v2 / 3-track roll only) — signal track shipped after it (SPT-3..5).
+
+**Why inert today:** `get_open_signal_entry` joins `paper_signal_entries` to `paper_trades` on the entry `trade_id` only, and flat legs drop out of `get_positions()`, so no reader sees the SELL row's
+state. Becomes a real defect the moment any state-based gate or report scans `paper_trades` by `state` without a net-qty check (the BUG-060 / BUG-062 failure shape).
+
+**Fix (recommended):** inside `close_signal_entry`'s existing transaction, also flip the leg's remaining `OPEN` rows for that `(strategy_name, leg_role, instrument_key)` — safe because the position is
+flat at that point (one lot in, one lot out). Keep it in the same transaction rather than a separate `mark_trade_closed` call so the "never half-closed" guarantee in its docstring still holds. Then
+re-run `scripts.dev.backfill_mark_trade_closed_overlay` (no `--dry-run`) to clear the backlog.
+
+**Backfill scope note:** the same dry-run also lists 11 IC legs from 2026-09-30 (`v1_leaps` ×3 — entry compensation after the BUG-057 race; `v1_weekly` ×4, `v2_monthly` ×4 — closes with empty notes
+and no executor log line, most likely manual `record_paper_trade` runs). Both wrote via `record_paper_trade`, which only started calling `mark_trade_closed` with BUG-062 (`ac4d163`, 2026-09-30 21:30)
+— after those 10:30 writes. They are pre-fix residue, not an open gap (zero non-signal stale rows since 2026-10-01); the one backfill run clears them too.
+
+**Cross-refs:** BUG-037 (same shape, different call sites), BUG-062 (the `record_paper_trade` fix that closed the compensation path), BUG-057 (the race that triggered the LEAPS compensation).
+
+
+**Implementation progress (2026-10-02):** `PaperStore.close_signal_entry` now runs a second `UPDATE` in the same transaction, after the by-id flip and its not-found raise: every `OPEN` row matching
+the entry row's `(strategy_name, leg_role, instrument_key)` (row-value subquery) goes to `CLOSED`. `mark_trade_closed` was not reused — it opens its own connection and would break the single
+transaction. Tests (`tests/unit/paper/test_signal_store.py`): SELL row flipped too; other open legs untouched; bad `trade_id` raises and writes nothing. B066.2 real `code-reviewer`: 0 CRITICAL / ERROR
+— one-at-a-time entry guard rules out closing a re-entry; all signal-track `state` readers unaffected. Deferred: WARNING on the `_states_by_key_action` test helper (last-writer-wins dict), INFO on a
+different-`strategy_name` isolation case and a two-cycle stale-row test.
+
+**B066.3 (2026-10-02, live host):** backfill dry-run found the expected 18 stale flat legs (7 `paper_signal_track_v1` `signal_long` + 11 pre-BUG-062 IC v1 leaps / weekly / v2 monthly); applied, re-run
+found 0. None came from BUG-067 paths.
+
+---
