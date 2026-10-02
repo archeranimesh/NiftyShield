@@ -1225,6 +1225,85 @@ def test_send_close_notification_no_store_skips_footer_without_raising() -> None
     assert any(log.get("event") == "ic_nifty_v1.footer_calc_skipped_no_store" for log in logs)
 
 
+# BUG-059 B059.1: close-card DTE for a closed 27-DTE IC. Fixed clock: today
+# Wed 2026-09-30 (the bug's discovery date), expiry Tue 2026-10-27 (Tuesday
+# expiry since April 2026 — REFERENCES.md).
+_B059_TODAY = date(2026, 9, 30)
+_B059_EXPIRY = date(2026, 10, 27)
+
+
+def _close_full_card_dte_line(keys: list[str]) -> str:
+    """Auto-execute CLOSE_FULL through apply_action; return the card's DTE line."""
+    from unittest.mock import AsyncMock, patch
+
+    from src.client.protocol import BrokerClient
+    from src.paper.store import PaperStore
+
+    broker = MagicMock(spec=BrokerClient)
+    broker.get_ltp = AsyncMock(return_value={k: Decimal("10.00") for k in keys})
+    store = MagicMock(spec=PaperStore)
+    store.record_trades = MagicMock(side_effect=lambda trades: (trades, []))
+    store.get_trades = MagicMock(return_value=[])
+    notifier = MagicMock()
+    notifier.send_notification = AsyncMock()
+
+    strat = IronCondorV1(broker=broker, store=store, notifier=notifier)
+    positions = _make_ic_positions(*keys)
+    action = _make_auto_close_action("CLOSE_FULL", event_type="PROFIT_TARGET")
+
+    with (
+        patch("src.strategy.ic_nifty_v1.market_today", return_value=_B059_TODAY),
+        patch("src.paper.tracker.get_strategy_realized_pnl", return_value=Decimal("0")),
+    ):
+        asyncio.run(strat.apply_action(positions, action))
+
+    (message,), _ = notifier.send_notification.call_args
+    return next(line for line in message.splitlines() if "*DTE:*" in line)
+
+
+def test_close_card_dte_uses_pre_close_positions_for_date_keyed_legs() -> None:
+    """BUG-059 hypothesis killed: apply_action hands the pre-close list to the card.
+
+    With expiry-embedded keys the card reads DTE 27, so ``positions`` is not
+    the post-close (empty) list.
+    """
+    d = _B059_EXPIRY.strftime("%d%b%Y").upper()
+    keys = [
+        f"NSE_FO|NIFTY{d}22000PE",
+        f"NSE_FO|NIFTY{d}21500PE",
+        f"NSE_FO|NIFTY{d}25000CE",
+        f"NSE_FO|NIFTY{d}25500CE",
+    ]
+
+    assert "*DTE:* 27 " in _close_full_card_dte_line(keys)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="BUG-059: IronCondorV1._parse_expiry has no BOD fallback for numeric keys",
+)
+def test_close_card_dte_for_numeric_upstox_keys() -> None:
+    """BUG-059 actual cause: real (numeric) Upstox keys render ``DTE: 0``.
+
+    IronCondorV1._parse_expiry is regex-only, so ``NSE_FO|51340``-shaped keys
+    return None and the card falls back to 0. The BOD instrument master knows
+    the expiry; the card must use it (same root cause as BUG-018 in v2).
+    """
+    from unittest.mock import patch
+
+    keys = ["NSE_FO|51340", "NSE_FO|51348", "NSE_FO|51405", "NSE_FO|51417"]
+    lookup = MagicMock()
+    lookup.get_by_key = MagicMock(return_value={"expiry": _B059_EXPIRY.isoformat()})
+
+    with (
+        patch("src.strategy.ic_nifty_v1.InstrumentLookup.from_file", return_value=lookup),
+        patch("src.strategy.ic_nifty_v1.format_leg_label", side_effect=lambda k, _lk: k),
+    ):
+        line = _close_full_card_dte_line(keys)
+
+    assert "*DTE:* 27 " in line
+
+
 def test_apply_action_close_full_manual_action_does_not_auto_persist() -> None:
     """A manually-approved (non auto-execute) CLOSE_FULL does not call close_ic_legs.
 
