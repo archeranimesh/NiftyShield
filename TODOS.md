@@ -23,8 +23,8 @@ rot them. (Item 3 closed 2026-10-02 — numbers kept stable because item text cr
    blocked on `greeks-bs-fallback` GF-2 + GF-3, so it waits for item 7.
 7. **Greeks Black-Scholes fallback** — `docs/plan/greeks-bs-fallback/` — next **GF-1** (read-only audit scope). Needs Animesh's three modeling decisions (rate / DTE convention / delta tolerance)
    before GF-2. Unblocks delta-based IC entry for the yearly bucket and `ic-payoff-charts` `chart-model-overlay/`.
-8. **greeks-parity-validation** — `docs/plan/full-repo-review-followups/greeks-parity-validation/` — next **T1**. P3, council-gated: do not implement directly — needs an `options-strategist` /
-   `greeks-analyst` consult first (tolerance-band decision). Sequence after item 7 so it validates the pricer that actually ships.
+8. **greeks-parity-validation** — `docs/plan/full-repo-review-followups/greeks-parity-validation/` — next **T2** (parity fixture test). P3. T1 consult done — assumptions in `DECISIONS.md`
+   (2026-10-02). Sequence after item 7 so it validates the pricer that actually ships.
 9. **Portfolio snapshot slimdown** — `docs/plan/portfolio-snapshot-slimdown/` — next **FD-1** (pre-delete audit). Epic, fixed order: `finideas-decommission/` (FD-1..7) → `dhan-holdings-removal/`
    (DHR-1..4); both rework `_build_portfolio_summary` + `_format_combined_summary`, so never interleave. No `schema.md`. Requested by Animesh 2026-09-10.
 10. **Strategy module refactor & AI-collaboration blueprint** — `docs/plan/strategy-refactor-blueprint/` — next **BP-1** (`/md-organize` run), then BP-2 (after item 2), BP-3 council, BP-4, BP-5.
@@ -1046,3 +1046,5 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
   `daily_snapshot` warns `NAV missing for 150799`; a new collar may add a second short call beside the open standalone CC.
 - [2026-10-02] full-repo-review-followups: closed suppression-hygiene-triage T1 (`0ca92fe`, REVIEW.md noqa carve-out; TD-A/TD-B filed under Technical Debt) and synced the epic README status (8/9 ✅).
   Only `greeks-parity-validation/` T1 (council consult) remains.
+- [2026-10-02] greeks-parity-validation T1: `options-strategist` + `greeks-analyst` consult on the 2026-04-07 chain fixture, logged in `DECISIONS.md` (`6bfb74d`) — parity on mids vs chain-implied
+  forward; BS reference pins Upstox's fitted convention (r=0.05, cal/365, carry-free theta). Added T2 (parity) / T3 (BS golden) to the story. No code.
