@@ -29,7 +29,7 @@
 | Field | Value |
 |---|---|
 | Severity | **Low** — `paper_trades.state` staleness on flat legs, same category as BUG-035 / BUG-037 / BUG-066 |
-| Status | 🟡 Fix in progress — `c408c1e` (B067.1–2) landed 2026-10-02; third path B067.5 + live-host backfill B067.3 pending |
+| Status | 🟡 Fix in progress — `c408c1e` (B067.1–2) landed 2026-10-02; B067.5 `d3ba54d`; live-host backfill B067.3 pending |
 | Discovered | 2026-10-02 — B037.6 `code-reviewer` pass on `5369c0e` (focus: close paths still missing the call) |
 | Location | `src/strategy/executor.py::PaperExecutor.apply` (~L250, close-leg loop); `src/strategy/collar_overlay_v1.py::CollarOverlayV1._close_both_legs` (~L508, `record_trades`) |
 
@@ -46,6 +46,10 @@ inserted (index, not unpack — 17 collar tests use a bare `MagicMock` store). N
 before its open loop, so a same-`apply` re-open stays `OPEN`. Tests on a real temp `PaperStore`: full close flips, duplicate insert does not, same-role other contract untouched
 (`tests/unit/strategy/test_executor.py`, new `test_collar_overlay_v1_mark_closed.py`). Real `code-reviewer`: 0 CRITICAL / ERROR / WARNING. The 3-line shift broke the escaping guard's line pins —
 re-pinned in `aa84424`. Third unwired path found: `NiftyTrackComparisonV1._persist_roll` (B067.5). Confirmed fine: `overlay_closer.py`, `auto_close.py` (writes no trades), entry-only scripts.
+
+**B067.5 (2026-10-02, `d3ba54d`):** `NiftyTrackComparisonV1._persist_roll` now flips only the close-side trades `record_trades(...)[0]` reports inserted (identity match, as in `roll_ic_legs`);
+replacement legs stay `OPEN`, a duplicate-skipped close flips nothing. Full closes only (`abs(net_qty)`). Tests on a real temp `PaperStore`. Real `code-reviewer`: 0 CRITICAL / ERROR; both WARNINGs
+fixed in the commit (docstring no longer claims atomicity; same-key re-open limitation commented — impossible today since a roll changes strike or expiry).
 ---
 
 ## BUG-066 — `signal_track_v1` exit leaves its closing SELL leg `OPEN`; only the entry BUY row is flipped to `CLOSED`
