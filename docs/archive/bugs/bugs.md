@@ -2665,3 +2665,42 @@ WARNINGs: closing-trade insert and `mark_trade_closed` run in separate transacti
 further unwired close paths (`PaperExecutor.apply`, `CollarOverlayV1._close_both_legs`) filed as BUG-067. INFO: no spread-only close test; CC calibration roll script unwired (non-production).
 
 ---
+
+## BUG-057 — IC entry builds the 4-leg basket while the monitor is live; a half-built basket is scored against the previous cycle's stale `original_entry_credit` and fires a false `LOSS_STOP`
+
+| Field | Value |
+|---|---|
+| Severity | **High** — auto-closes a real position mid-entry, the entry script then compensates the other legs, and the cycle is lost (paper-only today; live-money path if IC ever goes live) |
+| Status | ✅ Fixed — SHA `df8d7a3` + `77dfc51` (2026-10-02) |
+| Discovered | 2026-09-30 — `paper_ic_nifty_v1_monthly` 10:30 cron entry; Telegram `1/4 legs NOT persisted: short_put` |
+| Location | `scripts/strategies/ic/paper_ic_entry.py` + `_v2.py` (`set_original_entry_credit`, after the leg loop); `src/strategy/ic_nifty_v1.py` LOSS_STOP ~L365-430 |
+
+**Symptom:** the entry recorded `short_put` SELL @72.75 at 10:30:20; the monitor tick at 10:30:22 (`logs/monitor_daemon.log`) evaluated a lone short put, fired `LOSS_STOP`, `CLOSE_FULL` dispatched,
+and `ic_close_executor` bought the put back @72.55 (`paper_trades` id 369, notes `ic_nifty_v1 auto-close: CLOSE_FULL`). The entry script kept recording the remaining three legs, its post-run
+verification saw `short_put` net qty 0, reported it "NOT persisted", and compensated the three legs it had opened. End state flat, no naked exposure, no cycle. Both jobs started together only because
+the laptop woke from sleep and cron caught up — but the monitor ticks every ~30s all day and the basket takes ~26s to build, so the window exists on every entry.
+
+**Root cause (mechanism confirmed from code + log; the stale value itself is inferred):** `ic_nifty_v1.py` scores `LOSS_STOP` as `combined_mark / entry_credit >= loss_stop_pct` (2.0×) and prefers the
+persisted `paper_strategies.original_entry_credit` over the recomputed credit (BUG-021). The entry script writes the new cycle's credit only after all four leg subprocesses return, so throughout the
+build the column still holds the **previous** cycle's net credit. Prior cycle (2026-09-23) net credit was 44.975 − 22.175 + 21.90 − 8.975 = 35.725; the lone short put marked 72.5 → 72.5 / 35.725 =
+2.03 ≥ 2.0 → `LOSS_STOP`. The overwritten column value can't be re-read now (it holds today's 53.85), hence "inferred", but the arithmetic reproduces the trigger exactly.
+
+**Fix (recommended, not yet implemented):** in both entry scripts, clear `original_entry_credit` (set to NULL) *before* the leg subprocesses run, so `ic_nifty_v1` falls back to the recompute path
+(lone short put: mark ≈ credit → ratio ≈ 1.0, no stop) until the new credit is written. Smallest change, no monitor edit, no new lock. Alternatives considered: an `entry_in_progress` marker the
+monitor honours (more robust against other partial-state signals, but needs a schema column, a stale-marker timeout, and a monitor change); a "skip combined signals unless 4 legs open" guard in the
+strategy (rejected — legitimate partial closes such as `CLOSE_CALL_SPREAD` leave 2 legs and must keep their loss stop). Council checkpoint (CLAUDE.md Step 2b) not warranted: one defensible approach,
+cheap to reverse.
+
+**Cross-refs:** BUG-058 (the misleading alert this race produced), BUG-021 (why the persisted credit is preferred).
+
+**Second instance (noted 2026-10-02):** the same 10:30 run also hit `paper_ic_nifty_v1_leaps` — monitor `LOSS_STOP` → `CLOSE_FULL` at 10:30:26 (trace `9159aa3d`) closed its lone `short_put` @179.00,
+and the entry then compensated the other three legs (`ic_entry.legs_not_persisted … missing_legs=['short_put']`). The fix must cover every IC entry, not just monthly.
+
+**Implementation progress (2026-10-02):** new `PaperStore.clear_original_entry_credit` (NULLs the column; no-op without a row). `paper_ic_entry.py` and `_v2.py` call it in the live branch immediately
+before the leg loop, so `check_signals` recomputes the credit from open legs during the build (a lone short put scores ≈1.0×); the new credit is still written after the legs verify, and a mid-build
+failure leaves it NULL. Operator decision: a failed clear **aborts** the entry before any leg (ERROR log with `exc_info`, "IC Entry BLOCKED" Telegram, exit 1) — proceeding would reopen the
+false-`LOSS_STOP` window. `paper_ic_entry.py` serves every v1 variant (monthly / weekly / leaps), covering the 2026-10-02 leaps instance. Tests: B057.1 repro (stale credit fires `LOSS_STOP`, cleared
+does not), store clear + no-op, and per script clear-before-legs call order, credit left NULL on a missing leg, abort with no legs on clear failure. Real `code-reviewer` on both commits: 0 CRITICAL /
+ERROR. Deferred WARNING: `_gate_alert` is fire-and-forget and `sys.exit(1)` follows at once, so the BLOCKED alert may not send — pre-existing across ~25 abort points in both scripts, not scoped here.
+
+---

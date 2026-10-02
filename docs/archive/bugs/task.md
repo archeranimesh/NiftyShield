@@ -940,3 +940,12 @@ Detail: `docs/bugs/bugs.md` BUG-063.
 - [x] **B037.6** — Review: real `code-reviewer` or `general-purpose` + `REVIEW.md` substitute (mandatory — touches live paper-trading state transitions across CSP/IC, the two highest-volume strategy
   families). | SHA `5369c0e`
 - [x] **B037.7** — Commit, update `bugs.md` BUG-037 status to ✅ Fixed + SHA, update `TODOS.md`. | SHA `5369c0e`
+
+## BUG-057 — IC entry races the monitor: half-built basket scored against stale `original_entry_credit`
+
+Detail: `docs/bugs/bugs.md` BUG-057 (root cause, recommended fix, alternatives rejected).
+
+- [x] **B057.1** — Repro test: strategy with a stale `original_entry_credit` and only one open leg emits `LOSS_STOP`; same state with the credit cleared does not. (`tests/unit/strategy/`) | SHA
+  `df8d7a3`
+- [x] **B057.2** — `paper_ic_entry.py` and `paper_ic_entry_v2.py` clear `original_entry_credit` before the leg subprocesses run; new credit still written after. Tests: cleared before first leg,
+  restored after success, left NULL on failure. | SHA `df8d7a3` + `77dfc51`

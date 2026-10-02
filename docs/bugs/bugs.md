@@ -117,35 +117,7 @@ recorded mark. Repro test: an open leg with a past expiry ends flat and `CLOSED`
 
 ---
 
-## BUG-057 — IC entry builds the 4-leg basket while the monitor is live; a half-built basket is scored against the previous cycle's stale `original_entry_credit` and fires a false `LOSS_STOP`
-
-| Field | Value |
-|---|---|
-| Severity | **High** — auto-closes a real position mid-entry, the entry script then compensates the other legs, and the cycle is lost (paper-only today; live-money path if IC ever goes live) |
-| Status | 🔴 Open |
-| Discovered | 2026-09-30 — `paper_ic_nifty_v1_monthly` 10:30 cron entry; Telegram `1/4 legs NOT persisted: short_put` |
-| Location | `scripts/strategies/ic/paper_ic_entry.py` + `_v2.py` (`set_original_entry_credit`, after the leg loop); `src/strategy/ic_nifty_v1.py` LOSS_STOP ~L365-430 |
-
-**Symptom:** the entry recorded `short_put` SELL @72.75 at 10:30:20; the monitor tick at 10:30:22 (`logs/monitor_daemon.log`) evaluated a lone short put, fired `LOSS_STOP`, `CLOSE_FULL` dispatched,
-and `ic_close_executor` bought the put back @72.55 (`paper_trades` id 369, notes `ic_nifty_v1 auto-close: CLOSE_FULL`). The entry script kept recording the remaining three legs, its post-run
-verification saw `short_put` net qty 0, reported it "NOT persisted", and compensated the three legs it had opened. End state flat, no naked exposure, no cycle. Both jobs started together only because
-the laptop woke from sleep and cron caught up — but the monitor ticks every ~30s all day and the basket takes ~26s to build, so the window exists on every entry.
-
-**Root cause (mechanism confirmed from code + log; the stale value itself is inferred):** `ic_nifty_v1.py` scores `LOSS_STOP` as `combined_mark / entry_credit >= loss_stop_pct` (2.0×) and prefers the
-persisted `paper_strategies.original_entry_credit` over the recomputed credit (BUG-021). The entry script writes the new cycle's credit only after all four leg subprocesses return, so throughout the
-build the column still holds the **previous** cycle's net credit. Prior cycle (2026-09-23) net credit was 44.975 − 22.175 + 21.90 − 8.975 = 35.725; the lone short put marked 72.5 → 72.5 / 35.725 =
-2.03 ≥ 2.0 → `LOSS_STOP`. The overwritten column value can't be re-read now (it holds today's 53.85), hence "inferred", but the arithmetic reproduces the trigger exactly.
-
-**Fix (recommended, not yet implemented):** in both entry scripts, clear `original_entry_credit` (set to NULL) *before* the leg subprocesses run, so `ic_nifty_v1` falls back to the recompute path
-(lone short put: mark ≈ credit → ratio ≈ 1.0, no stop) until the new credit is written. Smallest change, no monitor edit, no new lock. Alternatives considered: an `entry_in_progress` marker the
-monitor honours (more robust against other partial-state signals, but needs a schema column, a stale-marker timeout, and a monitor change); a "skip combined signals unless 4 legs open" guard in the
-strategy (rejected — legitimate partial closes such as `CLOSE_CALL_SPREAD` leave 2 legs and must keep their loss stop). Council checkpoint (CLAUDE.md Step 2b) not warranted: one defensible approach,
-cheap to reverse.
-
-**Cross-refs:** BUG-058 (the misleading alert this race produced), BUG-021 (why the persisted credit is preferred).
-
-**Second instance (noted 2026-10-02):** the same 10:30 run also hit `paper_ic_nifty_v1_leaps` — monitor `LOSS_STOP` → `CLOSE_FULL` at 10:30:26 (trace `9159aa3d`) closed its lone `short_put` @179.00,
-and the entry then compensated the other three legs (`ic_entry.legs_not_persisted … missing_legs=['short_put']`). The fix must cover every IC entry, not just monthly.
+## BUG-057 [MOVED] — see `docs/archive/bugs/bugs.md` (closed 2026-10-02, SHA `df8d7a3` + `77dfc51`)
 
 ---
 

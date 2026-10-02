@@ -45,6 +45,8 @@
 
 > BUG-037 closed 2026-10-02 (SHA `5369c0e`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
+> BUG-057 closed 2026-10-02 (SHA `df8d7a3` + `77dfc51`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
+
 ## BUG-067 — `PaperExecutor.apply` and `CollarOverlayV1._close_both_legs` close legs without `mark_trade_closed`
 
 Detail: `docs/bugs/bugs.md` BUG-067.
@@ -71,14 +73,6 @@ Detail: `docs/bugs/bugs.md` BUG-060. Settle-price source decision comes first.
 - [x] **B060.1** — Decide the settlement price source (NSE final settle vs last recorded mark) and record it in `DECISIONS.md`. | SHA `6c76abf`
 - [ ] **B060.2** — Expiry-settlement step: every `OPEN`/`DEFENDED` leg with expiry < today gets a closing trade at intrinsic value and `mark_trade_closed`. Tests: expired leg ends flat and `CLOSED`; a
   leg expiring today or later is untouched.
-
-## BUG-057 — IC entry races the monitor: half-built basket scored against stale `original_entry_credit`
-
-Detail: `docs/bugs/bugs.md` BUG-057 (root cause, recommended fix, alternatives rejected).
-
-- [ ] **B057.1** — Repro test: strategy with a stale `original_entry_credit` and only one open leg emits `LOSS_STOP`; same state with the credit cleared does not. (`tests/unit/strategy/`)
-- [ ] **B057.2** — `paper_ic_entry.py` and `paper_ic_entry_v2.py` clear `original_entry_credit` before the leg subprocesses run; new credit still written after. Tests: cleared before first leg,
-  restored after success, left NULL on failure.
 
 ## BUG-059 — IC v1 close card: `DTE: 0` and float price formatting
 

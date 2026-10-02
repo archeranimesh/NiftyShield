@@ -88,6 +88,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-02] BUG-057 closed (`df8d7a3` + `77dfc51`): IC entry clears `original_entry_credit` before the legs and aborts if the clear fails; `code-reviewer` clean. Deferred: fire-and-forget BLOCKED
+  alert before `sys.exit` across all IC entry aborts.
 - [2026-10-02] BUG-066 fix `1bc9d29`: `close_signal_entry` closes the exit SELL row in the same transaction; `code-reviewer` clean. Open: B066.3 live-host backfill (dry-run expects 18 legs), then
   B066.4 close.
 - [2026-10-02] BUG-037 closed: B037.6 real `code-reviewer` on `5369c0e` — 0 CRITICAL/ERROR, no drift; entry + checklist archived. Two further unwired close paths (`PaperExecutor.apply`,
