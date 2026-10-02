@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -20,6 +21,7 @@ import pytest
 from src.models.options import OptionChain, OptionLeg
 from src.models.portfolio import TradeAction
 from src.paper.models import PaperPosition, PaperTrade
+from src.paper.store import PaperStore
 from src.strategy._price_utils import resolve_price
 from src.strategy.executor import PaperExecutor, PaperFillSimulator
 from src.strategy.protocol import ApprovedAction, LegClose, LegSpec
@@ -331,6 +333,87 @@ class TestPaperExecutorCloseLeg:
         )
         recorded: PaperTrade = store.record_trade.call_args[0][0]
         assert recorded.instrument_key == "NSE_FO|NEW"
+
+
+# ── BUG-067: close-leg state transition (real PaperStore) ─────────────────────
+
+_TODAY = date(2026, 10, 2)
+
+
+def _seed(store: PaperStore, key: str, action: TradeAction, qty: int, day: date) -> None:
+    """Insert one paper_csp/short_put trade row."""
+    store.record_trade(
+        PaperTrade(
+            strategy_name="paper_csp",
+            leg_role="short_put",
+            instrument_key=key,
+            trade_date=day,
+            action=action,
+            quantity=qty,
+            price=Decimal("100"),
+        )
+    )
+
+
+def _states(store: PaperStore, key: str) -> list[str]:
+    """Return the state of every paper_csp/short_put row for ``key``."""
+    trades = store.get_trades("paper_csp", "short_put")
+    return [t.state.value for t in trades if t.instrument_key == key]
+
+
+def _apply_close(store: PaperStore, tmp_path: Path, key: str) -> None:
+    """Run PaperExecutor.apply with one LegClose for short_put on ``key``."""
+    executor = PaperExecutor(
+        store=store, simulator=PaperFillSimulator(), db_path=tmp_path / "audit.sqlite"
+    )
+    action = ApprovedAction(
+        action_type="EXIT",
+        legs_to_close=[LegClose(leg_role="short_put", instrument_key=key)],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+    )
+    with (
+        patch("src.strategy.executor.market_today", return_value=_TODAY),
+        patch.object(executor, "_resolve_mid_price", return_value=Decimal("50")),
+        patch.object(executor, "_write_audit"),
+    ):
+        executor.apply("paper_csp", action, _make_chain(), approval_id=1, vix=18.0)
+
+
+class TestPaperExecutorMarkClosed:
+    def test_full_close_flips_opening_row_to_closed(self, tmp_path: Path) -> None:
+        """BUG-067: an inserted close leaves the leg flat → every row CLOSED."""
+        store = PaperStore(tmp_path / "paper.sqlite")
+        _seed(store, "NSE_FO|42", TradeAction.SELL, 50, date(2026, 9, 25))
+
+        _apply_close(store, tmp_path, "NSE_FO|42")
+
+        assert store.get_position("paper_csp", "short_put", "NSE_FO|42").net_qty == 0
+        assert _states(store, "NSE_FO|42") == ["CLOSED", "CLOSED"]
+
+    def test_duplicate_close_insert_does_not_flip_state(self, tmp_path: Path) -> None:
+        """A close skipped as a duplicate (same key/date/action already on file)
+        writes nothing, so the still-open leg must stay OPEN."""
+        store = PaperStore(tmp_path / "paper.sqlite")
+        _seed(store, "NSE_FO|42", TradeAction.SELL, 50, date(2026, 9, 25))
+        _seed(store, "NSE_FO|42", TradeAction.BUY, 25, _TODAY)  # partial close today
+
+        _apply_close(store, tmp_path, "NSE_FO|42")  # BUY 25 today → conflict
+
+        assert store.get_position("paper_csp", "short_put", "NSE_FO|42").net_qty == -25
+        assert _states(store, "NSE_FO|42") == ["OPEN", "OPEN"]
+
+    def test_close_leaves_other_contract_on_same_role_open(self, tmp_path: Path) -> None:
+        """Roll overlap: closing one instrument_key must not flip the other."""
+        store = PaperStore(tmp_path / "paper.sqlite")
+        _seed(store, "NSE_FO|OLD", TradeAction.SELL, 50, date(2026, 9, 25))
+        _seed(store, "NSE_FO|NEW", TradeAction.SELL, 50, date(2026, 9, 30))
+
+        _apply_close(store, tmp_path, "NSE_FO|NEW")
+
+        assert _states(store, "NSE_FO|NEW") == ["CLOSED", "CLOSED"]
+        assert _states(store, "NSE_FO|OLD") == ["OPEN"]
 
 
 class TestPaperExecutorEmptyAction:

@@ -247,7 +247,11 @@ class PaperExecutor:
                 ivr_at_entry=None,
                 is_paper=True,
             )
-            self._store.record_trade(trade)
+            # Close qty is abs(net_qty) of this (leg_role, instrument_key), so an
+            # inserted close always leaves the leg flat — safe to flip state.
+            # A duplicate skip wrote nothing, so the opening rows stay as-is.
+            if self._store.record_trade(trade):
+                self._store.mark_trade_closed(strategy_name, leg_role, position.instrument_key)
             self._write_audit(
                 strategy_name,
                 action.action_type,

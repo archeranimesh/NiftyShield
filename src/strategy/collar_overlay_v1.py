@@ -505,7 +505,10 @@ class CollarOverlayV1(ReEntryMixin):
             log.warning("collar_overlay_v1.apply_action.missing_put_leg")
 
         if self._store is not None and trades_to_record:
-            self._store.record_trades(trades_to_record)
+            inserted = self._store.record_trades(trades_to_record)[0]
+            # Each close is abs(net_qty) of its leg — flat once inserted.
+            for t in inserted:
+                self._store.mark_trade_closed(t.strategy_name, t.leg_role, t.instrument_key)
             log.info(
                 "collar_overlay_v1.apply_action.recorded_trades",
                 strategy_name=self.strategy_name,
