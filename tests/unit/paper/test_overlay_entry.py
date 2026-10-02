@@ -1696,7 +1696,7 @@ def test_alert_bootstrap_failure_sends_telegram_message():
         mock_notifier.send.assert_called_once()
         sent_msg = mock_notifier.send.call_args[0][0]
         assert "PP" in sent_msg
-        assert "logs/pp_entry.log" in sent_msg
+        assert "logs/pp\\_entry\\.log" in sent_msg  # MarkdownV2-escaped (BUG-042)
         assert "FAILED" in sent_msg
 
 

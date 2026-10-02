@@ -668,7 +668,7 @@ async def test_multi_instrument_missing_ltp_omits_role_not_partial(tmp_path: Pat
 
     assert "overlay_pp" not in totals  # fail loud: omitted, not a partial aggregate
     assert "overlay_cc" in totals  # unrelated role unaffected
-    assert any("ERROR" in m and "overlay_pp" in m for m in notifier.messages)
+    assert any("ERROR" in m and "overlay\\_pp" in m for m in notifier.messages)  # BUG-042
 
 
 # 12: single-position role retains exactly current (pre-fix) behavior.

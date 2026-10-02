@@ -766,14 +766,15 @@ async def compute_and_record_exit_signals(
 
     for msg in action_messages:
         try:
-            await notifier.send(msg)
+            # BUG-042: plain-text body, no intended markup — escape it whole.
+            await notifier.send(escape_markdown(msg))
         except Exception as exc:
             logger.warning("exit_signal.telegram_action_failed", error=str(exc))
 
     for strategy_name, warns in warn_by_strategy.items():
         batch = f"⚠️ EXIT WARN — {strategy_name}\n" + "\n".join(warns)
         try:
-            await notifier.send(batch)
+            await notifier.send(escape_markdown(batch))
         except Exception as exc:
             logger.warning(
                 "exit_signal.telegram_warn_failed",
@@ -1415,8 +1416,10 @@ async def _check_overlay_multi_instrument_alert(
             if notifier is not None:
                 try:
                     await notifier.send(
-                        f"✅ overlay {role}: back to a single open instrument — "
-                        f"P&L snapshot resumed normal (BUG-032)."
+                        escape_markdown(
+                            f"✅ overlay {role}: back to a single open instrument — "
+                            f"P&L snapshot resumed normal (BUG-032)."
+                        )
                     )
                 # Intentional: notification failure must not crash the snapshot.
                 except Exception as exc:
@@ -1441,9 +1444,12 @@ async def _check_overlay_multi_instrument_alert(
         icon = "🚨 *ERROR*" if escalated else "⚠️ *WARNING*"
         try:
             await notifier.send(
-                f"{icon} overlay {role}: {n} open instruments under one role for "
-                f"{today_streak} day(s) — aggregating P&L across all of them, LTP "
-                f"shown as N/A on the snapshot row. See BUG-032."
+                f"{icon} "
+                + escape_markdown(
+                    f"overlay {role}: {n} open instruments under one role for "
+                    f"{today_streak} day(s) — aggregating P&L across all of them, LTP "
+                    f"shown as N/A on the snapshot row. See BUG-032."
+                )
             )
         # Intentional: notification failure must not crash the snapshot.
         except Exception as exc:
@@ -1564,9 +1570,12 @@ async def _compute_overlay_leg_totals(
                 if notifier is not None:
                     try:
                         await notifier.send(
-                            f"🚨 *ERROR* overlay {role}: {n} open instruments, missing LTP "
-                            f"for {missing_keys} — P&L snapshot skipped for this role today "
-                            f"(BUG-032, fail-loud, not a partial aggregate)."
+                            "🚨 *ERROR* "
+                            + escape_markdown(
+                                f"overlay {role}: {n} open instruments, missing LTP "
+                                f"for {missing_keys} — P&L snapshot skipped for this role "
+                                f"today (BUG-032, fail-loud, not a partial aggregate)."
+                            )
                         )
                     # Intentional: notification failure must not crash the snapshot.
                     except Exception as exc:

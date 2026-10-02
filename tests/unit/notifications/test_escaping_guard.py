@@ -219,9 +219,8 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "and fully escaped inside build_position_health_message(), but this guard only inspects "
         "the immediate enclosing function (main)"
     ),
-    ("scripts/strategies/three_track/paper_3track_overlay_entry.py", 1333): (
-        "ROLL-14 - format confirmed, real code not yet migrated (bootstrap-failure alert)"
-    ),
+    # paper_3track_overlay_entry.py:1333 (_alert_bootstrap_failure) - BUG-042 escaped it
+    # at the call site; no longer a baseline entry.
     ("scripts/strategies/three_track/paper_3track_roll.py", 437): (
         "heuristic limitation, not a real gap - ROLL-9 migrated this (SHA on the task "
         "line); the message is built and fully escaped inside build_roll_notification() "
@@ -232,32 +231,16 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
     # base-expiry notifier.send (was line 511) - ROLL-15 (SHA 3855f8f) migrated it;
     # msg is now fully escaped (escape_markdown/mdcode on every value), so it is no
     # longer a baseline entry. Line numbers below shifted down by ROLL-15's edit.
-    (
-        "scripts/strategies/three_track/paper_3track_snapshot.py",
-        769,
-    ): "untracked gap - not named in any MD-*/ROLL-* task",
-    (
-        "scripts/strategies/three_track/paper_3track_snapshot.py",
-        776,
-    ): "untracked gap - not named in any MD-*/ROLL-* task",
-    (
-        "scripts/strategies/three_track/paper_3track_snapshot.py",
-        1417,
-    ): "ROLL-15/16 area - not itself named, untracked gap. Line moved from 1400 -> 1417 by BUG-061's edit.",
-    (
-        "scripts/strategies/three_track/paper_3track_snapshot.py",
-        1443,
-    ): "ROLL-15/16 area - not itself named, untracked gap. Line moved from 1426 -> 1443 by BUG-061's edit.",
-    (
-        "scripts/strategies/three_track/paper_3track_snapshot.py",
-        1566,
-    ): "untracked gap - not named in any MD-*/ROLL-* task. Line moved from 1547 -> 1566 by BUG-061's edit.",
+    # paper_3track_snapshot.py's EXIT SIGNAL action / EXIT WARN batch sends
+    # (compute_and_record_exit_signals) and the three BUG-032 multi-instrument alerts
+    # (_check_overlay_multi_instrument_alert, _compute_overlay_leg_totals) - BUG-042
+    # escaped all five at the call site; no longer baseline entries.
     ("scripts/dev/paper_track_snapshot.py", 171): (
         "value escaped inside callee build_proxy_critical_alert() — guard inspects enclosing function only"
     ),
-    ("scripts/strategies/three_track/paper_3track_snapshot.py", 2039): (
+    ("scripts/strategies/three_track/paper_3track_snapshot.py", 2048): (
         "value escaped inside callee build_proxy_critical_alert() — guard inspects enclosing "
-        "function only. Line moved from 2020 -> 2039 by BUG-061's edit."
+        "function only. Line moved from 2020 -> 2039 by BUG-061's edit, then 2039 -> 2048 by BUG-042's."
     ),
     ("scripts/morning_signal.py", 181): (
         "S5.5c — value is fully escaped inside the callee _format_signal_notification() "
@@ -283,12 +266,13 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "calls. BUG-065 moved the send into _deliver_exit_message (line 645 -> 114, then 114 -> 117 by BUG-064's new imports), which "
         "receives the already-escaped build_signal_exit_message() text."
     ),
-    ("scripts/strategies/three_track/paper_3track_snapshot.py", 2085): (
+    ("scripts/strategies/three_track/paper_3track_snapshot.py", 2094): (
         "ORD-3 - digest body is wrapped as a single MarkdownV2 fenced code block inside "
         "the callee _build_recovery_digest() (fence content is literal, no per-line/whole-"
         "string escape_markdown needed — same shape as the scripts/signal_eod.py:440 "
         "entry), but this guard only inspects the immediate enclosing function (_run), "
-        "not the builder it calls. Line moved from 2066 -> 2085 by BUG-061's edit."
+        "not the builder it calls. Line moved from 2066 -> 2085 by BUG-061's edit, "
+        "then 2085 -> 2094 by BUG-042's."
     ),
     ("scripts/record/record_paper_trade.py", 775): (
         "UEM-2 - heuristic limitation, not a real gap: the card is built by "
@@ -298,15 +282,14 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "inspects the immediate enclosing function (_send_entry_card_if_requested), "
         "not the builder it calls - same shape as the scripts/eod_summary.py:198 entry"
     ),
-    ("scripts/record/record_paper_trade.py", 848): (
+    ("scripts/record/record_paper_trade.py", 846): (
         "UXM-4 - heuristic limitation, not a real gap: the card is built by "
         "format_exit_message(), which escapes every interpolated value via "
         "escape_markdown() inside ExitMessage's own renderer "
         "(src/notifications/exit_message.py); this guard only inspects the "
         "immediate enclosing function (_send_close_card_if_requested), not the "
         "builder it calls - same shape as the scripts/eod_summary.py:198 entry. "
-        "Line moved from 845 -> 846 by a later edit above it, then 846 -> 848 "
-        "by B043.6 (CloseLegRow Decimal exit fallback)."
+        "Line moved from 845 -> 846 by a later edit above it."
     ),
     ("src/strategy/collar_overlay_v1.py", 683): (
         "OEM-2 - heuristic limitation, not a real gap: the card is built by "
@@ -315,7 +298,8 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "(src/notifications/entry_message.py); this guard only inspects the "
         "immediate enclosing function (_send_reentry_notification), not the "
         "builder it calls - same shape as the scripts/record/record_paper_trade.py:775 entry. "
-        "Line moved from 679 -> 680 by UXM-5's _send_close_notification rewrite above it."
+        "Line moved from 679 -> 680 by UXM-5's _send_close_notification rewrite above it, "
+        "then 680 -> 683 by c408c1e."
     ),
     ("src/strategy/collar_overlay_v1.py", 685): (
         "OEM-2 - heuristic limitation, not a real gap: the card is built by "
@@ -324,7 +308,8 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "(src/notifications/entry_message.py); this guard only inspects the "
         "immediate enclosing function (_send_reentry_notification), not the "
         "builder it calls - same shape as the scripts/record/record_paper_trade.py:775 entry. "
-        "Line moved from 681 -> 682 by UXM-5's _send_close_notification rewrite above it."
+        "Line moved from 681 -> 682 by UXM-5's _send_close_notification rewrite above it, "
+        "then 682 -> 685 by c408c1e."
     ),
     ("src/strategy/cc_overlay_v1.py", 447): (
         "UXM-5 - heuristic limitation, not a real gap: the card is built by "
@@ -348,7 +333,8 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "escape_markdown() inside ExitMessage's own renderer "
         "(src/notifications/exit_message.py); this guard only inspects the "
         "immediate enclosing function (_send_close_notification), not the "
-        "builder it calls - same shape as the scripts/record/record_paper_trade.py:846 entry"
+        "builder it calls - same shape as the scripts/record/record_paper_trade.py:846 entry. "
+        "Line moved from 863 -> 866 by c408c1e."
     ),
     ("src/strategy/auto_close.py", 387): (
         "UXM-6 - heuristic limitation, not a real gap: the card is built by "
@@ -363,11 +349,15 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
     ),
     # mvp_watch.run's alert and hourly-summary sends (formerly lines 148/155, now ~208/218) are
     # no longer listed: BUG-054's gap-warning send added an escape_markdown() call to run(), and the
-    # guard credits every send in a function that calls an escaping helper. They are NOT verified
-    # escaped - the guard is simply blind to them now (BUG-042 follow-up).
+    # guard credits every send in a function that calls an escaping helper. BUG-042 audited them:
+    # _format_alert_message() and format_hourly_summary() escape every out-of-fence value, pinned
+    # by tests/unit/notifications/test_bug042_call_site_escaping.py.
     ("scripts/mvp_watch.py", 293): (
-        "untracked gap - not named in any MD-*/ROLL-* task. New call site from "
-        "e7cdda0's live EOD summary wiring. Line moved from 230 -> 293 by BUG-054's edit."
+        "heuristic limitation, not a real gap (BUG-042 audit) - run_eod's message is built "
+        "and fully escaped inside src/mvp/tracker.py::format_eod_summary() (escape_markdown() "
+        "on every out-of-fence value, fenced table verbatim), but this guard only inspects the "
+        "immediate enclosing function (run_eod) - same shape as the scripts/eod_summary.py:198 "
+        "entry. Pinned by tests/unit/notifications/test_bug042_call_site_escaping.py."
     ),
 }
 
@@ -439,8 +429,8 @@ def test_baseline_has_no_duplicate_or_unused_entries():
 @pytest.mark.parametrize(
     "file_rel, line",
     [
-        ("src/strategy/collar_overlay_v1.py", 611),
-        ("src/strategy/collar_overlay_v1.py", 613),
+        ("src/strategy/collar_overlay_v1.py", 611),  # 608 -> 611 by c408c1e
+        ("src/strategy/collar_overlay_v1.py", 613),  # 610 -> 613 by c408c1e
     ],
 )
 def test_md3_audited_close_notifications_stay_escaped(file_rel, line):

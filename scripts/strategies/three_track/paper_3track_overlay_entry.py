@@ -1330,7 +1330,7 @@ def _alert_bootstrap_failure(overlay_label: str, log_file: str) -> None:
         f"Check {log_file} for the failing gate."
     )
     try:
-        asyncio.run(notifier.send(msg))
+        asyncio.run(notifier.send(escape_markdown(msg)))  # BUG-042: plain text, escape whole
     except Exception as exc:  # non-fatal — notify failure never masks the gate failure
         logger.warning("paper_3track_overlay_entry.failure_notify_failed", error=str(exc))
 

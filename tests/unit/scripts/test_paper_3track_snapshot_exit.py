@@ -308,7 +308,9 @@ async def test_notifier_called_for_action_and_warn(tmp_path: Path) -> None:
 
     # One ACTION send (PROFIT_TARGET); CC warning is suppressed for overlay roles (no Telegram warn)
     assert notifier.send.call_count == 1
-    action_calls = [c for c in notifier.send.call_args_list if "EXIT SIGNAL [ACTION]" in c.args[0]]
+    action_calls = [
+        c for c in notifier.send.call_args_list if "EXIT SIGNAL \\[ACTION\\]" in c.args[0]
+    ]
     assert len(action_calls) == 1
     # Verify CC warning event is still written in DB
     events = store.get_open_exit_events("paper_nifty_spot")
