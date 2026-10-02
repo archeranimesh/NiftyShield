@@ -13,9 +13,8 @@
 
 Forward spec work only — one `docs/plan/` story per line, pointer-only (title · folder · next unchecked task · one-line why). Ordered **story-by-story**: finish a story's `tasks.md` in sequence before
 starting the next story here; this list only decides *which story is next*. Bugs are **not** here — see `## Open Bugs`. Cross-references use folder names, never list positions, so renumbering can't
-rot them.
+rot them. (Item 3 closed 2026-10-02 — numbers kept stable because item text cross-references them.)
 
-3. **suppression-hygiene-triage** — `docs/plan/full-repo-review-followups/suppression-hygiene-triage/` — next **T1** (REVIEW.md carve-out for self-describing `# noqa` codes). P3, policy wording only.
 4. **Risk gamma phase A** — `docs/plan/risk-gamma-phase-a/` — next **B2.2** (chain fetch + field computation), then B2.3..B2.5. In progress, independent of everything else; finish before starting new
    stories.
 5. **Fix dead IC EOD report query** — `scripts/strategies/ic/paper_ic_snapshot.py` (no story folder) — the "Intraday actions" query is dead code, found in the DT-3a audit. Small; fold in whenever
@@ -1045,3 +1044,5 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
   / inception +45,001. Collar re-entry is the `--auto-collar` cron, next Wed 2026-10-07 10:30. Filed BUG-060 (no expiry settlement), BUG-061 (missing LTP → zero P&L), BUG-062 (`record_paper_trade`
   leaves closed legs `OPEN`) in `docs/bugs/`; nothing implemented. Unconfirmed, not filed: `eod_summary` errors `strategy_id not mapped to a bucket: 'paper_signal_track_v1'` (also on 09-29);
   `daily_snapshot` warns `NAV missing for 150799`; a new collar may add a second short call beside the open standalone CC.
+- [2026-10-02] full-repo-review-followups: closed suppression-hygiene-triage T1 (`0ca92fe`, REVIEW.md noqa carve-out; TD-A/TD-B filed under Technical Debt) and synced the epic README status (8/9 ✅).
+  Only `greeks-parity-validation/` T1 (council consult) remains.

@@ -45,15 +45,15 @@ verification (SHA match, test count) per Step 3b before closing the phase — An
 
 | Story | Purpose | Status | Depends on | Closing SHA |
 |---|---|---|---|---|
-| `portfolio-pnl-critical-fix/` | Fix live P&L wrong sign/magnitude on open short legs | ⬜ Not started | — | — |
-| `sqlite-backup-cron/` | Add scheduled backup of `portfolio.sqlite` | ⬜ Not started | — | — |
-| `docs-navigation-and-staleness/` | Fix stale status table + dead links in nav docs | ⬜ Not started | — | — |
-| `telegram-approval-auth-fix/` | Fix OR-vs-AND callback bug in trade-approval auth | ⬜ Not started | — | — |
-| `protocol-standards-reconciliation/` | Resolve reviewer/protocol contradictions | ⬜ Not started | — | — |
-| `logging-migration-completion/` | Migrate 21 bare loggers + 24 script entrypoints | ⬜ Not started | — | — |
+| `portfolio-pnl-critical-fix/` | Fix live P&L wrong sign/magnitude on open short legs | ✅ Done | — | `63c857a` |
+| `sqlite-backup-cron/` | Add scheduled backup of `portfolio.sqlite` | ✅ Done | — | `0b4793f` |
+| `docs-navigation-and-staleness/` | Fix stale status table + dead links in nav docs | ✅ Done | — | `2df25c2`, `fbddaed`, `49a34b1`, `bdec83a` |
+| `telegram-approval-auth-fix/` | Fix OR-vs-AND callback bug in trade-approval auth | ✅ Done | — | `5cafc3c` |
+| `protocol-standards-reconciliation/` | Resolve reviewer/protocol contradictions | ✅ Done | — | `0a8d739` |
+| `logging-migration-completion/` | Migrate 21 bare loggers + 24 script entrypoints | ✅ Done | — | `344d98c`, `dc526eb`, `060b7d6`, `dedd962` |
 | `greeks-parity-validation/` | Resolve contested Greeks tolerance-band decision, then implement | ⬜ Not started | council/strategist consult first | — |
-| `paper-pnl-golden-tests/` | Add golden tests for paper P&L (already mitigated one layer up) | ⬜ Not started | — | — |
-| `suppression-hygiene-triage/` | Triage suppression-hygiene policy carve-out | ⬜ Not started | — | — |
+| `paper-pnl-golden-tests/` | Add golden tests for paper P&L (already mitigated one layer up) | ✅ Done | — | `4448315` |
+| `suppression-hygiene-triage/` | Triage suppression-hygiene policy carve-out | ✅ Done | — | `0ca92fe` |
 
 Status: ⬜ Not started · 🔄 In progress · ✅ Done. This column is the epic's progress view — per-task checkboxes live only in each sub-story's `tasks.md`. Story order matches the Priority order table
 above, which the router (`prompt.md`) walks.
