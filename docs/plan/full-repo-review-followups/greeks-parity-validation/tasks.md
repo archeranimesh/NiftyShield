@@ -9,10 +9,10 @@
 
 - [x] **T2** — Put-call parity fixture test per `DECISIONS.md` "Greeks / option-chain correctness checks" (2026-10-02): mid prices, two-sided + `|K − S| ≤ 1500` filter, OLS implied forward, slope /
   per-strike band / ≤ 5% breach / per-wing sign-bias / `ask ≥ bid` asserts. Pure helpers in new `tests/helpers/` package; tests in `tests/unit/test_option_parity.py`. | Owner: Claude | Model:
-  claude-opus-5 | Review: code-reviewer | SHA: <pending>
-- [ ] **T3** — Black-Scholes golden test per the same `DECISIONS.md` entry: spot BSM, r=0.05, q=0, cal/365 to 15:30 IST, carry-free theta, ATM ±5 strikes, `iv = 0` excluded, tolerances delta 0.005 /
+  claude-opus-5 | Review: code-reviewer | SHA: 9b6445e
+- [x] **T3** — Black-Scholes golden test per the same `DECISIONS.md` entry: spot BSM, r=0.05, q=0, cal/365 to 15:30 IST, carry-free theta, ATM ±5 strikes, `iv = 0` excluded, tolerances delta 0.005 /
   vega 0.05 / theta 0.10 / gamma 0.0001, parameterised over fixture files. Tests in `tests/unit/test_bs_greeks.py`. | Owner: Claude | Model: claude-opus-5 | Review: code-reviewer + greeks-analyst |
-  SHA: —
+  SHA: <pending>
 
 ---
 

@@ -24,7 +24,7 @@ shipped. `token_audit.py`, the `CLAUDE.md`/`AGENTS.md` skill-ification, `session
 
 **`dev-foundation/`** · ✅ Shipped/Archived Engineering-excellence epic — tooling, CI, code health (3 sub-stories).
 
-**`full-repo-review-followups/`** · 🔄 In progress — 8 of 9 stories ✅; only `greeks-parity-validation/` remains (T1 consult + T2 parity done; next T3). 9 stories from the full-repo-review FR-7
+**`full-repo-review-followups/`** · ✅ Done — all 9 stories ✅ (`greeks-parity-validation/` closed 2026-10-02 with the T3 BS golden test); ready to archive. 9 stories from the full-repo-review FR-7
 synthesis (7 CRITICAL + 2 ERROR). P0: portfolio P&L fix, DB backup cron. P1: docs staleness, Telegram auth fix. P2: CLAUDE.md/REVIEW.md reconcile, logging migration. P3: Greeks/parity validation
 (council-gated), golden tests, suppression hygiene. Priority + dependencies in the epic's own `README.md`. `telegram-approval-auth-fix/` already shipped (SHA `5cafc3c`).
 

@@ -13,7 +13,7 @@
 
 Forward spec work only — one `docs/plan/` story per line, pointer-only (title · folder · next unchecked task · one-line why). Ordered **story-by-story**: finish a story's `tasks.md` in sequence before
 starting the next story here; this list only decides *which story is next*. Bugs are **not** here — see `## Open Bugs`. Cross-references use folder names, never list positions, so renumbering can't
-rot them. (Item 3 closed 2026-10-02 — numbers kept stable because item text cross-references them.)
+rot them. (Items 3 and 8 closed 2026-10-02 — numbers kept stable because item text cross-references them.)
 
 4. **Risk gamma phase A** — `docs/plan/risk-gamma-phase-a/` — next **B2.2** (chain fetch + field computation), then B2.3..B2.5. In progress, independent of everything else; finish before starting new
    stories.
@@ -23,8 +23,6 @@ rot them. (Item 3 closed 2026-10-02 — numbers kept stable because item text cr
    blocked on `greeks-bs-fallback` GF-2 + GF-3, so it waits for item 7.
 7. **Greeks Black-Scholes fallback** — `docs/plan/greeks-bs-fallback/` — next **GF-1** (read-only audit scope). Needs Animesh's three modeling decisions (rate / DTE convention / delta tolerance)
    before GF-2. Unblocks delta-based IC entry for the yearly bucket and `ic-payoff-charts` `chart-model-overlay/`.
-8. **greeks-parity-validation** — `docs/plan/full-repo-review-followups/greeks-parity-validation/` — next **T3** (BS golden test). P3. T1 consult + T2 parity test done — assumptions in `DECISIONS.md`
-   (2026-10-02). Sequence after item 7 so it validates the pricer that actually ships.
 9. **Portfolio snapshot slimdown** — `docs/plan/portfolio-snapshot-slimdown/` — next **FD-1** (pre-delete audit). Epic, fixed order: `finideas-decommission/` (FD-1..7) → `dhan-holdings-removal/`
    (DHR-1..4); both rework `_build_portfolio_summary` + `_format_combined_summary`, so never interleave. No `schema.md`. Requested by Animesh 2026-09-10.
 10. **Strategy module refactor & AI-collaboration blueprint** — `docs/plan/strategy-refactor-blueprint/` — next **BP-1** (`/md-organize` run), then BP-2 (after item 2), BP-3 council, BP-4, BP-5.
@@ -1050,3 +1048,5 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
   forward; BS reference pins Upstox's fitted convention (r=0.05, cal/365, carry-free theta). Added T2 (parity) / T3 (BS golden) to the story. No code.
 - [2026-10-02] greeks-parity-validation T2: put-call parity fixture test (`tests/helpers/bs_reference.py`, `tests/unit/test_option_parity.py`, 10 tests) through `parse_upstox_option_chain`. Amended
   the DECISIONS entry: window is ±1500 (recorded stats only reproduce there, not ±2000); sign-bias is per-wing (whole-chain is vacuous under OLS); added `ask ≥ bid`.
+- [2026-10-02] greeks-parity-validation T3: BS golden test (`tests/unit/test_bs_greeks.py`, BSM helpers in `tests/helpers/bs_reference.py`) — Upstox Greeks vs spot BSM r=0.05, cal/365 to 15:30 IST,
+  carry-free theta, ATM ±5 (n=22); max errors delta 0.0009 / vega 0.015 / theta 0.038 reproduce the consult. Edge tests: vega ×100 and textbook carry theta both fail. Story + epic done.
