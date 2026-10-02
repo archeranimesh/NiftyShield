@@ -329,3 +329,105 @@ async def test_one_ic_failure_does_not_block_others() -> None:
             expiry_type="weekly",
             error="Weekly initialization failed",
         )
+
+
+# --- BUG-060: expiry settlement at daemon startup -------------------------------
+
+
+@pytest.mark.asyncio
+async def test_startup_settlement_persists_and_notifies() -> None:
+    """Settlement runs with writes enabled, then the report is sent."""
+    store, broker, lookup = MagicMock(), MagicMock(), MagicMock()
+    report = MagicMock(settled=[MagicMock()], failures=[])
+    settle = AsyncMock(return_value=report)
+    notify = AsyncMock()
+    with (
+        patch("scripts.monitor_daemon.settle_expired_legs", settle),
+        patch("scripts.monitor_daemon.notify_settlement", notify),
+        patch("scripts.monitor_daemon.build_notifier", return_value="notifier"),
+    ):
+        await daemon.settle_expired_legs_at_startup(store, broker, lookup)
+
+    args, kwargs = settle.call_args
+    assert args[:3] == (store, broker, lookup)
+    assert kwargs["dry_run"] is False
+    notify.assert_awaited_once_with("notifier", report)
+
+
+@pytest.mark.asyncio
+async def test_startup_settlement_skipped_without_bod() -> None:
+    """No BOD lookup -> no settlement attempt (fail-closed, legs stay OPEN)."""
+    settle = AsyncMock()
+    with patch("scripts.monitor_daemon.settle_expired_legs", settle):
+        await daemon.settle_expired_legs_at_startup(MagicMock(), MagicMock(), None)
+    settle.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_startup_settlement_failure_does_not_raise() -> None:
+    """A settlement error is logged and swallowed so the daemon still starts."""
+    settle = AsyncMock(side_effect=RuntimeError("upstox down"))
+    notify = AsyncMock()
+    with (
+        patch("scripts.monitor_daemon.settle_expired_legs", settle),
+        patch("scripts.monitor_daemon.notify_settlement", notify),
+    ):
+        await daemon.settle_expired_legs_at_startup(MagicMock(), MagicMock(), MagicMock())
+    notify.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_main_settles_before_monitor_starts() -> None:
+    """main() awaits startup settlement before scheduling the first tick."""
+    calls: list[str] = []
+    mock_store, mock_broker = MagicMock(), MagicMock()
+    mock_gateway = MagicMock()
+    mock_gateway.start_polling = AsyncMock()
+    mock_monitor = MagicMock()
+
+    async def _run() -> None:
+        calls.append("monitor_run")
+
+    mock_monitor.run = _run
+
+    async def _settle(store, broker, lookup) -> None:
+        assert (store, broker) == (mock_store, mock_broker)
+        calls.append("settle")
+
+    from src.config import settings
+
+    with (
+        patch("scripts.monitor_daemon.PaperStore", return_value=mock_store),
+        patch("scripts.monitor_daemon.TelegramGateway", return_value=mock_gateway),
+        patch("scripts.monitor_daemon.create_client", return_value=mock_broker),
+        patch("scripts.monitor_daemon.StrategyMonitor", return_value=mock_monitor),
+        patch("scripts.monitor_daemon.settle_expired_legs_at_startup", _settle),
+        patch("scripts.monitor_daemon.IronCondorV1", None),
+        patch("scripts.monitor_daemon.IronCondorV2", None),
+        patch("scripts.monitor_daemon.CSPNiftyV1", None),
+        patch("scripts.monitor_daemon.NiftyTrackComparisonV1", None),
+        patch("scripts.monitor_daemon.MONITOR_OVERLAYS", False),
+        patch("sys.argv", ["monitor_daemon.py"]),
+        patch("asyncio.gather", side_effect=asyncio.CancelledError),
+        patch.object(settings, "telegram_bot_token", "fake_token"),
+        patch.object(settings, "telegram_chat_id", "fake_chat_id"),
+    ):
+        await daemon.main()
+        await asyncio.sleep(0)
+
+    assert calls[0] == "settle"
+
+
+@pytest.mark.asyncio
+async def test_startup_settlement_notify_failure_is_isolated() -> None:
+    """A notify error after a successful settlement is swallowed, not re-raised."""
+    report = MagicMock(settled=[MagicMock()], failures=[])
+    with (
+        patch("scripts.monitor_daemon.settle_expired_legs", AsyncMock(return_value=report)),
+        patch(
+            "scripts.monitor_daemon.notify_settlement",
+            AsyncMock(side_effect=ValueError("formatter")),
+        ),
+        patch("scripts.monitor_daemon.build_notifier", return_value="notifier"),
+    ):
+        await daemon.settle_expired_legs_at_startup(MagicMock(), MagicMock(), MagicMock())

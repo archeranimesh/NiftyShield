@@ -7,10 +7,11 @@ the official NIFTY 50 close on its expiry date, then ``mark_trade_closed``.
 Fail-closed: a leg whose contract or expiry-date close can't be resolved stays
 ``OPEN`` and is Telegram-warned. Logic: ``src/strategy/expiry_settlement.py``.
 
-Own entrypoint rather than a step inside ``paper_3track_snapshot.py``: it must
-run before the 10:30 overlay-entry cron (an expired marker leg blocks the
-collar bootstrap), whereas the snapshot runs at 15:35; and settlement spans
-every paper strategy, not just the 3-track book.
+Runs automatically once a day: ``scripts/monitor_daemon.py`` calls
+``settle_expired_legs`` at startup (09:15, before the 10:30 overlay-entry
+cron, where an expired marker leg would block the collar bootstrap) — there is
+no separate cron. This entrypoint is the manual tool: dry-runs, and
+``--contract`` overrides for contracts already dropped from the BOD master.
 
 Usage:
     # Dry-run (default) — log what would settle, no DB writes, no Telegram:

@@ -34,17 +34,22 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 # Load environment before local imports
 load_dotenv()
 
+from scripts.strategies.three_track.paper_expiry_settle import notify_settlement  # noqa: E402
 from src.client.factory import create_client  # noqa: E402
+from src.client.protocol import BrokerClient  # noqa: E402
 from src.client.upstox_market import parse_upstox_option_chain  # noqa: E402
 from src.config import settings  # noqa: E402
 from src.db import connect as _connect  # noqa: E402
 from src.instruments.lookup import InstrumentLookup  # noqa: E402
+from src.market_calendar.holidays import market_today  # noqa: E402
+from src.notifications.telegram import build_notifier  # noqa: E402
 from src.notifications.telegram_gateway import TelegramGateway  # noqa: E402
 from src.paper.store import PaperStore  # noqa: E402
 from src.strategy.executor import (  # noqa: E402
     PaperExecutor,
     PaperFillSimulator,
 )
+from src.strategy.expiry_settlement import settle_expired_legs  # noqa: E402
 from src.strategy.monitor import StrategyMonitor  # noqa: E402
 from src.strategy.protocol import ApprovedAction, LegSpec  # noqa: E402
 from src.utils.logging import setup_logging  # noqa: E402
@@ -122,6 +127,51 @@ gateway_task: asyncio.Task | None = None
 store_ref: PaperStore | None = None
 strategies_ref: list[str] = []
 _shutdown_started: bool = False
+
+# BUG-060: bound on the startup settlement (one candle fetch per expired expiry)
+_SETTLEMENT_TIMEOUT_S: float = 60.0
+_NOTIFY_TIMEOUT_S: float = 15.0
+
+
+async def settle_expired_legs_at_startup(
+    store: PaperStore,
+    broker: BrokerClient,
+    lookup: InstrumentLookup | None,
+) -> None:
+    """Settle expired paper legs once, before the first monitor tick (BUG-060).
+
+    The daemon starts every trading day before any entry cron, so this is the
+    daily settlement point — no separate cron. Never raises: a failure is
+    logged and the daemon still starts; an unsettled leg stays ``OPEN`` and is
+    retried on the next start (settlement is idempotent).
+
+    Args:
+        store: Paper ledger.
+        broker: Price source for the expiry-date NIFTY 50 close.
+        lookup: BOD instrument master; ``None`` skips settlement (fail-closed).
+    """
+    if lookup is None:
+        logger.warning("monitor_daemon.expiry_settlement_skipped", reason="bod_unavailable")
+        return
+    try:
+        report = await asyncio.wait_for(
+            settle_expired_legs(store, broker, lookup, market_today(), dry_run=False),
+            timeout=_SETTLEMENT_TIMEOUT_S,
+        )
+    except Exception as exc:  # noqa: BLE001 — must never block daemon start
+        logger.error("monitor_daemon.expiry_settlement_failed", error=str(exc), exc_info=True)
+        return
+    logger.info(
+        "monitor_daemon.expiry_settlement_done",
+        settled=len(report.settled),
+        left_open=len(report.failures),
+    )
+    try:
+        await asyncio.wait_for(
+            notify_settlement(build_notifier(), report), timeout=_NOTIFY_TIMEOUT_S
+        )
+    except Exception as exc:  # noqa: BLE001 — settlement is durable; report only
+        logger.error("monitor_daemon.expiry_notification_failed", error=str(exc), exc_info=True)
 
 
 async def shutdown():
@@ -607,6 +657,9 @@ async def main() -> int:
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, lambda s=sig: loop.create_task(shutdown()))
+
+    # BUG-060: close expired legs before the first tick sees them
+    await settle_expired_legs_at_startup(store, broker, lookup)
 
     # Start tasks
     monitor_task = asyncio.create_task(monitor.run())
