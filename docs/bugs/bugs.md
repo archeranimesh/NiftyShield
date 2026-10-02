@@ -28,6 +28,64 @@
 
 ---
 
+## BUG-068 — IC v1/v2 `_parse_expiry` loads the BOD instrument file synchronously on every monitor tick
+
+| Field | Value |
+|---|---|
+| Severity | **Medium** — blocks the event loop ~0.25 s per call (~0.75 s per tick across the three v1 books, plus v2); violates the no-blocking-I/O-in-hot-path rule |
+| Status | 🔴 Open |
+| Discovered | 2026-10-02 — BUG-059 fix (`49ce5fa`) review + timing on the live BOD (`NSE.json.gz`, 2 MB) |
+| Location | `src/strategy/_price_utils.py::resolve_option_expiry(load_bod=True)`; callers `IronCondorV1._parse_expiry`, `IronCondorV2._parse_expiry` (via `check_signals`) |
+
+**Root cause:** `load_bod=True` calls `InstrumentLookup.from_file(DEFAULT_BOD_PATH)` whenever the key regex misses — every numeric live key, every tick. v2 behaved this way before BUG-059; v1 now
+shares it. **Fix:** cache the lookup per strategy instance or pass the daemon's already-loaded lookup in. Related: a BOD file older than a contract's listing returns `None` and silently disables DTE
+signals for that leg.
+
+---
+
+## BUG-069 — IC entry "BLOCKED" Telegram alert can be lost: `_gate_alert` fires a background task and the script `sys.exit(1)`s immediately
+
+| Field | Value |
+|---|---|
+| Severity | **Low** — the abort itself is correct (no legs placed); only the operator alert may not arrive |
+| Status | 🔴 Open |
+| Discovered | 2026-10-02 — BUG-057 abort-on-clear-failure review (`77dfc51`) |
+| Location | `scripts/strategies/ic/paper_ic_entry.py` + `paper_ic_entry_v2.py` — `_gate_alert(...)` followed by `sys.exit(1)` at ~25 pre-leg abort points |
+
+**Root cause:** `_gate_alert` schedules the send with `create_task` and returns; `sys.exit` follows before the loop runs it. Pre-existing pattern, not introduced by BUG-057. **Fix:** await the send
+with a bounded timeout before exiting, at every abort point.
+
+---
+
+## BUG-070 — Closing-trade insert and `mark_trade_closed` run in separate SQLite transactions; a crash between them leaves a flat leg `OPEN`
+
+| Field | Value |
+|---|---|
+| Severity | **Low** — recoverable with `scripts/dev/backfill_mark_trade_closed_overlay.py`; same staleness class as BUG-035/037/066/067 |
+| Status | 🔴 Open — design decision first |
+| Discovered | 2026-10-02 — B037.6 `code-reviewer` on `5369c0e` (and noted in the BUG-067 / B067.5 reviews) |
+| Location | `src/paper/store.py` (`record_trade(s)` and `mark_trade_closed` each open their own `_connect()`); every wired close path (`csp_roll_executor`, `ic_close_executor`, `executor.py`,
+`collar_overlay_v1._close_both_legs`, `nifty_track_comparison_v1._persist_roll`, 3track roll, `overlay_closer`, `expiry_settlement`) |
+
+**Fix options:** a store method that inserts the close and flips state on one connection, or accept the window and rely on the idempotent backfill. Not implemented — decide first (B070.1).
+`close_signal_entry` (BUG-066) is already single-transaction.
+
+---
+
+## BUG-071 — `test-runner` agent cannot run the full unit suite: its command is blocked by the `inline_full_suite` hook
+
+| Field | Value |
+|---|---|
+| Severity | **Low** (tooling) — the mandatory once-per-task test gate cannot run; on 2026-10-02 the agent reported an unverifiable "3,403 passed" vs 3,861 collected and main fell back to ~11 inline
+scoped sweeps |
+| Status | 🔴 Open |
+| Discovered | 2026-10-02 — bug-sweep session; session-close audit counter `test-runner-def-blocked-by-inline-suite-hook` |
+| Location | `.claude/agents/test-runner.md`; the `inline_full_suite.sh` PreToolUse hook |
+
+**Fix:** make the agent's command pass the hook, or exempt the agent context; verify the agent returns pytest's verbatim summary line.
+
+---
+
 ## BUG-066 [MOVED] — see `docs/archive/bugs/bugs.md` (closed 2026-10-02, SHA `1bc9d29`)
 
 ---

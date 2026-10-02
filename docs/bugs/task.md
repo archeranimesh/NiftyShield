@@ -55,6 +55,35 @@
 
 > BUG-067 closed 2026-10-02 (SHA `c408c1e` + `d3ba54d`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
+## BUG-068 — IC v1/v2 load the BOD instrument file synchronously on every monitor tick
+
+Detail: `docs/bugs/bugs.md` BUG-068.
+
+- [ ] **B068.1** — Load the BOD lookup once per strategy instance (or inject the daemon's lookup) for `_parse_expiry`; no per-tick file read. Tests: lookup loaded once across ticks; numeric-key DTE
+  still resolves.
+- [ ] **B068.2** — Real `code-reviewer`; commit; close + archive.
+
+## BUG-069 — IC entry "BLOCKED" Telegram alert can be lost: fire-and-forget send then `sys.exit(1)`
+
+Detail: `docs/bugs/bugs.md` BUG-069.
+
+- [ ] **B069.1** — `_gate_alert` awaits the send (bounded timeout) before every pre-leg `sys.exit` in `paper_ic_entry.py` and `_v2.py`. Tests: alert awaited before exit; send failure still exits 1.
+- [ ] **B069.2** — Real `code-reviewer`; commit; close + archive.
+
+## BUG-070 — Closing-trade insert and `mark_trade_closed` run in separate transactions
+
+Detail: `docs/bugs/bugs.md` BUG-070.
+
+- [ ] **B070.1** — Decide: single-connection close (store API taking both) vs accept + rely on the backfill script. Record in `DECISIONS.md`. Pending Animesh.
+- [ ] **B070.2** — Implement per B070.1 across the wired close paths; tests: a failure between insert and flip leaves no half-state (or documented recovery).
+
+## BUG-071 — `test-runner` agent cannot run the full suite: blocked by the `inline_full_suite` hook
+
+Detail: `docs/bugs/bugs.md` BUG-071.
+
+- [ ] **B071.1** — Make `.claude/agents/test-runner.md`'s command pass `inline_full_suite.sh` (or exempt the agent context in the hook). Test: the agent returns a verbatim pytest summary line for
+  `tests/unit/`.
+
 ## BUG-060 — Expired paper overlay legs are never settled or closed
 
 Detail: `docs/bugs/bugs.md` BUG-060. Settle-price source decision comes first.
@@ -64,6 +93,8 @@ Detail: `docs/bugs/bugs.md` BUG-060. Settle-price source decision comes first.
   leg expiring today or later is untouched. | SHA `1937469`
 - [x] **B060.3** — Daily settlement runs at monitor-daemon startup (no separate cron); live dry-run 2026-10-02 found nothing to settle. | SHA `bd687ac`
 - [ ] **B060.4** — Re-settle trade 405 (collar put `NSE_FO|73994`, expiry 2026-09-29) at intrinsic vs the 2026-09-29 NIFTY 50 close (tested `scripts/dev/` CLI or one-off with operator sign-off).
+  Operator decision first: CLI vs hand correction.
+- [ ] **B060.5** — Verify on the next daemon start (Mon 2026-10-05 09:15): `grep expiry_settlement logs/monitor_daemon.log | tail -2` shows `expiry_settlement_done`. Pending live host.
 
 ## BUG-054 — MVP tracker has no stock-split/corporate-action adjustment for entry/target/SL prices
 
@@ -107,3 +138,10 @@ Design ruled by council 2026-09-25 (`docs/council/2026-09-25_mvp-corporate-actio
 - [ ] **B019.1** — Diagnostics committed (SHA `f7177b6`) and now diffed against 5 live trading days (08-14, 08-17, 08-19, 08-20, 08-21) — no systematic bias found, gaps flip sign and scale with
   intraday movement (one exact 0.00 diff on a low-movement day confirms the mechanism itself is sound). Leaving diagnostics running per Animesh's call (2026-08-24) rather than closing/removing yet.
   Full context: `docs/bugs/bugs.md` BUG-019.
+
+## Session handoff 2026-10-02 — non-bug items (not `BUG-ID` work; operator / protocol)
+
+- [ ] Run `roll-validator` on `d3ba54d` (BUG-067 B067.5 changed `NiftyTrackComparisonV1._persist_roll`; only `code-reviewer` ran — protocol gap).
+- [ ] Add a `CONTEXT.md` "What Exists" line for `src/strategy/expiry_settlement.py` + `scripts/strategies/three_track/paper_expiry_settle.py` (BUG-060; Step 5a gap).
+- [ ] Decide whether to commit the session-close audit edits: `suggestions.md`, `session_audit.jsonl`, `docs/plan/technical-debt/stories.md` (DEBT-14 note). Pending Animesh.
+- [ ] Push `main` (31 commits ahead of origin as of 2026-10-02). Pending Animesh.
