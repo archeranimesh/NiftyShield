@@ -282,7 +282,7 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "inspects the immediate enclosing function (_send_entry_card_if_requested), "
         "not the builder it calls - same shape as the scripts/eod_summary.py:198 entry"
     ),
-    ("scripts/record/record_paper_trade.py", 846): (
+    ("scripts/record/record_paper_trade.py", 848): (
         "UXM-4 - heuristic limitation, not a real gap: the card is built by "
         "format_exit_message(), which escapes every interpolated value via "
         "escape_markdown() inside ExitMessage's own renderer "
