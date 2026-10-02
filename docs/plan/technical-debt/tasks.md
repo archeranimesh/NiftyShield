@@ -74,3 +74,7 @@ commit — they are proactive verification/reconciliation work, not opportunisti
   when a touched `docs/plan/**`/`docs/bugs/**` paragraph exceeds the ≤200-char fill, but sessions keep discovering the backlog only via the abort — costing a reflow-run + re-stage + re-commit round
   trip each time (SPT-8, SCT-1, SPT-3, M12, and the BUG-053 backfill-resume session all hit this). Verify the existing `md-reflow` gate is effective; if this slug still recurs in 3 sessions logged
   after this DEBT line, escalate to a protocol/model discussion. Trigger: standalone. | Owner: Claude | Model: claude-sonnet-5 | Review: none
+- [ ] **DEBT-22** — `standalone-actionable`. `cd-in-compound-bash-command` (Count 5 at escalation, 2026-10-02; a stray duplicate Count-1 row merged). The remediation is the CLAUDE.md Rule 1 "Shell
+  mechanics" text — protocol only, no hook. Latest: Greeks parity T3 session — 18 of 20 Bash calls opened with `cd <repo-root>;`. Verify the protocol text is effective; a PreToolUse hook warning on a
+  leading `cd ` is the obvious mechanical catch if it is not. If this slug still recurs in 3 sessions logged after this DEBT line, escalate to a protocol/model discussion. Trigger: standalone. |
+  Owner: Claude | Model: claude-sonnet-5 | Review: none

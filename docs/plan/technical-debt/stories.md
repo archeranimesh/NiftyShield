@@ -109,3 +109,6 @@ slug. If it did **not** recur in 3+ such sessions, tick the box — the hook wor
   SPT-3, M12 hourly-summary close, and the BUG-053 backfill-resume session all needed a post-hoc `reflow_md` + `awk length>200` sweep and a re-stage/re-commit round trip instead of running the reflow
   before the first `git add`. Verify the existing gate is effective by checking whether authors run `reflow_md` pre-emptively over the next 3 logged sessions; if this slug still recurs, escalate to a
   protocol/model discussion.
+- **DEBT-22** — `cd-in-compound-bash-command` (Count 5). Remediation already exists as protocol text only: CLAUDE.md Rule 1 "Shell mechanics" forbids `cd` in a compound Bash command because the
+  working directory persists across calls. Sessions keep opening Bash calls with `cd <repo-root>;` regardless — the Greeks parity T3 session did it on 18 of 20 calls. Verify the text is effective over
+  the next 3 logged sessions; if not, a PreToolUse hook warning on a leading `cd ` is the mechanical catch, and continued recurrence escalates to a protocol/model discussion.
