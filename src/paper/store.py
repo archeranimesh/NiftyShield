@@ -1443,6 +1443,23 @@ class PaperStore:
                 (strategy_name, str(original_entry_credit)),
             )
 
+    def clear_original_entry_credit(self, strategy_name: str) -> None:
+        """Set the persisted original entry credit back to NULL.
+
+        BUG-057: entry scripts call this before placing any leg, so a monitor
+        tick that lands mid-build reads None and falls back to the recompute
+        path instead of scoring the half-built basket against the previous
+        cycle's stale credit. No-op when the strategy has no row yet.
+
+        Args:
+            strategy_name: Strategy identifier, e.g. ``paper_ic_nifty_v1_monthly``.
+        """
+        with _connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE paper_strategies SET original_entry_credit = NULL WHERE strategy_name = ?",
+                (strategy_name,),
+            )
+
     def get_original_entry_credit(self, strategy_name: str) -> Decimal | None:
         """Return the persisted original entry credit, or None if never recorded.
 

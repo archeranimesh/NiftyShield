@@ -581,6 +581,15 @@ async def run() -> None:
             strategy=strategy_name,
             leg_count=len(cmds),
         )
+        # BUG-057: the monitor ticks every ~30s and the basket takes ~26s to
+        # build, so a tick can score a half-built basket. Clear the prior
+        # cycle's persisted credit first so ic_nifty_v1 falls back to the
+        # recompute path (no false LOSS_STOP) until the new credit is written
+        # after the legs are verified. Non-fatal, same as the write below.
+        try:
+            store.clear_original_entry_credit(strategy_name)
+        except Exception as exc:  # noqa: BLE001 — must not block entry
+            logger.warning("ic_entry.original_credit_clear_failed", error=str(exc))
         subprocess_error: str | None = None
         for cmd in cmds:
             print(f"Executing: {' '.join(cmd)}")

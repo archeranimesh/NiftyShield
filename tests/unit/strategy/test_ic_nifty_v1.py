@@ -493,6 +493,52 @@ def test_loss_stop_survives_store_read_failure() -> None:
     assert "LOSS_STOP" in types
 
 
+# ── Tests: BUG-057 — half-built basket vs. stale prior-cycle credit ──────────
+
+
+def _lone_short_put_mid_entry() -> tuple[OptionChain, list[PaperPosition]]:
+    """2026-09-30 incident state: only short_put recorded (SELL @72.75, mark 72.5)."""
+    chain = _make_chain(short_put_ltp="72.5")
+    positions = [
+        _make_position(
+            leg_role="short_put",
+            instrument_key=_SHORT_PUT_KEY,
+            avg_sell_price="72.75",
+            net_qty=-65,
+        )
+    ]
+    return chain, positions
+
+
+def test_stale_entry_credit_fires_loss_stop_on_lone_short_put(tmp_path) -> None:
+    """BUG-057 repro: the prior cycle's credit (35.725) still persisted while the
+    new basket is mid-build → 72.5 / 35.725 = 2.03 ≥ 2.0 → false LOSS_STOP.
+    """
+    from src.paper.store import PaperStore
+
+    store = PaperStore(tmp_path / "portfolio.sqlite")
+    store.set_original_entry_credit(_STRATEGY, Decimal("35.725"))
+    strat = IronCondorV1(store=store)
+    chain, positions = _lone_short_put_mid_entry()
+    events = asyncio.run(strat.check_signals(chain, positions))
+    assert "LOSS_STOP" in [e.event_type for e in events]
+
+
+def test_cleared_entry_credit_does_not_fire_loss_stop_on_lone_short_put(tmp_path) -> None:
+    """BUG-057 fix: with the credit cleared before legs run, the strategy falls
+    back to recompute (72.5 / 72.75 ≈ 1.0) — no LOSS_STOP mid-entry.
+    """
+    from src.paper.store import PaperStore
+
+    store = PaperStore(tmp_path / "portfolio.sqlite")
+    store.set_original_entry_credit(_STRATEGY, Decimal("35.725"))
+    store.clear_original_entry_credit(_STRATEGY)
+    strat = IronCondorV1(store=store)
+    chain, positions = _lone_short_put_mid_entry()
+    events = asyncio.run(strat.check_signals(chain, positions))
+    assert "LOSS_STOP" not in [e.event_type for e in events]
+
+
 def test_delta_stop_fires_on_short_call_breach() -> None:
     """Short call |delta| = 0.36 ≥ 0.35 → DELTA_STOP ACTION."""
     strat = IronCondorV1()

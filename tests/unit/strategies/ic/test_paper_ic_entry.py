@@ -1498,3 +1498,61 @@ async def test_bug058_opened_then_closed_alert_names_closer(
     assert "opened then CLOSED" in sent_msg
     assert "monitor stop loss hit" in sent_msg
     assert "no trade rows today" not in sent_msg
+
+
+# ── BUG-057: clear stale entry credit before legs run ─────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_entry_credit_cleared_before_first_leg_and_rewritten_after(
+    mock_vix_data, mock_store, mock_lookup, mock_market_client, mock_subprocess, mock_telegram
+) -> None:
+    """BUG-057: the prior cycle's credit is cleared before any leg subprocess
+    runs (so a mid-build monitor tick can't score the half-built basket
+    against it), and the new credit is still written after the legs land."""
+    calls: list[str] = []
+    mock_store.clear_original_entry_credit.side_effect = lambda *a: calls.append("clear")
+    mock_subprocess.side_effect = lambda *a, **k: calls.append("leg")
+    mock_store.set_original_entry_credit.side_effect = lambda *a: calls.append("set")
+
+    with patch.object(sys, "argv", ["paper_ic_entry.py", "--expiry-type", "weekly", "--no-dry-run", "--bod-path", "dummy.json"]):
+        await run()
+
+    assert calls == ["clear", "leg", "leg", "leg", "leg", "set"]
+    mock_store.clear_original_entry_credit.assert_called_once_with("paper_ic_nifty_v1_weekly")
+
+
+@pytest.mark.asyncio
+async def test_entry_credit_left_cleared_when_leg_not_persisted(
+    mock_vix_data, mock_store, mock_lookup, mock_market_client, mock_subprocess, mock_telegram
+) -> None:
+    """BUG-057 edge case: a failed entry clears the stale credit and never
+    writes a new one — the column stays NULL (recompute fallback)."""
+    mock_store.get_position.return_value = PaperPosition(
+        strategy_name="paper_ic_nifty_v1_weekly",
+        leg_role="mock_leg",
+        net_qty=0,  # not persisted
+        avg_cost=Decimal("0"),
+        avg_sell_price=Decimal("0"),
+        instrument_key="NSE_FO|MOCK",
+    )
+
+    with patch.object(sys, "argv", ["paper_ic_entry.py", "--expiry-type", "weekly", "--no-dry-run", "--bod-path", "dummy.json"]), pytest.raises(SystemExit):
+        await run()
+
+    mock_store.clear_original_entry_credit.assert_called_once_with("paper_ic_nifty_v1_weekly")
+    mock_store.set_original_entry_credit.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_entry_credit_clear_failure_does_not_block_entry(
+    mock_vix_data, mock_store, mock_lookup, mock_market_client, mock_subprocess, mock_telegram
+) -> None:
+    """BUG-057 edge case: a failing clear is logged, not fatal — legs still run."""
+    mock_store.clear_original_entry_credit.side_effect = RuntimeError("db locked")
+
+    with patch.object(sys, "argv", ["paper_ic_entry.py", "--expiry-type", "weekly", "--no-dry-run", "--bod-path", "dummy.json"]):
+        await run()
+
+    assert mock_subprocess.call_count == 4
+    mock_store.set_original_entry_credit.assert_called_once()

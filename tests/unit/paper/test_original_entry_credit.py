@@ -57,3 +57,19 @@ def test_scoped_per_strategy_name(store):
 
     assert store.get_original_entry_credit("paper_ic_nifty_v2_monthly") == Decimal("163.850")
     assert store.get_original_entry_credit("paper_ic_nifty_v1_monthly") == Decimal("98.375")
+
+
+def test_clear_resets_persisted_credit_to_none(store):
+    """BUG-057: clearing a prior cycle's credit reads back as None (recompute fallback)."""
+    store.set_original_entry_credit("paper_ic_nifty_v1_monthly", Decimal("35.725"))
+
+    store.clear_original_entry_credit("paper_ic_nifty_v1_monthly")
+
+    assert store.get_original_entry_credit("paper_ic_nifty_v1_monthly") is None
+
+
+def test_clear_is_noop_when_never_recorded(store):
+    """Edge case: no paper_strategies row yet — clear must not raise or create a value."""
+    store.clear_original_entry_credit("paper_ic_nifty_v1_monthly")
+
+    assert store.get_original_entry_credit("paper_ic_nifty_v1_monthly") is None
