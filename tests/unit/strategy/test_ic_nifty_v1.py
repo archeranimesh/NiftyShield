@@ -1045,7 +1045,7 @@ def test_apply_action_close_full_auto_execute_sends_close_notification() -> None
     was silent, unlike CSP/CC/Collar/PP. See docs/bugs/bugs.md BUG-013.
 
     UXM-3: the confirmation is now the shared ``format_exit_message`` card —
-    headline, 4-leg table, and an ``📈 *Inception:*`` footer line.
+    headline, 4-leg table, and an ``📈 *Since inception:*`` footer line.
     """
     from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -1082,7 +1082,59 @@ def test_apply_action_close_full_auto_execute_sends_close_notification() -> None
     assert "[S]" in message
     assert _SHORT_PUT_KEY in message
     assert "7.7" in message
-    assert r"📈 *Inception:* \-₹1,234\.50" in message
+    assert r"📈 *Since inception:* \-₹1,234\.50" in message
+
+
+def test_bug043_ic_v1_close_card_renders_cycle_and_since_inception() -> None:
+    """BUG-043: IC v1 close card carries both `Cycle P&L` and `Since inception` lines."""
+    from unittest.mock import AsyncMock, patch
+
+    from src.client.protocol import BrokerClient
+    from src.models.portfolio import TradeAction
+    from src.paper.models import PaperTrade
+    from src.paper.store import PaperStore
+
+    def _trade(d: date, act: TradeAction, price: str) -> PaperTrade:
+        return PaperTrade(
+            strategy_name=_STRATEGY,
+            leg_role="short_put",
+            instrument_key=_SHORT_PUT_KEY,
+            trade_date=d,
+            action=act,
+            quantity=65,
+            price=Decimal(price),
+        )
+
+    broker = MagicMock(spec=BrokerClient)
+    broker.get_ltp = AsyncMock(
+        return_value={
+            _SHORT_PUT_KEY: Decimal("7.70"),
+            _LONG_PUT_KEY: Decimal("3.95"),
+            _SHORT_CALL_KEY: Decimal("3.35"),
+            _LONG_CALL_KEY: Decimal("1.20"),
+        }
+    )
+    store = MagicMock(spec=PaperStore)
+    store.record_trades = MagicMock(side_effect=lambda trades: (trades, []))
+    # One closed cycle (sell 50 -> buy back 20, 65 units) = +1,950.
+    store.get_trades = MagicMock(
+        return_value=[
+            _trade(date(2026, 5, 1), TradeAction.SELL, "50"),
+            _trade(date(2026, 5, 8), TradeAction.BUY, "20"),
+        ]
+    )
+    notifier = MagicMock()
+    notifier.send_notification = AsyncMock()
+
+    strat = IronCondorV1(broker=broker, store=store, notifier=notifier)
+    action = _make_auto_close_action("CLOSE_FULL", event_type="PROFIT_TARGET")
+
+    with patch("src.paper.tracker.get_strategy_realized_pnl", return_value=Decimal("3739.12")):
+        asyncio.run(strat.apply_action(_make_ic_positions(), action))
+
+    (message,), _ = notifier.send_notification.call_args
+    assert r"🔁 *Cycle P&L \(\#1\):* \+₹1,950\.00" in message
+    assert r"📈 *Since inception:* \+₹3,739\.12" in message
 
 
 def test_apply_action_close_full_auto_execute_notify_failure_non_fatal() -> None:
@@ -1220,7 +1272,7 @@ def test_send_close_notification_no_store_skips_footer_without_raising() -> None
 
     notifier.send_notification.assert_called_once()
     (message,), _ = notifier.send_notification.call_args
-    assert r"📈 *Inception:* ₹0\.00" in message
+    assert r"📈 *Since inception:* ₹0\.00" in message
     assert "7.7" in message
     assert any(log.get("event") == "ic_nifty_v1.footer_calc_skipped_no_store" for log in logs)
 

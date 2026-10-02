@@ -159,7 +159,10 @@ async def test_auto_close_overlay_cc_profit_target(
     assert "*CC Closed*" in msg
     assert "NIFTY 23000 CE 25 JUN 26" in msg
     assert "NSE_FO|NIFTY23000CE" not in msg
-    assert "📊 *Overlay P&L \\(total realized\\):*" in msg
+    # BUG-043: standard labels, both figures; the overlay-total duplicate is gone.
+    assert "🔁 *Cycle P&L \\(\\#1\\):* \\+₹4,485\\.00" in msg
+    assert "📈 *Since inception:* \\+₹4,485\\.00" in msg
+    assert "Overlay P&L" not in msg
 
 
 @pytest.mark.asyncio
@@ -356,7 +359,10 @@ async def test_auto_close_overlay_collar_put_pnl_uses_preclose_qty(
     # in the fenced leg table (raw, unescaped). Before the fix this
     # rendered as "→ ₹-0".
     assert "-₹7,523.75" in msg
-    assert "📊 *Overlay P&L \\(total realized\\):*" in msg
+    # BUG-043: standard labels, both figures; the overlay-total duplicate is gone.
+    assert "🔁 *Cycle P&L \\(\\#1\\):* \\-₹21,537\\.75" in msg
+    assert "📈 *Since inception:* \\-₹21,537\\.75" in msg
+    assert "Overlay P&L" not in msg
     assert "₹0\\.00\n" not in msg
 
 

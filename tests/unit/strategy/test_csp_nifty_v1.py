@@ -1311,7 +1311,53 @@ def test_csp_close_sends_exit_card(tmp_path: Path) -> None:
     msg = notifier_mock.send_notification.call_args[0][0]
     assert r"✅ *CSP Closed* — PROFIT\_TARGET" in msg
     assert "[S]" in msg
-    assert "📈 *Inception:*" in msg
+    assert "📈 *Since inception:*" in msg
+
+
+def test_bug043_csp_close_card_renders_cycle_and_since_inception(tmp_path: Path) -> None:
+    """BUG-043: CSP close card shows the just-closed cycle and the lifetime total separately."""
+    from unittest.mock import AsyncMock
+
+    from src.notifications.exit_message import ExitKind
+    from src.strategy.csp_nifty_v1 import CSPNiftyV1
+
+    def _trade(days_ago: int, act: TradeAction, price: str) -> PaperTrade:
+        return PaperTrade(
+            strategy_name=_STRATEGY,
+            leg_role="short_put",
+            instrument_key="NSE_FO|NIFTY23000PE",
+            trade_date=date.today() - timedelta(days=days_ago),
+            action=act,
+            quantity=65,
+            price=Decimal(price),
+        )
+
+    broker_mock = AsyncMock()
+    broker_mock.get_ltp.return_value = {"NSE_FO|NIFTY23000PE": "12.0"}
+    notifier_mock = AsyncMock()
+    store = PaperStore(tmp_path / "test_csp_bug043.sqlite")
+    # Prior closed cycle: 50 -> 60 = -650. Current cycle opens at 80.
+    store.record_trade(_trade(30, TradeAction.SELL, "50"))
+    store.record_trade(_trade(20, TradeAction.BUY, "60"))
+    store.record_trade(_trade(5, TradeAction.SELL, "80"))
+    strategy = CSPNiftyV1(broker=broker_mock, store=store, notifier=notifier_mock)
+    pos = _make_position()
+
+    close_trade = _run(strategy._close_leg(pos, date.today()))
+    _run(
+        strategy._send_close_card(
+            closed_pos=pos,
+            close_trade=close_trade,
+            today=date.today(),
+            kind=ExitKind.CLOSE,
+            triggering_signal="PROFIT_TARGET",
+        )
+    )
+
+    msg = notifier_mock.send_notification.call_args[0][0]
+    # Cycle #2: 80 -> 12 on 65 units = +4,420; inception = -650 + 4,420 = +3,770.
+    assert "🔁 *Cycle P&L \\(\\#2\\):* \\+₹4,420\\.00" in msg
+    assert "📈 *Since inception:* \\+₹3,770\\.00" in msg
 
 
 def test_csp_waiting_uses_waiting_kind(tmp_path: Path) -> None:
@@ -1444,4 +1490,4 @@ def test_reentry_notification_format() -> None:
 
     assert r"✅ *CSP Closed* — TEST\_TRIGGER\_123" in msg
     assert "[S]" in msg
-    assert r"📈 *Inception:* ₹0\.00" in msg
+    assert r"📈 *Since inception:* ₹0\.00" in msg

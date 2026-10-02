@@ -760,7 +760,68 @@ def test_apply_action_close_full_auto_execute_sends_close_notification() -> None
     assert "✅ *IC v2 Closed*" in message
     assert "LOSS\\_STOP" in message
     assert "30.0" in message
-    assert r"📈 *Inception:* \-₹5,432\.10" in message
+    assert r"📈 *Since inception:* \-₹5,432\.10" in message
+
+
+def test_bug043_ic_v2_close_card_renders_cycle_and_since_inception() -> None:
+    """BUG-043: IC v2 close card carries both `Cycle P&L` and `Since inception` lines."""
+    import asyncio
+    from unittest.mock import AsyncMock
+
+    from src.client.protocol import BrokerClient
+    from src.models.portfolio import TradeAction
+    from src.paper.models import PaperTrade
+    from src.paper.store import PaperStore
+
+    def _trade(d: datetime.date, act: TradeAction, price: str) -> PaperTrade:
+        return PaperTrade(
+            strategy_name="paper_ic_nifty_v2_monthly",
+            leg_role="short_put",
+            instrument_key=_key("23900", "PE"),
+            trade_date=d,
+            action=act,
+            quantity=65,
+            price=Decimal(price),
+        )
+
+    broker = MagicMock(spec=BrokerClient)
+    broker.get_ltp = AsyncMock(
+        return_value={
+            _key("23900", "PE"): Decimal("30.00"),
+            _key("23200", "PE"): Decimal("2.00"),
+            _key("25100", "CE"): Decimal("28.00"),
+            _key("25800", "CE"): Decimal("2.50"),
+        }
+    )
+    store = MagicMock(spec=PaperStore)
+    store.record_trades = MagicMock(side_effect=lambda trades: (trades, []))
+    # One closed cycle (sell 40 -> buy back 70, 65 units) = -1,950.
+    store.get_trades = MagicMock(
+        return_value=[
+            _trade(datetime.date(2026, 5, 1), TradeAction.SELL, "40"),
+            _trade(datetime.date(2026, 5, 20), TradeAction.BUY, "70"),
+        ]
+    )
+    notifier = MagicMock()
+    notifier.send_notification = AsyncMock()
+
+    strategy = IronCondorV2(config=IC_V2_MONTHLY, broker=broker, store=store, notifier=notifier)
+    strategy.set_original_credit(Decimal("100"))
+    action = ApprovedAction(
+        action_type="CLOSE_FULL",
+        legs_to_close=[],
+        legs_to_open=[],
+        rationale="auto-execute",
+        council_rank=1,
+        metadata={"auto_selected": True, "event_type": "LOSS_STOP"},
+    )
+
+    with patch("src.paper.tracker.get_strategy_realized_pnl", return_value=Decimal("-5432.10")):
+        asyncio.run(strategy.apply_action(_standard_ic_positions(), action))
+
+    (message,), _ = notifier.send_notification.call_args
+    assert r"🔁 *Cycle P&L \(\#1\):* \-₹1,950\.00" in message
+    assert r"📈 *Since inception:* \-₹5,432\.10" in message
 
 
 def test_apply_action_close_full_auto_execute_notify_failure_non_fatal() -> None:

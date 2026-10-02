@@ -154,12 +154,22 @@ def test_net_loss_renders_minus_sign() -> None:
     assert "₹\\-500" not in line
 
 
-def test_overlay_total_line_only_when_set() -> None:
-    without = format_exit_message(_msg())
-    assert "📊" not in without
+def test_footer_uses_bug043_cycle_and_since_inception_labels() -> None:
+    """BUG-043 (operator decision 2026-10-02): fixed `Cycle P&L` / `Since inception` labels."""
+    out = format_exit_message(_msg()).splitlines()
+    assert (
+        "🔁 *Cycle P&L \\(\\#1\\):* \\+₹61\\.40  ·  ₹103\\.40 → ₹42\\.00  ·  59% decay  ·  6d"
+        in out
+    )
+    assert "📈 *Since inception:* \\+₹340\\.10" in out
+    assert not any("Inception:" in line for line in out)
 
-    with_overlay = format_exit_message(_msg(overlay_total_pnl=Decimal("1200.00")))
-    assert "📊 *Overlay P&L" in with_overlay
+
+def test_footer_never_renders_overlay_total_line() -> None:
+    """BUG-043: the overlay-only total line duplicated inception and is gone."""
+    out = format_exit_message(_msg())
+    assert "📊" not in out
+    assert "Overlay P&L" not in out
 
 
 def test_close_leg_table_badges() -> None:

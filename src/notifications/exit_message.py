@@ -70,8 +70,6 @@ class ExitMessage:
         inception_pnl: Strategy-lifetime realized P&L (get_strategy_realized_pnl).
         stats: Win-rate/P&L stats over closed cycles; the win-rate row renders
             only when stats is not None and stats.closed_count >= 5.
-        overlay_total_pnl: Overlay-strategy total realized P&L, or None to omit
-            the row (non-overlay strategies).
         state_line: Optional trailing `-> *State:* ...` line (e.g. PP
             crash-monetize's RE_ENTRY_PENDING note).
     """
@@ -92,7 +90,6 @@ class ExitMessage:
     cycle_held_days: int | None = None
     inception_pnl: Decimal = Decimal("0")
     stats: CycleStats | None = None
-    overlay_total_pnl: Decimal | None = None
     state_line: str | None = None
 
     def __post_init__(self) -> None:
@@ -137,7 +134,7 @@ def _this_exit_line(msg: ExitMessage) -> str:
 
 
 def _cycle_line(msg: ExitMessage) -> str | None:
-    """``🔁 *Cycle #{i}:* {+₹cycle}  ·  ₹{credit} → ₹{buyback}  ·  {d}% decay  ·  {h}d``.
+    """``🔁 *Cycle P&L (#{i}):* {+₹cycle}  ·  ₹{credit} → ₹{buyback}  ·  {d}% decay  ·  {h}d``.
 
     None when there is no closed cycle (partial close). Drops the credit/buyback/decay
     segment when cycle_decay_pct is None (pure-long cycle, e.g. PP).
@@ -145,12 +142,12 @@ def _cycle_line(msg: ExitMessage) -> str | None:
     if msg.cycle_pnl is None:
         return None
 
-    idx = escape_markdown(str(msg.cycle_index))
+    label = escape_markdown(f"Cycle P&L (#{msg.cycle_index})")
     pnl = escape_markdown(format_money(msg.cycle_pnl, signed=True))
     held = escape_markdown(str(msg.cycle_held_days))
 
     if msg.cycle_decay_pct is None:
-        return f"🔁 *Cycle \\#{idx}:* {pnl}  ·  {held}d"
+        return f"🔁 *{label}:* {pnl}  ·  {held}d"
 
     assert (
         msg.cycle_short_credit is not None and msg.cycle_short_buyback is not None
@@ -158,7 +155,7 @@ def _cycle_line(msg: ExitMessage) -> str | None:
     credit = escape_markdown(format_money(msg.cycle_short_credit))
     buyback = escape_markdown(format_money(msg.cycle_short_buyback))
     decay = escape_markdown(f"{msg.cycle_decay_pct:.0f}")
-    return f"🔁 *Cycle \\#{idx}:* {pnl}  ·  {credit} → {buyback}  ·  {decay}% decay  ·  {held}d"
+    return f"🔁 *{label}:* {pnl}  ·  {credit} → {buyback}  ·  {decay}% decay  ·  {held}d"
 
 
 def _win_rate_line(stats: CycleStats) -> str | None:
@@ -188,7 +185,7 @@ def format_exit_message(msg: ExitMessage) -> str:
 
     Layout: bold headline, kv row, a blank line, the fenced
     ``build_close_leg_table()`` block, a divider, then the this-exit / cycle /
-    inception / win-rate / overlay-total / state footer lines.
+    since-inception / win-rate / state footer lines.
 
     Args:
         msg: The exit data. ``legs`` must be non-empty (``build_close_leg_table``
@@ -214,16 +211,12 @@ def format_exit_message(msg: ExitMessage) -> str:
         footer.append(cycle_line)
 
     inception = escape_markdown(format_money(msg.inception_pnl, signed=True))
-    footer.append(f"📈 *Inception:* {inception}")
+    footer.append(f"📈 *Since inception:* {inception}")
 
     if msg.stats is not None:
         win_rate_line = _win_rate_line(msg.stats)
         if win_rate_line is not None:
             footer.append(win_rate_line)
-
-    if msg.overlay_total_pnl is not None:
-        overlay = escape_markdown(format_money(msg.overlay_total_pnl, signed=True))
-        footer.append(f"📊 *Overlay P&L \\(total realized\\):* {overlay}")
 
     if msg.state_line is not None:
         footer.append(f"→ *State:* {escape_markdown(msg.state_line)}")

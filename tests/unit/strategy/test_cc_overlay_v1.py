@@ -764,8 +764,8 @@ def test_apply_action_close_cc_escapes_signal_name() -> None:
     assert "PROFIT\\_TARGET\\_CC" in msg
 
 
-def test_apply_action_close_cc_shows_overlay_total_footer_row() -> None:
-    """The close card carries the Overlay P&L (total realized) footer row."""
+def test_apply_action_close_cc_drops_overlay_total_footer_row() -> None:
+    """BUG-043: the Overlay P&L (total realized) row duplicated inception and is gone."""
     mock_store = MagicMock()
     mock_notifier = AsyncMock()
     strategy = CCOverlayV1(store=mock_store, notifier=mock_notifier)
@@ -781,7 +781,8 @@ def test_apply_action_close_cc_shows_overlay_total_footer_row() -> None:
     _run(strategy.apply_action([pos], action))
 
     msg = mock_notifier.send_notification.call_args[0][0]
-    assert "📊 *Overlay P&L \\(total realized\\):*" in msg
+    assert "📈 *Since inception:*" in msg
+    assert "Overlay P&L" not in msg
 
 
 def test_apply_action_close_cc_notify_failure_is_non_fatal() -> None:

@@ -1018,7 +1018,57 @@ def test_apply_action_close_collar_notification_uses_formatted_labels() -> None:
     assert "80.0" in msg
     assert "50.0" in msg
     assert "\\+₹3,250\\.00" in msg
-    assert "📊 *Overlay P&L \\(total realized\\):*" in msg
+    assert "Overlay P&L" not in msg
+
+
+def test_bug043_collar_close_card_renders_cycle_and_since_inception() -> None:
+    """BUG-043: collar close card carries `Cycle P&L` + `Since inception`, no overlay total."""
+    from unittest.mock import AsyncMock, patch
+
+    def _trade(role: str, key: str, d: date, act: TradeAction, price: str) -> PaperTrade:
+        return PaperTrade(
+            strategy_name=STRATEGY_OVERLAY,
+            leg_role=role,
+            instrument_key=key,
+            trade_date=d,
+            action=act,
+            quantity=65,
+            price=Decimal(price),
+        )
+
+    # One closed collar cycle: call 80 -> 30 (+3,250), put 50 -> 40 (-650) = +2,600.
+    cycle = [
+        _trade("overlay_collar_call", "NSE_FO|65900", date(2026, 6, 1), TradeAction.SELL, "80"),
+        _trade("overlay_collar_put", "NSE_FO|65901", date(2026, 6, 1), TradeAction.BUY, "50"),
+        _trade("overlay_collar_call", "NSE_FO|65900", date(2026, 6, 15), TradeAction.BUY, "30"),
+        _trade("overlay_collar_put", "NSE_FO|65901", date(2026, 6, 15), TradeAction.SELL, "40"),
+    ]
+    mock_store = MagicMock()
+    mock_store.get_trades.return_value = cycle
+    mock_notifier = AsyncMock()
+    strategy = CollarOverlayV1(store=mock_store, notifier=mock_notifier)
+
+    call_pos = _make_short_call_position(instrument_key="NSE_FO|65900", avg_sell_price="80")
+    put_pos = _make_long_put_position(instrument_key="NSE_FO|65901", avg_cost="50")
+    action = ApprovedAction(
+        action_type="CLOSE_COLLAR",
+        legs_to_close=[
+            LegClose(leg_role="overlay_collar_call"),
+            LegClose(leg_role="overlay_collar_put"),
+        ],
+        legs_to_open=[],
+        rationale="test",
+        council_rank=1,
+        metadata={"mark": "30.0"},
+    )
+    with patch("src.paper.tracker.get_strategy_realized_pnl", return_value=Decimal("9100.00")):
+        _run(strategy._send_close_notification(call_pos, put_pos, action))
+
+    msg = mock_notifier.send_notification.call_args[0][0]
+    assert "🔁 *Cycle P&L \\(\\#1\\):* \\+₹2,600\\.00" in msg
+    assert "📈 *Since inception:* \\+₹9,100\\.00" in msg
+    assert "Overlay P&L" not in msg
+    assert "📊" not in msg
 
 
 def test_apply_action_close_collar_notify_failure_is_non_fatal() -> None:

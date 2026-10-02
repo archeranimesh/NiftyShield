@@ -433,7 +433,6 @@ class CCOverlayV1(ReEntryMixin):
                     cycle_held_days=cycle_held_days,
                     inception_pnl=overlay_total_pnl,
                     stats=stats,
-                    overlay_total_pnl=overlay_total_pnl,
                 )
             )
         except Exception as exc:

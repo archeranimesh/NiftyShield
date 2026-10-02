@@ -311,7 +311,7 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "Line moved from 681 -> 682 by UXM-5's _send_close_notification rewrite above it, "
         "then 682 -> 685 by c408c1e."
     ),
-    ("src/strategy/cc_overlay_v1.py", 447): (
+    ("src/strategy/cc_overlay_v1.py", 446): (
         "UXM-5 - heuristic limitation, not a real gap: the card is built by "
         "format_exit_message(), which escapes every interpolated value via "
         "escape_markdown() inside ExitMessage's own renderer "
@@ -319,7 +319,7 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "immediate enclosing function (_send_close_notification), not the "
         "builder it calls - same shape as the scripts/record/record_paper_trade.py:846 entry"
     ),
-    ("src/strategy/pp_overlay_v1.py", 470): (
+    ("src/strategy/pp_overlay_v1.py", 469): (
         "UXM-5 - heuristic limitation, not a real gap: the card is built by "
         "format_exit_message(), which escapes every interpolated value via "
         "escape_markdown() inside ExitMessage's own renderer "
@@ -327,16 +327,17 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "immediate enclosing function (_send_close_notification), not the "
         "builder it calls - same shape as the scripts/record/record_paper_trade.py:846 entry"
     ),
-    ("src/strategy/collar_overlay_v1.py", 866): (
+    ("src/strategy/collar_overlay_v1.py", 865): (
         "UXM-5 - heuristic limitation, not a real gap: the card is built by "
         "format_exit_message(), which escapes every interpolated value via "
         "escape_markdown() inside ExitMessage's own renderer "
         "(src/notifications/exit_message.py); this guard only inspects the "
         "immediate enclosing function (_send_close_notification), not the "
         "builder it calls - same shape as the scripts/record/record_paper_trade.py:846 entry. "
-        "Line moved from 863 -> 866 by c408c1e."
+        "Line moved from 863 -> 866 by c408c1e, then 866 -> 865 by BUG-043 dropping "
+        "the overlay_total_pnl kwarg."
     ),
-    ("src/strategy/auto_close.py", 387): (
+    ("src/strategy/auto_close.py", 386): (
         "UXM-6 - heuristic limitation, not a real gap: the card is built by "
         "format_exit_message(), which escapes every interpolated value via "
         "escape_markdown() inside ExitMessage's own renderer "

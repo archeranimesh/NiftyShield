@@ -380,7 +380,6 @@ async def _send_close_notification(
                 cycle_held_days=cycle_held_days,
                 inception_pnl=realized_pnl,
                 stats=stats,
-                overlay_total_pnl=realized_pnl,
                 state_line=state_line,
             )
         )
