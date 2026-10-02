@@ -2830,3 +2830,34 @@ different-`strategy_name` isolation case and a two-cycle stale-row test.
 found 0. None came from BUG-067 paths.
 
 ---
+
+## BUG-067 — `PaperExecutor.apply` and `CollarOverlayV1._close_both_legs` record closing trades but never call `mark_trade_closed`; closed legs stay `OPEN`
+
+| Field | Value |
+|---|---|
+| Severity | **Low** — `paper_trades.state` staleness on flat legs, same category as BUG-035 / BUG-037 / BUG-066 |
+| Status | ✅ Fixed — SHA `c408c1e` + `d3ba54d`, 2026-10-02 |
+| Discovered | 2026-10-02 — B037.6 `code-reviewer` pass on `5369c0e` (focus: close paths still missing the call) |
+| Location | `src/strategy/executor.py::PaperExecutor.apply` (~L250, close-leg loop); `src/strategy/collar_overlay_v1.py::CollarOverlayV1._close_both_legs` (~L508, `record_trades`) |
+
+**Symptom / root cause:** BUG-037 (`5369c0e`) wired `mark_trade_closed` into `close_csp_leg`, `close_ic_legs`, `roll_ic_legs` and the 3track roll, but two production close paths write the closing
+trade with `record_trade(s)` and never flip the opening rows. `PaperExecutor.apply` persists every manual / Telegram-approved IC and CSP close (`ic_nifty_v1.py` ~L748 comment); `_close_both_legs` is
+the collar's `CLOSE_AND_REENTER_COLLAR` path (`OverlayCloser.close_collar_all` already calls it). Not yet counted on the live DB — B067.3's dry-run gives the number.
+
+**Fix:** after each insert, call `store.mark_trade_closed(strategy_name, leg_role, instrument_key)` only for rows actually inserted, mirroring `5369c0e`. Out of scope, noted by the same review:
+`scripts/strategies/cc_calibration/paper_cc_roll.py` (calibration only) and the separate-transaction gap between insert and state flip.
+
+
+**Implementation progress (2026-10-02):** `PaperExecutor.apply` calls `mark_trade_closed` only when `record_trade` returns True; `_close_both_legs` flips only the rows `record_trades(...)[0]` reports
+inserted (index, not unpack — 17 collar tests use a bare `MagicMock` store). Neither path can partial-close (both close `abs(net_qty)`), so no flatness guard is needed; the executor's close loop runs
+before its open loop, so a same-`apply` re-open stays `OPEN`. Tests on a real temp `PaperStore`: full close flips, duplicate insert does not, same-role other contract untouched
+(`tests/unit/strategy/test_executor.py`, new `test_collar_overlay_v1_mark_closed.py`). Real `code-reviewer`: 0 CRITICAL / ERROR / WARNING. The 3-line shift broke the escaping guard's line pins —
+re-pinned in `aa84424`. Third unwired path found: `NiftyTrackComparisonV1._persist_roll` (B067.5). Confirmed fine: `overlay_closer.py`, `auto_close.py` (writes no trades), entry-only scripts.
+
+**B067.5 (2026-10-02, `d3ba54d`):** `NiftyTrackComparisonV1._persist_roll` now flips only the close-side trades `record_trades(...)[0]` reports inserted (identity match, as in `roll_ic_legs`);
+replacement legs stay `OPEN`, a duplicate-skipped close flips nothing. Full closes only (`abs(net_qty)`). Tests on a real temp `PaperStore`. Real `code-reviewer`: 0 CRITICAL / ERROR; both WARNINGs
+fixed in the commit (docstring no longer claims atomicity; same-key re-open limitation commented — impossible today since a roll changes strike or expiry).
+
+**B067.3 (2026-10-02, live host):** backfill dry-run found 18 stale flat legs, none from this bug's three paths (all BUG-066 / pre-BUG-062 residue); applied, re-run found 0.
+
+---

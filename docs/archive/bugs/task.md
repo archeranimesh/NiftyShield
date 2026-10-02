@@ -981,3 +981,15 @@ Detail: `docs/bugs/bugs.md` BUG-066.
 - [x] **B066.3** — Run `python -m scripts.dev.backfill_mark_trade_closed_overlay` (dry-run first: expect 18 legs — 7 signal track + 11 pre-BUG-062 IC residue); confirm a re-run finds 0. | SHA
   `1bc9d29`
 - [x] **B066.4** — Commit, flip BUG-066 to ✅ Fixed + SHA, archive entry, update `TODOS.md`. | SHA `1bc9d29`
+
+## BUG-067 — `PaperExecutor.apply` and `CollarOverlayV1._close_both_legs` close legs without `mark_trade_closed`
+
+Detail: `docs/bugs/bugs.md` BUG-067.
+
+- [x] **B067.1** — Wire `mark_trade_closed` into both paths, guarded on the actual insert (same pattern as `5369c0e`). Tests per path: full close flips state, duplicate insert does not. | SHA
+  `c408c1e` + `aa84424`
+- [x] **B067.2** — Review: real `code-reviewer` (paper-trade state transitions). | SHA `c408c1e`
+- [x] **B067.5** — Same gap in `NiftyTrackComparisonV1._persist_roll` (`src/strategy/nifty_track_comparison_v1.py` ~L558-655): wire `mark_trade_closed` for inserted close trades. Tests: roll flips the
+  closed legs, duplicate insert does not. | SHA `d3ba54d`
+- [x] **B067.3** — Dry-run `backfill_mark_trade_closed_overlay` to count stale legs from these paths; apply on the live host. | SHA `c408c1e`
+- [x] **B067.4** — Commit, flip BUG-067 to ✅ Fixed + SHA, archive entry, update `TODOS.md`. | SHA `d3ba54d`
