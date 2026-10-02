@@ -305,7 +305,9 @@ if any((found := x) > 10 for x in data):
 ### Meta-Rules for the Review Process
 
 - **Read the tests before the code.** Tests reveal what the author *believed* the contract was. Divergence between tests and implementation is where the bugs hide.
-- **Grep for `# type: ignore` and `# noqa`.** Each one should have a comment explaining *why*. Silent suppressions are deferred bugs.
+- **Grep for `# type: ignore` and `# noqa`.** Each one should have a comment explaining *why*. Silent suppressions are deferred bugs. **Carve-out:** `# noqa` with a self-describing code — `E402`
+  (import not at top), `F401` (unused import), `N802` (function name case), `ANN001` (missing arg annotation) — needs no explanatory comment; the code names the rule being waived. Everything else
+  (`BLE001`, `SIM115`, any `# type: ignore`, a bare `# noqa`) still requires a stated reason.
 - **Every `TODO` and `FIXME` is an open defect.** Treat them as such, not as comments.
 - **Run `mypy --strict` on the diff, not just the file.** Type errors often surface in callers, not in the changed function itself.
 - **Cyclomatic complexity > 10** in a single function is a strong predictor of uncaught edge cases. Branches that aren't tested don't get caught by code review either.

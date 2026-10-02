@@ -46,7 +46,11 @@ rot them.
 19. **Historical data abstraction** — `docs/plan/historical-data-abstraction/` — next **HD-0**. LOW priority; HD-6 / HD-7 conditional on the HD-0 decision matrix. Do not start until the Phase 0.8 gate
     clears.
 20. **Technical Debt** — `docs/plan/technical-debt/` — DEBT-3 / 5 / 6a / 6b / 6c / 7. Opportunistic, **not sequential** — each item fires only when its named file / module is already being touched for
-    another story's task. See `prompt.md` for the per-item trigger.
+    another story's task. See `prompt.md` for the per-item trigger. Filed from `full-repo-review-followups/suppression-hygiene-triage` (FR-7 row 10): **TD-A** — replace the 7 `assert` statements in
+    `src/` (`reporting/eod_pt_summary.py:383`, `config.py:232`, `notifications/exit_message.py:155`, `strategy/roll_utils.py:62`, `strategy/signal_track_v1.py:551,657`,
+    `strategy/ic_close_executor.py:343`) with `raise ValueError` per G6 (asserts vanish under `-O`; several are Optional-narrowing, so some may warrant a real guard instead). **TD-B** — audit the
+    `except Exception` sites (FR-4 counted 183; today 138 in `src/`, 305 incl. `scripts/`; 60 carry `# noqa: BLE001`) as its own story: classify cron-boundary (legit) vs. swallow-in-hot-path (fix);
+    not started, needs a story folder.
 21. **Variance gate — start the observation clock** — `docs/plan/variance-gate/` — next **VG0** (spec reconciliation, Animesh). Cheap, but VG2.A needs ≥9 calendar months of observation, so it is the
     longest wall-clock pole. Do VG0/VG1 now; the Gate A–D tasks are human checkpoints that accrue passively while the items below are built.
 
