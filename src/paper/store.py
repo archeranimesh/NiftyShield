@@ -2316,9 +2316,11 @@ class PaperStore:
         """Close a signals-paper-track position: mark the leg CLOSED + log the exit.
 
         The closing ``paper_trades`` SELL leg is recorded by the caller (the
-        existing close path) before this is called.
+        existing close path) before this is called. Every remaining ``OPEN``
+        row for the entry's ``(strategy_name, leg_role, instrument_key)`` —
+        that SELL included — is flipped to ``CLOSED`` alongside the entry.
 
-        The state update and the exit-event insert run in a single transaction
+        The state updates and the exit-event insert run in a single transaction
         so a failure can never leave a half-closed position (which the
         ``open_signal_entry`` guard would then treat as no open position).
 
@@ -2344,6 +2346,15 @@ class PaperStore:
             )
             if cur.rowcount == 0:
                 raise ValueError(f"No paper trade found with id={trade_id}")
+            # BUG-066: also close the leg's still-OPEN SELL exit row. Safe —
+            # the leg is flat here (one lot in, one lot out).
+            conn.execute(
+                """UPDATE paper_trades SET state = ?
+                   WHERE state = ? AND (strategy_name, leg_role, instrument_key) =
+                     (SELECT strategy_name, leg_role, instrument_key
+                      FROM paper_trades WHERE id = ?)""",
+                (TradeState.CLOSED.value, TradeState.OPEN.value, trade_id),
+            )
             cur = conn.execute(
                 """INSERT INTO paper_exit_events
                    (strategy_name, leg_name, trade_id, snapshot_id, event_time,

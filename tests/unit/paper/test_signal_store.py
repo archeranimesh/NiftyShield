@@ -339,6 +339,70 @@ def test_close_sets_trade_state_closed(store: PaperStore) -> None:
     assert n_events == 1
 
 
+def _record_row(store: PaperStore, *, key: str, leg: str, action: TradeAction, day: date) -> None:
+    store.record_trade(
+        PaperTrade(
+            strategy_name=STRATEGY_SIGNAL_TRACK,
+            leg_role=leg,
+            instrument_key=key,
+            trade_date=day,
+            action=action,
+            quantity=LOT_SIZE,
+            price=Decimal("50"),
+        )
+    )
+
+
+def _states_by_key_action(store: PaperStore) -> dict[tuple[str, str, str], str]:
+    with sqlite3.connect(store.db_path) as conn:
+        rows = conn.execute(
+            "SELECT leg_role, instrument_key, action, state FROM paper_trades"
+        ).fetchall()
+    return {(leg, key, action): state for leg, key, action, state in rows}
+
+
+def test_close_flips_sell_exit_row_too(store: PaperStore) -> None:
+    """BUG-066: the SELL exit row must not stay OPEN after close."""
+    tid = _open_buy_row(store, day=date(2026, 9, 10), price="40.25")
+    store.open_signal_entry(_entry(tid))
+    _record_row(store, key=_KEY, leg=_LEG, action=TradeAction.SELL, day=date(2026, 9, 10))
+
+    store.close_signal_entry(tid, _exit_event(tid))
+
+    states = _states_by_key_action(store)
+    assert states[(_LEG, _KEY, "BUY")] == TradeState.CLOSED.value
+    assert states[(_LEG, _KEY, "SELL")] == TradeState.CLOSED.value
+
+
+def test_close_leaves_other_open_legs_untouched(store: PaperStore) -> None:
+    tid = _open_buy_row(store, day=date(2026, 9, 10), price="40.25")
+    store.open_signal_entry(_entry(tid))
+    _record_row(store, key=_KEY, leg=_LEG, action=TradeAction.SELL, day=date(2026, 9, 10))
+    _record_row(store, key="NSE_FO|66666", leg=_LEG, action=TradeAction.BUY, day=date(2026, 9, 10))
+    _record_row(store, key=_KEY, leg="other_leg", action=TradeAction.BUY, day=date(2026, 9, 10))
+
+    store.close_signal_entry(tid, _exit_event(tid))
+
+    states = _states_by_key_action(store)
+    assert states[(_LEG, "NSE_FO|66666", "BUY")] == TradeState.OPEN.value
+    assert states[("other_leg", _KEY, "BUY")] == TradeState.OPEN.value
+
+
+def test_close_bad_trade_id_raises_and_writes_nothing(store: PaperStore) -> None:
+    tid = _open_buy_row(store, day=date(2026, 9, 10), price="40.25")
+    _record_row(store, key=_KEY, leg=_LEG, action=TradeAction.SELL, day=date(2026, 9, 10))
+    bad = tid + 999
+
+    with pytest.raises(ValueError, match="No paper trade found"):
+        store.close_signal_entry(bad, _exit_event(bad))
+
+    states = _states_by_key_action(store)
+    assert set(states.values()) == {TradeState.OPEN.value}
+    with sqlite3.connect(store.db_path) as conn:
+        (n_events,) = conn.execute("SELECT COUNT(*) FROM paper_exit_events").fetchone()
+    assert n_events == 0
+
+
 # ── get_signal_exit (BUG-063) ─────────────────────────────────────────────────
 
 
