@@ -1211,7 +1211,8 @@ one snapshot cannot tell them apart below ~0.001 delta.
 settlement price, i.e. the official NIFTY 50 index close on the expiry date (source: Upstox historical daily candle for `NSE_INDEX|Nifty 50`, or the `IndexBhavRecord` index-close ingest in
 `src/backtest/`). **Why:** that is how NSE cash-settles index options; the last recorded option mark carries residual time value and is as stale as the last snapshot, so settling there misstates
 realised P&L (the manual trade-405 repair at 784.15 is exactly that error). **Fail-closed:** if the expiry-date close cannot be fetched, leave the leg `OPEN` and Telegram-warn — never fall back to the
-last mark, which would book a wrong price silently. **Consequence:** trade 405 (collar put `NSE_FO|73994`, expiry 2026-09-29) is re-settled at true intrinsic as part of B060.2.
+last mark, which would book a wrong price silently. **Trigger (2026-10-02):** runs once at monitor-daemon startup, not a separate cron. **Consequence:** trade 405 (collar put `NSE_FO|73994`, expiry
+2026-09-29) is re-settled at true intrinsic as part of B060.2.
 
 ---
 

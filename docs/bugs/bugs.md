@@ -37,7 +37,7 @@
 | Field | Value |
 |---|---|
 | Severity | **High** — an expired leg silently poisons P&L (BUG-061) and blocks collar re-entry; PP and CC will hit the same path at their own expiries |
-| Status | 🟡 Fix in progress — B060.2 `1937469` landed 2026-10-02; live-host run + cron (B060.3) and trade-405 re-settle (B060.4) pending |
+| Status | 🟡 Fix in progress — B060.2 `1937469` landed 2026-10-02; B060.3 `bd687ac` (daemon-startup settlement); trade-405 re-settle (B060.4) pending |
 | Discovered | 2026-09-30 — investigating a -45,001 Collar line (-565%) in the "NiftyBees vs overlays" digest |
 | Location | `paper_trades` lifecycle (no expiry-settlement path); `scripts/strategies/three_track/paper_3track_overlay_entry.py::_has_open_overlay_leg` (L1234) and its bootstrap gate (L1470) |
 
@@ -68,6 +68,11 @@ Fail-closed: missing close or unresolvable contract leaves the leg `OPEN` and wa
 books ₹0.05, not 0 — `PaperTrade.price` must be > 0 (same as `ic_close_executor._OTM_EXPIRY_PRICE`; ₹3.25 per 65-lot). **Risk:** the Upstox master drops expired contracts, so a leg found only after
 the host BOD refresh needs `--contract`. 22 tests. Real `code-reviewer`: 0 CRITICAL / ERROR; strike-through-float and send-delivery-logging warnings fixed; deferred two narrow `# type:
 ignore[arg-type]` on the CE/PE `Literal` (runtime-guarded).
+
+**B060.3 (2026-10-02, `bd687ac`):** operator rejected the separate 09:20 cron — the monitor daemon (started 09:15 daily, before the 10:30 overlay-entry crons) now awaits
+`settle_expired_legs_at_startup` before its first tick: skipped with a WARNING when the BOD lookup is missing, settle bounded at 60 s and notify at 15 s, each failure logged with its own event, never
+blocks the daemon. `paper_expiry_settle` remains the manual tool (dry-run, `--contract`). Live dry-run 2026-10-02: `settled=0 left_open=0` (trade 405 had already flattened the only expired leg). Takes
+effect on the next daemon start.
 ---
 
 ## BUG-061 [MOVED] — see `docs/archive/bugs/bugs.md` (closed 2026-09-30, SHA `7b671db`)
