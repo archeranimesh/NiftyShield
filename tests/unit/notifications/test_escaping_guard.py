@@ -308,7 +308,7 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "Line moved from 845 -> 846 by a later edit above it, then 846 -> 848 "
         "by B043.6 (CloseLegRow Decimal exit fallback)."
     ),
-    ("src/strategy/collar_overlay_v1.py", 680): (
+    ("src/strategy/collar_overlay_v1.py", 683): (
         "OEM-2 - heuristic limitation, not a real gap: the card is built by "
         "format_entry_message(), which escapes every interpolated value via "
         "escape_markdown() inside EntryMessage's own renderer "
@@ -317,7 +317,7 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "builder it calls - same shape as the scripts/record/record_paper_trade.py:775 entry. "
         "Line moved from 679 -> 680 by UXM-5's _send_close_notification rewrite above it."
     ),
-    ("src/strategy/collar_overlay_v1.py", 682): (
+    ("src/strategy/collar_overlay_v1.py", 685): (
         "OEM-2 - heuristic limitation, not a real gap: the card is built by "
         "format_entry_message(), which escapes every interpolated value via "
         "escape_markdown() inside EntryMessage's own renderer "
@@ -342,7 +342,7 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "immediate enclosing function (_send_close_notification), not the "
         "builder it calls - same shape as the scripts/record/record_paper_trade.py:846 entry"
     ),
-    ("src/strategy/collar_overlay_v1.py", 863): (
+    ("src/strategy/collar_overlay_v1.py", 866): (
         "UXM-5 - heuristic limitation, not a real gap: the card is built by "
         "format_exit_message(), which escapes every interpolated value via "
         "escape_markdown() inside ExitMessage's own renderer "
@@ -439,8 +439,8 @@ def test_baseline_has_no_duplicate_or_unused_entries():
 @pytest.mark.parametrize(
     "file_rel, line",
     [
-        ("src/strategy/collar_overlay_v1.py", 608),
-        ("src/strategy/collar_overlay_v1.py", 610),
+        ("src/strategy/collar_overlay_v1.py", 611),
+        ("src/strategy/collar_overlay_v1.py", 613),
     ],
 )
 def test_md3_audited_close_notifications_stay_escaped(file_rel, line):
