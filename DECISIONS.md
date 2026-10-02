@@ -1178,6 +1178,30 @@ the session extreme. **Consequence:** `signal_outcomes` high/low switch from exi
 
 ---
 
+## Greeks / option-chain correctness checks — parity + BS reference assumptions (2026-10-02, quant consult)
+
+**Decision:** two fixture-only pytest checks, parity first, BS-reference second, both test-only (pure helpers in a new `tests/helpers/` package, no `src/validation/` module, no runtime check yet — a
+module nobody calls is speculative scope). Consult: `options-strategist` + `greeks-analyst` (Opus), `greeks-parity-validation/` T1, against `nifty_chain_2026-04-07.json` (captured 2026-04-02 12:04
+IST, spot 22266.25, expiry Tue 2026-04-07, ~5.1 DTE, 129 strikes). **Parity:** bid/ask **mid** only — LTP is stale on illiquid strikes (7 CE strikes show `ltp=0` with live quotes; K=21900 gives a 5.82
+LTP residual) and `close_price` is prior-day. Filter: both legs two-sided (`bid > 0`) and `|K − S| ≤ 2000` (60 strikes). Rate / dividend / basis are not assumed: OLS of `(C_mid − P_mid)` on K gives
+`slope = −e^(−rT)` and `intercept = e^(−rT)·F`, so the check is internal consistency against a chain-implied forward (F ≈ 22271, ~5 over spot). The NiftyBees dividend question in the original task is
+moot — NiftyBees has no chain; the underlying is the NIFTY 50 index and its q is absorbed into F. Assert: `|slope + 1| ≤ 0.01`; per-strike `|residual| ≤ max(half_combined_spread + 2.0, 8.0)` INR; ≤ 5%
+of filtered strikes may breach; and residual signs must not be all one way (sign bias = field swap). Observed mid residuals: median 1.63, p95 5.15, max 9.20. The implied rate is **not** asserted —
+over 5 DTE the two consults' regressions disagreed (≈0.5% vs ≈9% annualised), i.e. it is noise. **Why loose:** the target failure modes (bid/ask or CE/PE swap, wrong Decimal cast, mis-keyed strike)
+produce residuals in the hundreds; the band only has to clear microstructure noise. **BS reference:** pins Upstox's empirically fitted convention rather than an independent "true" model, so drift or a
+parser/unit error fails loudly. Fit (ATM ±5 strikes, n=22): BSM on spot, `r = 0.05` fitted constant (not a market rate; delta RMS 0.00088 vs 0.00925 at r=0), `q = 0`, `σ = iv/100` (iv is percent), `T`
+= calendar seconds to 15:30 IST expiry / (365·86400) (a 252-day count is 3–5× worse), vega per 1 vol point, theta per calendar day. **Upstox theta omits the carry term** `−rKe^(−rT)N(d2)` — only
+`−S·σ·N'(d1)/(2√T·365)` fits (theta RMS 0.022 vs 1.54 with the full BSM theta, opposite-sign CE/PE errors). Tolerances: delta 0.005, vega 0.05, theta 0.10 (≈3–5× max observed). Gamma is quantised to 7
+distinct values (0–0.0006), so it is asserted only within 0.0001 of the reference. Strikes with `iv = 0` are excluded (11 CE deep-ITM, 39 PE deep-OTM — the parser stores them as `Decimal("0")`, not
+None). Black-76 on the implied forward (the strategist's proposal) was rejected for the golden test: the goal is to reproduce Upstox, and spot-BSM with r=0.05 is what fits. The strategist's looser BS
+bands (delta 0.03) were rejected for the same reason — they would not catch a convention drift. **Consequences:** (1) the carry-free theta matters beyond the test — any decay P&L built on Upstox theta
+misses ~1.5 INR/day per ATM 5-DTE leg of carry; (2) r is ambiguous to ±2–3% over 5 DTE, so the BS test is parameterised over fixture files and a longer-DTE (monthly, 20–30 DTE) snapshot should be
+captured to pin r and confirm carry-free theta at longer tenors — follow-up, not a blocker; (3) the reference math uses float (`math.erf`, stdlib only), converting from `Decimal` at the helper
+boundary — it is a numerical model, not a money path. **Not covered:** whether Upstox uses a skew-aware surface (SABR/SVI) rather than per-leg flat-vol BSM — one snapshot cannot tell them apart below
+~0.001 delta.
+
+---
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/` (except 0.6c), `src/streaming/` — all empty
