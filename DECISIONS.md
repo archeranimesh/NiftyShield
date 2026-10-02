@@ -696,11 +696,12 @@ wrong. Deferred fix — absorb in `parse_upstox_option_chain` by accepting `list
 **Row 6 (Greeks/parity absence) severity divergence, preserved per FR-7 not collapsed:** FR-5 rates the absence of any Black-Scholes reference test or put-call-parity check CRITICAL ("is the
 correctness test missing for financial logic" axis); FR-2 rates the same absence WARNING ("absence of a test is not itself a wrong result" axis), rating only its *consequences* (row 1's live P&L bugs)
 CRITICAL. FR-7's chairman kept CRITICAL because the epic's own evidence proves the consequence — the absence demonstrably let two live CRITICAL accounting errors survive undetected until manual
-reconciliation. Deferred to `docs/plan/greeks-parity-validation/` pending an `options-strategist`/`greeks-analyst` council consultation on tolerance bands and reference-model assumptions before
-implementation.
+reconciliation. Deferred to `docs/archive/plan/full-repo-review-followups/greeks-parity-validation/` pending an `options-strategist`/`greeks-analyst` council consultation on tolerance bands and
+reference-model assumptions before implementation.
 
 **Row 10 (suppression-comment hygiene) severity divergence:** FR-4 rated CRITICAL per the letter of REVIEW.md's suppression-comment rule; FR-7's chairman downgraded to ERROR because most bare
-`E402`/`F401` suppressions are self-describing and the load-bearing fix is a REVIEW.md policy carve-out, not 100+ mechanical comment additions. Deferred to `docs/plan/suppression-hygiene-triage/`.
+`E402`/`F401` suppressions are self-describing and the load-bearing fix is a REVIEW.md policy carve-out, not 100+ mechanical comment additions. Deferred to
+`docs/archive/plan/full-repo-review-followups/suppression-hygiene-triage/`.
 
 **Personas not represented (FR-7 §"Personas Not Represented") — logged so they are not rediscovered in production:**
 - **Regulatory/Compliance persona (margin, STT, tax):** correctly identified as covered by nobody, but load-bearing only once real orders are placed — hard-blocked today (`_raise_order_blocked()`,

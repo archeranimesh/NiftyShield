@@ -29,8 +29,8 @@ as applicable) — this task is "invoke the skill," not hand-edit docs.
 ## BP-2 — Extend `paper-pnl-golden-tests/` scope to `ic_nifty_v1`/`v2` decision points
 
 **Files to change / create:**
-- `docs/plan/full-repo-review-followups/paper-pnl-golden-tests/tasks.md` — add task(s) for strategy-decision-point fixtures alongside the existing P&L-math scope.
-- `docs/plan/full-repo-review-followups/paper-pnl-golden-tests/stories.md` — spec the new tasks.
+- `docs/archive/plan/full-repo-review-followups/paper-pnl-golden-tests/tasks.md` — add task(s) for strategy-decision-point fixtures alongside the existing P&L-math scope.
+- `docs/archive/plan/full-repo-review-followups/paper-pnl-golden-tests/stories.md` — spec the new tasks.
 - New fixture-capture tooling/tests under `tests/unit/strategy/` (exact paths TBD by the task spec written here — this task only scopes it, a later task in that story implements it).
 
 **Before any code (graph queries — do not write model constructors from memory):**

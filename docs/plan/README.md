@@ -24,9 +24,10 @@ shipped. `token_audit.py`, the `CLAUDE.md`/`AGENTS.md` skill-ification, `session
 
 **`dev-foundation/`** · ✅ Shipped/Archived Engineering-excellence epic — tooling, CI, code health (3 sub-stories).
 
-**`full-repo-review-followups/`** · ✅ Done — all 9 stories ✅ (`greeks-parity-validation/` closed 2026-10-02 with the T3 BS golden test); ready to archive. 9 stories from the full-repo-review FR-7
-synthesis (7 CRITICAL + 2 ERROR). P0: portfolio P&L fix, DB backup cron. P1: docs staleness, Telegram auth fix. P2: CLAUDE.md/REVIEW.md reconcile, logging migration. P3: Greeks/parity validation
-(council-gated), golden tests, suppression hygiene. Priority + dependencies in the epic's own `README.md`. `telegram-approval-auth-fix/` already shipped (SHA `5cafc3c`).
+**`full-repo-review-followups/`** · ✅ Archived 2026-10-02 → `docs/archive/plan/full-repo-review-followups/` (all 9 stories ✅; `greeks-parity-validation/` closed with the T3 BS golden test `91ce60b`).
+9 stories from the full-repo-review FR-7 synthesis (7 CRITICAL + 2 ERROR). P0: portfolio P&L fix, DB backup cron. P1: docs staleness, Telegram auth fix. P2: CLAUDE.md/REVIEW.md reconcile, logging
+migration. P3: Greeks/parity validation (council-gated), golden tests, suppression hygiene. Priority + dependencies in the epic's own `README.md`. `telegram-approval-auth-fix/` already shipped (SHA
+`5cafc3c`).
 
 **`telegram-markdown-migration/`** · ✅ Shipped/Archived 2026-09-06 → `docs/archive/plan/telegram-markdown-migration/` All Telegram messaging switched to `parse_mode=MarkdownV2` across three sequenced
 sub-stories: `backbone/` (parse-mode switch + escaping audit, `57c1c3c`), `formatting-rules/` (value/table spec → `FORMATTING.md`, `75cc123`), `strategy-rollout/` (per-message-family migration incl.

@@ -1,4 +1,4 @@
-Read `CONTEXT.md` and state `CONTEXT.md ✓` before doing anything else. Then read `docs/plan/full-repo-review-followups/paper-pnl-golden-tests/tasks.md` and find the first unchecked box. That is your
+Read `CONTEXT.md` and state `CONTEXT.md ✓` before doing anything else. Then read `docs/archive/plan/full-repo-review-followups/paper-pnl-golden-tests/tasks.md` and find the first unchecked box. That is your
 **only task** for this session. Do not look at any other unchecked item. One task. Complete it fully. Stop.
 
 **Origin:** Spawned from `docs/archive/plan/full-repo-review/findings/FR-7_synthesis.md` (Chairman Synthesis), FR-7 row 13 (ERROR) — FR-5 PNL-1. Independently re-verified against the live repo before
@@ -13,7 +13,7 @@ query against.
 
 **Pre-implementation gate:** State in one sentence which task, which files, which test file. Do not write any code until this plan is stated.
 
-**Story spec:** Read the matching story in `docs/plan/full-repo-review-followups/paper-pnl-golden-tests/stories.md` for the full spec.
+**Story spec:** Read the matching story in `docs/archive/plan/full-repo-review-followups/paper-pnl-golden-tests/stories.md` for the full spec.
 
 **Graph-before-Read rule:** Never call `Read` on `src/` or `scripts/` without first using the graph. Order: `git log --oneline -10 <file>` → `search_graph`/`get_code_snippet` → `trace_path` →
 `search_code` → `sed -n` → `Read` (state why the graph was insufficient).

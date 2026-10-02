@@ -1050,3 +1050,5 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
   the DECISIONS entry: window is ±1500 (recorded stats only reproduce there, not ±2000); sign-bias is per-wing (whole-chain is vacuous under OLS); added `ask ≥ bid`.
 - [2026-10-02] greeks-parity-validation T3: BS golden test (`tests/unit/test_bs_greeks.py`, BSM helpers in `tests/helpers/bs_reference.py`) — Upstox Greeks vs spot BSM r=0.05, cal/365 to 15:30 IST,
   carry-free theta, ATM ±5 (n=22); max errors delta 0.0009 / vega 0.015 / theta 0.038 reproduce the consult. Edge tests: vega ×100 and textbook carry theta both fail. Story + epic done.
+- [2026-10-02] Archived `full-repo-review-followups/` (9/9 ✅) → `docs/archive/plan/`; repointed inbound paths (strategy-refactor-blueprint, archived telegram-markdown-migration, TODOS_ARCHIVE,
+  DECISIONS.md dead links) and collapsed the plan README row. Docs-only.

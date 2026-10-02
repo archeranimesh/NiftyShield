@@ -32,7 +32,7 @@ invisibly into a port commit.
 ## Hard constraints
 
 - **Depends on `backbone/` + `formatting-rules/` fully complete** before ROLL-1. ROLL-0 is data-only and independent.
-- **ROLL-4 coordination check (mandatory, that task only):** re-read `docs/plan/full-repo-review-followups/telegram-approval-auth-fix/tasks.md` to confirm its current state before touching
+- **ROLL-4 coordination check (mandatory, that task only):** re-read `docs/archive/plan/full-repo-review-followups/telegram-approval-auth-fix/tasks.md` to confirm its current state before touching
   `TelegramGateway.send_approval_request`. Do not trust the outer `docs/plan/README.md` status line — it was found stale once (2026-08-07).
 - **Non-fatal send contract** (`src/notifications/CLAUDE.md`) — unchanged.
 - **Graph-before-Read** for any `src/` / `scripts/` file.

@@ -410,7 +410,7 @@ phase boundaries" guidance; do not bundle all 4 into a single unreviewable diff 
 - `src/notifications/telegram_gateway.py` — `TelegramGateway.send_approval_request`
 - `tests/unit/notifications/test_telegram_gateway.py`
 
-**Mandatory pre-step:** re-read `docs/plan/full-repo-review-followups/telegram-approval-auth-fix/tasks.md` in full before touching this method. If it has open tasks, coordinate (land its fix first, or
+**Mandatory pre-step:** re-read `docs/archive/plan/full-repo-review-followups/telegram-approval-auth-fix/tasks.md` in full before touching this method. If it has open tasks, coordinate (land its fix first, or
 do both changes in the same session with the auth fix as the first commit) — do not let this task's formatting changes and that story's auth changes race as uncoordinated diffs to the same function.
 
 **Scope:** apply bold/formatting to the approval-request message body using `formatting-rules/` helpers, consistent with ROLL-3's per-message judgment call. Confirm callback button label/data are

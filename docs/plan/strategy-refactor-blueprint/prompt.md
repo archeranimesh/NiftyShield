@@ -32,8 +32,8 @@ is not complete — and no task under this story starts real work — until Anim
 ## Session-start load hints
 
 - `docs/plan/technical-debt/tasks.md` — confirm no `DEBT-*` has since been filed for this (checked clean on 2026-09-26; recheck if time has passed).
-- `docs/plan/full-repo-review-followups/paper-pnl-golden-tests/` — existing P3 story (⬜ not started) that is the direct prerequisite safety net; BP-2 below extends its scope rather than duplicating
-  it.
+- `docs/archive/plan/full-repo-review-followups/paper-pnl-golden-tests/` — existing P3 story (⬜ not started) that is the direct prerequisite safety net; BP-2 below extends its scope rather than
+  duplicating it.
 - `docs/council/README.md` + `protocol-reference` §1 — the council protocol this story's BP-3 will invoke.
 - `CONTEXT_TREE.md` §`src/strategy/` — current per-file module descriptions, to re-check against `wc -l src/strategy/*.py` for drift before resuming.
 - `.claude/skills/md-organize/SKILL.md` — already covers most of the *docs*-side findings from this discussion (TODOS.md archival, DECISIONS.md semantic roll, line-style enforcement); BP-1 is "run

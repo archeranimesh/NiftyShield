@@ -1,4 +1,4 @@
-Read `CONTEXT.md` and state `CONTEXT.md ✓` before doing anything else. Then read `docs/plan/full-repo-review-followups/sqlite-backup-cron/tasks.md` and find the first unchecked box. That is the only
+Read `CONTEXT.md` and state `CONTEXT.md ✓` before doing anything else. Then read `docs/archive/plan/full-repo-review-followups/sqlite-backup-cron/tasks.md` and find the first unchecked box. That is the only
 task for this session.
 
 **This story is routed to Antigravity (see "Surface & Model" below for why).** Per CLAUDE.md Step 3b: do not write any code yourself. Invoke the `handoff-antigravity` skill now and produce the
@@ -25,7 +25,7 @@ anywhere in `scripts/`, no crontab entry, no doc. The DB also sits on a FUSE-art
 **Surface & Model: Antigravity (handoff via the `handoff-antigravity` skill); Claude Code / Sonnet for the review half.** Textbook Step 3b Antigravity case — new script, mechanical once scoped
 (`sqlite3.Connection.backup()` + retention pruning), non-ambiguous spec, no real-time design decisions. Claude verifies SHA + test count per Step 3b before closing the phase.
 
-**Story spec:** Read the matching story in `docs/plan/full-repo-review-followups/sqlite-backup-cron/stories.md` for the full spec.
+**Story spec:** Read the matching story in `docs/archive/plan/full-repo-review-followups/sqlite-backup-cron/stories.md` for the full spec.
 
 **Commit:** Antigravity executes the commit as part of its own protocol (per `ai_collaboration_plan.md`) — Claude does not draft or run a separate commit for this story.
 

@@ -368,7 +368,7 @@ listing a weekly contract every Tuesday makes it unlikely but not impossible) �
     dependency order: `backbone/` (parse-mode switch + audit-and-fix every existing caller's dynamic values AND static template punctuation for MarkdownV2's reserved-character set — wider than legacy
     Markdown v1, which the epic briefly targeted before this revision), `formatting-rules/` (decimal/alignment spec — money 2dp, strikes integer, Greeks 2dp signed, LTP/Entry 2dp default with a
     documented 1dp exception inside the leg table specifically — plus reusable table-builder helpers), `strategy-rollout/` (per-message-family migration sequenced by risk: IC audit → IC comparison
-    report → 7 strategies' close/roll notifications → approval requests last, coordinated with `docs/plan/full-repo-review-followups/telegram-approval-auth-fix/` — not itself a numbered item on this
+    report → 7 strategies' close/roll notifications → approval requests last, coordinated with `docs/archive/plan/full-repo-review-followups/telegram-approval-auth-fix/` — not itself a numbered item on this
     list, already shipped SHA `5cafc3c`). **Supersedes item 14's TGFMT-2..9** — see that item's note. Full real-caller list (confirmed via code graph, not assumed) and design rationale in the epic's
     `README.md`. **2026-08-07 (message-format-workshop session, docs+scratch only, no `backbone`/`formatting-rules` code exists yet):** ROLL-1's confirmed reference is now
     `scratch/telegram_formats/2026-08-07_ic_eod_audit_v2_telegram_format.py` (`paper_ic_nifty_v2_monthly`, real position data, `parse_mode=MarkdownV2`), superseding the earlier v1-strategy/legacy-Markdown prototype
@@ -1855,7 +1855,7 @@ Moved from TODOS.md's "Near-term Actions" list during the docs/plan reorg that g
   `src/paper/CLAUDE.md`'s "asserts" wording changed to "raises `ValueError`... (never literal `assert` — REVIEW.md G6)" in both occurrences. (3) Step 3 now states the Step 3b routing fork applies
   regardless of file count; Step 2b's three-condition check is now the single authoritative mechanism (AutoTrigger row + `ai_collaboration_plan.md` point back to it); Step 5c's "code changes" trigger
   now uses ANTIGRAVITY.md's precise `.py` in `src/`/`scripts/`/`tests/` scope. Docs-only commit, no code-reviewer gate. See
-  `docs/plan/full-repo-review-followups/protocol-standards-reconciliation/tasks.md` T1.
+  `docs/archive/plan/full-repo-review-followups/protocol-standards-reconciliation/tasks.md` T1.
 - [x] **Fix `nuvama/store.py` purge cutoff timezone** — `src/nuvama/store.py:532` uses naive `datetime.now()` instead of `datetime.now(timezone.utc)`. On a UTC host the retention window is off by
   +5:30, silently retaining or purging the wrong records. Fix: replace with `datetime.now(timezone.utc)`. Source: `docs/archive/reviews/2026-06-11_fable_codebase_review.md` WARNING. ✓ Verified already
   correct at `dc63bba` — `datetime.now(timezone.utc)` was in place; no code change needed.
@@ -1895,10 +1895,10 @@ Moved from TODOS.md's "Near-term Actions" list during the docs/plan reorg that g
   instantiation. See `docs/bugs/bugs.md` BUG-012 and `DECISIONS.md` 2026-07-06 for full writeup. Regression test:
   `tests/unit/strategies/ic/test_paper_ic_snapshot.py::test_process_variant_binds_constructor_args_by_keyword`.
 - [x] **FR-1..FR-9 full-repo-review epic complete (2026-07-06)** — Chairman Synthesis (`docs/plan/full-repo-review/findings/FR-7_synthesis.md`) produced 26 ranked findings (7 CRITICAL, all
-  independently re-derived and confirmed by FR-9, not just re-read). Spawned 9 follow-up stories grouped under the `docs/plan/full-repo-review-followups/` epic (mirrors the `dev-foundation/` epic
+  independently re-derived and confirmed by FR-9, not just re-read). Spawned 9 follow-up stories grouped under the `docs/archive/plan/full-repo-review-followups/` epic (mirrors the `dev-foundation/` epic
   convention — own `README.md` with priority tiers P0–P3 and dependency notes): `portfolio-pnl-critical-fix/`, `sqlite-backup-cron/`, `docs-navigation-and-staleness/`,
   `protocol-standards-reconciliation/`, `logging-migration-completion/`, `greeks-parity-validation/`, `telegram-approval-auth-fix/`, `suppression-hygiene-triage/`, `paper-pnl-golden-tests/` — see
-  `docs/plan/full-repo-review-followups/README.md` for status and priority order. `CLAUDE.md`'s AI Collaboration section revised (FR-1 Step 5 verdict) and FR-8's tooling-surface guide linked from
+  `docs/archive/plan/full-repo-review-followups/README.md` for status and priority order. `CLAUDE.md`'s AI Collaboration section revised (FR-1 Step 5 verdict) and FR-8's tooling-surface guide linked from
   Quick Reference. See `DECISIONS.md` 2026-07-06 entry for the full closing note and deferred/dissenting items.
 - [x] **`telegram-approval-auth-fix` T1 complete (2026-07-07)** — `TelegramGateway._handle_callback`'s auth guard used OR logic (`sender_id != self._chat_id and chat_id_from_msg != self._chat_id`), so
   any member of a group chat the bot was added to could approve/reject real trading decisions — masked only by 1:1-DM deployment topology, not enforced in code. Fixed to a single identity check: `if

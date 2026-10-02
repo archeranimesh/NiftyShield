@@ -1,4 +1,4 @@
-Read `CONTEXT.md` and state `CONTEXT.md ✓` before doing anything else. Then read `docs/plan/full-repo-review-followups/logging-migration-completion/tasks.md` and find the first unchecked box. That is
+Read `CONTEXT.md` and state `CONTEXT.md ✓` before doing anything else. Then read `docs/archive/plan/full-repo-review-followups/logging-migration-completion/tasks.md` and find the first unchecked box. That is
 the only task for this session.
 
 **This story is routed to Antigravity (see "Surface & Model" below for why).** Per CLAUDE.md Step 3b: do not write any code yourself. Invoke the `handoff-antigravity` skill now and produce the
@@ -30,7 +30,7 @@ entrypoints never call `setup_logging()`. LOGGING.md's mandatory rules were elev
 `src/` + 24 `scripts/`), zero design ambiguity, and a pre-commit hook (`no-script-main-logger`, to be extended) gives a hard machine-checkable verification signal — exactly the shape Step 3b
 describes.
 
-**Story spec:** Read the matching story in `docs/plan/full-repo-review-followups/logging-migration-completion/stories.md` for the full spec.
+**Story spec:** Read the matching story in `docs/archive/plan/full-repo-review-followups/logging-migration-completion/stories.md` for the full spec.
 
 **Test gate — blocking:** `python -m pytest tests/unit/ --tb=no -q` All must be green before committing.
 

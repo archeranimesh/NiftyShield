@@ -1,4 +1,4 @@
-Read `CONTEXT.md` and state `CONTEXT.md ✓` before doing anything else. Then read `docs/plan/full-repo-review-followups/docs-navigation-and-staleness/tasks.md` and find the first unchecked box. That is
+Read `CONTEXT.md` and state `CONTEXT.md ✓` before doing anything else. Then read `docs/archive/plan/full-repo-review-followups/docs-navigation-and-staleness/tasks.md` and find the first unchecked box. That is
 the only task for this session.
 
 **This story is routed to Antigravity (see "Surface & Model" below for why).** Per CLAUDE.md Step 3b: do not write any code yourself. Invoke the `handoff-antigravity` skill now and produce the
@@ -29,7 +29,7 @@ revised 2026-06-26 — a reader following the dead link could land on a supersed
 `ai_collaboration_plan.md`'s 3-5 file ceiling for Antigravity. Docs-only: skip the code-reviewer gate per Step 5c, but Claude should still `grep` for the dead paths after the handoff returns to
 confirm no other doc still references them.
 
-**Story spec:** Read the matching story in `docs/plan/full-repo-review-followups/docs-navigation-and-staleness/stories.md` for the full spec.
+**Story spec:** Read the matching story in `docs/archive/plan/full-repo-review-followups/docs-navigation-and-staleness/stories.md` for the full spec.
 
 **Commit:** Antigravity executes the commit as part of its own protocol (per `ai_collaboration_plan.md`) — Claude does not draft or run a separate commit for this story.
 

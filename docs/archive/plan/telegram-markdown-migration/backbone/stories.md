@@ -202,7 +202,7 @@ change, and these are the close-notification paths for every live strategy.
 See `TODO.md`'s "Correction (2026-08-12)" section for the full write-up.
 
 **Same escaping treatment as MD-3.** `send_approval_request` is the highest-consequence one in this task — it's the interactive-keyboard trade-approval path. Read
-`docs/plan/full-repo-review-followups/telegram-approval-auth-fix/tasks.md` first to confirm its current state (was open, shipped SHA `5cafc3c` as of 2026-08-07 per this epic's README — re-verify,
+`docs/archive/plan/full-repo-review-followups/telegram-approval-auth-fix/tasks.md` first to confirm its current state (was open, shipped SHA `5cafc3c` as of 2026-08-07 per this epic's README — re-verify,
 don't trust that note if time has passed) before touching the same method, to avoid diff conflicts with that story if it has since gained new tasks.
 
 **Tests:** same pattern as MD-3 — one test per script/method proving underscore-bearing dynamic values survive escaping. For `send_approval_request` specifically, also assert the callback button
