@@ -263,6 +263,13 @@ logic). Then standardise every close notification to two lines with fixed labels
 **Related:** the `scripts/dev/cycle_pnl_report.py` CLI (per-cycle P&L / exit reason / days in trade for IC-all / CC / PP / Collar) shares the cycle-reconstruction helper; build the helper under
 `src/paper/` first, then this bug's notification fix wires it into the five close paths.
 
+**Implementation progress (2026-10-02):** B043.6 — `CloseLegRow.entry/exit` are `Decimal`; new `_price_1dp()` quantizes to 1 dp `ROUND_HALF_UP` and raises `TypeError` on a non-`Decimal` (mirrors
+`format_money`). `float(...)` casts removed at every constructor (IC v1/v2, CSP, CC, PP, collar `_send_close_notification`, `auto_close`, `record_paper_trade` fallback → `Decimal("0")`). Tests: 72.55
+→ 72.6, 10.25 → 10.3; float rejected. Real `code-reviewer`: 0 CRITICAL / ERROR; deferred WARNING — `auto_close` legs are `list[dict[str, Any]]`, so mypy cannot see the `Decimal` contract (a
+`TypedDict` would). A non-`Decimal` reaching a card now drops that card with a logged warning rather than rendering. **B043.2 re-check:** all five paths already render through the shared
+`format_exit_message` with a cycle figure (`🔁 *Cycle #N:*`) and an inception figure (`📈 *Inception:*`), CSP included — the inconsistency this bug describes was fixed by the UXM epic. Open: the
+requested `Cycle P&L` / `Since inception` labels conflict with the later UXM spec (`docs/archive/plan/telegram-message-unification/unified-exit-message/stories.md` L115-116); the overlay-only `Overlay
+P&L (total realized)` line still duplicates Inception; B043.3 test gap is real either way (no Cycle-line assertion anywhere; collar and `auto_close` assert no footer).
 ---
 
 ## BUG-042 — `721daf9` MarkdownV2 switch broke every unmigrated `TelegramNotifier` cron caller (CC/PP entry, paper snapshot, monitor daemon, pre-market brief) — silent 400 since 2026-08-25
