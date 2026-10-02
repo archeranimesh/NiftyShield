@@ -1278,16 +1278,12 @@ def test_close_card_dte_uses_pre_close_positions_for_date_keyed_legs() -> None:
     assert "*DTE:* 27 " in _close_full_card_dte_line(keys)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-059: IronCondorV1._parse_expiry has no BOD fallback for numeric keys",
-)
 def test_close_card_dte_for_numeric_upstox_keys() -> None:
-    """BUG-059 actual cause: real (numeric) Upstox keys render ``DTE: 0``.
+    """BUG-059 actual cause: real (numeric) Upstox keys rendered ``DTE: 0``.
 
-    IronCondorV1._parse_expiry is regex-only, so ``NSE_FO|51340``-shaped keys
-    return None and the card falls back to 0. The BOD instrument master knows
-    the expiry; the card must use it (same root cause as BUG-018 in v2).
+    IronCondorV1._parse_expiry was regex-only, so ``NSE_FO|51340``-shaped keys
+    returned None and the card fell back to 0. It now resolves the expiry via
+    the BOD instrument master (same root cause as BUG-018 in v2).
     """
     from unittest.mock import patch
 
@@ -1302,6 +1298,46 @@ def test_close_card_dte_for_numeric_upstox_keys() -> None:
         line = _close_full_card_dte_line(keys)
 
     assert "*DTE:* 27 " in line
+
+
+_B059_NUMERIC_KEYS = ["NSE_FO|51340", "NSE_FO|51348", "NSE_FO|51405", "NSE_FO|51417"]
+
+
+def _numeric_key_dte_events(bod_expiry: date | None) -> list[str]:
+    """check_signals on numeric-keyed legs; BOD lookup returns ``bod_expiry``."""
+    from unittest.mock import patch
+
+    lookup = MagicMock()
+    lookup.get_by_key = MagicMock(
+        return_value=None if bod_expiry is None else {"expiry": bod_expiry.isoformat()}
+    )
+    positions = _make_ic_positions(*_B059_NUMERIC_KEYS)
+    with (
+        patch("src.strategy._price_utils.InstrumentLookup.from_file", return_value=lookup),
+        patch("src.strategy.ic_nifty_v1.market_today", return_value=_B059_TODAY),
+    ):
+        events = asyncio.run(IronCondorV1().check_signals(_make_empty_chain(), positions))
+    return [e.event_type for e in events]
+
+
+def test_time_stop_fires_for_numeric_keys_via_bod_expiry() -> None:
+    """BUG-059: live numeric keys at DTE 6 must fire TIME_STOP."""
+    types = _numeric_key_dte_events(_B059_TODAY + timedelta(days=6))
+    assert "TIME_STOP" in types
+
+
+def test_dte_warn_fires_for_numeric_keys_via_bod_expiry() -> None:
+    """BUG-059: live numeric keys at DTE 13 must fire DTE_WARN, not TIME_STOP."""
+    types = _numeric_key_dte_events(_B059_TODAY + timedelta(days=13))
+    assert "DTE_WARN" in types
+    assert "TIME_STOP" not in types
+
+
+def test_numeric_keys_bod_miss_yields_no_dte_events() -> None:
+    """BOD lookup miss → expiry None → no DTE events, no crash."""
+    types = _numeric_key_dte_events(None)
+    assert "TIME_STOP" not in types
+    assert "DTE_WARN" not in types
 
 
 def test_apply_action_close_full_manual_action_does_not_auto_persist() -> None:

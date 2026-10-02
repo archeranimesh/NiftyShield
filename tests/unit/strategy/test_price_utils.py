@@ -263,3 +263,51 @@ def test_resolve_option_expiry_bod_bad_expiry_string_returns_none() -> None:
         result = resolve_option_expiry("NSE_FO|61604", lookup=lookup)
     assert result is None
     assert any("bod_bad_expiry" in e.get("event", "") for e in cap)
+
+
+# ── resolve_option_expiry(load_bod=True) (BUG-059) ────────────────────────────
+# IronCondorV1/V2._parse_expiry delegate here with load_bod=True: the BOD file
+# is loaded only when the regex misses, and a load failure degrades to None.
+
+
+def test_resolve_option_expiry_load_bod_resolves_numeric_key() -> None:
+    from unittest.mock import patch
+
+    from src.strategy._price_utils import resolve_option_expiry
+
+    lookup = _FakeLookup({"NSE_FO|51340": {"expiry": "2026-10-27"}})
+    with patch(
+        "src.strategy._price_utils.InstrumentLookup.from_file", return_value=lookup
+    ) as from_file:
+        result = resolve_option_expiry("NSE_FO|51340", load_bod=True)
+    assert result == date(2026, 10, 27)
+    from_file.assert_called_once()
+
+
+def test_resolve_option_expiry_load_bod_skips_file_for_symbolic_key() -> None:
+    """Regex hit (incl. the strike-after-date IC form) never touches the BOD file."""
+    from unittest.mock import patch
+
+    from src.strategy._price_utils import resolve_option_expiry
+
+    with patch("src.strategy._price_utils.InstrumentLookup.from_file") as from_file:
+        result = resolve_option_expiry("NSE_FO|NIFTY27OCT202622000PE", load_bod=True)
+    assert result == date(2026, 10, 27)
+    from_file.assert_not_called()
+
+
+def test_resolve_option_expiry_load_bod_failure_returns_none() -> None:
+    from unittest.mock import patch
+
+    from src.strategy._price_utils import resolve_option_expiry
+
+    with (
+        patch(
+            "src.strategy._price_utils.InstrumentLookup.from_file",
+            side_effect=OSError("missing"),
+        ),
+        capture_logs() as cap,
+    ):
+        result = resolve_option_expiry("NSE_FO|51340", load_bod=True)
+    assert result is None
+    assert any(e.get("event") == "resolve_option_expiry.bod_load_failed" for e in cap)

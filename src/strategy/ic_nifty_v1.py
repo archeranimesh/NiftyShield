@@ -38,6 +38,7 @@ from src.notifications.formatting import CloseLegRow
 from src.paper.constants import DEFAULT_BOD_PATH
 from src.paper.models import PaperPosition, PaperTrade
 from src.strategy import roll_utils
+from src.strategy._price_utils import resolve_option_expiry
 from src.strategy.ic_close_executor import close_ic_legs, roll_ic_legs
 from src.strategy.ic_expiry_config_v2 import ProfitLockConfig
 from src.strategy.protocol import ApprovedAction, LegClose, LegSpec, SignalEvent
@@ -65,14 +66,6 @@ if TYPE_CHECKING:
 log = structlog.get_logger(__name__)
 
 # ── Regexes ───────────────────────────────────────────────────────────────────
-
-# Matches both live key formats:
-#   "NSE_FO|NIFTY26JUN2026PE24000" → group 1 = "26JUN2026"  (date before strike)
-#   "NSE_FO|NIFTY26JUN202624000PE" → group 1 = "26JUN2026"  (date before PE/CE suffix)
-_EXPIRY_RE = re.compile(
-    r"NSE_FO\|NIFTY(\d{2}[A-Za-z]{3}\d{4})",
-    re.IGNORECASE,
-)
 
 # Matches keys like "NSE_FO|NIFTY23000PE" or "NSE_FO|NIFTY23000CE"
 _STRIKE_RE = re.compile(r"NIFTY(\d+)(PE|CE)", re.IGNORECASE)
@@ -1390,20 +1383,17 @@ class IronCondorV1:
     def _parse_expiry(self, instrument_key: str) -> date | None:
         """Extract the option expiry date from an instrument key.
 
-        Handles keys like ``"NSE_FO|NIFTY29MAY2026PE"`` — returns
-        ``date(2026, 5, 29)``.  Returns ``None`` for numeric or
-        unrecognised key formats.
+        Regex-first for symbolic keys (``NSE_FO|NIFTY29MAY2026PE``), BOD
+        instrument-master fallback for real numeric Upstox keys
+        (``NSE_FO|51340``). BUG-059: the regex-only version returned None
+        for every live leg, so the close card read ``DTE: 0`` and
+        TIME_STOP/DTE_WARN never fired. Delegates to the shared
+        ``_price_utils.resolve_option_expiry`` (same fix as v2's BUG-018).
 
         Args:
             instrument_key: Upstox instrument key for the option leg.
 
         Returns:
-            Parsed expiry date, or ``None`` if key carries no date.
+            Parsed expiry date, or ``None`` if the key can't be resolved.
         """
-        m = _EXPIRY_RE.search(instrument_key)
-        if not m:
-            return None
-        try:
-            return datetime.strptime(m.group(1).upper(), "%d%b%Y").date()
-        except ValueError:
-            return None
+        return resolve_option_expiry(instrument_key, load_bod=True)

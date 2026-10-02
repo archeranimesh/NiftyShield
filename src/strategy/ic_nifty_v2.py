@@ -42,7 +42,6 @@ from typing import TYPE_CHECKING, Literal
 import structlog
 
 from src.instruments.lookup import InstrumentLookup, format_leg_label
-from src.instruments.lookup import parse_expiry as _parse_expiry_epoch
 from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
 from src.notifications.exit_message import ExitKind, ExitMessage, format_exit_message
@@ -51,6 +50,7 @@ from src.notifications.markdown import escape_markdown, mdcode
 from src.paper.constants import DEFAULT_BOD_PATH
 from src.paper.models import PaperPosition, PaperTrade
 from src.strategy import roll_utils
+from src.strategy._price_utils import resolve_option_expiry
 from src.strategy.ic_close_executor import close_ic_legs, roll_ic_legs
 from src.strategy.profit_lock_engine import ProfitLockDecision, ProfitLockEngine, ProfitLockState
 from src.strategy.protocol import ApprovedAction, LegClose, LegSpec, SignalEvent
@@ -72,10 +72,6 @@ log = structlog.get_logger(__name__)
 
 # ── Regexes (copied verbatim from ic_nifty_v1) ───────────────────────────────
 
-_EXPIRY_RE = re.compile(
-    r"NSE_FO\|NIFTY(\d{2}[A-Za-z]{3}\d{4})",
-    re.IGNORECASE,
-)
 _STRIKE_RE = re.compile(r"NIFTY(\d+)(PE|CE)", re.IGNORECASE)
 
 # ── Leg role sets (copied verbatim from ic_nifty_v1) ─────────────────────────
@@ -2494,7 +2490,8 @@ class IronCondorV2:
         Identical root cause to BUG-009 (paper_ic_snapshot.py) and BUG-012's
         ``_find_leg``/``_position_strike`` (this file). Fixed the same way:
         numeric keys fall back to a BOD instrument-master reverse lookup.
-        See docs/bugs/bugs.md BUG-018.
+        See docs/bugs/bugs.md BUG-018. BUG-059 moved the logic into the
+        shared ``_price_utils.resolve_option_expiry`` (also used by v1).
 
         Args:
             instrument_key: Upstox instrument key for the option leg.
@@ -2502,40 +2499,7 @@ class IronCondorV2:
         Returns:
             Parsed expiry date, or None if the key can't be resolved.
         """
-        m = _EXPIRY_RE.search(instrument_key)
-        if m:
-            try:
-                return datetime.strptime(m.group(1).upper(), "%d%b%Y").date()
-            except ValueError:
-                return None
-
-        try:
-            lookup = InstrumentLookup.from_file(DEFAULT_BOD_PATH)
-            inst = lookup.get_by_key(instrument_key)
-            if inst is None:
-                log.warning(
-                    "ic_nifty_v2.expiry_parse_failed",
-                    instrument_key=instrument_key,
-                    reason="not_found_in_bod",
-                )
-                return None
-            expiry_str = _parse_expiry_epoch(inst.get("expiry"))
-            if expiry_str is None:
-                log.warning(
-                    "ic_nifty_v2.expiry_parse_failed",
-                    instrument_key=instrument_key,
-                    reason="no_expiry_field",
-                )
-                return None
-            return date.fromisoformat(expiry_str)
-        except (ValueError, OSError) as exc:
-            log.warning(
-                "ic_nifty_v2.expiry_parse_failed",
-                instrument_key=instrument_key,
-                reason="exception",
-                error=str(exc),
-            )
-            return None
+        return resolve_option_expiry(instrument_key, load_bod=True)
 
     def _log_counterfactual_exit(
         self,

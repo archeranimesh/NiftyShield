@@ -6,15 +6,13 @@ from __future__ import annotations
 import re
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
-from typing import TYPE_CHECKING
 
 import structlog
 
+from src.instruments.lookup import InstrumentLookup
 from src.instruments.lookup import parse_expiry as _parse_expiry_epoch
 from src.models.options import OptionChain, OptionLeg
-
-if TYPE_CHECKING:
-    from src.instruments.lookup import InstrumentLookup
+from src.paper.constants import DEFAULT_BOD_PATH
 
 log = structlog.get_logger(__name__)
 
@@ -26,9 +24,12 @@ log = structlog.get_logger(__name__)
 _STRIKE_RE = re.compile(r"NIFTY(\d+)(PE|CE)", re.IGNORECASE)
 
 # Matches keys like "NSE_FO|NIFTY29MAY2026PE" → group 1 = "29MAY2026".
-# Same symbolic-key-only limitation as `_STRIKE_RE` above — real numeric
-# Upstox keys never match and must fall back to BOD JSON (`resolve_option_expiry`).
-_EXPIRY_RE = re.compile(r"NSE_FO\|NIFTY(\d{2}[A-Za-z]{3}\d{4})(PE|CE)", re.IGNORECASE)
+# No PE/CE anchor after the date: IC fixtures also embed a strike there
+# ("NSE_FO|NIFTY26JUN202624000PE") — BUG-059 moved IronCondorV1/V2 onto
+# this helper. Same symbolic-key-only limitation as `_STRIKE_RE` above — real
+# numeric Upstox keys never match and must fall back to BOD JSON
+# (`resolve_option_expiry`).
+_EXPIRY_RE = re.compile(r"NSE_FO\|NIFTY(\d{2}[A-Za-z]{3}\d{4})", re.IGNORECASE)
 
 
 def find_option_leg(
@@ -115,6 +116,8 @@ def _resolve_via_bod(
 def resolve_option_expiry(
     instrument_key: str,
     lookup: InstrumentLookup | None = None,
+    *,
+    load_bod: bool = False,
 ) -> date | None:
     """Extract an option leg's expiry date from its instrument key.
 
@@ -135,6 +138,10 @@ def resolve_option_expiry(
         lookup: Optional ``InstrumentLookup`` (BOD JSON) used to resolve the
             expiry for real numeric instrument keys that the regex cannot
             parse. If omitted, only symbolic keys resolve.
+        load_bod: When ``lookup`` is omitted and the regex misses, load the
+            BOD JSON from ``DEFAULT_BOD_PATH`` (non-fatal on failure). Lazy so
+            symbolic keys never touch the file. Used by IronCondorV1/V2
+            (BUG-018, BUG-059).
 
     Returns:
         Parsed expiry date, or ``None`` if the key can't be resolved by
@@ -145,6 +152,13 @@ def resolve_option_expiry(
         try:
             return datetime.strptime(m.group(1).upper(), "%d%b%Y").date()
         except ValueError:
+            return None
+
+    if lookup is None and load_bod:
+        try:
+            lookup = InstrumentLookup.from_file(DEFAULT_BOD_PATH)
+        except (ValueError, OSError) as exc:
+            log.warning("resolve_option_expiry.bod_load_failed", key=instrument_key, error=str(exc))
             return None
 
     if lookup is None:
