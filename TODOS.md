@@ -60,7 +60,7 @@ Snapshot (authoritative list: `bugs.md`) —
 
 - **BUG-030** — `_overlay_type_groups` elif-precedence orphans the `overlay_cc` leg when `overlay_collar_put` is also present same-day. Next: **B030.1** (entry-side tagging question, blocks the
   grouping fix).
-- **BUG-066** — `signal_track_v1` exit leaves its SELL leg `OPEN` (7 stale legs, +1 per exit); backfill also clears 11 pre-BUG-062 IC residue legs. Next: **B066.1**.
+- **BUG-066** — `signal_track_v1` exit leaves its SELL leg `OPEN` (7 stale legs, +1 per exit); backfill also clears 11 pre-BUG-062 IC residue legs. Next: **B066.3** (live-host backfill).
 - **BUG-019** — diagnostic-only, not actionable (awaiting a live trading day's data before a fix is scoped).
 
 Feature-vs-bug priority is chosen at session start via `/work`. A bug urgent enough to pre-empt all feature work should be raised with Animesh directly — it is not expressed by reordering either list.
@@ -88,6 +88,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-02] BUG-066 fix `1bc9d29`: `close_signal_entry` closes the exit SELL row in the same transaction; `code-reviewer` clean. Open: B066.3 live-host backfill (dry-run expects 18 legs), then
+  B066.4 close.
 - [2026-10-02] BUG-037 closed: B037.6 real `code-reviewer` on `5369c0e` — 0 CRITICAL/ERROR, no drift; entry + checklist archived. Two further unwired close paths (`PaperExecutor.apply`,
   `CollarOverlayV1._close_both_legs`) go to BUG-067.
 - [2026-10-02] Bug decisions recorded in `DECISIONS.md`: B060.1 — expired legs settle at intrinsic vs the NSE final settlement price (expiry-day NIFTY 50 close), fail-closed, no last-mark fallback;

@@ -47,7 +47,7 @@ the collar's `CLOSE_AND_REENTER_COLLAR` path (`OverlayCloser.close_collar_all` a
 | Field | Value |
 |---|---|
 | Severity | **Low** — `paper_trades.state` staleness on flat legs, same category as BUG-035 / BUG-037; no live signal or P&L reads the SELL row's state today |
-| Status | 🔴 Open |
+| Status | 🟡 Fix in progress — fix `1bc9d29` (B066.1–2) landed 2026-10-02; live-host backfill (B066.3) pending |
 | Discovered | 2026-10-02 — re-checking BUG-037 against the live DB (`backfill_mark_trade_closed_overlay --dry-run` found 18 stale flat legs, all post-`5369c0e`) |
 | Location | `src/strategy/signal_track_v1.py` exit path (~L773, `record_trade(sell_trade)` → `close_signal_entry`); `src/paper/store.py::close_signal_entry` (`UPDATE … WHERE id = ?`) |
 
@@ -71,6 +71,12 @@ and no executor log line, most likely manual `record_paper_trade` runs). Both wr
 
 **Cross-refs:** BUG-037 (same shape, different call sites), BUG-062 (the `record_paper_trade` fix that closed the compensation path), BUG-057 (the race that triggered the LEAPS compensation).
 
+
+**Implementation progress (2026-10-02):** `PaperStore.close_signal_entry` now runs a second `UPDATE` in the same transaction, after the by-id flip and its not-found raise: every `OPEN` row matching
+the entry row's `(strategy_name, leg_role, instrument_key)` (row-value subquery) goes to `CLOSED`. `mark_trade_closed` was not reused — it opens its own connection and would break the single
+transaction. Tests (`tests/unit/paper/test_signal_store.py`): SELL row flipped too; other open legs untouched; bad `trade_id` raises and writes nothing. B066.2 real `code-reviewer`: 0 CRITICAL / ERROR
+— one-at-a-time entry guard rules out closing a re-entry; all signal-track `state` readers unaffected. Deferred: WARNING on the `_states_by_key_action` test helper (last-writer-wins dict), INFO on a
+different-`strategy_name` isolation case and a two-cycle stale-row test.
 ---
 
 ## BUG-060 — Expired paper overlay legs are never settled or closed; they stay `OPEN` in `paper_trades` after expiry and block the next bootstrap entry
