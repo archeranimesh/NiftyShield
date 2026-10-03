@@ -32,20 +32,6 @@
 
 ---
 
-## BUG-069 — IC entry "BLOCKED" Telegram alert can be lost: `_gate_alert` fires a background task and the script `sys.exit(1)`s immediately
-
-| Field | Value |
-|---|---|
-| Severity | **Low** — the abort itself is correct (no legs placed); only the operator alert may not arrive |
-| Status | 🔴 Open |
-| Discovered | 2026-10-02 — BUG-057 abort-on-clear-failure review (`77dfc51`) |
-| Location | `scripts/strategies/ic/paper_ic_entry.py` + `paper_ic_entry_v2.py` — `_gate_alert(...)` followed by `sys.exit(1)` at ~25 pre-leg abort points |
-
-**Root cause:** `_gate_alert` schedules the send with `create_task` and returns; `sys.exit` follows before the loop runs it. Pre-existing pattern, not introduced by BUG-057. **Fix:** await the send
-with a bounded timeout before exiting, at every abort point.
-
----
-
 ## BUG-070 — Closing-trade insert and `mark_trade_closed` run in separate SQLite transactions; a crash between them leaves a flat leg `OPEN`
 
 | Field | Value |

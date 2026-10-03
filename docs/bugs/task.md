@@ -57,12 +57,7 @@
 
 > BUG-068 closed 2026-10-03 (SHA `5e79fc5`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
-## BUG-069 — IC entry "BLOCKED" Telegram alert can be lost: fire-and-forget send then `sys.exit(1)`
-
-Detail: `docs/bugs/bugs.md` BUG-069.
-
-- [ ] **B069.1** — `_gate_alert` awaits the send (bounded timeout) before every pre-leg `sys.exit` in `paper_ic_entry.py` and `_v2.py`. Tests: alert awaited before exit; send failure still exits 1.
-- [ ] **B069.2** — Real `code-reviewer`; commit; close + archive.
+> BUG-069 closed 2026-10-03 (SHA `13bf3ab`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
 ## BUG-070 — Closing-trade insert and `mark_trade_closed` run in separate transactions
 

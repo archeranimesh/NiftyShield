@@ -2881,3 +2881,20 @@ failed load is not cached so a transient file problem retries on the next tick. 
 DTE still resolves). Full unit suite green (run manually; `test-runner` blocked by BUG-071). Real `code-reviewer`: clean, no findings.
 
 ---
+
+## BUG-069 — IC entry "BLOCKED" Telegram alert can be lost: `_gate_alert` fires a background task and the script `sys.exit(1)`s immediately
+
+| Field | Value |
+|---|---|
+| Severity | **Low** — the abort itself is correct (no legs placed); only the operator alert may not arrive |
+| Status | ✅ Fixed — `13bf3ab` |
+| Discovered | 2026-10-02 — BUG-057 abort-on-clear-failure review (`77dfc51`) |
+| Location | `scripts/strategies/ic/paper_ic_entry.py` + `paper_ic_entry_v2.py` — `_gate_alert(...)` followed by `sys.exit(1)` at ~25 pre-leg abort points |
+
+**Root cause:** `_gate_alert` schedules the send with `create_task` and returns; `sys.exit` follows before the loop runs it. Pre-existing pattern, not introduced by BUG-057. **Fix:** await the send
+with a bounded timeout before exiting, at every abort point.
+
+**Implementation progress:** `run()` in `paper_ic_entry.py`/`_v2.py` now wraps the old body (`_run_entry`) in `try/finally`; `_gate_alert` registers its send tasks and `ic_entry_gates.drain_alerts` awaits them (10s bound, failures/timeouts swallowed) so every abort path — incl. the shared sync gates — delivers its alert. Tests: 3 `drain_alerts` unit tests + per-script alert-before-exit (send ok/fails). Real `code-reviewer`: 0 CRITICAL/ERROR; 1 WARNING (`CancelledError` from `t.exception()`) fixed.
+
+---
+

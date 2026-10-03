@@ -1001,3 +1001,10 @@ Detail: `docs/bugs/bugs.md` BUG-068.
 - [x] **B068.1** — Per-instance `BodLookupCache` in `_price_utils.py`; IC v1/v2 `_parse_expiry` delegate to it, `load_bod` kwarg removed; tests: single load across calls, failure not cached. | SHA
   `5e79fc5`
 - [x] **B068.2** — Real `code-reviewer` (clean, no findings); commit; close + archive. | SHA `5e79fc5`
+
+## BUG-069 — IC entry "BLOCKED" Telegram alert can be lost: fire-and-forget send then `sys.exit(1)`
+
+Detail: `docs/bugs/bugs.md` BUG-069.
+
+- [x] **B069.1** — `_gate_alert` awaits the send (bounded timeout) before every pre-leg `sys.exit` in `paper_ic_entry.py` and `_v2.py`. Tests: alert awaited before exit; send failure still exits 1. | SHA `13bf3ab`
+- [x] **B069.2** — Real `code-reviewer`; commit; close + archive. | SHA `13bf3ab`
