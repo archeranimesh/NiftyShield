@@ -76,7 +76,9 @@ slug. If it did **not** recur in 3+ such sessions, tick the box — the hook wor
 - **DEBT-14** — `context-tree-row-missing-for-new-module` (Count 5). No remediation exists. Every doc-freshness hook proxies "docs behind code" by a src-commit count and never checks whether a
   `src/<module>/` dir has a matching `CONTEXT_TREE.md` row or `CONTEXT.md` "What Exists" line. `src/signals/` was created by an Antigravity handoff at S1.1 (`8d295c6`) and S1.2/S1.3/S2.1 each added
   code (`store.py` at S2.1, `2aa5979`) without ever backfilling the row. Build a `check_context_tree_coverage.py` preflight that lists `src/*/` + `scripts/*/` dirs absent from `CONTEXT_TREE.md`, wire
-  it into `commit_preflight.py`, then verify against the `src/signals/` backfill commit. Standalone — no trigger wait.
+  it into `commit_preflight.py`, then verify against the `src/signals/` backfill commit. Standalone — no trigger wait. Also absorbs `context-md-what-exists-not-updated-new-module` (Count 5, drained
+  2026-10-02): the gap extends to new *files* in an existing module — BUG-060 added `src/strategy/expiry_settlement.py` + `paper_expiry_settle.py` with no `CONTEXT.md` line — so the preflight should
+  diff new `src/`/`scripts/` files too, not only dirs.
 - **DEBT-15** — `ruff-format-check-skipped-precommit-abort` (Count 5). Remediation: SWEEP-4 `commit_preflight.py` staged `ruff format --check` blocker (`2b85b84`). It fires before the commit rather
   than letting the pre-commit hook abort it, but a `ruff format` + re-stage cycle still costs a round trip when only `ruff check` + an `awk` length sweep were run pre-stage (S5.3: `✗ ruff-format` on
   `record_signal_outcome.py`). Run `token_audit.py` / grep session-close reports over the 3 sessions after `2b85b84`; if the slug did not recur, tick the box. If it recurred, open a protocol/model
