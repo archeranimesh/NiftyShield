@@ -17,6 +17,7 @@ from typing import Any
 
 import structlog
 
+from src.client.exceptions import DataFetchError
 from src.client.upstox_market import UpstoxMarketClient, parse_upstox_option_chain
 from src.config import settings
 from src.db import connect
@@ -110,24 +111,30 @@ def _fetch_and_snapshot(
     conn: sqlite3.Connection | None,
     dry_run: bool,
 ) -> list[GammaChainSnapshot]:
-    """Fetch each expiry's chain and derive snapshot rows (persistence is B2.3).
+    """Fetch each expiry's chain, derive snapshot rows and persist them.
 
-    Prior-day OI is read once per expiry. With ``dry_run`` no store method is
-    called, so ``oi_change_1d`` is None for every row.
+    Prior-day OI is read once per expiry. A ``DataFetchError`` on one expiry is
+    logged and skipped; store errors propagate so ``connect()`` rolls back. With
+    ``dry_run`` no store method is called, so ``oi_change_1d`` is None for every
+    row and nothing is written.
     """
     snaps: list[GammaChainSnapshot] = []
     for expiry in expiries:
-        chain = _fetch_chain(client, expiry)
+        try:
+            chain = _fetch_chain(client, expiry)
+        except DataFetchError as exc:
+            logger.error("gamma_daily_watch.fetch_failed", expiry=str(expiry), error=str(exc))
+            continue
         if chain is None:
             continue
         prior_oi = {} if dry_run or conn is None else store.get_prior_oi(conn, expiry, today)
         rows = derive_snapshots(chain, expiry, today, snapshot_time, prior_oi)
-        logger.info(
-            "gamma_daily_watch.snapshots_derived",
-            expiry=str(expiry),
-            rows=len(rows),
-            dry_run=dry_run,
-        )
+        if dry_run or conn is None:
+            logger.info("gamma_daily_watch.dry_run_skip", expiry=str(expiry), rows=len(rows))
+        else:
+            for snap in rows:
+                store.insert_chain_snapshot(conn, snap)
+            logger.info("gamma_daily_watch.snapshots_written", expiry=str(expiry), rows=len(rows))
         snaps.extend(rows)
     return snaps
 

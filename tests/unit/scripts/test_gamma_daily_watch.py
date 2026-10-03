@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import sqlite3
 import sys
 from contextlib import contextmanager
 from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
+import pytest
 from structlog.testing import capture_logs
 
 from scripts.pipeline.gamma_daily_watch import (
@@ -16,6 +18,7 @@ from scripts.pipeline.gamma_daily_watch import (
     main,
     resolve_expiries,
 )
+from src.client.exceptions import DataFetchError
 from src.models.options import OptionChain, OptionChainStrike, OptionLeg
 
 
@@ -273,3 +276,95 @@ def test_fetch_and_snapshot_skips_expiry_with_no_chain() -> None:
         )
 
     assert snaps == []
+
+
+def _three_strike_chain() -> OptionChain:
+    chain = _chain_with_one_strike()
+    leg = chain.strikes[Decimal("25000")].ce
+    strikes = {Decimal(k): OptionChainStrike(ce=leg, pe=leg) for k in (24900, 25000, 25100)}
+    return OptionChain(underlying_spot=chain.underlying_spot, expiry=chain.expiry, strikes=strikes)
+
+
+def test_persistence_called_per_snapshot() -> None:
+    """Each derived row is inserted once: 3 strikes x 2 option types = 6 calls."""
+    store = MagicMock()
+    store.get_prior_oi.return_value = {}
+    conn = MagicMock()
+
+    with patch(
+        "scripts.pipeline.gamma_daily_watch._fetch_chain", return_value=_three_strike_chain()
+    ):
+        snaps = _fetch_and_snapshot(
+            MagicMock(), (date(2026, 4, 21),), date(2026, 4, 20), "09:20", store, conn, False
+        )
+
+    assert len(snaps) == 6
+    assert store.insert_chain_snapshot.call_count == 6
+    store.insert_chain_snapshot.assert_any_call(conn, snaps[0])
+
+
+def test_dry_run_skips_persistence() -> None:
+    """dry_run never calls insert_chain_snapshot and logs the skipped count."""
+    store = MagicMock()
+    store.get_prior_oi.return_value = {}
+
+    with patch(
+        "scripts.pipeline.gamma_daily_watch._fetch_chain", return_value=_three_strike_chain()
+    ):
+        with capture_logs() as logs:
+            _fetch_and_snapshot(
+                MagicMock(),
+                (date(2026, 4, 21),),
+                date(2026, 4, 20),
+                "09:20",
+                store,
+                MagicMock(),
+                True,
+            )
+
+    store.insert_chain_snapshot.assert_not_called()
+    assert any(e["event"] == "gamma_daily_watch.dry_run_skip" and e["rows"] == 6 for e in logs)
+
+
+def test_single_expiry_failure_does_not_abort() -> None:
+    """A DataFetchError on the first expiry is logged; the second is still processed."""
+    store = MagicMock()
+    store.get_prior_oi.return_value = {}
+    effects = [DataFetchError("boom"), _chain_with_one_strike()]
+
+    with patch("scripts.pipeline.gamma_daily_watch._fetch_chain", side_effect=effects):
+        with capture_logs() as logs:
+            snaps = _fetch_and_snapshot(
+                MagicMock(),
+                (date(2026, 4, 21), date(2026, 4, 28)),
+                date(2026, 4, 20),
+                "09:20",
+                store,
+                MagicMock(),
+                dry_run=False,
+            )
+
+    assert len(snaps) == 2
+    assert store.insert_chain_snapshot.call_count == 2
+    assert any(e["log_level"] == "error" for e in logs)
+
+
+def test_store_error_propagates() -> None:
+    """A store write failure is not swallowed (connect() must roll back)."""
+    store = MagicMock()
+    store.get_prior_oi.return_value = {}
+    store.insert_chain_snapshot.side_effect = sqlite3.OperationalError("disk")
+
+    with patch(
+        "scripts.pipeline.gamma_daily_watch._fetch_chain", return_value=_chain_with_one_strike()
+    ):
+        with pytest.raises(sqlite3.OperationalError):
+            _fetch_and_snapshot(
+                MagicMock(),
+                (date(2026, 4, 21),),
+                date(2026, 4, 20),
+                "09:20",
+                store,
+                MagicMock(),
+                False,
+            )
