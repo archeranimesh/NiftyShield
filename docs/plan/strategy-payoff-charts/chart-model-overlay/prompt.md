@@ -24,8 +24,8 @@ The Stockmock reference chart shows more than the expiry payoff: a T+0 curve (to
 ## Scope guard
 
 **In bounds:** new module `src/pricing/expected_move.py` (expected-move + POP math on top of the `greeks-bs-fallback/` pricer); a shared ATM-IV accessor (V1 has none); a generic T+0 P&L series builder
-over `PayoffLeg`s; additive extensions to `src/notifications/payoff_chart.py` (`render_payoff_png` / `send_payoff_chart` gain optional args); an optional market-context hook on `PayoffAdapter` that
-supplies per-leg IV, mid and DTE — so the five call sites `chart-core/` wired need no edit.
+over `PayoffLeg`s; additive extensions to `src/notifications/payoff_chart.py` (`render_payoff_png` / `send_payoff_chart` gain optional args); an optional `MarketAware` capability Protocol (kept off
+`PayoffAdapter` so non-overlay adapters implement no stubs) that supplies per-leg IV, mid and DTE — so the five call sites `chart-core/` wired need no edit.
 
 **Out of bounds:** `src/pricing/black_scholes.py` and `src/pricing/implied_vol.py` themselves (owned by `greeks-bs-fallback/` — consume, do not edit); the three modeling decisions (risk-free rate, DTE
 convention, delta tolerance — inherited from `greeks-bs-fallback/` GF-1, use whatever it decided); the expiry payoff trapezoid + stat strip basics (done in `chart-core/`); any DB schema change.
@@ -48,7 +48,7 @@ Changes `src/` and `scripts/` behaviour (richer chart). Not docs/tooling only.
 - **MO-4** — draw the blue dashed T+0 curve on the chart.
 - **MO-5** — draw the ±1σ/±2σ verticals + shaded bands.
 - **MO-6** — add POP to the stat strip.
-- **MO-7** — optional `market(ctx)` hook on `PayoffAdapter` + `send_payoff_chart` computes the overlay from it.
+- **MO-7** — `MarketAware` capability Protocol + `send_payoff_chart` computes the overlay from it.
 - **MO-8** — IC adapters implement the hook at all five lifecycle points (entry, EOD, close).
 - **MO-9** — docs close (epic complete).
 

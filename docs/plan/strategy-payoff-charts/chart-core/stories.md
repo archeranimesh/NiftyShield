@@ -28,9 +28,14 @@ No DB schema change anywhere in this story — no `schema.md`.
   None` or `closed_trades` is empty. `self._notifier` is a `TelegramGateway` injected at construction (`scripts/monitor_daemon.py`).
 
 **Design in one paragraph.** Payoff math is strategy-agnostic: a strategy is a list of `PayoffLeg`s (strike, kind, signed qty, entry price) and expiry P&L is the sum of per-leg `qty · (intrinsic −
-entry)`. Which strategies get a chart is decided by an **explicit, opt-in registry** (`@register_payoff(name)` — PC-10): an unregistered strategy gets no chart and no error. Iron Condors register
-themselves in this epic (PC-13); every future strategy adds one registration line (and an adapter only if the default positions-derived one is not enough). All senders go through one non-raising entry
-point, `send_payoff_chart` (PC-11).
+entry)`. The math, registry and error types live in a **leaf package `src/payoff/`** that imports nothing from `src.strategy` or `src.notifications` (the dependency rule — enforced by a test in PC-2).
+Which strategies get a chart is decided by an **explicit, opt-in registry** (`@register_payoff(name)` — PC-10): a strategy that is not registered gets no chart, and the sender logs a *warning* (wired
+sites are expected to be registered, so silence would hide a wiring bug). Registrations are collected in **one explicit module, `src/strategy/payoff_registrations.py`** (PC-13), imported by every
+wired site — never as an import side effect of a strategy module. All senders go through one non-raising entry point, `send_payoff_chart` (PC-11), which depends on a `PhotoSender` Protocol, not a
+concrete gateway.
+
+**Dependency rule (one-directional, no cycles):** `src.payoff` ← `src.notifications.payoff_chart` ← wired call sites; `src.payoff` ← `src.strategy.payoff_registrations` ← wired call sites.
+`src.payoff` depends on nothing project-internal except `src.paper.models.PaperPosition` *types* under `TYPE_CHECKING` only (or on a local `Protocol` mirroring its fields — decide in PC-10).
 
 ---
 
@@ -55,8 +60,11 @@ the path mode) and confirm this folder is clean. (Epic originally scaffolded as 
 ## PC-2 — `PayoffLeg`, `StrategyPayoff`, `compute_payoff`
 
 **Files to change / create:**
-- `src/strategy/payoff.py` — new module (package `src/strategy/` already has `__init__.py`).
-- `tests/unit/strategy/test_payoff.py` — new.
+- `src/payoff/__init__.py` — new leaf package (one-line comment is enough; required so the graph indexes it).
+- `src/payoff/core.py` — new: `PayoffLeg`, `StrategyPayoff`, `compute_payoff`.
+- `src/payoff/errors.py` — new: `PayoffError` (base), `InvalidLegsError(PayoffError, ValueError)`, `DuplicateRegistrationError(PayoffError)`, `RenderError(PayoffError)`, `SendError(PayoffError)` — the
+  module-boundary exception hierarchy.
+- `tests/unit/payoff/__init__.py`, `tests/unit/payoff/test_core.py`, `tests/unit/payoff/test_import_boundary.py` — new.
 
 **Before any code (graph queries):**
 - `get_code_snippet("OptionLeg")`, `get_code_snippet("PaperPosition")` — exact field names for the leg inputs.
@@ -77,7 +85,7 @@ the path mode) and confirm this folder is clean. (Epic originally scaffolded as 
    - Otherwise `max_profit = max(values)`, `max_loss = min(values)` over `{0} ∪ strikes`; a bounded side where the extremum is ≥ 0 / ≤ 0 respectively still returns the number (a risk-free structure is
      legal, just unusual).
    - `breakevens`: linearly interpolate every sign change between consecutive evaluation points (including the segment past the top strike when its slope crosses zero). Exact zeros are included once.
-   - Raise `ValueError` on an empty leg list or an option leg with `strike is None` — a malformed leg set is a programming error at the adapter, not a runtime condition.
+   - Raise `InvalidLegsError` on an empty leg list or an option leg with `strike is None` — a malformed leg set is a programming error at the adapter, not a runtime condition.
    - `Decimal` only; Google-style docstring; no I/O.
 4. Do **not** special-case any strategy. IC, CSP, CC, Collar and everything later must fall out of the same scan.
 
@@ -86,7 +94,9 @@ the path mode) and confirm this folder is clean. (Epic originally scaffolded as 
 - `test_compute_payoff_skewed_wings` — unequal wings → max_loss uses the wider wing.
 - `test_compute_payoff_naked_short_call_unbounded_loss` — single short CE → `max_loss is None`, `rr_ratio is None`, one breakeven.
 - `test_compute_payoff_long_call_unbounded_profit` — single long CE → `max_profit is None`.
-- `test_compute_payoff_empty_legs` / `test_compute_payoff_option_without_strike` — `ValueError`.
+- `test_compute_payoff_empty_legs` / `test_compute_payoff_option_without_strike` — `InvalidLegsError`.
+- `test_payoff_package_import_boundary` — AST-walk every module under `src/payoff/` and assert no import of `src.strategy` or `src.notifications` (the automated dependency-direction check; runs
+  offline).
 - `test_compute_payoff_zero_net_premium` — no crash, breakevens still ordered.
 
 **Commit:** `feat(strategy): add strategy-agnostic expiry payoff math (compute_payoff)`
@@ -96,8 +106,8 @@ the path mode) and confirm this folder is clean. (Epic originally scaffolded as 
 ## PC-3 — `expiry_pnl_at` + `expiry_pnl_series`
 
 **Files to change / create:**
-- `src/strategy/payoff.py` — add two functions.
-- `tests/unit/strategy/test_payoff.py` — add cases.
+- `src/payoff/core.py` — add two functions.
+- `tests/unit/payoff/test_core.py` — add cases.
 
 **What to implement:**
 
@@ -120,7 +130,7 @@ the path mode) and confirm this folder is clean. (Epic originally scaffolded as 
 ## PC-4 — Acceptance matrix
 
 **Files to change / create:**
-- `tests/unit/strategy/test_payoff_acceptance.py` — new (tests only).
+- `tests/unit/payoff/test_acceptance.py` — new (tests only).
 
 **What to implement:** four named, hand-computed fixtures, each asserting `max_profit`, `max_loss`, `breakevens` and a spot-by-spot `expiry_pnl_at` spot-check. Put the arithmetic in a comment above
 each fixture so a reader can verify it without running anything.
@@ -148,7 +158,8 @@ message.
 
 **What to implement:**
 
-1. `import matplotlib; matplotlib.use("Agg")` at module top, before `pyplot`.
+1. Build the figure with the object-oriented API — `from matplotlib.figure import Figure` + `FigureCanvasAgg` — **not `pyplot`**. `pyplot` keeps process-global figure state and is not thread-safe, and
+   the render is CPU-bound work that must not block the event loop (see PC-11); a `Figure` owned by the call is safe to render off-thread and needs no `plt.close`.
 2. `render_payoff_png(payoff: StrategyPayoff, *, spot: Decimal | None = None, current_pnl: Decimal | None = None, dte: int | None = None, margin: Decimal | None = None, title: str = "") -> bytes`:
    - x-range: from `min(key_spots) − 1.5·span` to `max(key_spots) + 1.5·span` where `span = max(key_spots) − min(key_spots)` (fallback `0.1·spot` / `0.1·strike` when there is a single strike). Include
      `spot` in the range when given. Never extend below 0.
@@ -159,7 +170,8 @@ message.
    - If `current_pnl` given: a marker dot at `(spot, current_pnl)` (needs `spot` too), labelled like Stockmock's `Target P&L : <₹> (<%>)` where % is `current_pnl / margin` when available else
      `current_pnl / max_profit` (omit the % when `max_profit is None`).
    - Title: `title` as passed — the caller supplies strategy name + expiry + DTE.
-   - Axis labels; y grid at 0. Render to `io.BytesIO` via `fig.savefig(buf, format="png", dpi=…, bbox_inches="tight")`; `plt.close(fig)`; return `buf.getvalue()`.
+   - Axis labels; y grid at 0. Render to `io.BytesIO` via `fig.savefig(buf, format="png", dpi=…, bbox_inches="tight")`; return `buf.getvalue()`. Wrap any matplotlib failure in `RenderError` (never
+     leak a matplotlib exception type).
    - Theme-agnostic, single committed look (light background) — this is an image, not a web page.
 3. Money / strike formatting for labels goes through the `FORMATTING.md` helpers in `src/notifications/formatting.py` (`format_money`, `format_strike`) — do not hand-format.
 4. A structured log line per render (`payoff_chart.rendered`, with title + byte size) per `LOGGING.md`.
@@ -169,7 +181,7 @@ message.
 - `test_render_minimal` — only `payoff` passed → still valid PNG.
 - `test_render_unbounded_structure` — naked short call payoff → valid PNG (no crash on `max_loss is None`).
 - `test_render_full` — all optional args → valid PNG (smoke; no pixel assertions).
-- `test_render_closes_figure` — `plt.get_fignums()` empty after the call.
+- `test_render_does_not_touch_pyplot` — `matplotlib.pyplot` figure registry stays empty after the call (`'matplotlib.pyplot' not in sys.modules` or `plt.get_fignums() == []`).
 
 **Commit:** `feat(notifications): render strategy expiry payoff chart to PNG (matplotlib)`
 
@@ -267,70 +279,90 @@ up to `len(CONFIGS) + len(CONFIGS_V2)` variants → that many text messages + th
 ## PC-10 — Payoff registry (opt-in) + default adapter
 
 **Files to change / create:**
-- `src/strategy/payoff_registry.py` — new.
-- `tests/unit/strategy/test_payoff_registry.py` — new.
+- `src/payoff/registry.py` — new: `PayoffContext`, the adapter Protocols, `PayoffRegistry`, module-level default registry + `register_payoff` / `get_adapter`, `DefaultPositionAdapter`.
+- `tests/unit/payoff/test_registry.py` — new.
 
 **Before any code:** `get_code_snippet("PaperPosition")`, `search_graph("InstrumentLookup")` and `get_code_snippet` on its strike-resolving method — the default adapter needs a strike per option
-position. Confirm what a closed (flat) position and an unresolvable key look like (`option_type is None`).
+position. Confirm what a closed (flat) position and an unresolvable key look like (`option_type is None`). Decide how `src/payoff` refers to `PaperPosition` without importing `src.paper` at runtime
+(`TYPE_CHECKING` import, or a small local `PositionLike` Protocol with the five fields it reads) — the leaf rule in the header forbids a runtime dependency on strategy / notifications and prefers none
+on paper.
 
 **What to implement:**
 
-1. `PayoffContext` — frozen dataclass handed to an adapter: `positions: Sequence[PaperPosition]`, `spot: Decimal | None`, `lot_size: int`, `strategy_name: str`, plus a free-form `extras: Mapping[str,
-   object] = {}` for strategy-specific inputs.
-2. `PayoffAdapter` — `Protocol`: `def legs(self, ctx: PayoffContext) -> list[PayoffLeg]` (required) and an optional `def title(self, ctx: PayoffContext) -> str`.
-3. `register_payoff(name: str, adapter: PayoffAdapter | None = None)` — usable as a decorator on a strategy class (`@register_payoff("csp_nifty_v1")`, default adapter) or called directly with an
-   adapter instance. `ValueError` on a duplicate name (a second registration is a bug, never a silent override).
-4. `get_adapter(name: str) -> PayoffAdapter | None` — `None` for an unregistered strategy. **Opt-in is the contract:** nothing is registered implicitly.
-5. `DefaultPositionAdapter` — builds one `PayoffLeg` per non-flat position: `kind = position.option_type`, `qty = position.net_qty` (already signed), `entry_price = avg_sell_price` for shorts /
-   `avg_cost` for longs, `strike` from the instrument lookup (`None` for EQ / FUT). Positions with `option_type is None` or `net_qty == 0` are skipped and logged at debug; if that leaves no legs the
-   adapter returns `[]` (the entry point then sends nothing).
-6. Module docstring carries the three-line "how to register a strategy" recipe — PC-19 copies it into `src/strategy/CLAUDE.md`.
+1. `PayoffContext` — frozen dataclass handed to an adapter: `positions: Sequence[PositionLike]`, `spot: Decimal | None`, `lot_size: int`, `strategy_name: str`, plus `extras: Mapping[str, object]`
+   (default empty) for strategy-specific inputs.
+2. Adapter Protocols, split by capability (ISP — no adapter implements a method it does not need):
+   - `PayoffAdapter` — required: `def legs(self, ctx: PayoffContext) -> list[PayoffLeg]`.
+   - `HasTitle` — `def title(self, ctx: PayoffContext) -> str`.
+   - (`MarketAware` for the overlay is added by `chart-model-overlay/` MO-7 as a third small Protocol.) Callers detect optional capabilities with `isinstance(adapter, HasTitle)`
+     (`@runtime_checkable`), never `hasattr` or a fat base class.
+3. `PayoffRegistry` — a small class holding `dict[str, PayoffAdapter]` with `register(name, adapter)` (raises `DuplicateRegistrationError(PayoffError)` on a duplicate name; a second registration is a
+   bug, never a silent override), `get(name) -> PayoffAdapter | None`, and `clear()` for test isolation. A module-level `DEFAULT_REGISTRY` plus thin `register_payoff(name, adapter=None)` (decorator or
+   direct call) and `get_adapter(name)` wrappers keep the one-line registration ergonomics. **Consumers accept a `PayoffRegistry` parameter that defaults to `DEFAULT_REGISTRY`** (DIP — tests inject a
+   fresh registry instead of mutating global state).
+4. `DefaultPositionAdapter(lookup)` — **the instrument lookup is injected** through its constructor (a `StrikeResolver` Protocol: `def strike_for(self, instrument_key: str) -> Decimal | None`), never
+   constructed inside. It builds one `PayoffLeg` per non-flat position: `kind = position.option_type`, `qty = position.net_qty` (already signed), `entry_price = avg_sell_price` for shorts / `avg_cost`
+   for longs, `strike` from the resolver (`None` for EQ / FUT). Positions with `net_qty == 0` are skipped. A **partially resolved set aborts** — if any non-flat option position has `option_type is
+   None` or no resolvable strike, raise `InvalidLegsError` (a payoff drawn from a subset of the legs would mislead); `send_payoff_chart` logs it and sends nothing.
+5. Module docstring carries the three-line "how to register a strategy" recipe — PC-19 copies it into `src/strategy/CLAUDE.md`.
 
 **Tests:**
 - `test_register_and_get` / `test_get_unregistered_returns_none` / `test_duplicate_registration_raises`.
-- `test_default_adapter_builds_legs` — fixture positions (short PE, short CE, long PE, long CE) → four `PayoffLeg`s with signed qty and correct entry price per side.
-- `test_default_adapter_skips_flat_and_unresolved` — flat and `option_type=None` positions dropped, no raise.
+- `test_injected_registry_is_isolated` — a fresh `PayoffRegistry` does not see `DEFAULT_REGISTRY` entries.
+- `test_default_adapter_builds_legs` — fixture positions (short PE, short CE, long PE, long CE) with a fake resolver → four `PayoffLeg`s with signed qty and correct entry price per side.
+- `test_default_adapter_skips_flat` — flat positions dropped.
+- `test_default_adapter_partial_resolution_raises` — one unresolved option leg → `InvalidLegsError`, no partial chart.
+- `test_title_capability_detected` — adapter with `title()` satisfies `HasTitle`; one without does not.
 - `test_decorator_registers_class` — decorator form returns the class unchanged.
 
-**Commit:** `feat(strategy): add opt-in payoff registry with default positions adapter`
+**Commit:** `feat(payoff): add opt-in payoff registry with injected default adapter`
 
 ---
 
 ## PC-11 — `send_payoff_chart` entry point
 
 **Files to change / create:**
-- `src/notifications/payoff_chart.py` — add the async function.
+- `src/notifications/payoff_chart.py` — add the async function and the `PhotoSender` Protocol.
 - `tests/unit/notifications/test_payoff_chart.py` — add cases.
 
 **What to implement:**
 
 ```python
+class PhotoSender(Protocol):
+    async def send_photo(self, png: bytes, caption: str = "") -> None: ...
+
 async def send_payoff_chart(
-    gateway,                 # anything with async send_photo(png, caption="")
+    sender: PhotoSender,
     strategy_name: str,
     ctx: PayoffContext,
     *,
+    registry: PayoffRegistry = DEFAULT_REGISTRY,
     dte: int | None = None,
     current_pnl: Decimal | None = None,
     margin: Decimal | None = None,
-    title: str = "",
     caption: str = "",
 ) -> None:
 ```
 
-- `get_adapter(strategy_name)`; `None` → log at debug and return (an unregistered strategy is normal, not an error).
-- `adapter.legs(ctx)` → `compute_payoff` → `render_payoff_png(..., spot=ctx.spot, ...)` → `await gateway.send_photo(png, caption=caption)`. Empty legs → return without sending.
-- Wrap the whole body so **nothing raises** into the caller: a compute error, a render error, or a send error is logged (`payoff_chart.send_failed`) and swallowed. This is the single choke point that
-  keeps the feature non-fatal — every call site then needs no try/except of its own.
-- CPU-bound `render_*` call: acceptable inline for now (one small figure); note in a comment that if it ever shows up in the monitor tick it moves to a `ProcessPoolExecutor` per `CLAUDE.md` async
-  rules. Wrap the gateway await in `asyncio.wait_for` (explicit timeout, per `CLAUDE.md` async rules).
+- `registry.get(strategy_name)`; `None` → **log a warning** (`payoff_chart.unregistered`, with the strategy name) and return. Every wired call site is expected to be registered; silence would hide a
+  wiring bug such as a missing `payoff_registrations` import.
+- `adapter.legs(ctx)` → `compute_payoff` → title from `adapter.title(ctx)` when `isinstance(adapter, HasTitle)` → render → `await sender.send_photo(png, caption=caption)`. Empty legs → return without
+  sending.
+- **Render off the event loop.** `render_payoff_png` is CPU-bound (~0.5–1 s with the first-import cost) and this runs inside the 90-second `StrategyMonitor` tick: `await
+  asyncio.to_thread(render_payoff_png, ...)` (safe because PC-5 uses the `Figure` API, not `pyplot`). `asyncio.to_thread` copies the current `contextvars` context, so the structlog correlation id
+  carries into the worker (verified by a test below). If measurement ever shows the GIL contention matters, move to a `ProcessPoolExecutor` per `CLAUDE.md` async rules — note this in a comment. Wrap
+  both the render and the send in `asyncio.wait_for` with explicit timeouts.
+- Exception handling: catch `PayoffError` (expected: bad legs, render, send) and log at warning; catch bare `Exception` once at the outermost boundary, log with `logger.exception`
+  (`payoff_chart.unexpected_failure`), and swallow. **Nothing raises into the caller.** This is the single choke point that keeps the feature non-fatal — call sites need no try/except of their own.
 
 **Tests:**
-- `test_send_happy_path` — registered fake adapter + fake gateway; assert `send_photo` got PNG bytes.
-- `test_send_unregistered_is_noop` — gateway not called, no raise.
-- `test_send_empty_legs_is_noop`.
-- `test_send_swallows_render_error` — monkeypatch `render_payoff_png` to raise → returns, gateway not called, warning logged.
-- `test_send_swallows_send_error` — gateway `send_photo` raises → returns.
+- `test_send_happy_path` — injected fresh registry + fake adapter + fake `PhotoSender`; assert `send_photo` got PNG bytes.
+- `test_send_unregistered_warns_and_noops` — gateway not called, no raise, warning logged.
+- `test_send_empty_legs_is_noop` and `test_send_unresolved_legs_is_noop` (adapter raises `InvalidLegsError`).
+- `test_send_swallows_render_error` — monkeypatch `render_payoff_png` to raise → returns, sender not called, warning logged.
+- `test_send_swallows_send_error` — sender `send_photo` raises → returns.
+- `test_send_times_out_cleanly` — a sender that never completes → returns after the timeout.
+- `test_correlation_context_reaches_render_thread` — bind a structlog contextvar, assert a log line emitted inside the render worker still carries it.
 
 **Commit:** `feat(notifications): add send_payoff_chart non-raising entry point`
 
@@ -351,26 +383,31 @@ written for the per-call-site fallback; if a central hook exists for a point, co
 
 ---
 
-## PC-13 — IC adapter + explicit registration
+## PC-13 — IC registration module (`payoff_registrations.py`)
 
 **Files to change / create:**
-- `src/strategy/ic_nifty_v1.py`, `src/strategy/ic_nifty_v2.py` — an adapter and `register_payoff(...)` call per strategy (module level or decorator).
-- `tests/unit/strategy/test_ic_payoff_adapter.py` — new.
+- `src/strategy/payoff_registrations.py` — new: the **single explicit place** where strategies opt in, plus an idempotent `ensure_registered(registry=DEFAULT_REGISTRY)`.
+- `tests/unit/strategy/test_payoff_registrations.py` — new.
 
 **Before any code:** `get_code_snippet("IronCondorV1._compute_combined_pnl")` and the V2 mirror; check what the strategy `name` strings are (`search_code('strategy_name =')` in both files) — the
-registry key must equal the `strategy_name` the call sites pass.
+registry key must equal the `strategy_name` the call sites pass. Confirm whether the default positions adapter reproduces the four IC legs (it should — that is the point of the design).
 
-**What to implement:** IC is the first (and, in this epic, only) registered strategy. If the `DefaultPositionAdapter` reproduces the four IC legs correctly, register with the default and add no
-adapter code (that is the point of the design); otherwise write a thin IC adapter that takes the four strikes + entry credit from the V1 / V2 position sets. Add a `title()` producing `<strategy> ·
-<expiry_type> · <dte>DTE`. Registering is explicit and lives next to the strategy class, which is the template future strategies copy.
+**What to implement:** `ensure_registered()` registers `iron_condor_v1` and `iron_condor_v2` (default adapter if sufficient, else a thin IC adapter co-located here that takes strikes + entry credit
+from the V1 / V2 position sets; add a `title()` producing `<strategy> · <expiry_type> · <dte>DTE`). It is idempotent (guards the duplicate-registration error) so every wired site can call it without
+ordering concerns. **Registration is never an import side effect of a strategy module**: `src/strategy/__init__.py` imports `IronCondorV1` but not `IronCondorV2`, and the entry scripts import neither
+strategy class, so import-time registration would silently skip V2 at entry. Each wired site (PC-14..18) calls `ensure_registered()` explicitly. This module is also the template future strategies
+copy: one `registry.register("<strategy_name>")` line inside `ensure_registered`.
 
-**Review:** `greeks-analyst` — blocking (strategy classes, IC credit definition).
+**Review:** `greeks-analyst` — blocking (IC credit definition).
 
 **Tests:**
-- `test_ic_v1_registered` / `test_ic_v2_registered` — `get_adapter` resolves both names.
+- `test_ensure_registered_resolves_ic_v1_and_v2` — fresh registry, both names resolve.
+- `test_ensure_registered_is_idempotent` — calling twice does not raise.
+- `test_every_wired_strategy_name_is_registered` — a parametrised list of the strategy names the wired sites pass (the single source of truth for PC-14..18) all resolve; adding a wired site without a
+  registration fails this test.
 - `test_ic_adapter_legs_match_entry_strikes` — fixture V1 and V2 position sets → four legs, correct signs, `net_premium` equals the entry credit × lot size.
 
-**Commit:** `feat(strategy): register iron condors for payoff charts`
+**Commit:** `feat(strategy): register iron condors for payoff charts explicitly`
 
 ---
 
@@ -380,7 +417,8 @@ adapter code (that is the point of the design); otherwise write a thin IC adapte
 - `scripts/strategies/ic/paper_ic_entry.py` — one additive call.
 
 **Before any code:** `bash sed -n '740,800p' scripts/strategies/ic/paper_ic_entry.py` (the `net_credit` computation + `ICEntryMessage` build + Telegram send region). `trace_path` the send function.
-Confirm where the fetched `OptionChain` (for `spot`, `dte`) and the opened positions are in scope; honour the PC-12 findings.
+Confirm where the fetched `OptionChain` (for `spot`, `dte`) and the opened positions are in scope; honour the PC-12 findings. Call `ensure_registered()` (PC-13) before sending; build the
+`PayoffContext` with the injected strike resolver.
 
 **What to implement:** immediately after the existing `ICEntryMessage` text send, `await send_payoff_chart(gateway, strategy_name, PayoffContext(positions=…, spot=chain.underlying_spot,
 lot_size=LOT_SIZE, strategy_name=…), dte=(chain.expiry - market_today()).days)`. No `current_pnl` (fresh entry), no `margin` (not captured yet). Guard on the gateway being non-`None` exactly as the
@@ -457,14 +495,15 @@ helper differ from V1.
 ## PC-19 — Docs close
 
 **Files to change / create (targeted `Edit` only, never `Write`):**
-- `CONTEXT.md` — "What Exists": add `src/strategy/payoff.py`, `src/strategy/payoff_registry.py` and `src/notifications/payoff_chart.py` one-liners; note `send_photo` on the Telegram wrappers.
-- `src/strategy/CLAUDE.md` — a "Registering a strategy for payoff charts" recipe (copy of the `payoff_registry.py` module docstring): the one-line `@register_payoff("<strategy_name>")`, when a custom
-  `PayoffAdapter` is needed, and that registration is opt-in.
+- `CONTEXT.md` — "What Exists": add `src/payoff/` (`core.py`, `registry.py`, `errors.py`), `src/strategy/payoff_registrations.py` and `src/notifications/payoff_chart.py` one-liners; note `send_photo`
+  on the Telegram wrappers.
+- `src/strategy/CLAUDE.md` — a "Registering a strategy for payoff charts" recipe (copy of the `src/payoff/registry.py` module docstring): the one-line `@register_payoff("<strategy_name>")`, when a
+  custom `PayoffAdapter` is needed, and that registration is opt-in.
 - `DECISIONS.md` — an entry dated the commit day: matplotlib added as a runtime dep for Telegram payoff charts; charts are additive follow-up photo sends; payoff math is strategy-agnostic with an
   opt-in registry; the `chart-model-overlay/` split and its `greeks-bs-fallback/` dependency.
 - `TODOS.md` — a Session Log line; update the `## Feature Backlog` entry's `next:` to the first `chart-model-overlay/` task (or mark `chart-core/` done).
 - `docs/plan/README.md` — flip the `strategy-payoff-charts/` epic row: `chart-core/` → ✅ with SHA.
-- `docs/plan/strategy-payoff-charts/README.md` — **Stories** table status column.
+- `docs/plan/strategy-payoff-charts/README.md` — **Stories** table status column; regenerate the "after" import-graph diagram (tests excluded) beside the design-time one.
 - Re-index the graph: `mcp__codebase-memory-mcp__index_repository`.
 
 **Tests:** none (docs). Run `python -m pytest tests/unit/ --tb=no -q` once to confirm the story left the suite green.

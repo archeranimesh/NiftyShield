@@ -16,9 +16,10 @@ No DB schema change anywhere in this story — no `schema.md`.
   `src/pricing/implied_vol.py` — `solve_iv(option_type, mid_price, spot, strike, dte, rate) -> float | None`, Newton-Raphson + bisection, never raises. Confirm the exact signatures with
   `get_code_snippet` — they may have shifted during that story.
 - The three modeling constants (risk-free rate, DTE convention `days/365` vs `days/252`, delta tolerance) are settled in `greeks-bs-fallback/` GF-1 — read them there, do not pick new ones.
-- `chart-core/` shipped (strategy-agnostic, opt-in registry): `src/strategy/payoff.py` (`PayoffLeg`, `StrategyPayoff`, `compute_payoff`, `expiry_pnl_at`, `expiry_pnl_series`),
-  `src/strategy/payoff_registry.py` (`PayoffAdapter`, `PayoffContext`, `register_payoff`, `get_adapter`, `DefaultPositionAdapter`), `src/notifications/payoff_chart.py` (`render_payoff_png`,
-  `send_payoff_chart`), `send_photo` on the Telegram wrappers, and both Iron Condors registered and wired. Confirm exact names with `get_code_snippet` — they may have shifted during that story.
+- `chart-core/` shipped (strategy-agnostic, opt-in registry; leaf package so `src/pricing/` may import it but it never imports `src/pricing/`): `src/payoff/core.py` (`PayoffLeg`, `StrategyPayoff`,
+  `compute_payoff`, `expiry_pnl_at`, `expiry_pnl_series`), `src/payoff/registry.py` (`PayoffRegistry`, `PayoffContext`, `PayoffAdapter`, `HasTitle`, `register_payoff`, `DefaultPositionAdapter`),
+  `src/payoff/errors.py` (`PayoffError` hierarchy), `src/strategy/payoff_registrations.py` (`ensure_registered`), `src/notifications/payoff_chart.py` (`render_payoff_png`, `send_payoff_chart`,
+  `PhotoSender`), `send_photo` on the Telegram wrappers, and both Iron Condors registered and wired. Confirm exact names with `get_code_snippet` — they may have shifted during that story.
 - The overlay must work for **any** registered strategy: it operates on `PayoffLeg` lists (each leg carries a `role` label for per-leg IV / mid lookup), never on IC-specific strikes.
 
 ---
@@ -164,32 +165,35 @@ percent helper.
 
 ---
 
-## MO-7 — Market-context hook on `PayoffAdapter` + overlay assembly
+## MO-7 — `MarketAware` capability + overlay assembly
 
 **Files to change / create:**
-- `src/strategy/payoff_registry.py` — add an **optional** `market(ctx) -> PayoffMarket | None` to the `PayoffAdapter` protocol (adapters without it are unchanged), and a frozen `PayoffMarket`
-  dataclass: `dte: int`, `iv_by_role: Mapping[str, float]`, `mid_by_role: Mapping[str, float]`, `atm_iv_pct: float | None`.
-- `src/notifications/payoff_chart.py` — `send_payoff_chart` calls `adapter.market(ctx)` when present and computes `sigma = expected_move(spot, atm_iv, dte)`, `pop = pop_of_profit(spot,
-  profit_regions(payoff), dte, atm_iv)` and `t0_series = t0_pnl_series(...)`, then calls the extended renderer. Any of the three failing → that element is `None`, the chart still sends.
+- `src/payoff/registry.py` — add a third small Protocol `MarketAware` (`@runtime_checkable`): `def market(self, ctx: PayoffContext) -> PayoffMarket | None`, and a frozen `PayoffMarket` dataclass:
+  `dte: int`, `iv_by_role: Mapping[str, float]`, `mid_by_role: Mapping[str, float]`, `atm_iv_pct: float | None`. `PayoffAdapter` itself is **unchanged** — adapters opt into the overlay by implementing
+  `market()`; those that do not simply never satisfy `MarketAware` (ISP: no stub methods).
+- `src/notifications/payoff_chart.py` — `send_payoff_chart` checks `isinstance(adapter, MarketAware)`; when true it calls `adapter.market(ctx)` and computes `sigma = expected_move(spot, atm_iv, dte)`,
+  `pop = pop_of_profit(spot, profit_regions(payoff), dte, atm_iv)` and `t0_series = t0_pnl_series(...)`, then calls the extended renderer. Any of the three failing → that element is `None`, the chart
+  still sends. Pricing imports stay in `src/pricing/` and `payoff_chart.py`; `src/payoff/` never imports `src/pricing/`.
 - tests for both.
 
-**Why a hook rather than new call-site arguments:** `chart-core/` made registration the only per-strategy step. Keeping the overlay inside the adapter preserves that — the five wired call sites do not
-change, and a future strategy gets the overlay by implementing one method, not by editing scripts.
+**Why a capability Protocol rather than new call-site arguments:** `chart-core/` made registration the only per-strategy step. Keeping the overlay inside the adapter preserves that — the wired call
+sites do not change, and a future strategy gets the overlay by implementing one method, not by editing scripts.
 
 **Tests:**
-- `test_send_with_market_hook_draws_overlay` — a fake adapter with `market()` → renderer receives `t0_series`, `sigma`, `pop`.
-- `test_send_without_market_hook_is_expiry_only` — adapter lacking the method → unchanged `chart-core/` behaviour.
+- `test_send_with_market_aware_adapter_draws_overlay` — a fake `MarketAware` adapter → renderer receives `t0_series`, `sigma`, `pop`.
+- `test_send_without_market_hook_is_expiry_only` — adapter lacking `market()` → unchanged `chart-core/` behaviour.
 - `test_send_market_failure_degrades` — `market()` raises / all-zero unsolvable IV → expiry-only chart still sent.
+- `test_payoff_package_still_imports_nothing_from_pricing` — re-run the PC-2 import-boundary test with `src.pricing` added to the forbidden set.
 
-**Commit:** `feat(notifications): build model overlay from adapter market context`
+**Commit:** `feat(notifications): build model overlay from MarketAware adapters`
 
 ---
 
 ## MO-8 — IC adapters implement `market(ctx)`
 
 **Files to change / create:**
-- `src/strategy/ic_nifty_v1.py`, `src/strategy/ic_nifty_v2.py` — implement `market()` on the IC adapters from PC-13 (per-leg IV and mid from the chain / positions already in scope, `atm_iv` from MO-2,
-  `dte` from the chain expiry).
+- `src/strategy/payoff_registrations.py` — implement `market()` on the IC adapters from PC-13 (promote the default adapter to a thin IC adapter if PC-13 used the default) (per-leg IV and mid from the
+  chain / positions already in scope, `atm_iv` from MO-2, `dte` from the chain expiry).
 - `scripts/strategies/ic/paper_ic_entry.py`, `paper_ic_entry_v2.py`, `paper_ic_snapshot.py` and both `_send_close_notification` paths — **only** if `PayoffContext.extras` must carry the chain (add
   `chart` to `extras` at the call site; otherwise no call-site edit). Per the PC-12 hook audit, a central hook means zero call-site edits here.
 

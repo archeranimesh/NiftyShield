@@ -56,8 +56,8 @@ Story order is fixed and is the row order above. `chart-core/` has no external d
 - **The renderer degrades, never errors** — a missing spot, missing DTE, missing margin, an unbounded side, or (in the overlay) an unsolvable IV drops that one element from the chart; the expiry
   payoff line always renders for any non-empty leg set.
 - **Registration is opt-in and explicit** — nothing is charted implicitly; a duplicate registration raises (never a silent override).
-- **`Decimal` for money** in the payoff math (`src/strategy/payoff.py`, `payoff_registry.py`). The pricing helpers (`src/pricing/`, overlay only) are `float` by the `greeks-bs-fallback/` decision —
-  charting and probability only, never a persisted money path.
+- **`Decimal` for money** in the payoff math (`src/payoff/`). The pricing helpers (`src/pricing/`, overlay only) are `float` by the `greeks-bs-fallback/` decision — charting and probability only,
+  never a persisted money path.
 - **Message budget** — `TelegramNotifier`'s per-session budget (default 10) must not let photos starve text in the EOD snapshot run (~8 variants → ~8 text + ~8 photos). PC-9 addresses this.
 - **`greeks-analyst` is a blocking review gate** for every task that touches `paper_ic_snapshot.py`, the `IronCondor*` strategy classes, or option-chain IV.
 
@@ -68,17 +68,65 @@ Story order is fixed and is the row order above. `chart-core/` has no external d
 - **`paper_ic_snapshot.py` dead-query cleanup** — `TODOS.md ## Feature Backlog` item 15 ("Fix dead IC EOD report query") touches the same file PC-16 wires into. Unrelated change; if item 15 lands
   first, rebase PC-16 onto it, otherwise ignore.
 - **`morning_signal.py`** is *not* in scope — it produces a directional signal with a single strike, not a multi-leg structure, and has no legs to chart.
+- **2026-10-03 rename / generalisation:** this epic was scaffolded as `ic-payoff-charts/` (PC-1, `7210c31`) and generalised the same day; PC-1's SHA predates the rename.
 - **Future strategies** (CSP, CC, Collar, signal-track, …) — out of scope here by design. Each adds its own `@register_payoff` during its own story, following the recipe PC-19 writes into
   `src/strategy/CLAUDE.md`.
 
+## Architecture (design time, 2026-10-03)
+
+Authored before implementation, per `docs/refactor/planning-protocol.md`. Production modules only — tests excluded. Arrows point from dependent to dependency; `src/payoff/` is a leaf.
+
+```mermaid
+flowchart LR
+  subgraph sites["Wired sites (5)"]
+    E1[paper_ic_entry]; E2[paper_ic_entry_v2]; EOD[paper_ic_snapshot]; C1[ic_nifty_v1 close]; C2[ic_nifty_v2 close]
+  end
+  REG[strategy/payoff_registrations<br/>ensure_registered]
+  CH[notifications/payoff_chart<br/>send_payoff_chart, render_payoff_png]
+  TG[notifications/telegram + gateway<br/>send_photo]
+  subgraph leaf["src/payoff (leaf)"]
+    CORE[core: PayoffLeg, compute_payoff]
+    RG[registry: PayoffRegistry, adapters]
+    ERR[errors: PayoffError]
+  end
+  PR[src/pricing<br/>overlay only, blocked on greeks-bs-fallback]
+  sites --> REG
+  sites --> CH
+  REG --> RG
+  CH --> RG
+  CH --> CORE
+  CH -. PhotoSender Protocol .-> TG
+  RG --> CORE
+  RG --> ERR
+  CORE --> ERR
+  PR --> CORE
+  CH -. overlay .-> PR
+```
+
+The design converges all five wired sites on one entry point (`send_payoff_chart`, fan-in 5) instead of five bespoke Iron-Condor payoff and renderer calls. PC-19 regenerates this diagram from the real
+import graph after the code lands.
+
+## Design review (2026-10-03, against `docs/refactor/`)
+
+| # | Finding | Source doc | Resolution | Task |
+|---|---|---|---|---|
+| 1 | Import-time registration silently skips V2 (init imports V1 only) | design-principles (explicit) | Idempotent `ensure_registered()` per site; warn if unregistered | PC-11, PC-13 |
+| 2 | Math + registry in `src/strategy/` would cycle with `notifications` (already depends on `strategy`) | code-deduplication (one-way deps) | Leaf `src/payoff/` + AST import-boundary test | PC-2 |
+| 3 | Inline CPU-bound render blocks the 90 s monitor tick; `pyplot` is not thread-safe | CLAUDE.md async rules | `Figure` API + `asyncio.to_thread`; context test | PC-5, PC-11 |
+| 4 | Optional `title()` / `market()` on one adapter Protocol (stub methods) | design-principles (ISP) | Split Protocols: `PayoffAdapter`, `HasTitle`, `MarketAware` | PC-10, MO-7 |
+| 5 | Untyped gateway, global registry, adapter constructing its own lookup | design-principles (DIP) | `PhotoSender` Protocol, injectable `PayoffRegistry`, injected strike resolver | PC-10, PC-11 |
+| 6 | No module-boundary exception hierarchy; one catch-all | code-deduplication (wrap at the boundary) | `PayoffError` hierarchy; catch-all only at the outermost boundary | PC-2, PC-11 |
+| 7 | Partially resolved legs would draw a misleading payoff | review judgment | Default adapter aborts with `InvalidLegsError` | PC-10 |
+| 8 | Prior-art audit | code-deduplication Step 1 | No existing breakeven / max-loss code in `src/` or `scripts/` — nothing to reuse or converge | — |
+
 ## Epic done when
 
-- **`chart-core/`** — `src/strategy/payoff.py` computes a strategy-agnostic `StrategyPayoff` (max profit / max loss or unbounded / any number of breakevens / R:R) with tests, and the acceptance matrix
-  (IC / CSP / CC / Collar) passes; `src/strategy/payoff_registry.py` provides the opt-in registry + default positions adapter; `src/notifications/payoff_chart.py` renders the expiry payoff PNG (payoff
-  line + fills + breakeven/short-strike verticals + spot line + current-P&L dot + stat strip) via matplotlib Agg and exposes the non-raising `send_payoff_chart`; `TelegramNotifier.send_photo` +
-  `TelegramGateway.send_photo` exist, are non-fatal, and honour the message budget; both Iron Condors are registered and `send_payoff_chart` is wired into both entry scripts, the EOD snapshot
-  per-variant loop, and both close notifications (or into a central hook if the PC-12 audit finds one); the docs-close task records the new modules, the matplotlib dependency, and the "register a
-  strategy" recipe.
+- **`chart-core/`** — `src/payoff/core.py` (leaf package `src/payoff/`) computes a strategy-agnostic `StrategyPayoff` (max profit / max loss or unbounded / any number of breakevens / R:R) with tests,
+  and the acceptance matrix (IC / CSP / CC / Collar) passes; `src/payoff/registry.py` provides the injectable opt-in registry + default positions adapter, and `src/strategy/payoff_registrations.py` is
+  the single explicit registration site; `src/notifications/payoff_chart.py` renders the expiry payoff PNG (payoff line + fills + breakeven/short-strike verticals + spot line + current-P&L dot + stat
+  strip) via matplotlib Agg and exposes the non-raising `send_payoff_chart`; `TelegramNotifier.send_photo` + `TelegramGateway.send_photo` exist, are non-fatal, and honour the message budget; both Iron
+  Condors are registered and `send_payoff_chart` is wired into both entry scripts, the EOD snapshot per-variant loop, and both close notifications (or into a central hook if the PC-12 audit finds
+  one); the docs-close task records the new modules, the matplotlib dependency, and the "register a strategy" recipe.
 - **`chart-model-overlay/`** — the same renderer additionally draws the blue dashed T+0 P&L curve (per-leg Black-Scholes at `dte/365`, solved IV where Upstox gives 0), the ±1σ/±2σ vertical lines +
   shaded bands, and shows POP in the stat strip, for any registered strategy; adapters supply per-leg IV + DTE so call sites do not change; every new element degrades cleanly when its input is
   missing; the docs-close task records the `greeks-bs-fallback/` dependency as satisfied.

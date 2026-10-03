@@ -13,10 +13,10 @@ for the per-task implementation spec.
 - [ ] **MO-4** — `payoff_chart.py`: draw the blue dashed T+0 curve (new optional arg; no-op when `None`) | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: —
 - [ ] **MO-5** — `payoff_chart.py`: draw ±1σ/±2σ verticals + shaded bands from `expected_move` | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: —
 - [ ] **MO-6** — `payoff_chart.py` stat strip: add POP from `pop_of_profit` | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: —
-- [ ] **MO-7** — Optional `market(ctx)` hook on `PayoffAdapter` (per-leg IV / mid / DTE); `send_payoff_chart` builds T+0 + σ + POP from it | Owner: Claude | Model: claude-sonnet-5 | Review:
-  code-reviewer | SHA: —
-- [ ] **MO-8** — IC adapters implement `market(ctx)` for entry, EOD snapshot and both close paths — no call-site edits expected | Owner: Claude | Model: claude-sonnet-5 | Review: greeks-analyst | SHA:
-  —
+- [ ] **MO-7** — `MarketAware` capability Protocol (per-leg IV / mid / DTE) in `src/payoff/registry.py`; `send_payoff_chart` builds T+0 + σ + POP from it | Owner: Claude | Model: claude-sonnet-5 |
+  Review: code-reviewer | SHA: —
+- [ ] **MO-8** — IC adapters (in `payoff_registrations.py`) implement `market(ctx)` for entry, EOD snapshot and both close paths — no call-site edits expected | Owner: Claude | Model: claude-sonnet-5
+  | Review: greeks-analyst | SHA: —
 - [ ] **MO-9** — Docs close + archive the `strategy-payoff-charts/` epic folder per §Conventions; re-index graph | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: —
 
 ## Story done when
@@ -29,8 +29,8 @@ for the per-task implementation spec.
 - **MO-4** — the blue dashed T+0 curve is drawn when the series is passed and omitted when `None`; PNG still valid in both cases.
 - **MO-5** — ±1σ and ±2σ verticals + shaded bands are drawn from a passed `sigma`; omitted when `None` or `spot` is `None`.
 - **MO-6** — POP shows in the stat strip as a % when passed; omitted when `None`.
-- **MO-7 / MO-8** — the adapter's `market(ctx)` supplies per-leg IV + mids + DTE from data the call site already holds; `send_payoff_chart` solves the zeros and builds the T+0 series + `sigma` +
-  `pop`; an adapter without the hook, or an all-zero-IV chain that cannot be solved, still sends the `chart-core/` expiry-only chart.
+- **MO-7 / MO-8** — an adapter implementing the `MarketAware` Protocol supplies per-leg IV + mids + DTE from data the call site already holds; `send_payoff_chart` solves the zeros and builds the T+0
+  series + `sigma` + `pop`; an adapter that is not `MarketAware`, or an all-zero-IV chain that cannot be solved, still sends the `chart-core/` expiry-only chart.
 - **MO-9** — the epic's docs show both sub-stories ✅; `strategy-payoff-charts/` is archived to `docs/archive/plan/`; the graph is re-indexed.
 
 ## After each task
