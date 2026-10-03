@@ -142,6 +142,7 @@ def test_morning_flag_skips_watchlist() -> None:
 
     with (
         patch.object(sys, "argv", test_args),
+        patch("scripts.pipeline.gamma_daily_watch.is_trading_day", return_value=True),
         patch("scripts.pipeline.gamma_daily_watch._runtime", _fake_runtime),
     ):
         with patch(
@@ -159,6 +160,7 @@ def test_dry_run_flag_propagates() -> None:
 
     with (
         patch.object(sys, "argv", test_args),
+        patch("scripts.pipeline.gamma_daily_watch.is_trading_day", return_value=True),
         patch("scripts.pipeline.gamma_daily_watch._runtime", _fake_runtime),
     ):
         with patch(
@@ -183,6 +185,7 @@ def test_date_override_option() -> None:
 
     with (
         patch.object(sys, "argv", test_args),
+        patch("scripts.pipeline.gamma_daily_watch.is_trading_day", return_value=True),
         patch("scripts.pipeline.gamma_daily_watch._runtime", _fake_runtime),
     ):
         with patch(
@@ -201,6 +204,70 @@ def test_date_override_option() -> None:
                     mock_resolve.assert_called_once_with(date(2026, 5, 15))
                     mock_fetch.assert_called_once()
                     assert mock_fetch.call_args[1]["today"] == date(2026, 5, 15)
+
+
+_HOLIDAY = "2026-10-03"  # Saturday
+
+
+def test_non_trading_day_real_run_exits_before_any_fetch() -> None:
+    """BUG-072: a real run on a non-trading day makes no client/store call and returns."""
+    with (
+        patch.object(sys, "argv", ["gamma_daily_watch.py", "--date", _HOLIDAY]),
+        patch("scripts.pipeline.gamma_daily_watch.is_trading_day", return_value=False),
+        patch("scripts.pipeline.gamma_daily_watch._runtime") as mock_runtime,
+        patch("scripts.pipeline.gamma_daily_watch.resolve_expiries") as mock_resolve,
+        capture_logs() as logs,
+    ):
+        main()
+    mock_runtime.assert_not_called()
+    mock_resolve.assert_not_called()
+    assert [e["log_level"] for e in logs if e["event"] == "gamma_daily_watch.non_trading_day"] == [
+        "info"
+    ]
+
+
+def test_trading_day_real_run_is_unchanged() -> None:
+    """BUG-072: on a trading day the fetch path runs and no non-trading-day event is logged."""
+    with (
+        patch.object(sys, "argv", ["gamma_daily_watch.py", "--date", "2026-05-15"]),
+        patch("scripts.pipeline.gamma_daily_watch.is_trading_day", return_value=True),
+        patch("scripts.pipeline.gamma_daily_watch._runtime", _fake_runtime),
+        patch(
+            "scripts.pipeline.gamma_daily_watch.resolve_expiries",
+            return_value=(date(2026, 5, 19), date(2026, 5, 26)),
+        ),
+        patch("scripts.pipeline.gamma_daily_watch._fetch_and_snapshot", return_value=[]) as fetch,
+        patch("scripts.pipeline.gamma_daily_watch._update_watchlist"),
+        patch("scripts.pipeline.gamma_daily_watch._run_calibration"),
+        patch("scripts.pipeline.gamma_daily_watch._send_summary"),
+        capture_logs() as logs,
+    ):
+        main()
+    fetch.assert_called_once()
+    assert not [e for e in logs if e["event"] == "gamma_daily_watch.non_trading_day"]
+
+
+def test_non_trading_day_dry_run_warns_and_continues() -> None:
+    """BUG-072: --dry-run on a non-trading day logs a WARNING but still derives rows."""
+    with (
+        patch.object(sys, "argv", ["gamma_daily_watch.py", "--date", _HOLIDAY, "--dry-run"]),
+        patch("scripts.pipeline.gamma_daily_watch.is_trading_day", return_value=False),
+        patch("scripts.pipeline.gamma_daily_watch._runtime", _fake_runtime),
+        patch(
+            "scripts.pipeline.gamma_daily_watch.resolve_expiries",
+            return_value=(date(2026, 10, 6), date(2026, 10, 13)),
+        ),
+        patch("scripts.pipeline.gamma_daily_watch._fetch_and_snapshot", return_value=[]) as fetch,
+        patch("scripts.pipeline.gamma_daily_watch._update_watchlist"),
+        patch("scripts.pipeline.gamma_daily_watch._run_calibration"),
+        patch("scripts.pipeline.gamma_daily_watch._send_summary"),
+        capture_logs() as logs,
+    ):
+        main()
+    fetch.assert_called_once()
+    assert [e["log_level"] for e in logs if e["event"] == "gamma_daily_watch.non_trading_day"] == [
+        "warning"
+    ]
 
 
 def _chain_with_one_strike() -> OptionChain:
@@ -564,6 +631,7 @@ def _run_main(argv: list[str], calls: list[str]) -> dict[str, MagicMock]:
     with (
         patch.object(sys, "argv", argv),
         patch("scripts.pipeline.gamma_daily_watch._runtime", _fake_runtime),
+        patch("scripts.pipeline.gamma_daily_watch.is_trading_day", return_value=True),
     ):
         patchers = {
             n: patch(f"scripts.pipeline.gamma_daily_watch.{n}", return_value=r)

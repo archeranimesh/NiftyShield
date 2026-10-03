@@ -378,6 +378,14 @@ def main() -> None:
     else:
         today = date.today()
 
+    if not is_trading_day(today):
+        # Upstox serves the last session's chain on non-trading days, so a real run
+        # would persist a stale duplicate under a new snapshot_date (BUG-072).
+        if not args.dry_run:
+            logger.info("gamma_daily_watch.non_trading_day", date=str(today))
+            return
+        logger.warning("gamma_daily_watch.non_trading_day", date=str(today), dry_run=True)
+
     logger.info("Running daily watch for date: %s", today)
 
     current_week_expiry, next_week_expiry = resolve_expiries(today)
