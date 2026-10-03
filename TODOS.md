@@ -87,6 +87,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-03] BUG-068 closed (`5e79fc5`): per-instance `BodLookupCache` in `_price_utils.py`; IC v1/v2 `_parse_expiry` load the BOD file once, failures not cached; `code-reviewer` clean.
 - [2026-10-02] BUG-060 settlement moved into monitor-daemon startup (`bd687ac`, no new cron). Filed BUG-068 (per-tick BOD load), BUG-069 (lost BLOCKED alert), BUG-070 (non-atomic close + state flip),
   BUG-071 (test-runner blocked by hook); B060.5 Monday log check and a session-handoff block added to `docs/bugs/task.md`.
 - [2026-10-02] BUG-060 B060.4: trade 405 hand-corrected 784.15 → 783.80 (strike 23500 − close 22716.20; ₹22.75 delta, DB-only, operator sign-off). Only B060.5 (live daemon start) remains.

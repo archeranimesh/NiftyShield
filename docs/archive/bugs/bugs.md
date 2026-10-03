@@ -2861,3 +2861,23 @@ fixed in the commit (docstring no longer claims atomicity; same-key re-open limi
 **B067.3 (2026-10-02, live host):** backfill dry-run found 18 stale flat legs, none from this bug's three paths (all BUG-066 / pre-BUG-062 residue); applied, re-run found 0.
 
 ---
+
+## BUG-068 — IC v1/v2 `_parse_expiry` loads the BOD instrument file synchronously on every monitor tick
+
+| Field | Value |
+|---|---|
+| Severity | **Medium** — blocks the event loop ~0.25 s per call (~0.75 s per tick across the three v1 books, plus v2); violates the no-blocking-I/O-in-hot-path rule |
+| Status | ✅ Fixed (SHA 5e79fc5) |
+| Discovered | 2026-10-02 — BUG-059 fix (`49ce5fa`) review + timing on the live BOD (`NSE.json.gz`, 2 MB) |
+| Location | `src/strategy/_price_utils.py::resolve_option_expiry(load_bod=True)`; callers `IronCondorV1._parse_expiry`, `IronCondorV2._parse_expiry` (via `check_signals`) |
+
+**Root cause:** `load_bod=True` calls `InstrumentLookup.from_file(DEFAULT_BOD_PATH)` whenever the key regex misses — every numeric live key, every tick. v2 behaved this way before BUG-059; v1 now
+shares it. **Fix:** cache the lookup per strategy instance or pass the daemon's already-loaded lookup in. Related: a BOD file older than a contract's listing returns `None` and silently disables DTE
+signals for that leg.
+
+**Implementation progress (2026-10-03, `5e79fc5`):** new `BodLookupCache` in `src/strategy/_price_utils.py` loads the BOD file at most once per strategy instance; `IronCondorV1` /
+`IronCondorV2` `_parse_expiry` delegate to it and the `load_bod` kwarg is removed. Design choice: per-instance cache rather than injecting the daemon's lookup (no daemon wiring change), and a
+failed load is not cached so a transient file problem retries on the next tick. Five tests in `tests/unit/strategy/test_price_utils.py` (single load across calls, failure not cached, numeric-key
+DTE still resolves). Full unit suite green (run manually; `test-runner` blocked by BUG-071). Real `code-reviewer`: clean, no findings.
+
+---

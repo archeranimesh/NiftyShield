@@ -993,3 +993,11 @@ Detail: `docs/bugs/bugs.md` BUG-067.
   closed legs, duplicate insert does not. | SHA `d3ba54d`
 - [x] **B067.3** — Dry-run `backfill_mark_trade_closed_overlay` to count stale legs from these paths; apply on the live host. | SHA `c408c1e`
 - [x] **B067.4** — Commit, flip BUG-067 to ✅ Fixed + SHA, archive entry, update `TODOS.md`. | SHA `d3ba54d`
+
+## BUG-068 — IC v1/v2 load the BOD instrument file synchronously on every monitor tick
+
+Detail: `docs/bugs/bugs.md` BUG-068.
+
+- [x] **B068.1** — Per-instance `BodLookupCache` in `_price_utils.py`; IC v1/v2 `_parse_expiry` delegate to it, `load_bod` kwarg removed; tests: single load across calls, failure not cached. | SHA
+  `5e79fc5`
+- [x] **B068.2** — Real `code-reviewer` (clean, no findings); commit; close + archive. | SHA `5e79fc5`

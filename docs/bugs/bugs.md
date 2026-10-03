@@ -28,18 +28,7 @@
 
 ---
 
-## BUG-068 — IC v1/v2 `_parse_expiry` loads the BOD instrument file synchronously on every monitor tick
-
-| Field | Value |
-|---|---|
-| Severity | **Medium** — blocks the event loop ~0.25 s per call (~0.75 s per tick across the three v1 books, plus v2); violates the no-blocking-I/O-in-hot-path rule |
-| Status | 🔴 Open |
-| Discovered | 2026-10-02 — BUG-059 fix (`49ce5fa`) review + timing on the live BOD (`NSE.json.gz`, 2 MB) |
-| Location | `src/strategy/_price_utils.py::resolve_option_expiry(load_bod=True)`; callers `IronCondorV1._parse_expiry`, `IronCondorV2._parse_expiry` (via `check_signals`) |
-
-**Root cause:** `load_bod=True` calls `InstrumentLookup.from_file(DEFAULT_BOD_PATH)` whenever the key regex misses — every numeric live key, every tick. v2 behaved this way before BUG-059; v1 now
-shares it. **Fix:** cache the lookup per strategy instance or pass the daemon's already-loaded lookup in. Related: a BOD file older than a contract's listing returns `None` and silently disables DTE
-signals for that leg.
+## BUG-068 [MOVED] — see `docs/archive/bugs/bugs.md` (closed 2026-10-03, SHA `5e79fc5`)
 
 ---
 
@@ -83,6 +72,11 @@ scoped sweeps |
 | Location | `.claude/agents/test-runner.md`; the `inline_full_suite.sh` PreToolUse hook |
 
 **Fix:** make the agent's command pass the hook, or exempt the agent context; verify the agent returns pytest's verbatim summary line.
+
+**Recurrence 2026-10-03 (B068.1 gate):** `test-runner` again could not run `pytest tests/unit/` — it blamed the hook (blocking on uncommitted `.py` changes), then attempted `git stash` to work around
+it, which the permission layer denied ("Irreversible Local Destruction"), and it asked main to commit first or edit `settings.json`. Two distinct defects: (1) the hook/command mismatch above; (2)
+`.claude/agents/test-runner.md` does not forbid index/stash-touching git commands, so a blocked agent reaches for `git stash` (a data-loss risk for concurrent edits). Operator ran the suite manually
+(green) to unblock. Fix scope adds: forbid stash/restore/index commands in the agent definition and instruct it to report a block verbatim rather than work around it.
 
 ---
 

@@ -55,13 +55,7 @@
 
 > BUG-067 closed 2026-10-02 (SHA `c408c1e` + `d3ba54d`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
-## BUG-068 — IC v1/v2 load the BOD instrument file synchronously on every monitor tick
-
-Detail: `docs/bugs/bugs.md` BUG-068.
-
-- [ ] **B068.1** — Load the BOD lookup once per strategy instance (or inject the daemon's lookup) for `_parse_expiry`; no per-tick file read. Tests: lookup loaded once across ticks; numeric-key DTE
-  still resolves.
-- [ ] **B068.2** — Real `code-reviewer`; commit; close + archive.
+> BUG-068 closed 2026-10-03 (SHA `5e79fc5`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
 ## BUG-069 — IC entry "BLOCKED" Telegram alert can be lost: fire-and-forget send then `sys.exit(1)`
 
@@ -83,6 +77,7 @@ Detail: `docs/bugs/bugs.md` BUG-071.
 
 - [ ] **B071.1** — Make `.claude/agents/test-runner.md`'s command pass `inline_full_suite.sh` (or exempt the agent context in the hook). Test: the agent returns a verbatim pytest summary line for
   `tests/unit/`.
+- [ ] **B071.2** — Forbid `git stash`/`restore`/index commands in `test-runner.md`; blocked agent must report verbatim, not work around (recurred 2026-10-03).
 
 ## BUG-060 — Expired paper overlay legs are never settled or closed
 
