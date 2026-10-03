@@ -8,13 +8,23 @@ manage the watchlist, calibrate percentiles, and send Telegram updates.
 from __future__ import annotations
 
 import argparse
+import sqlite3
 import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import date, datetime, timedelta
 from typing import Any
 
 import structlog
 
+from src.client.upstox_market import UpstoxMarketClient, parse_upstox_option_chain
+from src.config import settings
+from src.db import connect
+from src.gamma.derive import derive_snapshots
+from src.gamma.models import GammaChainSnapshot
+from src.gamma.store import GammaStore
 from src.market_calendar.holidays import is_trading_day
+from src.models.options import OptionChain
 from src.utils.logging import setup_logging
 
 _SCRIPT_NAME = "scripts.pipeline.gamma_daily_watch"
@@ -68,23 +78,68 @@ def resolve_expiries(today: date) -> tuple[date, date]:
     return current_week_expiry, next_week_expiry
 
 
+_NIFTY_INSTRUMENT = "NSE_INDEX|Nifty 50"
+
+
+def _fetch_chain(client: UpstoxMarketClient, expiry_date: date) -> OptionChain | None:
+    """Fetch and parse the Nifty option chain for one expiry.
+
+    Args:
+        client: Upstox market-data client.
+        expiry_date: Expiry to fetch.
+
+    Returns:
+        The parsed chain, or None (with a WARNING) when the response is empty,
+        e.g. market closed.
+    """
+    chain = parse_upstox_option_chain(
+        client.get_option_chain_sync(_NIFTY_INSTRUMENT, expiry_date.isoformat())
+    )
+    if not chain.strikes:
+        logger.warning("gamma_daily_watch.empty_chain", expiry=str(expiry_date))
+        return None
+    return chain
+
+
 def _fetch_and_snapshot(
-    client: Any,
+    client: UpstoxMarketClient,
     expiries: tuple[date, date],
     today: date,
     snapshot_time: str,
-    store: Any,
-    conn: Any,
+    store: GammaStore,
+    conn: sqlite3.Connection | None,
     dry_run: bool,
-) -> list[Any]:
-    """Fetch option chains and compute/store snapshots. (Stub)"""
-    logger.info(
-        "Stub: fetch_and_snapshot for expiries %s, today=%s, dry_run=%s",
-        expiries,
-        today,
-        dry_run,
-    )
-    return []
+) -> list[GammaChainSnapshot]:
+    """Fetch each expiry's chain and derive snapshot rows (persistence is B2.3).
+
+    Prior-day OI is read once per expiry. With ``dry_run`` no store method is
+    called, so ``oi_change_1d`` is None for every row.
+    """
+    snaps: list[GammaChainSnapshot] = []
+    for expiry in expiries:
+        chain = _fetch_chain(client, expiry)
+        if chain is None:
+            continue
+        prior_oi = {} if dry_run or conn is None else store.get_prior_oi(conn, expiry, today)
+        rows = derive_snapshots(chain, expiry, today, snapshot_time, prior_oi)
+        logger.info(
+            "gamma_daily_watch.snapshots_derived",
+            expiry=str(expiry),
+            rows=len(rows),
+            dry_run=dry_run,
+        )
+        snaps.extend(rows)
+    return snaps
+
+
+@contextmanager
+def _runtime(dry_run: bool) -> Iterator[tuple[UpstoxMarketClient, GammaStore, sqlite3.Connection]]:
+    """Yield the client, store and an open connection (tables ensured unless dry-run)."""
+    store = GammaStore()
+    with connect(settings.db_path) as conn:
+        if not dry_run:
+            store.create_tables(conn)
+        yield UpstoxMarketClient(), store, conn
 
 
 def _update_watchlist(
@@ -143,31 +198,28 @@ def main() -> None:
     logger.info("Resolved current-week expiry: %s", current_week_expiry)
     logger.info("Resolved next-week expiry: %s", next_week_expiry)
 
-    # Stub instantiation / connection handling
-    client = None
-    store = None
-    conn = None
     snapshot_time = datetime.now().strftime("%H:%M")
 
-    snaps = _fetch_and_snapshot(
-        client=client,
-        expiries=(current_week_expiry, next_week_expiry),
-        today=today,
-        snapshot_time=snapshot_time,
-        store=store,
-        conn=conn,
-        dry_run=args.dry_run,
-    )
-
-    if not args.morning:
-        _update_watchlist(
-            today_snaps=snaps,
-            current_week_expiry=current_week_expiry,
+    with _runtime(args.dry_run) as (client, store, conn):
+        snaps = _fetch_and_snapshot(
+            client=client,
+            expiries=(current_week_expiry, next_week_expiry),
             today=today,
+            snapshot_time=snapshot_time,
             store=store,
             conn=conn,
             dry_run=args.dry_run,
         )
+
+        if not args.morning:
+            _update_watchlist(
+                today_snaps=snaps,
+                current_week_expiry=current_week_expiry,
+                today=today,
+                store=store,
+                conn=conn,
+                dry_run=args.dry_run,
+            )
 
 
 if __name__ == "__main__":

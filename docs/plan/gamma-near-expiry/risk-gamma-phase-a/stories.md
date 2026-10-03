@@ -57,7 +57,10 @@
 
 ---
 
-## Task B2.2 — Chain fetch + field computation
+## Task B2.2 — Chain fetch + field computation  ✅ DONE
+
+> Built deviations: added `GammaStore.get_prior_oi` (batched prior-day OI); `prior_oi` keys are `(int strike, option_type)` to match `GammaChainSnapshot.strike`; `bid_ask_spread` is `None` when bid or
+> ask is 0 (`OptionLeg` encodes a missing price as 0); client is `UpstoxMarketClient` (sync `get_option_chain_sync`, as in the other pipeline scripts) — `BrokerClient` only exposes the async variant.
 
 **Files to change:**
 - `src/gamma/derive.py` — **new**: pure `derive_snapshots` (shared with Phase B `gamma_scan.py`; no store access, no I/O)

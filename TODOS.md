@@ -15,8 +15,8 @@ Forward spec work only — one `docs/plan/` story per line, pointer-only (title 
 starting the next story here; this list only decides *which story is next*. Bugs are **not** here — see `## Open Bugs`. Cross-references use folder names, never list positions, so renumbering can't
 rot them. (Items 3 and 8 closed 2026-10-02 — numbers kept stable because item text cross-references them.)
 
-4. **Gamma near-expiry buy (epic)** — `docs/plan/gamma-near-expiry/` — Phase A `risk-gamma-phase-a/` next **B2.2** (chain fetch + `derive_snapshots`), then B2.3..B2.5; Phase B `gamma-scan-phase-b/`
-   (GS-1..6) starts after Phase A closes and ≥ 5 days of snapshots exist. In progress, independent of everything else; finish before starting new stories.
+4. **Gamma near-expiry buy (epic)** — `docs/plan/gamma-near-expiry/` — Phase A `risk-gamma-phase-a/` next **B2.3** (snapshot persistence), then B2.4..B2.5; Phase B `gamma-scan-phase-b/` (GS-1..6)
+   starts after Phase A closes and ≥ 5 days of snapshots exist. In progress, independent of everything else; finish before starting new stories.
 5. **Fix dead IC EOD report query** — `scripts/strategies/ic/paper_ic_snapshot.py` (no story folder) — the "Intraday actions" query is dead code, found in the DT-3a audit. Small; fold in whenever
    `paper_ic_snapshot.py` is next touched.
 6. **Strategy payoff charts on Telegram (IC first, any strategy via opt-in registry)** — `docs/plan/strategy-payoff-charts/` — next **PC-2** (`src/strategy/payoff.py`). `chart-core/` (PC-2..19, no
@@ -1078,3 +1078,5 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
   proof deferred to B071.3 (classifier blocked the spawn while the agent def was uncommitted). Cosmetic 2-space indent on `.claude/hooks/inline_full_suite.sh` lines 3–4 left (needs operator edit).
 - [2026-10-03] BUG-071 closed: B071.3 `@test-runner` returned a verbatim pytest summary (no hook block). First full run showed 52 failed/24 errors (Greeks/VIX/bhavcopy ingest) but a rerun was 3954
   passed — transient, cause unknown, not reproduced. Hook comment-indent fixed.
+- [2026-10-03] `gamma-near-expiry/risk-gamma-phase-a` B2.2: pure `src/gamma/derive.py::derive_snapshots`, batched `GammaStore.get_prior_oi`, script `_fetch_chain` / `_fetch_and_snapshot` / `_runtime`.
+  greeks-analyst: bid=0 spread guard fixed. SHA backfill in next commit.

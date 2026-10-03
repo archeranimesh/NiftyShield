@@ -545,3 +545,52 @@ def test_get_gearing_by_dte(store, db_conn):
     # Fetch gearing for DTE = 1
     gearing_list_dte1 = store.get_gearing_by_dte(db_conn, target_dte=1, limit_days=2)
     assert gearing_list_dte1 == [decimal.Decimal("3.2")]
+
+
+def _prior_snap(date: datetime.date, time: str, strike: int, oi: int | None) -> GammaChainSnapshot:
+    return GammaChainSnapshot(
+        snapshot_date=date,
+        snapshot_time=time,
+        expiry_date=datetime.date(2026, 5, 28),
+        strike=strike,
+        option_type="CE",
+        dte_calendar=2,
+        nifty_spot=decimal.Decimal("25000"),
+        nifty_futures=None,
+        india_vix=None,
+        delta_val=None,
+        gamma_val=None,
+        vega_val=None,
+        theta_val=None,
+        iv_val=None,
+        gamma_gearing=None,
+        distance_pct=None,
+        best_bid=None,
+        best_ask=None,
+        bid_ask_spread=None,
+        oi=oi,
+        oi_change_1d=None,
+        volume_day=None,
+        strike_iv_pctile_20d=None,
+        gamma_gearing_pctile_dte=None,
+        created_at=datetime.datetime(2026, 5, 26, 9, 50, tzinfo=datetime.timezone.utc),
+    )
+
+
+def test_get_prior_oi_returns_latest_pre_today_per_key(store, db_conn):
+    expiry = datetime.date(2026, 5, 28)
+    today = datetime.date(2026, 5, 27)
+    for snap in (
+        _prior_snap(datetime.date(2026, 5, 25), "15:20", 25000, 100),
+        _prior_snap(datetime.date(2026, 5, 26), "09:20", 25000, 200),
+        _prior_snap(datetime.date(2026, 5, 26), "15:20", 25000, 300),
+        _prior_snap(datetime.date(2026, 5, 26), "15:20", 25100, None),
+        _prior_snap(today, "09:20", 25000, 999),
+    ):
+        store.insert_chain_snapshot(db_conn, snap)
+
+    assert store.get_prior_oi(db_conn, expiry, today) == {(25000, "CE"): 300}
+
+
+def test_get_prior_oi_empty_store(store, db_conn):
+    assert store.get_prior_oi(db_conn, datetime.date(2026, 5, 28), datetime.date(2026, 5, 27)) == {}

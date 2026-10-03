@@ -3,10 +3,26 @@
 from __future__ import annotations
 
 import sys
+from contextlib import contextmanager
 from datetime import date
-from unittest.mock import patch
+from decimal import Decimal
+from unittest.mock import MagicMock, patch
 
-from scripts.pipeline.gamma_daily_watch import main, resolve_expiries
+from structlog.testing import capture_logs
+
+from scripts.pipeline.gamma_daily_watch import (
+    _fetch_and_snapshot,
+    _fetch_chain,
+    main,
+    resolve_expiries,
+)
+from src.models.options import OptionChain, OptionChainStrike, OptionLeg
+
+
+@contextmanager
+def _fake_runtime(dry_run: bool):
+    """Stand-in for _runtime: no client, no DB."""
+    yield MagicMock(), MagicMock(), MagicMock()
 
 
 def test_resolve_expiries_mid_week() -> None:
@@ -116,7 +132,10 @@ def test_morning_flag_skips_watchlist() -> None:
     """If --morning is passed, _update_watchlist is not called."""
     test_args = ["gamma_daily_watch.py", "--morning"]
 
-    with patch.object(sys, "argv", test_args):
+    with (
+        patch.object(sys, "argv", test_args),
+        patch("scripts.pipeline.gamma_daily_watch._runtime", _fake_runtime),
+    ):
         with patch(
             "scripts.pipeline.gamma_daily_watch._fetch_and_snapshot", return_value=[]
         ) as mock_fetch:
@@ -130,7 +149,10 @@ def test_dry_run_flag_propagates() -> None:
     """If --dry-run is passed, dry_run=True flows into _fetch_and_snapshot and _update_watchlist."""
     test_args = ["gamma_daily_watch.py", "--dry-run"]
 
-    with patch.object(sys, "argv", test_args):
+    with (
+        patch.object(sys, "argv", test_args),
+        patch("scripts.pipeline.gamma_daily_watch._runtime", _fake_runtime),
+    ):
         with patch(
             "scripts.pipeline.gamma_daily_watch._fetch_and_snapshot", return_value=[]
         ) as mock_fetch:
@@ -147,7 +169,10 @@ def test_date_override_option() -> None:
     """If --date is passed, it override today reference date."""
     test_args = ["gamma_daily_watch.py", "--date", "2026-05-15"]
 
-    with patch.object(sys, "argv", test_args):
+    with (
+        patch.object(sys, "argv", test_args),
+        patch("scripts.pipeline.gamma_daily_watch._runtime", _fake_runtime),
+    ):
         with patch(
             "scripts.pipeline.gamma_daily_watch.resolve_expiries",
             return_value=(date(2026, 5, 21), date(2026, 5, 28)),
@@ -160,3 +185,91 @@ def test_date_override_option() -> None:
                     mock_resolve.assert_called_once_with(date(2026, 5, 15))
                     mock_fetch.assert_called_once()
                     assert mock_fetch.call_args[1]["today"] == date(2026, 5, 15)
+
+
+def _chain_with_one_strike() -> OptionChain:
+    leg = OptionLeg(
+        ltp=Decimal("10"),
+        bid=Decimal("9"),
+        ask=Decimal("10"),
+        oi=100,
+        volume=5,
+        delta=Decimal("0.5"),
+        gamma=Decimal("0.001"),
+        theta=None,
+        vega=None,
+        iv=None,
+        strike=Decimal("25000"),
+    )
+    return OptionChain(
+        underlying_spot=Decimal("25000"),
+        expiry=date(2026, 4, 21),
+        strikes={Decimal("25000"): OptionChainStrike(ce=leg, pe=leg)},
+    )
+
+
+def test_fetch_chain_empty_response() -> None:
+    """An empty broker response returns None and logs a warning."""
+    client = MagicMock()
+    client.get_option_chain_sync.return_value = []
+
+    with capture_logs() as logs:
+        assert _fetch_chain(client, date(2026, 4, 21)) is None
+
+    assert any(e["log_level"] == "warning" for e in logs)
+    client.get_option_chain_sync.assert_called_once_with("NSE_INDEX|Nifty 50", "2026-04-21")
+
+
+def test_fetch_and_snapshot_batches_prior_oi() -> None:
+    """Prior OI is looked up once per expiry, not once per strike."""
+    store = MagicMock()
+    store.get_prior_oi.return_value = {(25000, "CE"): 80}
+    expiries = (date(2026, 4, 21), date(2026, 4, 28))
+
+    with patch(
+        "scripts.pipeline.gamma_daily_watch._fetch_chain", return_value=_chain_with_one_strike()
+    ):
+        snaps = _fetch_and_snapshot(
+            MagicMock(), expiries, date(2026, 4, 20), "09:20", store, MagicMock(), dry_run=False
+        )
+
+    assert store.get_prior_oi.call_count == 2
+    assert len(snaps) == 4
+    assert snaps[0].oi_change_1d == Decimal("0.25")
+
+
+def test_fetch_and_snapshot_dry_run_skips_store() -> None:
+    """dry_run derives rows without touching the store."""
+    store = MagicMock()
+
+    with patch(
+        "scripts.pipeline.gamma_daily_watch._fetch_chain", return_value=_chain_with_one_strike()
+    ):
+        snaps = _fetch_and_snapshot(
+            MagicMock(),
+            (date(2026, 4, 21), date(2026, 4, 28)),
+            date(2026, 4, 20),
+            "09:20",
+            store,
+            MagicMock(),
+            dry_run=True,
+        )
+
+    assert store.method_calls == []
+    assert len(snaps) == 4 and snaps[0].oi_change_1d is None
+
+
+def test_fetch_and_snapshot_skips_expiry_with_no_chain() -> None:
+    """An expiry whose chain is None contributes no rows."""
+    with patch("scripts.pipeline.gamma_daily_watch._fetch_chain", return_value=None):
+        snaps = _fetch_and_snapshot(
+            MagicMock(),
+            (date(2026, 4, 21), date(2026, 4, 28)),
+            date(2026, 4, 20),
+            "09:20",
+            MagicMock(),
+            MagicMock(),
+            dry_run=False,
+        )
+
+    assert snaps == []

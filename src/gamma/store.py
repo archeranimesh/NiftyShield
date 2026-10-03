@@ -333,6 +333,39 @@ class GammaStore:
         ).fetchone()
         return _row_to_chain_snapshot(row) if row is not None else None
 
+    def get_prior_oi(
+        self,
+        conn: sqlite3.Connection,
+        expiry_date: datetime.date,
+        today: datetime.date,
+    ) -> dict[tuple[int, str], int]:
+        """Fetch the latest prior-day OI per (strike, option_type) in one query.
+
+        Args:
+            conn: An open SQLite connection.
+            expiry_date: Expiry date to filter by.
+            today: Date threshold (only snapshots strictly before this date).
+
+        Returns:
+            Mapping of (strike, option_type) to the OI of that option's most
+            recent snapshot before today. Rows with NULL OI are omitted.
+        """
+        rows = conn.execute(
+            """
+            SELECT strike, option_type, oi FROM (
+                SELECT strike, option_type, oi,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY strike, option_type
+                           ORDER BY snapshot_date DESC, snapshot_time DESC
+                       ) AS rn
+                FROM gamma_chain_snapshots
+                WHERE expiry_date = ? AND snapshot_date < ? AND oi IS NOT NULL
+            ) WHERE rn = 1
+            """,
+            (expiry_date.isoformat(), today.isoformat()),
+        ).fetchall()
+        return {(int(r["strike"]), r["option_type"]): int(r["oi"]) for r in rows}
+
     def upsert_watchlist(self, conn: sqlite3.Connection, entry: GammaWatchlistEntry) -> None:
         """Insert or update a watchlist entry.
 
