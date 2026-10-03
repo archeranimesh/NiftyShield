@@ -696,3 +696,58 @@ class TestCaptureEntryMargin:
         )
 
         assert result is None
+
+
+# ---------------------------------------------------------------------------
+# BUG-069 — drain_alerts awaits fire-and-forget gate alerts before exit
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_drain_alerts_awaits_slow_send():
+    import asyncio
+
+    from scripts.strategies.ic.ic_entry_gates import drain_alerts
+
+    sent: list[str] = []
+
+    async def _slow_send() -> None:
+        await asyncio.sleep(0.05)
+        sent.append("x")
+
+    await drain_alerts([asyncio.get_running_loop().create_task(_slow_send())], timeout=1.0)
+    assert sent == ["x"]
+
+
+@pytest.mark.asyncio
+async def test_drain_alerts_swallows_failure_and_times_out():
+    import asyncio
+
+    from scripts.strategies.ic.ic_entry_gates import drain_alerts
+
+    async def _boom() -> None:
+        raise RuntimeError("telegram down")
+
+    async def _hang() -> None:
+        await asyncio.sleep(60)
+
+    loop = asyncio.get_running_loop()
+    hang = loop.create_task(_hang())
+    await drain_alerts([loop.create_task(_boom()), hang], timeout=0.05)  # must not raise
+    await asyncio.sleep(0)
+    assert hang.cancelled()
+    await drain_alerts([])  # empty list is a no-op
+
+
+@pytest.mark.asyncio
+async def test_drain_alerts_tolerates_precancelled_task():
+    import asyncio
+
+    from scripts.strategies.ic.ic_entry_gates import drain_alerts
+
+    async def _noop() -> None:
+        await asyncio.sleep(60)
+
+    t = asyncio.get_running_loop().create_task(_noop())
+    t.cancel()
+    await drain_alerts([t], timeout=0.5)  # must not raise CancelledError

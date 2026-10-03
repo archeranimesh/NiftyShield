@@ -22,6 +22,7 @@ Usage::
 
 from __future__ import annotations
 
+import asyncio
 import calendar
 import sys
 from collections.abc import Callable
@@ -43,6 +44,8 @@ from src.paper.store import PaperStore
 
 _SCRIPT_NAME = "scripts.strategies.ic.ic_entry_gates"
 logger = structlog.get_logger(_SCRIPT_NAME)
+
+ALERT_DRAIN_TIMEOUT_S = 10.0
 
 
 def make_gate_violation(
@@ -152,6 +155,23 @@ def _post_expiry_gate() -> None:
 # ---------------------------------------------------------------------------
 # Gate 1 — Duplicate position guard
 # ---------------------------------------------------------------------------
+
+
+async def drain_alerts(tasks: list[asyncio.Task], timeout: float = ALERT_DRAIN_TIMEOUT_S) -> None:
+    """Await fire-and-forget gate-alert tasks so a following ``sys.exit`` cannot drop them.
+
+    Bounded by ``timeout``; failures and timeouts are swallowed (alerting is non-fatal).
+    """
+    if not tasks:
+        return
+    done, pending = await asyncio.wait(tasks, timeout=timeout)
+    for t in done:
+        if not t.cancelled():
+            t.exception()  # mark retrieved; send() is already non-fatal
+    for t in pending:
+        t.cancel()
+    if pending:
+        logger.warning("ic_entry.alert_drain_timeout", unsent=len(pending))
 
 
 def check_duplicate(

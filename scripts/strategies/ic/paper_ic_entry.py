@@ -29,6 +29,7 @@ from scripts.strategies.ic.ic_entry_gates import (
     _post_expiry_gate,
     capture_entry_margin,
     describe_missing_legs,
+    drain_alerts,
     make_gate_violation,
 )
 from src.backtest.ivr import compute_ivr
@@ -233,7 +234,20 @@ def parse_args() -> argparse.Namespace:
 
 
 async def run() -> None:
-    """Run the Iron Condor entry workflow."""
+    """Run the Iron Condor entry workflow.
+
+    Gate-failure alerts are fire-and-forget tasks; they are drained (bounded) in
+    ``finally`` so every ``sys.exit`` abort path still delivers its alert (BUG-069).
+    """
+    pending_alerts: list[asyncio.Task] = []
+    try:
+        await _run_entry(pending_alerts)
+    finally:
+        await drain_alerts(pending_alerts)
+
+
+async def _run_entry(pending_alerts: list[asyncio.Task]) -> None:
+    """Entry workflow body; ``_gate_alert`` registers its send tasks in ``pending_alerts``."""
     setup_logging()
     args = parse_args()
     config = CONFIGS[args.expiry_type]
@@ -256,7 +270,7 @@ async def run() -> None:
             return
         msg = escape_markdown(msg)
         try:
-            asyncio.get_running_loop().create_task(_tg.send(msg))
+            pending_alerts.append(asyncio.get_running_loop().create_task(_tg.send(msg)))
         except Exception:  # noqa: BLE001
             pass
 

@@ -1558,3 +1558,40 @@ async def test_entry_aborts_without_legs_when_credit_clear_fails(
     assert excinfo.value.code == 1
     mock_subprocess.assert_not_called()
     mock_store.set_original_entry_credit.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("send_fails", [False, True])
+async def test_bug069_alert_delivered_before_exit(send_fails):
+    """BUG-069: a slow gate-alert send completes before run() raises SystemExit(1);
+    a failing send still exits 1."""
+    import asyncio
+
+    delivered: list[str] = []
+
+    async def _send(msg: str) -> None:
+        await asyncio.sleep(0.05)
+        if send_fails:
+            raise RuntimeError("telegram down")
+        delivered.append(msg)
+
+    with (
+        patch("scripts.strategies.ic.paper_ic_entry.build_notifier") as mock_build_notifier,
+        patch("scripts.strategies.ic.paper_ic_entry.PaperStore") as mock_store_cls,
+        patch(
+            "sys.argv",
+            ["scripts/strategies/ic/paper_ic_entry.py", "--expiry-type", "monthly", "--db-path", "dummy.db"],
+        ),
+    ):
+        mock_notifier = MagicMock()
+        mock_notifier.send = _send
+        mock_build_notifier.return_value = mock_notifier
+        pos = MagicMock()
+        pos.net_qty = 1
+        mock_store_cls.return_value.get_positions.return_value = [pos]
+
+        with pytest.raises(SystemExit) as exc:
+            await run()
+
+    assert exc.value.code == 1
+    assert len(delivered) == (0 if send_fails else 1)
