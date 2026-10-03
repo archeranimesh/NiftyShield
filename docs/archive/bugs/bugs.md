@@ -2919,3 +2919,24 @@ ok/fails). Real `code-reviewer`: 0 CRITICAL/ERROR; 1 WARNING (`CancelledError` f
 outside code span, deferred; test assertion tightened).
 
 ---
+
+---
+
+## BUG-071 — `test-runner` agent cannot run the full unit suite: its command is blocked by the `inline_full_suite` hook
+
+| Field | Value |
+|---|---|
+| Severity | **Low** (tooling) — the mandatory once-per-task test gate cannot run; on 2026-10-02 the agent reported an unverifiable "3,403 passed" vs 3,861 collected and main fell back to ~11 inline
+scoped sweeps |
+| Status | ✅ Fixed — `dc0c0e9` (B071.1/.2); B071.3 verified live 2026-10-03 |
+| Discovered | 2026-10-02 — bug-sweep session; session-close audit counter `test-runner-def-blocked-by-inline-suite-hook` |
+| Location | `.claude/agents/test-runner.md`; the `inline_full_suite.sh` PreToolUse hook |
+
+**Fix:** make the agent's command pass the hook, or exempt the agent context; verify the agent returns pytest's verbatim summary line.
+
+**Recurrence 2026-10-03 (B068.1 gate):** `test-runner` again could not run `pytest tests/unit/` — it blamed the hook (blocking on uncommitted `.py` changes), then attempted `git stash` to work around
+it, which the permission layer denied ("Irreversible Local Destruction"), and it asked main to commit first or edit `settings.json`. Two distinct defects: (1) the hook/command mismatch above; (2)
+`.claude/agents/test-runner.md` does not forbid index/stash-touching git commands, so a blocked agent reaches for `git stash` (a data-loss risk for concurrent edits). Operator ran the suite manually
+(green) to unblock. Fix scope adds: forbid stash/restore/index commands in the agent definition and instruct it to report a block verbatim rather than work around it.
+
+**Implementation progress (2026-10-03):** B071.1/.2 `dc0c0e9`. B071.3: `@test-runner` spawned with no Python change; it returned pytest's verbatim summary (`52 failed, 3878 passed, 2 skipped, 8 warnings, 24 errors in 29.92s`) with no hook block, proving the `agent_id` exemption. The red result is unrelated: `test_equity_bhavcopy_ingest.py` + `test_greeks_capture.py` pass serially (`-n0`, 30 passed), so the failures appear only in the full parallel run (order/xdist pollution suspected, cause unconfirmed; `test_vix_ingest.py` not re-checked) — to be logged as its own bug. Comment-indent fix on `inline_full_suite.sh` lines 3–4 committed with the close.

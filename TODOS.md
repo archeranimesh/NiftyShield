@@ -1076,3 +1076,5 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
   DECISIONS.md dead links) and collapsed the plan README row. Docs-only.
 - [2026-10-03] BUG-071 B071.1/.2: `inline_full_suite` hook exempts subagent payloads (`agent_id`); `test-runner.md` forbids stash/index git commands and reports blocks verbatim. Live `@test-runner`
   proof deferred to B071.3 (classifier blocked the spawn while the agent def was uncommitted). Cosmetic 2-space indent on `.claude/hooks/inline_full_suite.sh` lines 3–4 left (needs operator edit).
+- [2026-10-03] BUG-071 closed: B071.3 `@test-runner` returned a verbatim pytest summary (no hook block). Suite red in full xdist run (52 failed/24 errors) but the sampled files pass serially —
+  pollution suspected, new bug to be logged. Hook comment-indent fixed.

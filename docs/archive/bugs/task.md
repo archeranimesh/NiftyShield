@@ -1016,3 +1016,11 @@ Detail: `docs/bugs/bugs.md` BUG-070.
 
 - [x] **B070.1** — Decided: accept the non-atomic window, detect flat-but-OPEN legs at daemon startup; recorded in `DECISIONS.md`. | SHA `a006ebd`
 - [x] **B070.2** — `find_stale_flat_legs` + startup Telegram warning (alert only); tests added. | SHA `a006ebd`
+
+## BUG-071 — `test-runner` agent cannot run the full suite: blocked by the `inline_full_suite` hook
+
+Detail: `docs/bugs/bugs.md` BUG-071.
+
+- [x] **B071.1** — Hook exempts payloads carrying `agent_id` (subagent calls); unit-tested. | SHA `dc0c0e9`
+- [x] **B071.2** — `test-runner.md` forbids stash/restore/index git commands and says to report a block verbatim. | SHA `dc0c0e9`
+- [x] **B071.3** — `@test-runner` returned pytest's verbatim summary with no hook block (live proof of `agent_id` exemption). | SHA `PENDING`

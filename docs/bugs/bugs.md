@@ -36,22 +36,7 @@
 
 ---
 
-## BUG-071 — `test-runner` agent cannot run the full unit suite: its command is blocked by the `inline_full_suite` hook
-
-| Field | Value |
-|---|---|
-| Severity | **Low** (tooling) — the mandatory once-per-task test gate cannot run; on 2026-10-02 the agent reported an unverifiable "3,403 passed" vs 3,861 collected and main fell back to ~11 inline
-scoped sweeps |
-| Status | 🟡 Fix in progress — B071.1/.2 landed 2026-10-03 (`dc0c0e9`); B071.3 live `@test-runner` verification deferred to next code session |
-| Discovered | 2026-10-02 — bug-sweep session; session-close audit counter `test-runner-def-blocked-by-inline-suite-hook` |
-| Location | `.claude/agents/test-runner.md`; the `inline_full_suite.sh` PreToolUse hook |
-
-**Fix:** make the agent's command pass the hook, or exempt the agent context; verify the agent returns pytest's verbatim summary line.
-
-**Recurrence 2026-10-03 (B068.1 gate):** `test-runner` again could not run `pytest tests/unit/` — it blamed the hook (blocking on uncommitted `.py` changes), then attempted `git stash` to work around
-it, which the permission layer denied ("Irreversible Local Destruction"), and it asked main to commit first or edit `settings.json`. Two distinct defects: (1) the hook/command mismatch above; (2)
-`.claude/agents/test-runner.md` does not forbid index/stash-touching git commands, so a blocked agent reaches for `git stash` (a data-loss risk for concurrent edits). Operator ran the suite manually
-(green) to unblock. Fix scope adds: forbid stash/restore/index commands in the agent definition and instruct it to report a block verbatim rather than work around it.
+## BUG-071 [MOVED] — see `docs/archive/bugs/bugs.md` (closed 2026-10-03)
 
 ---
 
