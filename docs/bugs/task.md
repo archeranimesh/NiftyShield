@@ -65,8 +65,8 @@
 
 Detail: `docs/bugs/bugs.md` BUG-071.
 
-- [x] **B071.1** — Hook exempts payloads carrying `agent_id` (subagent calls); unit-tested. | SHA pending
-- [x] **B071.2** — `test-runner.md` forbids stash/restore/index git commands and says to report a block verbatim. | SHA pending
+- [x] **B071.1** — Hook exempts payloads carrying `agent_id` (subagent calls); unit-tested. | SHA `dc0c0e9`
+- [x] **B071.2** — `test-runner.md` forbids stash/restore/index git commands and says to report a block verbatim. | SHA `dc0c0e9`
 - [ ] **B071.3** — Next session that modifies Python code: spawn `@test-runner` and confirm it returns pytest's verbatim summary line for `tests/unit/` (live proof `agent_id` exempts it). The
   auto-mode classifier blocked the spawn while the agent def was uncommitted-modified, so it was deferred 2026-10-03 (Animesh). If it still reports a hook block, rework the exemption.
 
