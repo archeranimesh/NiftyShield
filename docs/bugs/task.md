@@ -61,7 +61,7 @@
 
 > BUG-070 closed 2026-10-03 (SHA `a006ebd`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
-> BUG-071 closed 2026-10-03 (SHA `PENDING`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
+> BUG-071 closed 2026-10-03 (SHA `24b0eb2`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
 ## BUG-060 — Expired paper overlay legs are never settled or closed
 

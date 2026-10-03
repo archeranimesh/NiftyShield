@@ -1023,4 +1023,4 @@ Detail: `docs/bugs/bugs.md` BUG-071.
 
 - [x] **B071.1** — Hook exempts payloads carrying `agent_id` (subagent calls); unit-tested. | SHA `dc0c0e9`
 - [x] **B071.2** — `test-runner.md` forbids stash/restore/index git commands and says to report a block verbatim. | SHA `dc0c0e9`
-- [x] **B071.3** — `@test-runner` returned pytest's verbatim summary with no hook block (live proof of `agent_id` exemption). | SHA `PENDING`
+- [x] **B071.3** — `@test-runner` returned pytest's verbatim summary with no hook block (live proof of `agent_id` exemption). | SHA `24b0eb2`
