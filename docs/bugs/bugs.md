@@ -44,6 +44,34 @@
 
 ---
 
+## BUG-072 — `gamma_daily_watch.py` has no trading-day guard: on an exchange holiday or weekend it would persist a stale duplicate of the last session's chain
+
+| Field | Value |
+|---|---|
+| Severity | **Medium now, High once the cron is enabled** — latent today (no cron line, nothing persisted); once live it corrupts the history that decisions D3 and D5 read |
+| Status | 🔴 Open |
+| Discovered | 2026-10-03 — first manual `--dry-run`, run on a Saturday night, processed both expiries normally |
+| Location | `scripts/pipeline/gamma_daily_watch.py::main` (no check on `today`); the only `is_trading_day` use is inside `resolve_expiries` |
+
+**Symptom:** `python -m scripts.pipeline.gamma_daily_watch --dry-run` on Saturday 2026-10-03 resolved expiries 2026-10-06 and 2026-10-13, got HTTP 200 from the Upstox option-chain endpoint for both,
+and derived 180 rows per expiry. Nothing in the log says the market was closed.
+
+**Root cause:** Upstox serves the last session's chain on non-trading days instead of an empty response, so the empty-chain branch in `_fetch_chain` (which returns `None` with a WARNING) never fires.
+`main()` never asks whether `today` is a trading day, and the planned cron (`1-5`) includes exchange holidays.
+
+**Impact if enabled unfixed:** a holiday run inserts a second copy of the previous day's rows under a new `snapshot_date`. `oi_change_1d` is then 0 for every strike, "2 consecutive days" removal rules
+count a repeated day as a distinct one, and the distinct-day percentile gate (D5) reaches 20 days earlier than it should.
+
+**Fix (not yet implemented):** at the top of `main()`, when `not is_trading_day(today)`: a real run logs `gamma_daily_watch.non_trading_day` at INFO and exits 0 before any fetch; a `--dry-run` logs
+the same event as a WARNING and continues, so off-hours testing (as on 2026-10-03) still works. Repro tests: a holiday date with `dry_run=False` makes no client or store call and exits 0; a trading
+day is unchanged; a holiday with `--dry-run` still derives rows.
+
+**Related, not yet confirmed as defects (do not log as bugs):** (a) the `>= 3.0` gearing floor in strategy §5b looks non-binding at the implemented scale of `gamma × spot² / ask` (the derive test
+fixture gives 62,500), which would also affect Phase B Layer 2 — verify from live values, then settle with council Q2 before GS-2; (b) one WARNING per zero-ask row floods the log (hundreds of lines
+per run) — a per-expiry summary count would be quieter. Both are noted in `TODOS.md`.
+
+---
+
 ## BUG-060 — Expired paper overlay legs are never settled or closed; they stay `OPEN` in `paper_trades` after expiry and block the next bootstrap entry
 
 | Field | Value |

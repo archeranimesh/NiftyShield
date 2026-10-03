@@ -87,6 +87,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-03] Filed BUG-072 (gamma_daily_watch has no trading-day guard; found by a Saturday `--dry-run`). Unconfirmed suspicions left here: gamma-gearing scale vs the 3.0/5.0 floors (print a live
+  gearing distribution, then council Q2 before GS-2) and per-row `ask=0` WARNING noise. Gamma cron line stays commented out until B072.1 lands. Docs only.
 - [2026-10-03] gamma-near-expiry B2.5 closed (`3906c15`): percentile calibration (`update_percentiles`, 20-distinct-day gate, D5) + non-fatal Telegram summary; Phase A complete; `test-runner` green
   (4009), `code-reviewer` and `greeks-analyst` clean (warnings deferred).
 - [2026-10-03] gamma-near-expiry B2.4 closed (`c5126be`): pure `src/gamma/watchlist.py` + `get_prior_snapshots` / `get_all_active_watchlist` + `_update_watchlist` (D3/D4); `test-runner` green (3992),

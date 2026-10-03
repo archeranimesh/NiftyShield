@@ -63,6 +63,15 @@
 
 > BUG-071 closed 2026-10-03 (SHA `24b0eb2`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
+## BUG-072 — `gamma_daily_watch.py` has no trading-day guard (stale duplicate snapshots on holidays)
+
+Detail: `docs/bugs/bugs.md` BUG-072. Fix before the gamma cron line is enabled.
+
+- [ ] **B072.1** — Add the trading-day guard to `main()` (real run: log and exit 0 before any fetch; `--dry-run`: warn and continue) with the three repro tests.
+- [ ] **B072.2** — Confirm on the first trading day: a `--dry-run` during market hours is unchanged, then enable the commented 15:20 cron line in the crontab.
+
+---
+
 ## BUG-060 — Expired paper overlay legs are never settled or closed
 
 Detail: `docs/bugs/bugs.md` BUG-060. Settle-price source decision comes first.
