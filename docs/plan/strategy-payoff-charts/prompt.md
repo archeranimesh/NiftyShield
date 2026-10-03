@@ -1,10 +1,10 @@
-# IC Payoff Charts — prompt (router)
+# Strategy Payoff Charts — prompt (router)
 
 Central entry point for this epic. `/work` loads this file, **not** a sub-story `prompt.md`. Read `CONTEXT.md` and state `CONTEXT.md ✓` before anything else, then follow the steps below to find and
 run exactly one task.
 
 **Origin:** `README.md` in this folder — the epic index. Read it if you have not this session; it carries the scope decisions, the ordered story list, the cross-cutting constraints (non-fatal send
-contract, additive-send rule, renderer-degrades rule, message budget), and the `greeks-bs-fallback/` dependency this router's logic depends on.
+contract, additive-send rule, renderer-degrades rule, opt-in registration, message budget), and the `greeks-bs-fallback/` dependency this router's logic depends on.
 
 ---
 
@@ -12,7 +12,7 @@ contract, additive-send rule, renderer-degrades rule, message budget), and the `
 
 Story order is fixed — it is the row order of the **Stories** table in this folder's `README.md`:
 
-1. `chart-core/` — expiry payoff chart + `send_photo` plumbing + lifecycle wiring. Depends on: nothing.
+1. `chart-core/` — generic expiry payoff chart + opt-in strategy registry + `send_photo` plumbing + IC lifecycle wiring. Depends on: nothing.
 2. `chart-model-overlay/` — T+0 curve + ±1σ/±2σ bands + POP. Depends on: `chart-core/` complete **and** `greeks-bs-fallback/` GF-2 + GF-3 shipped.
 
 Do not jump ahead even if a later task looks more urgent.

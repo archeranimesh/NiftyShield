@@ -1,6 +1,7 @@
 # Chart Model Overlay — prompt
 
-> Add the model-driven layer to the payoff chart: the blue dashed T+0 mark-to-market curve, the ±1σ/±2σ expected-move bands, and POP (probability of profit) in the stat strip.
+> Add the model-driven layer to the payoff chart for **any registered strategy**: the blue dashed T+0 mark-to-market curve, the ±1σ/±2σ expected-move bands, and POP (probability of profit) in the stat
+> strip. This is the Black-Scholes-dependent half of the epic, deliberately deferred until `greeks-bs-fallback/` ships; everything else is already in `chart-core/`.
 
 Read `CONTEXT.md` and state `CONTEXT.md ✓` before anything else. Then read `tasks.md`, find the first unchecked `- [ ]`, and do **only** that task. Read that task's full spec in `stories.md` (same
 task id) before writing any code. One task per session. Complete it fully. Stop.
@@ -22,9 +23,9 @@ The Stockmock reference chart shows more than the expiry payoff: a T+0 curve (to
 
 ## Scope guard
 
-**In bounds:** new module `src/pricing/expected_move.py` (expected-move + POP math on top of the `greeks-bs-fallback/` pricer); a shared ATM-IV accessor (V1 has none); a T+0 P&L series builder;
-additive extensions to `src/notifications/payoff_chart.py` (`render_expiry_payoff_png` / `build_and_send_ic_payoff` gain optional args); threading per-leg IV + DTE through the five call sites
-`chart-core/` wired.
+**In bounds:** new module `src/pricing/expected_move.py` (expected-move + POP math on top of the `greeks-bs-fallback/` pricer); a shared ATM-IV accessor (V1 has none); a generic T+0 P&L series builder
+over `PayoffLeg`s; additive extensions to `src/notifications/payoff_chart.py` (`render_payoff_png` / `send_payoff_chart` gain optional args); an optional market-context hook on `PayoffAdapter` that
+supplies per-leg IV, mid and DTE — so the five call sites `chart-core/` wired need no edit.
 
 **Out of bounds:** `src/pricing/black_scholes.py` and `src/pricing/implied_vol.py` themselves (owned by `greeks-bs-fallback/` — consume, do not edit); the three modeling decisions (risk-free rate, DTE
 convention, delta tolerance — inherited from `greeks-bs-fallback/` GF-1, use whatever it decided); the expiry payoff trapezoid + stat strip basics (done in `chart-core/`); any DB schema change.
@@ -41,20 +42,20 @@ Changes `src/` and `scripts/` behaviour (richer chart). Not docs/tooling only.
 
 ## Task overview
 
-- **MO-1** — `src/pricing/expected_move.py`: `expected_move` + `pop_between` (`math.erf`).
+- **MO-1** — `src/pricing/expected_move.py`: `expected_move` + `pop_of_profit` (`math.erf`).
 - **MO-2** — shared `atm_iv(chain)` accessor.
 - **MO-3** — `t0_pnl_series(...)` using `src/pricing/black_scholes.py`, `solve_iv` fallback for `iv == 0`.
 - **MO-4** — draw the blue dashed T+0 curve on the chart.
 - **MO-5** — draw the ±1σ/±2σ verticals + shaded bands.
 - **MO-6** — add POP to the stat strip.
-- **MO-7** — thread DTE + per-leg IV through `build_and_send_ic_payoff` + both entry scripts.
-- **MO-8** — thread the same through the EOD snapshot + both close paths.
+- **MO-7** — optional `market(ctx)` hook on `PayoffAdapter` + `send_payoff_chart` computes the overlay from it.
+- **MO-8** — IC adapters implement the hook at all five lifecycle points (entry, EOD, close).
 - **MO-9** — docs close (epic complete).
 
 ## Definition of done
 
 Mirrors `tasks.md` "## Story done when". In short: the same renderer additionally draws the T+0 curve, the σ bands, and POP; each degrades cleanly when its input (IV, DTE) is missing or unsolvable;
-every call site passes the new inputs; the epic's docs record the dependency as satisfied and the epic as complete.
+the registered adapter supplies the new inputs (no call-site change for strategies that already send a chart); the epic's docs record the dependency as satisfied and the epic as complete.
 
 ## Perspectives not covered
 

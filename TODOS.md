@@ -19,10 +19,10 @@ rot them. (Items 3 and 8 closed 2026-10-02 — numbers kept stable because item 
    stories.
 5. **Fix dead IC EOD report query** — `scripts/strategies/ic/paper_ic_snapshot.py` (no story folder) — the "Intraday actions" query is dead code, found in the DT-3a audit. Small; fold in whenever
    `paper_ic_snapshot.py` is next touched.
-6. **IC payoff charts on Telegram** — `docs/plan/ic-payoff-charts/` — next **PC-2** (`src/strategy/payoff.py`). `chart-core/` (PC-2..15, no option model) ships now; `chart-model-overlay/` (MO-1..9) is
-   blocked on `greeks-bs-fallback` GF-2 + GF-3, so it waits for item 7.
+6. **Strategy payoff charts on Telegram (IC first, any strategy via opt-in registry)** — `docs/plan/strategy-payoff-charts/` — next **PC-2** (`src/strategy/payoff.py`). `chart-core/` (PC-2..19, no
+   option model: generic payoff math + registry + IC wiring) ships now; `chart-model-overlay/` (MO-1..9) is blocked on `greeks-bs-fallback` GF-2 + GF-3, so it waits for item 7.
 7. **Greeks Black-Scholes fallback** — `docs/plan/greeks-bs-fallback/` — next **GF-1** (read-only audit scope). Needs Animesh's three modeling decisions (rate / DTE convention / delta tolerance)
-   before GF-2. Unblocks delta-based IC entry for the yearly bucket and `ic-payoff-charts` `chart-model-overlay/`.
+   before GF-2. Unblocks delta-based IC entry for the yearly bucket and `strategy-payoff-charts` `chart-model-overlay/`.
 9. **Portfolio snapshot slimdown** — `docs/plan/portfolio-snapshot-slimdown/` — next **FD-1** (pre-delete audit). Epic, fixed order: `finideas-decommission/` (FD-1..7) → `dhan-holdings-removal/`
    (DHR-1..4); both rework `_build_portfolio_summary` + `_format_combined_summary`, so never interleave. No `schema.md`. Requested by Animesh 2026-09-10.
 10. **Strategy module refactor & AI-collaboration blueprint** — `docs/plan/strategy-refactor-blueprint/` — next **BP-1** (`/md-organize` run), then BP-2 (after item 2), BP-3 council, BP-4, BP-5.
@@ -295,7 +295,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 - [2026-09-22] `doc-format-migration/` `plan-folders/` DFM-3 — restructured `broker-abstraction/` (tier B, first of 4): consolidated 16 `stories/BA-N.md` files into one `stories.md`, canonical
   task-line format, reflow. No shipped tasks, no digests needed. SHA: `525c0d2`. DFM-3 not ticked — `full-repo-review/`, `historical-data-abstraction/` remain.
 - [2026-09-22] `doc-format-migration/` `plan-folders/` DFM-2 closed — converted the remaining 12 tier-A folders (`backtest-eval-core/`, `chain-decay-analysis/`, `entry-event-filter/`,
-  `full-repo-review-followups/`, `greeks-bs-fallback/`, `ic-payoff-charts/`, `mvp/`, `options_income/`, `risk-gamma-phase-a/`, `signals-eval-core/`, `technical-debt/`, `variance-gate/`) via 12
+  `full-repo-review-followups/`, `greeks-bs-fallback/`, `strategy-payoff-charts/`, `mvp/`, `options_income/`, `risk-gamma-phase-a/`, `signals-eval-core/`, `technical-debt/`, `variance-gate/`) via 12
   parallel subagents, one commit each (SHAs: `7fcdba2`, `8b1c5df`, `b22052a`, `4dc1ed1`, `0a2838a`, `500c290`, `8455d50`, `ddf0964`, `1f0a6cd`, `6a9c87e`, `b1bf839`, `0b8d897`);
   `portfolio-snapshot-slimdown/` needed zero changes (already canonical + reflow-clean). Notable catches beyond format: `full-repo-review-followups/` had 6 sub-story `tasks.md` files with task
   descriptions truncated mid-sentence since the original authoring commit (`149408f`), reconstructed from each sub-story's `stories.md`; `mvp/`/`options_income/`/`variance-gate/` legacy filenames
