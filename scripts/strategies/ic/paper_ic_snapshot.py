@@ -165,6 +165,48 @@ def get_action_taken(row: dict[str, Any]) -> str:
     return "CLOSE_FULL"
 
 
+def _build_actions_value(db_path: Path | str, strategy_name: str, snap_date: date) -> str:
+    """Render today's ACTED exit events as the report's Actions value.
+
+    Each event renders as `action` \\(signal at HH:MM\\); the time is omitted
+    when ``event_time`` is not a parseable ISO timestamp. Rows are converted
+    to plain dicts because ``get_action_taken`` uses ``.get``, which
+    ``sqlite3.Row`` lacks.
+
+    Args:
+        db_path: Path to the portfolio SQLite database.
+        strategy_name: Strategy whose ACTED events to read.
+        snap_date: Snapshot date; only events stamped that day are included.
+
+    Returns:
+        MarkdownV2-ready string, or ``"None"`` when nothing was acted on.
+    """
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = [
+            dict(r)
+            for r in conn.execute(
+                """SELECT exit_signal, notes, event_time, actual_rule_used
+                   FROM paper_exit_events
+                   WHERE strategy_name = ? AND status = 'ACTED'
+                     AND substr(event_time, 1, 10) = ?
+                   ORDER BY event_time ASC""",
+                (strategy_name, snap_date.isoformat()),
+            )
+        ]
+    if not rows:
+        return "None"
+    parts = []
+    for row in rows:
+        try:
+            when = f" at {datetime.fromisoformat(row['event_time']).strftime('%H:%M')}"
+        except (ValueError, TypeError):
+            when = ""
+        note = escape_markdown(f"{row['exit_signal']}{when}")
+        parts.append(f"{mdcode(get_action_taken(row))} \\({note}\\)")
+    return ", ".join(parts)
+
+
 def compute_net_greek(values: list[Decimal | None]) -> Decimal | None:
     """Sum a Greek across all legs, or None if ANY leg is missing it.
 
@@ -475,42 +517,7 @@ async def process_variant(
         signal_codes.append("DTE_WARN")
     alert_value = ", ".join(mdcode(s) for s in signal_codes) if signal_codes else "None"
 
-    # Intraday acted events -- each rendered as `action` \(signal at HH:MM\),
-    # condensing the old "signal → action executed at time" sentence into
-    # the Actions line without losing which signal triggered which action.
-    acted_events = []
-    with sqlite3.connect(store.db_path) as conn:
-        conn.row_factory = sqlite3.Row
-        rows = conn.execute(
-            """SELECT exit_signal, notes, event_time, actual_rule_used
-               FROM paper_exit_events
-               WHERE strategy_name = ? AND status = 'ACTED'
-               ORDER BY event_time ASC""",
-            (config.strategy_name,),
-        ).fetchall()
-        for row in rows:
-            if row["event_time"][:10] == snap_date.isoformat():
-                acted_events.append(row)
-
-    if acted_events:
-        action_parts = []
-        for row in acted_events:
-            action_taken = get_action_taken(row)
-            time_str = "11:42"
-            try:
-                dt = datetime.fromisoformat(row["event_time"])
-                time_str = dt.strftime("%H:%M")
-            except (ValueError, TypeError):
-                if (
-                    isinstance(row.get("event_time"), str)
-                    and len(row["event_time"]) >= 16
-                ):
-                    time_str = row["event_time"][11:16]
-            note = escape_markdown(f"{row['exit_signal']} at {time_str}")
-            action_parts.append(f"{mdcode(action_taken)} \\({note}\\)")
-        actions_value = ", ".join(action_parts)
-    else:
-        actions_value = "None"
+    actions_value = _build_actions_value(store.db_path, config.strategy_name, snap_date)
 
     # captured_credit's sign drives pnl_emoji; "flat" icon doubles as the
     # unresolved-mark sentinel (pnl_emoji has no dedicated "unknown" state).

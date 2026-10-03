@@ -6,14 +6,17 @@ from __future__ import annotations
 
 import argparse
 import re
+import sqlite3
 from datetime import date, datetime, timezone
 from decimal import Decimal
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import structlog.testing
 
 from scripts.strategies.ic.paper_ic_snapshot import (
+    _build_actions_value,
     _run,
     build_header,
     format_leg_label,
@@ -506,19 +509,12 @@ async def test_intraday_acted_event(
         bod_path="dummy.json",
     )
 
-    with patch("sqlite3.connect") as mock_conn:
-        mock_cursor = MagicMock()
-        mock_cursor.fetchall.return_value = [
-            {
-                "exit_signal": "PROFIT_TARGET",
-                "notes": "CLOSE_FULL",
-                "event_time": "2026-06-26T11:42:00",
-                "actual_rule_used": "CLOSE_FULL",
-            }
-        ]
-        exe = mock_conn.return_value.__enter__.return_value.execute
-        exe.return_value = mock_cursor
-
+    # Row handling is covered against real SQLite by the _build_actions_value
+    # tests; here only the wiring into the report is checked.
+    with patch(
+        "scripts.strategies.ic.paper_ic_snapshot._build_actions_value",
+        return_value="`CLOSE_FULL` \\(PROFIT\\_TARGET at 11:42\\)",
+    ):
         await _run(args)
 
     call_arg = mock_telegram.send_notification.call_args[0][0]
@@ -1417,3 +1413,40 @@ def test_build_header_strategy_id_kept_as_separate_code_span_line() -> None:
 
     assert "`paper_ic_nifty_v1_monthly`" not in title_line
     assert id_line == "`paper_ic_nifty_v1_monthly`"
+
+
+def _exit_events_db(tmp_path: Path, rows: list[tuple]) -> str:
+    db = str(tmp_path / "p.sqlite")
+    with sqlite3.connect(db) as conn:
+        conn.execute(
+            """CREATE TABLE paper_exit_events (strategy_name TEXT, status TEXT,
+               exit_signal TEXT, notes TEXT, event_time TEXT, actual_rule_used TEXT)"""
+        )
+        conn.executemany("INSERT INTO paper_exit_events VALUES (?,?,?,?,?,?)", rows)
+    return db
+
+
+def test_build_actions_value_renders_acted_event_with_time(tmp_path) -> None:
+    """Regression: sqlite3.Row has no .get, so an ACTED row used to crash."""
+    db = _exit_events_db(
+        tmp_path,
+        [
+            ("s", "ACTED", "PROFIT_TARGET", None, "2026-10-01T11:42:05", None),
+            ("s", "ACTED", "LOSS_STOP", None, "2026-09-30T10:00:00", None),
+            ("s", "OPEN", "TIME_STOP", None, "2026-10-01T12:00:00", None),
+            ("other", "ACTED", "LOSS_STOP", None, "2026-10-01T12:00:00", None),
+        ],
+    )
+
+    out = _build_actions_value(db, "s", date(2026, 10, 1))
+
+    assert out == "`CLOSE_FULL` \\(PROFIT\\_TARGET at 11:42\\)"
+
+
+def test_build_actions_value_omits_unparseable_time_and_none_when_empty(tmp_path) -> None:
+    db = _exit_events_db(
+        tmp_path, [("s", "ACTED", "ROLL_WING", None, "2026-10-01 garbage", "ROLL_WING")]
+    )
+
+    assert _build_actions_value(db, "s", date(2026, 10, 1)) == "`ROLL_WING` \\(ROLL\\_WING\\)"
+    assert _build_actions_value(db, "s", date(2026, 10, 2)) == "None"
