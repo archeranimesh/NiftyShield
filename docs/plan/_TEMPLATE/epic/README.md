@@ -14,6 +14,12 @@
 <!-- The load-bearing choices already made, and with whom ("confirmed with Animesh,
 YYYY-MM-DD"). These are the decisions a sub-story must not silently re-open. -->
 
+## Architecture and design review
+
+<!-- Mandatory before any sub-story starts implementing (docs/refactor/planning-protocol.md): a Mermaid import/dependency diagram authored at design time (production modules only, tests excluded,
+docs/refactor/architecture-diagrams.md), and a findings table from running docs/refactor/design-principles.md and code-deduplication-and-taxonomy.md against the plan (finding | source doc |
+resolution | task). See docs/plan/strategy-payoff-charts/README.md for a worked example. Write "n/a — docs/tooling only" if the epic adds no code structure. -->
+
 ## Stories
 
 | Story | Purpose | Status | Depends on | Closing SHA |

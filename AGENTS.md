@@ -106,6 +106,7 @@ chat history — CONTEXT.md is the single source of truth. Module tree (file-lev
 | Formatting any value into a Telegram message (money, Greeks, strikes, %, expiries, tables) | `FORMATTING.md` — per-parameter-type standard + the escaping-boundary contract |
 | Working inside `src/<module>/` | that module's `CLAUDE.md`, read explicitly — autoload covers only this root file |
 | Reviewing or building on Antigravity's own prior work | `ANTIGRAVITY.md` |
+| Authoring a story/epic, or adding a module, class or seam | `docs/refactor/design-principles.md` + `code-deduplication-and-taxonomy.md`; `code-review-checklist.md` before commit |
 
 On the `DB_REGISTRY.md` row: read it *before* concluding a table is empty or absent — see its 2026-08-07 note on `paper_nav_snapshots` vs. `paper_leg_snapshots` for the failure it prevents.
 
@@ -200,6 +201,9 @@ to "Claude implements" is pure waste.
 
 A task spec's **"Before any code" pre-step is mandatory** — when it says read the target source, read it (via the graph per Rule 0). You cannot tell a load-bearing invariant from reference narration
 by a doc's wording alone; deciding which lines are frozen without the code open produces a wrong trim.
+
+**New module, class or seam:** read `docs/refactor/design-principles.md` first and run its SOLID triggers against the plan (constructor-injected `Protocol` collaborators, no new `elif` on a decision
+method, leaf packages with one-way dependencies); a story's `prompt.md` records the outcome in its **Design review** section.
 
 **When spawning parallel file-editing subagents:** forbid every index / stash-touching git command explicitly — not just `add` / `commit` / `stash` but `git stash`, `git restore --staged`, anything
 that mutates the index — and tell each agent to compute before / after line counts with `awk` / `grep` only. One agent running `git stash` for a line count sweeps every other agent's concurrent edits

@@ -35,6 +35,8 @@ Print the created path and its file list (the script's own stdout already has th
   `schema.md` only if the story changes DB schema — the script already dropped it by default.
 - For an **epic**: fill in the root `prompt.md` (router — story order) and `README.md` (shared brief, scope decisions, story-status table), then run this skill again once per sub-story with `--into
   <epic-slug>`.
+- Either way: when the story adds a module, class or seam, tell the user to fill the **Design review** section (story `prompt.md`) / **Architecture and design review** section (epic `README.md`) by
+  running the triggers in `docs/refactor/design-principles.md` and the prior-art audit in `docs/refactor/code-deduplication-and-taxonomy.md` against the plan before drafting `stories.md`.
 - Either way: `docs/plan/README.md` §Conventions has the full field-by-field spec if anything is unclear.
 
 Do not write any story content yourself unless the user asks for that as a separate step — this skill's job ends at a clean scaffold.
