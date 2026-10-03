@@ -1,10 +1,15 @@
-"""Tests for src.payoff.core.compute_payoff."""
+"""Tests for src.payoff.core."""
 
 from decimal import Decimal as D
 
 import pytest
 
-from src.payoff.core import PayoffLeg, compute_payoff
+from src.payoff.core import (
+    PayoffLeg,
+    compute_payoff,
+    expiry_pnl_at,
+    expiry_pnl_series,
+)
 from src.payoff.errors import InvalidLegsError
 
 
@@ -72,3 +77,47 @@ def test_compute_payoff_zero_net_premium():
     p = compute_payoff(legs)
     assert p.net_premium == D("0")
     assert list(p.breakevens) == sorted(p.breakevens)
+
+
+def test_expiry_pnl_at_plateau():
+    p = compute_payoff(_ic())
+    assert expiry_pnl_at(p, D("23250")) == p.max_profit
+
+
+def test_expiry_pnl_at_deep_otm():
+    p = compute_payoff(_ic())
+    assert expiry_pnl_at(p, D("22000")) == p.max_loss
+
+
+def test_expiry_pnl_at_breakeven():
+    p = compute_payoff(_ic())
+    for be in p.breakevens:
+        assert abs(expiry_pnl_at(p, be)) < D("0.01")
+
+
+def test_expiry_pnl_at_unbounded_tail():
+    p = compute_payoff([PayoffLeg("CE", D("23500"), -65, D("100"))])
+    far, farther = D("25000"), D("26000")
+    assert expiry_pnl_at(p, far) - expiry_pnl_at(p, farther) == D("65000")
+
+
+def test_expiry_pnl_series_length():
+    p = compute_payoff(_ic())
+    spots, pnls = expiry_pnl_series(p, D("22000"), D("24500"), 11)
+    assert len(spots) == len(pnls) == 11
+    assert spots[0] == D("22000") and spots[-1] == D("24500")
+
+
+def test_expiry_pnl_series_rejects_bad_range():
+    p = compute_payoff(_ic())
+    with pytest.raises(ValueError):
+        expiry_pnl_series(p, D("24500"), D("22000"), 5)
+    with pytest.raises(ValueError):
+        expiry_pnl_series(p, D("22000"), D("24500"), 1)
+
+
+def test_expiry_pnl_series_min_n():
+    p = compute_payoff(_ic())
+    spots, pnls = expiry_pnl_series(p, D("22000"), D("24500"), 2)
+    assert spots == [D("22000"), D("24500")]
+    assert len(pnls) == 2

@@ -121,3 +121,42 @@ def compute_payoff(legs: Sequence[PayoffLeg]) -> StrategyPayoff:
         rr_ratio=rr,
         key_spots=tuple(strikes),
     )
+
+
+def expiry_pnl_at(payoff: StrategyPayoff, spot: Decimal) -> Decimal:
+    """Expiry P&L in rupees at a settlement spot.
+
+    Shares ``_pnl`` with ``compute_payoff``, so the two cannot drift.
+
+    Args:
+        payoff: A computed payoff.
+        spot: Settlement price.
+
+    Returns:
+        Sum of per-leg P&L at ``spot``.
+    """
+    return _pnl(payoff.legs, spot)
+
+
+def expiry_pnl_series(
+    payoff: StrategyPayoff, lo: Decimal, hi: Decimal, n: int
+) -> tuple[list[Decimal], list[Decimal]]:
+    """Expiry P&L over ``n`` evenly spaced spots in ``[lo, hi]``.
+
+    Args:
+        payoff: A computed payoff.
+        lo: First spot (exact).
+        hi: Last spot (exact).
+        n: Number of points, at least 2.
+
+    Returns:
+        Matched ``(spots, pnls)`` lists of length ``n``.
+
+    Raises:
+        ValueError: If ``n < 2`` or ``hi < lo``.
+    """
+    if n < 2 or hi < lo:
+        raise ValueError("need n >= 2 and hi >= lo")
+    step = (hi - lo) / (n - 1)
+    spots = [lo + step * i for i in range(n - 1)] + [hi]
+    return spots, [expiry_pnl_at(payoff, s) for s in spots]
