@@ -1074,3 +1074,5 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
   carry-free theta, ATM ±5 (n=22); max errors delta 0.0009 / vega 0.015 / theta 0.038 reproduce the consult. Edge tests: vega ×100 and textbook carry theta both fail. Story + epic done.
 - [2026-10-02] Archived `full-repo-review-followups/` (9/9 ✅) → `docs/archive/plan/`; repointed inbound paths (strategy-refactor-blueprint, archived telegram-markdown-migration, TODOS_ARCHIVE,
   DECISIONS.md dead links) and collapsed the plan README row. Docs-only.
+- [2026-10-03] BUG-071 B071.1/.2: `inline_full_suite` hook exempts subagent payloads (`agent_id`); `test-runner.md` forbids stash/index git commands and reports blocks verbatim. Live `@test-runner`
+  proof deferred to B071.3 (classifier blocked the spawn while the agent def was uncommitted). Cosmetic 2-space indent on `.claude/hooks/inline_full_suite.sh` lines 3–4 left (needs operator edit).

@@ -91,6 +91,8 @@ def main(stdin_text: str) -> int:
         return 0
     if not isinstance(data, dict):
         return 0
+    if data.get("agent_id"):
+        return 0  # subagent call (e.g. @test-runner) — the full suite belongs there
     command = (data.get("tool_input") or {}).get("command", "") or ""
     warning = evaluate(command)
     if warning:

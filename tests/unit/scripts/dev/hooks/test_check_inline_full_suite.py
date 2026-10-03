@@ -68,6 +68,14 @@ def test_blocks_on_bare_full_suite():
     )
 
 
+def test_main_exempts_subagent_full_suite():
+    """A bare full-suite run carrying agent_id (inside @test-runner) is allowed."""
+    cmd = "python -m pytest tests/unit/ -v --tb=short"
+    payload = {"tool_input": {"command": cmd}}
+    assert main(json.dumps(payload)) == 2
+    assert main(json.dumps({**payload, "agent_id": "a1b2"})) == 0
+
+
 def test_main_exits_zero_on_null_tool_input():
     """A payload with tool_input: null must not crash the hook."""
     assert main(json.dumps({"tool_input": None})) == 0

@@ -42,7 +42,7 @@
 |---|---|
 | Severity | **Low** (tooling) — the mandatory once-per-task test gate cannot run; on 2026-10-02 the agent reported an unverifiable "3,403 passed" vs 3,861 collected and main fell back to ~11 inline
 scoped sweeps |
-| Status | 🔴 Open |
+| Status | 🟡 Fix in progress — B071.1/.2 landed 2026-10-03 (SHA pending); B071.3 live `@test-runner` verification deferred to next code session |
 | Discovered | 2026-10-02 — bug-sweep session; session-close audit counter `test-runner-def-blocked-by-inline-suite-hook` |
 | Location | `.claude/agents/test-runner.md`; the `inline_full_suite.sh` PreToolUse hook |
 
