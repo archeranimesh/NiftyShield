@@ -32,6 +32,11 @@ Found by checking these specs against the code (`gamma_daily_watch.py`, `GammaSt
 - **D7 — Telegram send (B2.5).** `build_notifier()` returns `None` when unconfigured → skip silently. `notifier.send` is async: call it via `asyncio.run` with an explicit timeout, mirroring
   `scripts/signal_eod.py::_notify_outcome`; failure is a WARNING, never fatal. Message text follows the escaping rules in `FORMATTING.md`.
 
+- **D8 — Summary counts (B2.5, closed after B2.4).** `_update_watchlist` returns `{"added", "retained", "removed", "elevated"}` and `main()` must capture it. The Telegram "{watchlist} on watchlist"
+  figure is `added + retained` (active entries after this run; elevated is a subset, not extra). "{captured}" is `len(snaps)`. No new store count.
+- **D9 — Dry-run reads (accepted deviation from B2.4).** `--dry-run` may read history and active entries from the store (a missing-table `OperationalError` is tolerated in dry-run only) but must never
+  call a store write. This supersedes B2.4's "call no store methods" wording. B2.5 follows the same rule: calibration reads history in dry-run and writes nothing.
+
 **Carried to Phase B (not this story):** strategy §3/§12 still describe Phase B as Wednesday/Thursday (cron `3,4`) and the daily script path as `scripts/gamma_daily_watch.py`. Expiry moved to Tuesday
 in April 2026 and the script lives in `scripts/pipeline/`. GS-6 must re-derive the cron days from the Tuesday expiry (DTE 1 = Monday, DTE 0 = Tuesday) before adding the crontab line.
 

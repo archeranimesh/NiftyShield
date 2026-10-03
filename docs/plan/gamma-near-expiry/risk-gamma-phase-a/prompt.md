@@ -26,7 +26,7 @@ module. `src/gamma/` never imports from `scripts/`.
 
 ## Resolved design decisions
 
-`stories.md` §"Resolved design decisions" (D1–D7, closed 2026-10-03) overrides any conflicting wording in the task specs below it and in strategy doc §12. Read it before B2.3, B2.4 or B2.5; do not
+`stories.md` §"Resolved design decisions" (D1–D9, closed 2026-10-03) overrides any conflicting wording in the task specs below it and in strategy doc §12. Read it before B2.3, B2.4 or B2.5; do not
 re-open a decision mid-task — if one proves wrong, stop and report.
 
 ## Session-start load hints
