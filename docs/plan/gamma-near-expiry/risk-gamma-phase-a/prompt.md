@@ -44,7 +44,7 @@ re-open a decision mid-task — if one proves wrong, stop and report.
 - **B2.2** — Chain fetch + field computation (pure `src/gamma/derive.py`). Done.
 - **B2.3** — Snapshot persistence. Done.
 - **B2.4** — Watchlist maintenance (pure `src/gamma/watchlist.py`). Done.
-- **B2.5** — Percentile calibration (`GammaStore.update_percentiles`) + Telegram summary. Open.
+- **B2.5** — Percentile calibration (`GammaStore.update_percentiles`) + Telegram summary. Done.
 
 ## Definition of done
 

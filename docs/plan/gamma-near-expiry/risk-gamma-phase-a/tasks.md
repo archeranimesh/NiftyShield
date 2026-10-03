@@ -4,7 +4,7 @@
 > <code-reviewer|none> | SHA: <sha>` when done. Add one line to `TODOS.md` session log. See `docs/plan/README.md` §Conventions. Full story spec for each task:
 > `docs/plan/gamma-near-expiry/risk-gamma-phase-a/stories.md`.
 
-**Open: B2.5.**
+**Open: none — Phase A complete.**
 
 ---
 
@@ -29,8 +29,8 @@
   Review: test-runner, code-reviewer | SHA: d3e19ed
 - [x] **B2.4** — Watchlist maintenance (pure `src/gamma/watchlist.py::evaluate_watchlist` + script `_update_watchlist` + store `get_prior_snapshots` / `get_all_active_watchlist`; add / retain / remove
   / elevate per §5b, decisions D3–D4) | Owner: Claude | Model: claude-sonnet-5-5 | Review: test-runner, greeks-analyst, code-reviewer | SHA: c5126be
-- [ ] **B2.5** — Percentile calibration + Telegram summary (`GammaStore.update_percentiles` + distinct-day history gate, `_run_calibration`, `build_notifier` wire-up, decision D5) | Owner: Claude |
-  Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
+- [x] **B2.5** — Percentile calibration + Telegram summary (`GammaStore.update_percentiles` + distinct-day history gate, `_run_calibration`, `build_notifier` wire-up, decision D5) | Owner: Claude |
+  Model: claude-sonnet-5-5 | Review: test-runner, code-reviewer, greeks-analyst | SHA: 3906c15
 
 ## Story done when
 

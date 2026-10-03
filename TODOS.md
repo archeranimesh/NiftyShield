@@ -15,8 +15,8 @@ Forward spec work only — one `docs/plan/` story per line, pointer-only (title 
 starting the next story here; this list only decides *which story is next*. Bugs are **not** here — see `## Open Bugs`. Cross-references use folder names, never list positions, so renumbering can't
 rot them. (Items 3 and 8 closed 2026-10-02 — numbers kept stable because item text cross-references them.)
 
-4. **Gamma near-expiry buy (epic)** — `docs/plan/gamma-near-expiry/` — Phase A `risk-gamma-phase-a/` next **B2.3** (snapshot persistence), then B2.4..B2.5; Phase B `gamma-scan-phase-b/` (GS-1..6)
-   starts after Phase A closes and ≥ 5 days of snapshots exist. In progress, independent of everything else; finish before starting new stories.
+4. **Gamma near-expiry buy (epic)** — `docs/plan/gamma-near-expiry/` — Phase A `risk-gamma-phase-a/` ✅ done; next Phase B `gamma-scan-phase-b/` GS-1 (GS-1..6), blocked until ≥ 5 days of snapshots
+   exist. In progress, independent of everything else; finish before starting new stories.
 5. **Fix dead IC EOD report query** — `scripts/strategies/ic/paper_ic_snapshot.py` (no story folder) — the "Intraday actions" query is dead code, found in the DT-3a audit. Small; fold in whenever
    `paper_ic_snapshot.py` is next touched.
 6. **Strategy payoff charts on Telegram (IC first, any strategy via opt-in registry)** — `docs/plan/strategy-payoff-charts/` — next **PC-2** (`src/strategy/payoff.py`). `chart-core/` (PC-2..19, no
@@ -87,6 +87,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-03] gamma-near-expiry B2.5 closed (`3906c15`): percentile calibration (`update_percentiles`, 20-distinct-day gate, D5) + non-fatal Telegram summary; Phase A complete; `test-runner` green
+  (4009), `code-reviewer` and `greeks-analyst` clean (warnings deferred).
 - [2026-10-03] gamma-near-expiry B2.4 closed (`c5126be`): pure `src/gamma/watchlist.py` + `get_prior_snapshots` / `get_all_active_watchlist` + `_update_watchlist` (D3/D4); `test-runner` green (3992),
   `greeks-analyst` and `code-reviewer` clean.
 - [2026-10-03] gamma-near-expiry B2.3 closed (`d3e19ed`): snapshot persistence wired into `_fetch_and_snapshot`, `DataFetchError` isolated per expiry (D1); `test-runner` green (3970), `code-reviewer`
