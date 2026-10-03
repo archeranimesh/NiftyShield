@@ -116,8 +116,6 @@ def _resolve_via_bod(
 def resolve_option_expiry(
     instrument_key: str,
     lookup: InstrumentLookup | None = None,
-    *,
-    load_bod: bool = False,
 ) -> date | None:
     """Extract an option leg's expiry date from its instrument key.
 
@@ -138,10 +136,6 @@ def resolve_option_expiry(
         lookup: Optional ``InstrumentLookup`` (BOD JSON) used to resolve the
             expiry for real numeric instrument keys that the regex cannot
             parse. If omitted, only symbolic keys resolve.
-        load_bod: When ``lookup`` is omitted and the regex misses, load the
-            BOD JSON from ``DEFAULT_BOD_PATH`` (non-fatal on failure). Lazy so
-            symbolic keys never touch the file. Used by IronCondorV1/V2
-            (BUG-018, BUG-059).
 
     Returns:
         Parsed expiry date, or ``None`` if the key can't be resolved by
@@ -152,13 +146,6 @@ def resolve_option_expiry(
         try:
             return datetime.strptime(m.group(1).upper(), "%d%b%Y").date()
         except ValueError:
-            return None
-
-    if lookup is None and load_bod:
-        try:
-            lookup = InstrumentLookup.from_file(DEFAULT_BOD_PATH)
-        except (ValueError, OSError) as exc:
-            log.warning("resolve_option_expiry.bod_load_failed", key=instrument_key, error=str(exc))
             return None
 
     if lookup is None:
@@ -183,6 +170,42 @@ def resolve_option_expiry(
             error=str(exc),
         )
         return None
+
+
+class BodLookupCache:
+    """Lazily loads the BOD instrument master once and resolves option expiries.
+
+    BUG-068: ``resolve_option_expiry(..., load_bod=True)`` re-read the BOD JSON
+    (~0.25 s, blocking) on every numeric live key, every monitor tick. This
+    holds the loaded ``InstrumentLookup`` for the instance's lifetime. Symbolic
+    keys (regex hit) never trigger a load. A load failure is not cached, so the
+    next call retries.
+    """
+
+    def __init__(self) -> None:
+        self._lookup: InstrumentLookup | None = None
+
+    def resolve(self, instrument_key: str) -> date | None:
+        """Resolve an option leg's expiry, loading the BOD file at most once.
+
+        Args:
+            instrument_key: Upstox instrument key for the option leg.
+
+        Returns:
+            Parsed expiry date, or ``None`` if the key can't be resolved or
+            the BOD file can't be loaded.
+        """
+        if self._lookup is None and not _EXPIRY_RE.search(instrument_key):
+            try:
+                self._lookup = InstrumentLookup.from_file(DEFAULT_BOD_PATH)
+            except (ValueError, OSError) as exc:
+                log.warning(
+                    "resolve_option_expiry.bod_load_failed",
+                    key=instrument_key,
+                    error=str(exc),
+                )
+                return None
+        return resolve_option_expiry(instrument_key, self._lookup)
 
 
 def resolve_price(leg: OptionLeg) -> Decimal:

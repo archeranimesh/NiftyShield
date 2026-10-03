@@ -265,41 +265,42 @@ def test_resolve_option_expiry_bod_bad_expiry_string_returns_none() -> None:
     assert any("bod_bad_expiry" in e.get("event", "") for e in cap)
 
 
-# ── resolve_option_expiry(load_bod=True) (BUG-059) ────────────────────────────
-# IronCondorV1/V2._parse_expiry delegate here with load_bod=True: the BOD file
-# is loaded only when the regex misses, and a load failure degrades to None.
+# ── BodLookupCache (BUG-059, BUG-068) ─────────────────────────────────────────
+# IronCondorV1/V2._parse_expiry delegate here: the BOD file is loaded lazily,
+# only when the regex misses, at most once per instance; a load failure
+# degrades to None and is retried on the next call.
 
 
-def test_resolve_option_expiry_load_bod_resolves_numeric_key() -> None:
+def test_bod_lookup_cache_resolves_numeric_key() -> None:
     from unittest.mock import patch
 
-    from src.strategy._price_utils import resolve_option_expiry
+    from src.strategy._price_utils import BodLookupCache
 
     lookup = _FakeLookup({"NSE_FO|51340": {"expiry": "2026-10-27"}})
     with patch(
         "src.strategy._price_utils.InstrumentLookup.from_file", return_value=lookup
     ) as from_file:
-        result = resolve_option_expiry("NSE_FO|51340", load_bod=True)
+        result = BodLookupCache().resolve("NSE_FO|51340")
     assert result == date(2026, 10, 27)
     from_file.assert_called_once()
 
 
-def test_resolve_option_expiry_load_bod_skips_file_for_symbolic_key() -> None:
+def test_bod_lookup_cache_skips_file_for_symbolic_key() -> None:
     """Regex hit (incl. the strike-after-date IC form) never touches the BOD file."""
     from unittest.mock import patch
 
-    from src.strategy._price_utils import resolve_option_expiry
+    from src.strategy._price_utils import BodLookupCache
 
     with patch("src.strategy._price_utils.InstrumentLookup.from_file") as from_file:
-        result = resolve_option_expiry("NSE_FO|NIFTY27OCT202622000PE", load_bod=True)
+        result = BodLookupCache().resolve("NSE_FO|NIFTY27OCT202622000PE")
     assert result == date(2026, 10, 27)
     from_file.assert_not_called()
 
 
-def test_resolve_option_expiry_load_bod_failure_returns_none() -> None:
+def test_bod_lookup_cache_load_failure_returns_none() -> None:
     from unittest.mock import patch
 
-    from src.strategy._price_utils import resolve_option_expiry
+    from src.strategy._price_utils import BodLookupCache
 
     with (
         patch(
@@ -308,6 +309,39 @@ def test_resolve_option_expiry_load_bod_failure_returns_none() -> None:
         ),
         capture_logs() as cap,
     ):
-        result = resolve_option_expiry("NSE_FO|51340", load_bod=True)
+        result = BodLookupCache().resolve("NSE_FO|51340")
     assert result is None
     assert any(e.get("event") == "resolve_option_expiry.bod_load_failed" for e in cap)
+
+
+def test_bod_lookup_cache_reads_file_once_across_calls() -> None:
+    from unittest.mock import patch
+
+    from src.strategy._price_utils import BodLookupCache
+
+    lookup = _FakeLookup({"NSE_FO|51340": {"expiry": "2026-10-27"}})
+    cache = BodLookupCache()
+    with patch(
+        "src.strategy._price_utils.InstrumentLookup.from_file", return_value=lookup
+    ) as from_file:
+        results = [cache.resolve("NSE_FO|51340") for _ in range(5)]
+    assert results == [date(2026, 10, 27)] * 5
+    from_file.assert_called_once()
+
+
+def test_bod_lookup_cache_failure_not_cached_retries() -> None:
+    from unittest.mock import patch
+
+    from src.strategy._price_utils import BodLookupCache
+
+    lookup = _FakeLookup({"NSE_FO|51340": {"expiry": "2026-10-27"}})
+    cache = BodLookupCache()
+    with patch(
+        "src.strategy._price_utils.InstrumentLookup.from_file",
+        side_effect=[OSError("transient"), lookup],
+    ) as from_file:
+        first = cache.resolve("NSE_FO|51340")
+        second = cache.resolve("NSE_FO|51340")
+    assert first is None
+    assert second == date(2026, 10, 27)
+    assert from_file.call_count == 2

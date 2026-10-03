@@ -38,7 +38,7 @@ from src.notifications.formatting import CloseLegRow
 from src.paper.constants import DEFAULT_BOD_PATH
 from src.paper.models import PaperPosition, PaperTrade
 from src.strategy import roll_utils
-from src.strategy._price_utils import resolve_option_expiry
+from src.strategy._price_utils import BodLookupCache
 from src.strategy.ic_close_executor import close_ic_legs, roll_ic_legs
 from src.strategy.ic_expiry_config_v2 import ProfitLockConfig
 from src.strategy.protocol import ApprovedAction, LegClose, LegSpec, SignalEvent
@@ -144,6 +144,7 @@ class IronCondorV1:
         self._broker = broker
         self._store = store
         self._notifier = notifier
+        self._bod = BodLookupCache()  # BUG-068: BOD file read once, not per tick
 
     @property
     def strategy_name(self) -> str:
@@ -1396,4 +1397,4 @@ class IronCondorV1:
         Returns:
             Parsed expiry date, or ``None`` if the key can't be resolved.
         """
-        return resolve_option_expiry(instrument_key, load_bod=True)
+        return self._bod.resolve(instrument_key)

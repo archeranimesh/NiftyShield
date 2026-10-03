@@ -50,7 +50,7 @@ from src.notifications.markdown import escape_markdown, mdcode
 from src.paper.constants import DEFAULT_BOD_PATH
 from src.paper.models import PaperPosition, PaperTrade
 from src.strategy import roll_utils
-from src.strategy._price_utils import resolve_option_expiry
+from src.strategy._price_utils import BodLookupCache
 from src.strategy.ic_close_executor import close_ic_legs, roll_ic_legs
 from src.strategy.profit_lock_engine import ProfitLockDecision, ProfitLockEngine, ProfitLockState
 from src.strategy.protocol import ApprovedAction, LegClose, LegSpec, SignalEvent
@@ -206,6 +206,7 @@ class IronCondorV2:
         self._broker = broker
         self._store = store
         self._notifier = notifier
+        self._bod = BodLookupCache()  # BUG-068: BOD file read once, not per tick
 
         # ── Adjustment state (reset on new entry cycle via reset_roll_state()) ──
         # Keyed by side ("put" | "call"). Counts partial rolls executed this cycle.
@@ -2499,7 +2500,7 @@ class IronCondorV2:
         Returns:
             Parsed expiry date, or None if the key can't be resolved.
         """
-        return resolve_option_expiry(instrument_key, load_bod=True)
+        return self._bod.resolve(instrument_key)
 
     def _log_counterfactual_exit(
         self,
