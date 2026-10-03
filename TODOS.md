@@ -15,8 +15,8 @@ Forward spec work only — one `docs/plan/` story per line, pointer-only (title 
 starting the next story here; this list only decides *which story is next*. Bugs are **not** here — see `## Open Bugs`. Cross-references use folder names, never list positions, so renumbering can't
 rot them. (Items 3 and 8 closed 2026-10-02 — numbers kept stable because item text cross-references them.)
 
-4. **Risk gamma phase A** — `docs/plan/risk-gamma-phase-a/` — next **B2.2** (chain fetch + field computation), then B2.3..B2.5. In progress, independent of everything else; finish before starting new
-   stories.
+4. **Gamma near-expiry buy (epic)** — `docs/plan/gamma-near-expiry/` — Phase A `risk-gamma-phase-a/` next **B2.2** (chain fetch + `derive_snapshots`), then B2.3..B2.5; Phase B `gamma-scan-phase-b/`
+   (GS-1..6) starts after Phase A closes and ≥ 5 days of snapshots exist. In progress, independent of everything else; finish before starting new stories.
 5. **Fix dead IC EOD report query** — `scripts/strategies/ic/paper_ic_snapshot.py` (no story folder) — the "Intraday actions" query is dead code, found in the DT-3a audit. Small; fold in whenever
    `paper_ic_snapshot.py` is next touched.
 6. **Strategy payoff charts on Telegram (IC first, any strategy via opt-in registry)** — `docs/plan/strategy-payoff-charts/` — next **PC-2** (`src/strategy/payoff.py`). `chart-core/` (PC-2..19, no
@@ -295,7 +295,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 - [2026-09-22] `doc-format-migration/` `plan-folders/` DFM-3 — restructured `broker-abstraction/` (tier B, first of 4): consolidated 16 `stories/BA-N.md` files into one `stories.md`, canonical
   task-line format, reflow. No shipped tasks, no digests needed. SHA: `525c0d2`. DFM-3 not ticked — `full-repo-review/`, `historical-data-abstraction/` remain.
 - [2026-09-22] `doc-format-migration/` `plan-folders/` DFM-2 closed — converted the remaining 12 tier-A folders (`backtest-eval-core/`, `chain-decay-analysis/`, `entry-event-filter/`,
-  `full-repo-review-followups/`, `greeks-bs-fallback/`, `strategy-payoff-charts/`, `mvp/`, `options_income/`, `risk-gamma-phase-a/`, `signals-eval-core/`, `technical-debt/`, `variance-gate/`) via 12
+  `full-repo-review-followups/`, `gamma-near-expiry/`, `greeks-bs-fallback/`, `strategy-payoff-charts/`, `mvp/`, `options_income/`, `signals-eval-core/`, `technical-debt/`, `variance-gate/`) via 12
   parallel subagents, one commit each (SHAs: `7fcdba2`, `8b1c5df`, `b22052a`, `4dc1ed1`, `0a2838a`, `500c290`, `8455d50`, `ddf0964`, `1f0a6cd`, `6a9c87e`, `b1bf839`, `0b8d897`);
   `portfolio-snapshot-slimdown/` needed zero changes (already canonical + reflow-clean). Notable catches beyond format: `full-repo-review-followups/` had 6 sub-story `tasks.md` files with task
   descriptions truncated mid-sentence since the original authoring commit (`149408f`), reconstructed from each sub-story's `stories.md`; `mvp/`/`options_income/`/`variance-gate/` legacy filenames

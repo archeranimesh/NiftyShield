@@ -9,13 +9,20 @@ task id) before writing any code. One task per session. Complete it fully. Stop.
 
 Paper trading needed a portfolio delta gate on new entries (Track A) and a scaffold for the Near-Expiry Gamma Buy strategy (Track B) — a daily scan that snapshots the option chain near each week's
 expiry, maintains a watchlist of high-gamma strikes, and alerts on qualifying setups. Track A shipped first and unblocks safe paper-trade entry; Track B builds out `src/gamma/` and
-`scripts/gamma_daily_watch.py` in small, testable increments so each sub-task lands as one reviewable commit.
+`scripts/pipeline/gamma_daily_watch.py` in small, testable increments so each sub-task lands as one reviewable commit.
 
 ## Scope guard
 
-In bounds: `src/risk/` wiring into `scripts/record_paper_trade.py` (Track A, done); `src/gamma/` models + `GammaStore`; `scripts/gamma_daily_watch.py` chain fetch, snapshot persistence, watchlist
-maintenance, percentile calibration, and the Telegram summary (Track B). Out of bounds: `gamma_scan.py` (a separate story — see the note at the foot of `stories.md`) and any change to `src/risk/`
+In bounds: `src/risk/` wiring into `scripts/record_paper_trade.py` (Track A, done); `src/gamma/` models + `GammaStore`; `scripts/pipeline/gamma_daily_watch.py` chain fetch, snapshot persistence,
+watchlist maintenance, percentile calibration, and the Telegram summary (Track B). Out of bounds: `gamma_scan.py` (sibling story `../gamma-scan-phase-b/` in this epic) and any change to `src/risk/`
 internals themselves. This story changes `src/` behaviour; it is not docs/tooling only.
+
+## Design review
+
+Reviewed 2026-10-03 against `docs/refactor/` (design-principles, code-deduplication-and-taxonomy, code-review-checklist). Outcome: derived-field maths moves to a pure `src/gamma/derive.py` (Phase B
+reuses it; prior-day OI is one batched lookup, not N+1 queries); the §5b rules move to a pure `src/gamma/watchlist.py`; B2.5 gets a targeted `GammaStore.update_percentiles`; B2.3 catches
+`DataFetchError` instead of a bare `Exception`. Rejected as over-engineering: a rule registry / predicate list for the watchlist, a `SnapshotRepo` Protocol over `GammaStore`, and a `calibration.py`
+module. `src/gamma/` never imports from `scripts/`.
 
 ## Session-start load hints
 
@@ -29,10 +36,10 @@ internals themselves. This story changes `src/` behaviour; it is not docs/toolin
 - **A** — Wire `src/risk/` delta gate into `record_paper_trade.py`. Done.
 - **B1** — `src/gamma/` package: models + `GammaStore`. Done.
 - **B2.1** — `gamma_daily_watch.py` scaffold: CLI flags + expiry resolution. Done.
-- **B2.2** — Chain fetch + field computation. Open.
+- **B2.2** — Chain fetch + field computation (pure `src/gamma/derive.py`). Open.
 - **B2.3** — Snapshot persistence. Open.
-- **B2.4** — Watchlist maintenance. Open.
-- **B2.5** — Percentile calibration + Telegram summary. Open.
+- **B2.4** — Watchlist maintenance (pure `src/gamma/watchlist.py`). Open.
+- **B2.5** — Percentile calibration (`GammaStore.update_percentiles`) + Telegram summary. Open.
 
 ## Definition of done
 
