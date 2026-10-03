@@ -62,13 +62,17 @@ and derived 180 rows per expiry. Nothing in the log says the market was closed.
 **Impact if enabled unfixed:** a holiday run inserts a second copy of the previous day's rows under a new `snapshot_date`. `oi_change_1d` is then 0 for every strike, "2 consecutive days" removal rules
 count a repeated day as a distinct one, and the distinct-day percentile gate (D5) reaches 20 days earlier than it should.
 
-**Fix (not yet implemented):** at the top of `main()`, when `not is_trading_day(today)`: a real run logs `gamma_daily_watch.non_trading_day` at INFO and exits 0 before any fetch; a `--dry-run` logs
+**Fix (implemented, `2305977`):** at the top of `main()`, when `not is_trading_day(today)`: a real run logs `gamma_daily_watch.non_trading_day` at INFO and exits 0 before any fetch; a `--dry-run` logs
 the same event as a WARNING and continues, so off-hours testing (as on 2026-10-03) still works. Repro tests: a holiday date with `dry_run=False` makes no client or store call and exits 0; a trading
 day is unchanged; a holiday with `--dry-run` still derives rows.
 
 **Related, not yet confirmed as defects (do not log as bugs):** (a) the `>= 3.0` gearing floor in strategy §5b looks non-binding at the implemented scale of `gamma × spot² / ask` (the derive test
 fixture gives 62,500), which would also affect Phase B Layer 2 — verify from live values, then settle with council Q2 before GS-2; (b) one WARNING per zero-ask row floods the log (hundreds of lines
 per run) — a per-expiry summary count would be quieter. Both are noted in `TODOS.md`.
+
+**Implementation progress (B072.1):** guard added in `main()` right after `today` is resolved. 3 repro tests added; 4 existing `main()` tests plus `_run_main` pinned `is_trading_day` so they no longer
+depend on the real date. Full unit suite 4012 passed. code-reviewer: 1 ERROR (unpinned `test_date_override_option`) fixed; 3 line-length WARNINGs deferred — reviewer assumed 80 cols, repo limit is 100
+and ruff is clean.
 
 ---
 

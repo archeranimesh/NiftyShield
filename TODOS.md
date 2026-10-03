@@ -1090,3 +1090,5 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
   passed — transient, cause unknown, not reproduced. Hook comment-indent fixed.
 - [2026-10-03] `gamma-near-expiry/risk-gamma-phase-a` B2.2: pure `src/gamma/derive.py::derive_snapshots`, batched `GammaStore.get_prior_oi`, script `_fetch_chain` / `_fetch_and_snapshot` / `_runtime`.
   greeks-analyst: bid=0 spread guard fixed. SHA backfill in next commit.
+- [2026-10-03] BUG-072 B072.1: `gamma_daily_watch.main()` trading-day guard (`2305977`) — real run exits 0 before any fetch, `--dry-run` warns and continues. B072.2 (live-day dry-run, enable 15:20
+  cron) pending.
