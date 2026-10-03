@@ -24,6 +24,11 @@ reuses it; prior-day OI is one batched lookup, not N+1 queries); the §5b rules 
 `DataFetchError` instead of a bare `Exception`. Rejected as over-engineering: a rule registry / predicate list for the watchlist, a `SnapshotRepo` Protocol over `GammaStore`, and a `calibration.py`
 module. `src/gamma/` never imports from `scripts/`.
 
+## Resolved design decisions
+
+`stories.md` §"Resolved design decisions" (D1–D7, closed 2026-10-03) overrides any conflicting wording in the task specs below it and in strategy doc §12. Read it before B2.3, B2.4 or B2.5; do not
+re-open a decision mid-task — if one proves wrong, stop and report.
+
 ## Session-start load hints
 
 - `src/gamma/CLAUDE.md` (if present) before touching `src/gamma/`.

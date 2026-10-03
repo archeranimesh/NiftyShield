@@ -87,6 +87,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-03] gamma-near-expiry: closed 7 design decisions (D1–D7) in `risk-gamma-phase-a/stories.md`, amended B2.4/B2.5 file lists, set B2.2 SHA `a59e156`, noted the stale Wed/Thu cron for GS-6.
+  Docs only.
 - [2026-10-03] BUG-070 closed (`a006ebd`): accepted the non-atomic close/flip window; `PaperStore.find_stale_flat_legs` + daemon-startup Telegram warning (alert only), backfill script reuses the
   query. Suite green, `code-reviewer` clean.
 - [2026-10-03] BUG-069 closed (`13bf3ab`): `run()` drains `_gate_alert` send tasks (`ic_entry_gates.drain_alerts`, 10s bound) in a `finally`, so IC v1/v2 BLOCKED alerts survive every `sys.exit(1)`;

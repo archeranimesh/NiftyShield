@@ -92,7 +92,11 @@ still evaluates; notifier failure is non-fatal; non-DTE-0/1 day is a no-op.
 **Files to change:** crontab entry (documented in `docs/strategies/near_expiry_buy_v1.md` §12 / the cron doc named in `CLAUDE.md` Quick reference), `.env.example` (`DHAN_DATA_API_KEY`, `GAMMA_*`
 overrides), `TODOS.md`.
 
-**What to implement:** add `*/5 9-15 * * 3,4` per the strategy doc; run `gamma_scan.py --dry-run` on the first qualifying Wednesday and review the log for stale-OI, rate-limit and market-close edge
-cases; record findings. No code change expected — a code fix found here becomes its own follow-up task.
+**Re-derive the days first:** the strategy doc's `3,4` (Wed/Thu) predates the April 2026 move to Tuesday expiry — DTE 1 is Monday and DTE 0 is Tuesday, so the cron days are likely `1,2`. Confirm via
+`REFERENCES.md` and `resolve_expiries`, and fix §3/§12 of the strategy doc, before adding the line. The daily-watch script path in §12 is also stale (`scripts/pipeline/gamma_daily_watch.py`).
+
+**What to implement:** add the cron line (days per the re-derivation above; the doc's `*/5 9-15 * * 3,4` is the stale baseline); run `gamma_scan.py --dry-run` on the first qualifying scan day (not
+necessarily a Wednesday — see above) and review the log for stale-OI, rate-limit and market-close edge cases; record findings. No code change expected — a code fix found here becomes its own follow-up
+task.
 
 **Commit:** `docs(gamma): enable gamma_scan cron and record dry-run`
