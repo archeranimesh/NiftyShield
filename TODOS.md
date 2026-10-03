@@ -87,6 +87,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-03] BUG-070 closed (`a006ebd`): accepted the non-atomic close/flip window; `PaperStore.find_stale_flat_legs` + daemon-startup Telegram warning (alert only), backfill script reuses the
+  query. Suite green, `code-reviewer` clean.
 - [2026-10-03] BUG-069 closed (`13bf3ab`): `run()` drains `_gate_alert` send tasks (`ic_entry_gates.drain_alerts`, 10s bound) in a `finally`, so IC v1/v2 BLOCKED alerts survive every `sys.exit(1)`;
   real `code-reviewer` clean.
 - [2026-10-03] BUG-068 closed (`5e79fc5`): per-instance `BodLookupCache` in `_price_utils.py`; IC v1/v2 `_parse_expiry` load the BOD file once, failures not cached; `code-reviewer` clean.

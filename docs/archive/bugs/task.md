@@ -1006,5 +1006,13 @@ Detail: `docs/bugs/bugs.md` BUG-068.
 
 Detail: `docs/bugs/bugs.md` BUG-069.
 
-- [x] **B069.1** — `_gate_alert` awaits the send (bounded timeout) before every pre-leg `sys.exit` in `paper_ic_entry.py` and `_v2.py`. Tests: alert awaited before exit; send failure still exits 1. | SHA `13bf3ab`
+- [x] **B069.1** — `_gate_alert` awaits the send (bounded timeout) before every pre-leg `sys.exit` in `paper_ic_entry.py` and `_v2.py`. Tests: alert awaited before exit; send failure still exits 1. |
+  SHA `13bf3ab`
 - [x] **B069.2** — Real `code-reviewer`; commit; close + archive. | SHA `13bf3ab`
+
+## BUG-070 — Closing-trade insert and `mark_trade_closed` run in separate transactions
+
+Detail: `docs/bugs/bugs.md` BUG-070.
+
+- [x] **B070.1** — Decided: accept the non-atomic window, detect flat-but-OPEN legs at daemon startup; recorded in `DECISIONS.md`. | SHA `a006ebd`
+- [x] **B070.2** — `find_stale_flat_legs` + startup Telegram warning (alert only); tests added. | SHA `a006ebd`

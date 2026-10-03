@@ -32,18 +32,7 @@
 
 ---
 
-## BUG-070 — Closing-trade insert and `mark_trade_closed` run in separate SQLite transactions; a crash between them leaves a flat leg `OPEN`
-
-| Field | Value |
-|---|---|
-| Severity | **Low** — recoverable with `scripts/dev/backfill_mark_trade_closed_overlay.py`; same staleness class as BUG-035/037/066/067 |
-| Status | 🔴 Open — design decision first |
-| Discovered | 2026-10-02 — B037.6 `code-reviewer` on `5369c0e` (and noted in the BUG-067 / B067.5 reviews) |
-| Location | `src/paper/store.py` (`record_trade(s)` and `mark_trade_closed` each open their own `_connect()`); every wired close path (`csp_roll_executor`, `ic_close_executor`, `executor.py`,
-`collar_overlay_v1._close_both_legs`, `nifty_track_comparison_v1._persist_roll`, 3track roll, `overlay_closer`, `expiry_settlement`) |
-
-**Fix options:** a store method that inserts the close and flips state on one connection, or accept the window and rely on the idempotent backfill. Not implemented — decide first (B070.1).
-`close_signal_entry` (BUG-066) is already single-transaction.
+## BUG-070 [MOVED] — see `docs/archive/bugs/bugs.md` (closed 2026-10-03, SHA `a006ebd`)
 
 ---
 

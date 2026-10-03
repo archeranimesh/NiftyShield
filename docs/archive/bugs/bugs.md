@@ -2875,10 +2875,10 @@ fixed in the commit (docstring no longer claims atomicity; same-key re-open limi
 shares it. **Fix:** cache the lookup per strategy instance or pass the daemon's already-loaded lookup in. Related: a BOD file older than a contract's listing returns `None` and silently disables DTE
 signals for that leg.
 
-**Implementation progress (2026-10-03, `5e79fc5`):** new `BodLookupCache` in `src/strategy/_price_utils.py` loads the BOD file at most once per strategy instance; `IronCondorV1` /
-`IronCondorV2` `_parse_expiry` delegate to it and the `load_bod` kwarg is removed. Design choice: per-instance cache rather than injecting the daemon's lookup (no daemon wiring change), and a
-failed load is not cached so a transient file problem retries on the next tick. Five tests in `tests/unit/strategy/test_price_utils.py` (single load across calls, failure not cached, numeric-key
-DTE still resolves). Full unit suite green (run manually; `test-runner` blocked by BUG-071). Real `code-reviewer`: clean, no findings.
+**Implementation progress (2026-10-03, `5e79fc5`):** new `BodLookupCache` in `src/strategy/_price_utils.py` loads the BOD file at most once per strategy instance; `IronCondorV1` / `IronCondorV2`
+`_parse_expiry` delegate to it and the `load_bod` kwarg is removed. Design choice: per-instance cache rather than injecting the daemon's lookup (no daemon wiring change), and a failed load is not
+cached so a transient file problem retries on the next tick. Five tests in `tests/unit/strategy/test_price_utils.py` (single load across calls, failure not cached, numeric-key DTE still resolves).
+Full unit suite green (run manually; `test-runner` blocked by BUG-071). Real `code-reviewer`: clean, no findings.
 
 ---
 
@@ -2894,7 +2894,28 @@ DTE still resolves). Full unit suite green (run manually; `test-runner` blocked 
 **Root cause:** `_gate_alert` schedules the send with `create_task` and returns; `sys.exit` follows before the loop runs it. Pre-existing pattern, not introduced by BUG-057. **Fix:** await the send
 with a bounded timeout before exiting, at every abort point.
 
-**Implementation progress:** `run()` in `paper_ic_entry.py`/`_v2.py` now wraps the old body (`_run_entry`) in `try/finally`; `_gate_alert` registers its send tasks and `ic_entry_gates.drain_alerts` awaits them (10s bound, failures/timeouts swallowed) so every abort path — incl. the shared sync gates — delivers its alert. Tests: 3 `drain_alerts` unit tests + per-script alert-before-exit (send ok/fails). Real `code-reviewer`: 0 CRITICAL/ERROR; 1 WARNING (`CancelledError` from `t.exception()`) fixed.
+**Implementation progress:** `run()` in `paper_ic_entry.py`/`_v2.py` now wraps the old body (`_run_entry`) in `try/finally`; `_gate_alert` registers its send tasks and `ic_entry_gates.drain_alerts`
+awaits them (10s bound, failures/timeouts swallowed) so every abort path — incl. the shared sync gates — delivers its alert. Tests: 3 `drain_alerts` unit tests + per-script alert-before-exit (send
+ok/fails). Real `code-reviewer`: 0 CRITICAL/ERROR; 1 WARNING (`CancelledError` from `t.exception()`) fixed.
 
 ---
 
+## BUG-070 — Closing-trade insert and `mark_trade_closed` run in separate SQLite transactions; a crash between them leaves a flat leg `OPEN`
+
+| Field | Value |
+|---|---|
+| Severity | **Low** — recoverable with `scripts/dev/backfill_mark_trade_closed_overlay.py`; same staleness class as BUG-035/037/066/067 |
+| Status | ✅ Fixed — `a006ebd` |
+| Discovered | 2026-10-02 — B037.6 `code-reviewer` on `5369c0e` (and noted in the BUG-067 / B067.5 reviews) |
+| Location | `src/paper/store.py` (`record_trade(s)` and `mark_trade_closed` each open their own `_connect()`); every wired close path (`csp_roll_executor`, `ic_close_executor`, `executor.py`,
+`collar_overlay_v1._close_both_legs`, `nifty_track_comparison_v1._persist_roll`, 3track roll, `overlay_closer`, `expiry_settlement`) |
+
+**Fix options:** a store method that inserts the close and flips state on one connection, or accept the window and rely on the idempotent backfill. Decided B070.1: accept the window, detect at startup
+(see `DECISIONS.md`). `close_signal_entry` (BUG-066) is already single-transaction.
+
+**Implementation progress:** option C. `PaperStore.find_stale_flat_legs()` (promoted from the backfill script, which now calls it) plus `warn_stale_flat_legs_at_startup` in
+`scripts/monitor_daemon.py`, run right after startup expiry settlement: logs `monitor_daemon.stale_flat_legs` and sends one MarkdownV2 Telegram warning; alert only, never raises. Tests: 2 in
+`tests/unit/paper/test_store.py`, 3 in `tests/unit/test_monitor_daemon.py`. Full unit suite green (3953 passed). `greeks-analyst` and `code-reviewer`: no CRITICAL/ERROR; two cosmetic WARNINGs (emoji
+outside code span, deferred; test assertion tightened).
+
+---

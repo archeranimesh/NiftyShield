@@ -59,12 +59,7 @@
 
 > BUG-069 closed 2026-10-03 (SHA `13bf3ab`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
-## BUG-070 — Closing-trade insert and `mark_trade_closed` run in separate transactions
-
-Detail: `docs/bugs/bugs.md` BUG-070.
-
-- [ ] **B070.1** — Decide: single-connection close (store API taking both) vs accept + rely on the backfill script. Record in `DECISIONS.md`. Pending Animesh.
-- [ ] **B070.2** — Implement per B070.1 across the wired close paths; tests: a failure between insert and flip leaves no half-state (or documented recovery).
+> BUG-070 closed 2026-10-03 (SHA `a006ebd`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
 ## BUG-071 — `test-runner` agent cannot run the full suite: blocked by the `inline_full_suite` hook
 
