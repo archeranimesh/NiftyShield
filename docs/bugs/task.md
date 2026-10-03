@@ -67,7 +67,7 @@
 
 Detail: `docs/bugs/bugs.md` BUG-072. Fix before the gamma cron line is enabled.
 
-- [ ] **B072.1** — Add the trading-day guard to `main()` (real run: log and exit 0 before any fetch; `--dry-run`: warn and continue) with the three repro tests.
+- [x] **B072.1** — Add the trading-day guard to `main()` (real run: log and exit 0 before any fetch; `--dry-run`: warn and continue) with the three repro tests. | SHA `2305977`
 - [ ] **B072.2** — Confirm on the first trading day: a `--dry-run` during market hours is unchanged, then enable the commented 15:20 cron line in the crontab.
 
 ---

@@ -49,7 +49,7 @@
 | Field | Value |
 |---|---|
 | Severity | **Medium now, High once the cron is enabled** — latent today (no cron line, nothing persisted); once live it corrupts the history that decisions D3 and D5 read |
-| Status | 🔴 Open |
+| Status | 🟡 Fix in progress — B072.1 `2305977` landed 2026-10-03; B072.2 (live-day confirmation + cron enable) pending |
 | Discovered | 2026-10-03 — first manual `--dry-run`, run on a Saturday night, processed both expiries normally |
 | Location | `scripts/pipeline/gamma_daily_watch.py::main` (no check on `today`); the only `is_trading_day` use is inside `resolve_expiries` |
 
