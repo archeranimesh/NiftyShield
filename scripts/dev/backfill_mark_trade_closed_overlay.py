@@ -34,7 +34,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import sqlite3
 import sys
 from pathlib import Path
 
@@ -49,27 +48,6 @@ from src.paper.store import PaperStore
 
 _SCRIPT_NAME = "scripts.dev.backfill_mark_trade_closed_overlay"
 logger = structlog.get_logger(_SCRIPT_NAME)
-
-
-def _find_stale_flat_legs(conn: sqlite3.Connection) -> list[tuple[str, str, str]]:
-    """Return every (strategy_name, leg_role, instrument_key) that is flat
-    (net BUY-SELL quantity == 0) but still has at least one row in
-    state IN ('OPEN', 'DEFENDED').
-
-    Pulled as grouped sums only, never a raw row dump, per Rule 1
-    (aggregate at the source).
-    """
-    rows = conn.execute(
-        """
-        SELECT strategy_name, leg_role, instrument_key,
-               SUM(CASE WHEN action = 'BUY' THEN quantity ELSE -quantity END) AS net_qty,
-               SUM(CASE WHEN state IN ('OPEN', 'DEFENDED') THEN 1 ELSE 0 END) AS open_rows
-        FROM paper_trades
-        GROUP BY strategy_name, leg_role, instrument_key
-        HAVING net_qty = 0 AND open_rows > 0
-        """
-    ).fetchall()
-    return [(r[0], r[1], r[2]) for r in rows]
 
 
 def backfill(db_path: Path, dry_run: bool) -> None:
@@ -89,12 +67,8 @@ def backfill(db_path: Path, dry_run: bool) -> None:
         db_path: Path to the portfolio SQLite database.
         dry_run: If True, only print what would change — no writes.
     """
-    conn = sqlite3.connect(db_path)
-    try:
-        conn.row_factory = sqlite3.Row
-        stale = _find_stale_flat_legs(conn)
-    finally:
-        conn.close()
+    store = PaperStore(db_path)
+    stale = store.find_stale_flat_legs()
 
     if not stale:
         print(f"[{_SCRIPT_NAME}] No stale flat legs found — nothing to do.")
@@ -108,7 +82,6 @@ def backfill(db_path: Path, dry_run: bool) -> None:
         print(f"[{_SCRIPT_NAME}] --dry-run: no changes written.")
         return
 
-    store = PaperStore(db_path)
     applied = 0
     skipped: list[tuple[str, str, str]] = []
     failed: list[tuple[str, str, str, str]] = []

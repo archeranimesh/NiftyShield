@@ -1237,6 +1237,17 @@ these labels.
 
 ---
 
+## Close insert + `mark_trade_closed` stay non-atomic; detect at startup instead (BUG-070, 2026-10-03)
+
+**Decision:** keep `record_trade(s)` and `mark_trade_closed` as separate transactions at the ~8 close call sites; do not add an atomic close API. Instead the monitor daemon, after startup expiry
+settlement, calls `PaperStore.find_stale_flat_legs()` and sends one Telegram warning naming any leg that is flat (BUY-SELL qty == 0) but still `OPEN`/`DEFENDED`. Alert only — no auto-heal; the
+operator repairs with `scripts/dev/backfill_mark_trade_closed_overlay.py`. **Rejected:** atomic `record_close` store API — rewrites every close path (incl. the `roll-validator`-gated `_persist_roll`
+and multi-leg `_close_both_legs`) to remove a millisecond-wide window whose outcome is a recoverable stale flag, not a P&L error. **Why detect:** the failure was silent; startup settlement cannot
+self-heal it (the closing trade already exists). `close_signal_entry` (BUG-066) remains the single-transaction precedent for new close paths. No council: single-discipline, operator-approved
+2026-10-03.
+
+---
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/` (except 0.6c), `src/streaming/` — all empty

@@ -921,6 +921,25 @@ def test_mark_trade_closed_does_not_touch_re_entry_pending(store: PaperStore) ->
     assert trades[0].state == TradeState.RE_ENTRY_PENDING
 
 
+# ── BUG-070: find_stale_flat_legs ─────────────────────────────────────────────
+
+
+def test_find_stale_flat_legs_detects_flat_but_open(store: PaperStore) -> None:
+    """Close recorded but mark_trade_closed skipped -> leg is reported."""
+    store.record_trade(_sell_trade())
+    store.record_trade(_buy_trade())
+    assert store.find_stale_flat_legs() == [(_STRATEGY, _LEG, _KEY)]
+
+
+def test_find_stale_flat_legs_ignores_closed_and_live_legs(store: PaperStore) -> None:
+    """Flat+CLOSED and still-open (net != 0) legs are not reported."""
+    store.record_trade(_sell_trade())
+    assert store.find_stale_flat_legs() == []
+    store.record_trade(_buy_trade())
+    store.mark_trade_closed(_STRATEGY, _LEG, _KEY)
+    assert store.find_stale_flat_legs() == []
+
+
 def test_record_trade_persists_state_field(store: PaperStore) -> None:
     from src.models.portfolio import TradeAction
 

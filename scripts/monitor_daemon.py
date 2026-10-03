@@ -42,6 +42,7 @@ from src.config import settings  # noqa: E402
 from src.db import connect as _connect  # noqa: E402
 from src.instruments.lookup import InstrumentLookup  # noqa: E402
 from src.market_calendar.holidays import market_today  # noqa: E402
+from src.notifications.markdown import escape_markdown, mdcode  # noqa: E402
 from src.notifications.telegram import build_notifier  # noqa: E402
 from src.notifications.telegram_gateway import TelegramGateway  # noqa: E402
 from src.paper.store import PaperStore  # noqa: E402
@@ -131,6 +132,33 @@ _shutdown_started: bool = False
 # BUG-060: bound on the startup settlement (one candle fetch per expired expiry)
 _SETTLEMENT_TIMEOUT_S: float = 60.0
 _NOTIFY_TIMEOUT_S: float = 15.0
+
+
+async def warn_stale_flat_legs_at_startup(store: PaperStore) -> None:
+    """Warn once if a flat leg still has OPEN/DEFENDED rows (BUG-070).
+
+    Detects a crash between the closing-trade insert and ``mark_trade_closed``.
+    Alert only — the operator repairs with
+    ``scripts/dev/backfill_mark_trade_closed_overlay.py``. Never raises.
+
+    Args:
+        store: Paper ledger.
+    """
+    try:
+        stale = store.find_stale_flat_legs()
+        if not stale:
+            return
+        logger.warning("monitor_daemon.stale_flat_legs", count=len(stale), legs=stale)
+        lines = [f"⚠️ *{escape_markdown('Flat legs still OPEN (BUG-070)')}*"]
+        lines += [f"{mdcode(sn)} {mdcode(lr)} {mdcode(ik)}" for sn, lr, ik in stale]
+        lines.append(
+            escape_markdown("Run: python -m scripts.dev.backfill_mark_trade_closed_overlay")
+        )
+        notifier = build_notifier()
+        if notifier is not None:
+            await asyncio.wait_for(notifier.send("\n".join(lines)), timeout=_NOTIFY_TIMEOUT_S)
+    except Exception as exc:  # noqa: BLE001 — detection must never block daemon start
+        logger.error("monitor_daemon.stale_flat_legs_check_failed", error=str(exc), exc_info=True)
 
 
 async def settle_expired_legs_at_startup(
@@ -660,6 +688,7 @@ async def main() -> int:
 
     # BUG-060: close expired legs before the first tick sees them
     await settle_expired_legs_at_startup(store, broker, lookup)
+    await warn_stale_flat_legs_at_startup(store)
 
     # Start tasks
     monitor_task = asyncio.create_task(monitor.run())

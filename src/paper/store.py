@@ -744,6 +744,31 @@ class PaperStore:
             if cur.rowcount == 0:
                 raise ValueError(f"No paper trade found with id={trade_id}")
 
+    def find_stale_flat_legs(self) -> list[tuple[str, str, str]]:
+        """Return legs that are flat but still carry an OPEN/DEFENDED row (BUG-070).
+
+        A leg is flat when BUY minus SELL quantity over its whole history is 0.
+        Such a leg means a close trade was recorded but ``mark_trade_closed``
+        never ran (crash between the two transactions). This is a candidate
+        scan over the all-time sum: re-verify with ``get_position`` before
+        repairing. Aggregated at the source, never a row dump.
+
+        Returns:
+            ``(strategy_name, leg_role, instrument_key)`` per stale leg.
+        """
+        with _connect(self.db_path) as conn:
+            rows = conn.execute(
+                """
+                SELECT strategy_name, leg_role, instrument_key,
+                       SUM(CASE WHEN action = 'BUY' THEN quantity ELSE -quantity END) AS net_qty,
+                       SUM(CASE WHEN state IN ('OPEN', 'DEFENDED') THEN 1 ELSE 0 END) AS open_rows
+                FROM paper_trades
+                GROUP BY strategy_name, leg_role, instrument_key
+                HAVING net_qty = 0 AND open_rows > 0
+                """
+            ).fetchall()
+        return [(r[0], r[1], r[2]) for r in rows]
+
     def mark_trade_closed(
         self,
         strategy_name: str,

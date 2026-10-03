@@ -402,6 +402,7 @@ async def test_main_settles_before_monitor_starts() -> None:
         patch("scripts.monitor_daemon.create_client", return_value=mock_broker),
         patch("scripts.monitor_daemon.StrategyMonitor", return_value=mock_monitor),
         patch("scripts.monitor_daemon.settle_expired_legs_at_startup", _settle),
+        patch("scripts.monitor_daemon.warn_stale_flat_legs_at_startup", AsyncMock()),
         patch("scripts.monitor_daemon.IronCondorV1", None),
         patch("scripts.monitor_daemon.IronCondorV2", None),
         patch("scripts.monitor_daemon.CSPNiftyV1", None),
@@ -431,3 +432,36 @@ async def test_startup_settlement_notify_failure_is_isolated() -> None:
         patch("scripts.monitor_daemon.build_notifier", return_value="notifier"),
     ):
         await daemon.settle_expired_legs_at_startup(MagicMock(), MagicMock(), MagicMock())
+
+
+# --- BUG-070: stale flat-leg warning at daemon startup --------------------------
+
+
+@pytest.mark.asyncio
+async def test_stale_flat_legs_warning_sent() -> None:
+    """A flat-but-OPEN leg produces one Telegram warning naming it."""
+    store = MagicMock()
+    store.find_stale_flat_legs.return_value = [("paper_x", "overlay_cc", "NSE_FO|1")]
+    notifier = MagicMock(send=AsyncMock())
+    with patch("scripts.monitor_daemon.build_notifier", return_value=notifier):
+        await daemon.warn_stale_flat_legs_at_startup(store)
+    notifier.send.assert_awaited_once()
+    assert "NSE_FO|1" in notifier.send.call_args.args[0]
+
+
+@pytest.mark.asyncio
+async def test_stale_flat_legs_clean_state_sends_nothing() -> None:
+    """No stale legs -> no notifier built, nothing sent."""
+    store = MagicMock()
+    store.find_stale_flat_legs.return_value = []
+    with patch("scripts.monitor_daemon.build_notifier") as build:
+        await daemon.warn_stale_flat_legs_at_startup(store)
+    build.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_stale_flat_legs_check_failure_does_not_raise() -> None:
+    """A DB error is logged and swallowed so the daemon still starts."""
+    store = MagicMock()
+    store.find_stale_flat_legs.side_effect = RuntimeError("db locked")
+    await daemon.warn_stale_flat_legs_at_startup(store)
