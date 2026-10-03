@@ -87,6 +87,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-03] gamma-near-expiry B2.4 closed (`c5126be`): pure `src/gamma/watchlist.py` + `get_prior_snapshots` / `get_all_active_watchlist` + `_update_watchlist` (D3/D4); `test-runner` green (3992),
+  `greeks-analyst` and `code-reviewer` clean.
 - [2026-10-03] gamma-near-expiry B2.3 closed (`d3e19ed`): snapshot persistence wired into `_fetch_and_snapshot`, `DataFetchError` isolated per expiry (D1); `test-runner` green (3970), `code-reviewer`
   clean.
 - [2026-10-03] gamma-near-expiry: closed 7 design decisions (D1–D7) in `risk-gamma-phase-a/stories.md`, amended B2.4/B2.5 file lists, set B2.2 SHA `a59e156`, noted the stale Wed/Thu cron for GS-6.

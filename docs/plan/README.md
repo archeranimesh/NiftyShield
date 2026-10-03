@@ -69,8 +69,8 @@ blueprint drawn from the case study. No `src/` code touched under this story. Re
 `BACKTEST_PLAN_PHASE1.md` (root, canonical spec) — CSP v1 variance-gate buildout, CSP-live/IC-paper expansion, post-gate strategy expansion, long-horizon capital allocation. Each phase gated on the
 previous phase's closing GATE task; `phase1` itself gated on the Phase 0.8 variance gate (`variance-gate/`, below).
 
-**`gamma-near-expiry/`** · 🔄 In progress · next: **`risk-gamma-phase-a/` B2.4** (watchlist maintenance) Near-Expiry Gamma Buy epic: Phase A `gamma_daily_watch.py` (delta gate done) → Phase B
-`gamma-scan-phase-b/` `gamma_scan.py` (⬜ not started; blocked on Phase A + ≥ 5 days of snapshot data). Epic created 2026-10-03 from the standalone `risk-gamma-phase-a/` folder.
+**`gamma-near-expiry/`** · 🔄 In progress · next: **`risk-gamma-phase-a/` B2.5** (percentile calibration + Telegram summary) Near-Expiry Gamma Buy epic: Phase A `gamma_daily_watch.py` (delta gate done)
+→ Phase B `gamma-scan-phase-b/` `gamma_scan.py` (⬜ not started; blocked on Phase A + ≥ 5 days of snapshot data). Epic created 2026-10-03 from the standalone `risk-gamma-phase-a/` folder.
 
 **`variance-gate/`** · ⬜ Not started · next: **VG0** (CSP v1 spec reconciliation) CSP v1 Phase 0.8 deployment gate — spec reconciliation + gate criteria A–D.
 

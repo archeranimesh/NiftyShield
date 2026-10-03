@@ -4,7 +4,7 @@
 > <code-reviewer|none> | SHA: <sha>` when done. Add one line to `TODOS.md` session log. See `docs/plan/README.md` §Conventions. Full story spec for each task:
 > `docs/plan/gamma-near-expiry/risk-gamma-phase-a/stories.md`.
 
-**Open: B2.4, B2.5.**
+**Open: B2.5.**
 
 ---
 
@@ -25,10 +25,10 @@
 - [x] **B2.1** — Script scaffold: CLI flags + expiry resolution | Owner: Animesh | Model: n/a | Review: none | SHA: b68bb3d
 - [x] **B2.2** — Chain fetch + field computation (pure `src/gamma/derive.py::derive_snapshots`; script `_fetch_chain`, `_fetch_and_snapshot`) | Owner: Claude | Model: claude-sonnet-5 | Review:
   greeks-analyst | SHA: a59e156
-- [x] **B2.3** — Snapshot persistence (wire `GammaStore.insert_chain_snapshot` into `_fetch_and_snapshot`; catch `DataFetchError`, not bare `Exception`) | Owner: Claude | Model: claude-sonnet-5 |
-  Review: test-runner, code-reviewer | SHA: d3e19ed Review: code-reviewer | SHA: —
-- [ ] **B2.4** — Watchlist maintenance (pure `src/gamma/watchlist.py::evaluate_watchlist` + script `_update_watchlist` + store `get_prior_snapshots` / `get_all_active_watchlist`; add / retain / remove
-  / elevate per §5b, decisions D3–D4) | Owner: Claude | Model: claude-sonnet-5 | Review: greeks-analyst | SHA: —
+- [x] **B2.3** — Snapshot persistence (wire `GammaStore.insert_chain_snapshot` into `_fetch_and_snapshot`; catch `DataFetchError`, not bare `Exception`) | Owner: Claude | Model: claude-sonnet-5-5 |
+  Review: test-runner, code-reviewer | SHA: d3e19ed
+- [x] **B2.4** — Watchlist maintenance (pure `src/gamma/watchlist.py::evaluate_watchlist` + script `_update_watchlist` + store `get_prior_snapshots` / `get_all_active_watchlist`; add / retain / remove
+  / elevate per §5b, decisions D3–D4) | Owner: Claude | Model: claude-sonnet-5-5 | Review: test-runner, greeks-analyst, code-reviewer | SHA: c5126be
 - [ ] **B2.5** — Percentile calibration + Telegram summary (`GammaStore.update_percentiles` + distinct-day history gate, `_run_calibration`, `build_notifier` wire-up, decision D5) | Owner: Claude |
   Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
 
