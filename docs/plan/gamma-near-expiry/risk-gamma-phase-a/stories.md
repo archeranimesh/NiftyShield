@@ -174,9 +174,9 @@ for testability and single responsibility (the script is the most logic-dense fi
 
 **What to implement:**
 
-`evaluate_watchlist(today_snaps, history, today) -> WatchlistDecision` (frozen dataclass: `add`, `elevate`, `remove` lists, where each removal carries its `removal_reason`; `history` holds the
-yesterday / 3-day-gearing / consecutive-day inputs gathered by the script). `_update_watchlist(today_snaps, current_week_expiry, today, store, conn, dry_run) -> dict` in the script applies the
-decision through the store and returns `{"added": int, "retained": int, "removed": int, "elevated": int}`.
+`evaluate_watchlist(today_snaps, history, active, today) -> WatchlistDecision` (frozen dataclass: `add`, `retain`, `elevate`, `remove` lists, where each removal carries its `removal_reason`; `history`
+holds the yesterday / 3-day-gearing / consecutive-day inputs gathered by the script). `_update_watchlist(today_snaps, current_week_expiry, today, store, conn, dry_run) -> dict` in the script applies
+the decision through the store and returns `{"added": int, "retained": int, "removed": int, "elevated": int}`.
 
 **Inclusion criteria (all five — §5b):**
 ```
