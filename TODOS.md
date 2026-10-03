@@ -87,6 +87,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-03] gamma-near-expiry B2.3 closed (`d3e19ed`): snapshot persistence wired into `_fetch_and_snapshot`, `DataFetchError` isolated per expiry (D1); `test-runner` green (3970), `code-reviewer`
+  clean.
 - [2026-10-03] gamma-near-expiry: closed 7 design decisions (D1–D7) in `risk-gamma-phase-a/stories.md`, amended B2.4/B2.5 file lists, set B2.2 SHA `a59e156`, noted the stale Wed/Thu cron for GS-6.
   Docs only.
 - [2026-10-03] BUG-070 closed (`a006ebd`): accepted the non-atomic close/flip window; `PaperStore.find_stale_flat_legs` + daemon-startup Telegram warning (alert only), backfill script reuses the

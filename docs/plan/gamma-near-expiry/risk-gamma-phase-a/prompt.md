@@ -42,7 +42,7 @@ re-open a decision mid-task — if one proves wrong, stop and report.
 - **B1** — `src/gamma/` package: models + `GammaStore`. Done.
 - **B2.1** — `gamma_daily_watch.py` scaffold: CLI flags + expiry resolution. Done.
 - **B2.2** — Chain fetch + field computation (pure `src/gamma/derive.py`). Done.
-- **B2.3** — Snapshot persistence. Open.
+- **B2.3** — Snapshot persistence. Done.
 - **B2.4** — Watchlist maintenance (pure `src/gamma/watchlist.py`). Open.
 - **B2.5** — Percentile calibration (`GammaStore.update_percentiles`) + Telegram summary. Open.
 
