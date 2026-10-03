@@ -30,11 +30,22 @@ Constructor: `GammaStore()` — stateless; every method takes an open `sqlite3.C
 `get_prior_oi(conn, expiry_date, today)` — one batched query returning the latest pre-today OI per `(strike, option_type)`; feeds `derive_snapshots` (never call `get_yesterday_snapshot` in a
 per-strike loop).
 
+`get_prior_snapshots(conn, expiry_date, today, days)` — one query: the latest snapshot per `(strike, option_type)` for each of the last `days` distinct snapshot dates strictly before `today` (D3;
+same-day re-runs collapse to the latest `snapshot_time`). `get_all_active_watchlist(conn)` — active entries across all expiries; needed because `get_active_watchlist` takes one expiry and misses last
+week's entries once `current_week_expiry` has rolled (D4).
+
 ## Derived fields (`derive.py`)
 
 Pure, zero-I/O `derive_snapshots(chain, expiry_date, today, snapshot_time, prior_oi)` builds `GammaChainSnapshot` rows for strikes within ±10% of spot (`gamma_gearing` = gamma × spot² / ask, `None`
 when ask <= 0.50 or gamma missing; `distance_pct`; `oi_change_1d`; `bid_ask_spread`; `dte_calendar`). Shared by `scripts/pipeline/gamma_daily_watch.py` and Phase B `gamma_scan.py`. Strike keys are
 `int`, matching `GammaChainSnapshot.strike`.
+
+## Watchlist rules (`watchlist.py`)
+
+Pure `evaluate_watchlist(today_snaps, history, active, today) -> WatchlistDecision` (frozen: `add`, `retain`, `remove` carrying `removal_reason`, `elevate`); thresholds are module constants, no rule
+registry. Add criteria (§5b) gate new entries only; an active entry that stops qualifying is retained (state refreshed) unless a removal rule fires (D4). `None` gearing/OI blocks adding; `None`
+`oi_change_1d` passes inclusion but blocks elevation. Elevation is recomputed every run, needs inclusion, and needs 3 prior snapshot dates (average excludes today). "Yesterday" is the most recent
+prior snapshot *date*; a strike missing from it never triggers removal. `expired` covers every active entry. Feed it current-week-expiry snapshots only. The script applies the decision.
 
 ## Dependency rule
 
@@ -42,6 +53,6 @@ when ask <= 0.50 or gamma missing; `distance_pct`; `oi_change_1d`; `bid_ask_spre
 
 ## What does NOT yet exist
 
-- `gamma_daily_watch.py` is partly built (`scripts/pipeline/`): expiry resolution and chain fetch + derivation exist; watchlist maintenance (`src/gamma/watchlist.py`) and percentile calibration are
-  still open (B2.3–B2.5).
+- `gamma_daily_watch.py` is partly built (`scripts/pipeline/`): expiry resolution, chain fetch + derivation, snapshot persistence and watchlist maintenance exist; percentile calibration and the
+  Telegram summary are still open (B2.5).
 - Calibration update path for `strike_iv_pctile_20d` and `gamma_gearing_pctile_dte` percentile columns — schema present, population logic not yet implemented.

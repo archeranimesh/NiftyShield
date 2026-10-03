@@ -366,6 +366,50 @@ class GammaStore:
         ).fetchall()
         return {(int(r["strike"]), r["option_type"]): int(r["oi"]) for r in rows}
 
+    def get_prior_snapshots(
+        self,
+        conn: sqlite3.Connection,
+        expiry_date: datetime.date,
+        today: datetime.date,
+        days: int,
+    ) -> list[GammaChainSnapshot]:
+        """Fetch the latest snapshot per (strike, option_type) for each prior date.
+
+        Covers the last ``days`` distinct snapshot dates strictly before
+        ``today`` for the expiry, in one query. Same-day re-runs collapse to
+        the latest snapshot_time of that date.
+
+        Args:
+            conn: An open SQLite connection.
+            expiry_date: Expiry date to filter by.
+            today: Date threshold (only snapshot dates strictly before this).
+            days: Number of distinct prior snapshot dates to include.
+
+        Returns:
+            Snapshots ordered by snapshot_date DESC, strike ASC, option_type ASC.
+        """
+        rows = conn.execute(
+            """
+            SELECT * FROM (
+                SELECT *, ROW_NUMBER() OVER (
+                           PARTITION BY snapshot_date, strike, option_type
+                           ORDER BY snapshot_time DESC
+                       ) AS rn
+                FROM gamma_chain_snapshots
+                WHERE expiry_date = ?
+                  AND snapshot_date IN (
+                    SELECT DISTINCT snapshot_date FROM gamma_chain_snapshots
+                    WHERE expiry_date = ? AND snapshot_date < ?
+                    ORDER BY snapshot_date DESC
+                    LIMIT ?
+                  )
+            ) WHERE rn = 1
+            ORDER BY snapshot_date DESC, strike ASC, option_type ASC
+            """,
+            (expiry_date.isoformat(), expiry_date.isoformat(), today.isoformat(), days),
+        ).fetchall()
+        return [_row_to_chain_snapshot(r) for r in rows]
+
     def upsert_watchlist(self, conn: sqlite3.Connection, entry: GammaWatchlistEntry) -> None:
         """Insert or update a watchlist entry.
 
@@ -432,6 +476,24 @@ class GammaStore:
             ORDER BY strike ASC, option_type ASC
             """,
             (expiry_date.isoformat(),),
+        ).fetchall()
+        return [_row_to_watchlist_entry(r) for r in rows]
+
+    def get_all_active_watchlist(self, conn: sqlite3.Connection) -> list[GammaWatchlistEntry]:
+        """Fetch every active watchlist entry regardless of expiry.
+
+        Args:
+            conn: An open SQLite connection.
+
+        Returns:
+            Active entries ordered by expiry_date, strike, option_type.
+        """
+        rows = conn.execute(
+            """
+            SELECT * FROM gamma_watchlist
+            WHERE removed_date IS NULL
+            ORDER BY expiry_date ASC, strike ASC, option_type ASC
+            """
         ).fetchall()
         return [_row_to_watchlist_entry(r) for r in rows]
 

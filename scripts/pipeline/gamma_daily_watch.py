@@ -13,7 +13,6 @@ import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta
-from typing import Any
 
 import structlog
 
@@ -22,8 +21,9 @@ from src.client.upstox_market import UpstoxMarketClient, parse_upstox_option_cha
 from src.config import settings
 from src.db import connect
 from src.gamma.derive import derive_snapshots
-from src.gamma.models import GammaChainSnapshot
+from src.gamma.models import GammaChainSnapshot, GammaWatchlistEntry
 from src.gamma.store import GammaStore
+from src.gamma.watchlist import GEARING_AVG_DAYS, evaluate_watchlist
 from src.market_calendar.holidays import is_trading_day
 from src.models.options import OptionChain
 from src.utils.logging import setup_logging
@@ -80,6 +80,7 @@ def resolve_expiries(today: date) -> tuple[date, date]:
 
 
 _NIFTY_INSTRUMENT = "NSE_INDEX|Nifty 50"
+_HISTORY_DAYS = GEARING_AVG_DAYS
 
 
 def _fetch_chain(client: UpstoxMarketClient, expiry_date: date) -> OptionChain | None:
@@ -149,22 +150,62 @@ def _runtime(dry_run: bool) -> Iterator[tuple[UpstoxMarketClient, GammaStore, sq
         yield UpstoxMarketClient(), store, conn
 
 
+def _load_watchlist_inputs(
+    store: GammaStore, conn: sqlite3.Connection | None, expiry: date, today: date, dry_run: bool
+) -> tuple[list[GammaChainSnapshot], list[GammaWatchlistEntry]]:
+    """Read prior snapshots and active entries; empty when the tables are absent.
+
+    A dry run never creates tables, so a missing table is treated as empty
+    history instead of an error.
+    """
+    if conn is None:
+        return [], []
+    try:
+        history = store.get_prior_snapshots(conn, expiry, today, _HISTORY_DAYS)
+        return history, store.get_all_active_watchlist(conn)
+    except sqlite3.OperationalError:
+        if not dry_run:
+            raise
+        logger.warning("gamma_daily_watch.dry_run_no_tables")
+        return [], []
+
+
 def _update_watchlist(
-    today_snaps: list[Any],
+    today_snaps: list[GammaChainSnapshot],
     current_week_expiry: date,
     today: date,
-    store: Any,
-    conn: Any,
+    store: GammaStore,
+    conn: sqlite3.Connection | None,
     dry_run: bool,
 ) -> dict[str, int]:
-    """Update the active watchlist. (Stub)"""
-    logger.info(
-        "Stub: update_watchlist for current_week_expiry %s, today=%s, dry_run=%s",
-        current_week_expiry,
-        today,
-        dry_run,
-    )
-    return {"added": 0, "retained": 0, "removed": 0, "elevated": 0}
+    """Re-evaluate the watchlist (§5b) and apply the decision through the store.
+
+    Only current-week-expiry snapshots are evaluated (D4); the ``expired`` rule
+    still covers every active entry. ``dry_run`` reads but never writes.
+
+    Returns:
+        Counts: ``{"added", "retained", "removed", "elevated"}``.
+    """
+    week_snaps = [s for s in today_snaps if s.expiry_date == current_week_expiry]
+    history, active = _load_watchlist_inputs(store, conn, current_week_expiry, today, dry_run)
+    decision = evaluate_watchlist(week_snaps, history, active, today)
+    stats = {
+        "added": len(decision.add),
+        "retained": len(decision.retain),
+        "removed": len(decision.remove),
+        "elevated": len(decision.elevate),
+    }
+    if dry_run or conn is None:
+        logger.info("gamma_daily_watch.watchlist_dry_run", **stats)
+        return stats
+    for entry in (*decision.add, *decision.retain):
+        store.upsert_watchlist(conn, entry)
+    for r in decision.remove:
+        store.remove_from_watchlist(
+            conn, r.expiry_date, r.strike, r.option_type, r.removal_reason, today
+        )
+    logger.info("gamma_daily_watch.watchlist_updated", **stats)
+    return stats
 
 
 def main() -> None:

@@ -7,6 +7,7 @@ import sys
 from contextlib import contextmanager
 from datetime import date
 from decimal import Decimal
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -15,10 +16,12 @@ from structlog.testing import capture_logs
 from scripts.pipeline.gamma_daily_watch import (
     _fetch_and_snapshot,
     _fetch_chain,
+    _update_watchlist,
     main,
     resolve_expiries,
 )
 from src.client.exceptions import DataFetchError
+from src.gamma.watchlist import WatchlistDecision, WatchlistRemoval
 from src.models.options import OptionChain, OptionChainStrike, OptionLeg
 
 
@@ -368,3 +371,66 @@ def test_store_error_propagates() -> None:
                 MagicMock(),
                 False,
             )
+
+
+def _wl_snap(expiry: date, strike: int = 25000) -> Any:
+    snap = MagicMock()
+    snap.expiry_date = expiry
+    snap.strike = strike
+    return snap
+
+
+def _decision(**kwargs: Any) -> Any:
+    base: dict[str, Any] = {"add": (), "retain": (), "remove": (), "elevate": ()}
+    return WatchlistDecision(**{**base, **kwargs})
+
+
+def test_update_watchlist_applies_decision_and_returns_stats() -> None:
+    expiry, today = date(2026, 5, 26), date(2026, 5, 22)
+    store, conn = MagicMock(), MagicMock()
+    entry = MagicMock()
+    removal = WatchlistRemoval(date(2026, 5, 19), 24900, "CE", "expired")
+    decision = _decision(add=(entry,), retain=(entry,), remove=(removal,), elevate=(entry,))
+    snaps = [_wl_snap(expiry), _wl_snap(date(2026, 6, 2))]
+    with patch(
+        "scripts.pipeline.gamma_daily_watch.evaluate_watchlist", return_value=decision
+    ) as ev:
+        stats = _update_watchlist(snaps, expiry, today, store, conn, dry_run=False)
+
+    assert stats == {"added": 1, "retained": 1, "removed": 1, "elevated": 1}
+    assert ev.call_args[0][0] == [snaps[0]]  # current-week expiry only
+    assert store.upsert_watchlist.call_count == 2
+    store.remove_from_watchlist.assert_called_once_with(
+        conn, date(2026, 5, 19), 24900, "CE", "expired", today
+    )
+    store.get_prior_snapshots.assert_called_once_with(conn, expiry, today, 3)
+    store.get_all_active_watchlist.assert_called_once_with(conn)
+
+
+def test_dry_run_no_store_calls() -> None:
+    store, conn = MagicMock(), MagicMock()
+    removal = WatchlistRemoval(date(2026, 5, 19), 24900, "CE", "expired")
+    decision = _decision(add=(MagicMock(),), remove=(removal,))
+    with patch("scripts.pipeline.gamma_daily_watch.evaluate_watchlist", return_value=decision):
+        stats = _update_watchlist(
+            [], date(2026, 5, 26), date(2026, 5, 22), store, conn, dry_run=True
+        )
+
+    assert stats["added"] == 1 and stats["removed"] == 1
+    store.upsert_watchlist.assert_not_called()
+    store.remove_from_watchlist.assert_not_called()
+
+
+def test_dry_run_tolerates_missing_tables_but_live_run_raises() -> None:
+    store = MagicMock()
+    store.get_prior_snapshots.side_effect = sqlite3.OperationalError("no such table")
+    args = ([], date(2026, 5, 26), date(2026, 5, 22), store, MagicMock())
+
+    assert _update_watchlist(*args, dry_run=True) == {
+        "added": 0,
+        "retained": 0,
+        "removed": 0,
+        "elevated": 0,
+    }
+    with pytest.raises(sqlite3.OperationalError):
+        _update_watchlist(*args, dry_run=False)

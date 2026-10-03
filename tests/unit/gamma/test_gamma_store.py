@@ -594,3 +594,69 @@ def test_get_prior_oi_returns_latest_pre_today_per_key(store, db_conn):
 
 def test_get_prior_oi_empty_store(store, db_conn):
     assert store.get_prior_oi(db_conn, datetime.date(2026, 5, 28), datetime.date(2026, 5, 27)) == {}
+
+
+def test_get_prior_snapshots_latest_per_date_excludes_today(store, db_conn):
+    expiry = datetime.date(2026, 5, 28)
+    today = datetime.date(2026, 5, 27)
+    for snap in (
+        _prior_snap(datetime.date(2026, 5, 22), "15:20", 25000, 50),
+        _prior_snap(datetime.date(2026, 5, 25), "15:20", 25000, 100),
+        _prior_snap(datetime.date(2026, 5, 26), "09:20", 25000, 200),
+        _prior_snap(datetime.date(2026, 5, 26), "15:20", 25000, 300),
+        _prior_snap(datetime.date(2026, 5, 26), "15:20", 25100, 400),
+        _prior_snap(today, "09:20", 25000, 999),
+    ):
+        store.insert_chain_snapshot(db_conn, snap)
+
+    got = store.get_prior_snapshots(db_conn, expiry, today, days=2)
+
+    assert [(s.snapshot_date.day, s.strike, s.oi) for s in got] == [
+        (26, 25000, 300),
+        (26, 25100, 400),
+        (25, 25000, 100),
+    ]
+
+
+def test_get_prior_snapshots_empty_store(store, db_conn):
+    got = store.get_prior_snapshots(
+        db_conn, datetime.date(2026, 5, 28), datetime.date(2026, 5, 27), days=3
+    )
+    assert got == []
+
+
+def _wl_entry(expiry: datetime.date, strike: int, removed: bool) -> GammaWatchlistEntry:
+    return GammaWatchlistEntry(
+        expiry_date=expiry,
+        strike=strike,
+        option_type="CE",
+        added_date=datetime.date(2026, 5, 20),
+        last_seen_date=datetime.date(2026, 5, 20),
+        removed_date=datetime.date(2026, 5, 21) if removed else None,
+        removal_reason="expired" if removed else None,
+        distance_pct=None,
+        gamma_gearing=None,
+        oi=None,
+        oi_change_1d=None,
+        days_on_watchlist=1,
+        elevated=False,
+        elevation_reason=None,
+    )
+
+
+def test_get_all_active_watchlist_spans_expiries_and_skips_removed(store, db_conn):
+    e1, e2 = datetime.date(2026, 5, 19), datetime.date(2026, 5, 26)
+    for entry in (
+        _wl_entry(e2, 25000, False),
+        _wl_entry(e1, 24900, False),
+        _wl_entry(e1, 24800, True),
+    ):
+        store.upsert_watchlist(db_conn, entry)
+
+    got = store.get_all_active_watchlist(db_conn)
+
+    assert [(g.expiry_date, g.strike) for g in got] == [(e1, 24900), (e2, 25000)]
+
+
+def test_get_all_active_watchlist_empty(store, db_conn):
+    assert store.get_all_active_watchlist(db_conn) == []
