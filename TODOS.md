@@ -17,8 +17,8 @@ rot them. (Items 3, 5 and 8 closed — numbers kept stable because item text cro
 
 4. **Gamma near-expiry buy (epic)** — `docs/plan/gamma-near-expiry/` — Phase A `risk-gamma-phase-a/` ✅ done; next Phase B `gamma-scan-phase-b/` GS-1 (GS-1..6), blocked until ≥ 5 days of snapshots
    exist. In progress, independent of everything else; finish before starting new stories.
-6. **Strategy payoff charts on Telegram (IC first, any strategy via opt-in registry)** — `docs/plan/strategy-payoff-charts/` — next **PC-3** (`src/payoff/core.py`). `chart-core/` (PC-2..19, no option
-   model: generic payoff math + registry + IC wiring) ships now; `chart-model-overlay/` (MO-1..9) is blocked on `greeks-bs-fallback` GF-2 + GF-3, so it waits for item 7.
+6. **Strategy payoff charts on Telegram (IC first, any strategy via opt-in registry)** — `docs/plan/strategy-payoff-charts/` — next **PC-4** (`tests/unit/payoff/test_acceptance.py`). `chart-core/`
+   (PC-2..19, no option model: generic payoff math + registry + IC wiring) ships now; `chart-model-overlay/` (MO-1..9) is blocked on `greeks-bs-fallback` GF-2 + GF-3, so it waits for item 7.
 7. **Greeks Black-Scholes fallback** — `docs/plan/greeks-bs-fallback/` — next **GF-1** (read-only audit scope). Needs Animesh's three modeling decisions (rate / DTE convention / delta tolerance)
    before GF-2. Unblocks delta-based IC entry for the yearly bucket and `strategy-payoff-charts` `chart-model-overlay/`.
 9. **Portfolio snapshot slimdown** — `docs/plan/portfolio-snapshot-slimdown/` — next **FD-1** (pre-delete audit). Epic, fixed order: `finideas-decommission/` (FD-1..7) → `dhan-holdings-removal/`
@@ -85,6 +85,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-03] strategy-payoff-charts PC-3 closed (`cf7aadb`): `expiry_pnl_at` / `expiry_pnl_series` (share `_pnl` with `compute_payoff`, a deliberate deviation from the spec's "should call");
+  `test-runner` green (4029), `code-reviewer` 0 CRITICAL/ERROR, warnings fixed.
 - [2026-10-03] strategy-payoff-charts PC-2 closed (`bd6e6a1`): leaf `src/payoff/` (`compute_payoff`, `PayoffError` hierarchy, AST import-boundary test); `test-runner` green (4022), `code-reviewer` 0
   CRITICAL/ERROR, warnings fixed except mypy Optional narrowing (guarded by `_validate`). Loop run: Claude implements all PC tasks, 45 min between iterations.
 - [2026-10-03] Filed BUG-072 (gamma_daily_watch has no trading-day guard; found by a Saturday `--dry-run`). Unconfirmed suspicions left here: gamma-gearing scale vs the 3.0/5.0 floors (print a live

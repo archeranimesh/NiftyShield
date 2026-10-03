@@ -3,12 +3,12 @@
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
 spec.
 
-**Open: PC-3.**
+**Open: PC-4.**
 
 - [x] **PC-1** — Scaffold the `strategy-payoff-charts/` epic + both sub-stories; register in `TODOS.md` + README | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 7210c31
 - [x] **PC-2** — `src/payoff/` leaf package: `core.py` (`PayoffLeg`, `StrategyPayoff`, `compute_payoff`), `errors.py` (`PayoffError` hierarchy), import-boundary test, `Decimal` | Owner: Claude |
   Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: bd6e6a1
-- [ ] **PC-3** — `src/payoff/core.py`: `expiry_pnl_at` + `expiry_pnl_series` for any `StrategyPayoff` | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: —
+- [x] **PC-3** — `src/payoff/core.py`: `expiry_pnl_at` + `expiry_pnl_series` for any `StrategyPayoff` | Owner: Claude | Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: cf7aadb
 - [ ] **PC-4** — Acceptance matrix `tests/unit/strategy/test_payoff_acceptance.py`: IC, CSP, CC, Collar hand-computed fixtures | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: —
 - [ ] **PC-5** — `src/notifications/payoff_chart.py`: `render_payoff_png` generic chart body via the matplotlib `Figure` API (no `pyplot`); add matplotlib dep | Owner: Antigravity | Model: n/a |
   Review: code-reviewer | SHA: —
