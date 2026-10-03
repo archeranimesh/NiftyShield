@@ -8,7 +8,7 @@ from contextlib import contextmanager
 from datetime import date
 from decimal import Decimal
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from structlog.testing import capture_logs
@@ -16,6 +16,8 @@ from structlog.testing import capture_logs
 from scripts.pipeline.gamma_daily_watch import (
     _fetch_and_snapshot,
     _fetch_chain,
+    _run_calibration,
+    _send_summary,
     _update_watchlist,
     main,
     resolve_expiries,
@@ -162,7 +164,11 @@ def test_dry_run_flag_propagates() -> None:
         with patch(
             "scripts.pipeline.gamma_daily_watch._fetch_and_snapshot", return_value=[]
         ) as mock_fetch:
-            with patch("scripts.pipeline.gamma_daily_watch._update_watchlist") as mock_update:
+            with (
+                patch("scripts.pipeline.gamma_daily_watch._update_watchlist") as mock_update,
+                patch("scripts.pipeline.gamma_daily_watch._run_calibration"),
+                patch("scripts.pipeline.gamma_daily_watch._send_summary"),
+            ):
                 main()
                 mock_fetch.assert_called_once()
                 # Check dry_run=True was passed in kwargs
@@ -186,7 +192,11 @@ def test_date_override_option() -> None:
             with patch(
                 "scripts.pipeline.gamma_daily_watch._fetch_and_snapshot", return_value=[]
             ) as mock_fetch:
-                with patch("scripts.pipeline.gamma_daily_watch._update_watchlist"):
+                with (
+                    patch("scripts.pipeline.gamma_daily_watch._update_watchlist"),
+                    patch("scripts.pipeline.gamma_daily_watch._run_calibration"),
+                    patch("scripts.pipeline.gamma_daily_watch._send_summary"),
+                ):
                     main()
                     mock_resolve.assert_called_once_with(date(2026, 5, 15))
                     mock_fetch.assert_called_once()
@@ -434,3 +444,167 @@ def test_dry_run_tolerates_missing_tables_but_live_run_raises() -> None:
     }
     with pytest.raises(sqlite3.OperationalError):
         _update_watchlist(*args, dry_run=False)
+
+
+# --- B2.5: calibration + Telegram ---
+
+_TODAY = date(2026, 6, 10)
+_STATS = {"added": 2, "retained": 3, "removed": 1, "elevated": 1}
+
+
+def _cal_snap(iv: str | None = "0.15", gearing: str | None = "5", dte: int = 2) -> Any:
+    snap = MagicMock()
+    snap.strike, snap.option_type, snap.dte_calendar = 25000, "CE", dte
+    snap.iv_val = Decimal(iv) if iv else None
+    snap.gamma_gearing = Decimal(gearing) if gearing else None
+    snap.snapshot_date, snap.snapshot_time, snap.expiry_date = _TODAY, "15:20", date(2026, 6, 16)
+    return snap
+
+
+def _cal_store(iv_days: int = 20, gearing_days: int = 20) -> MagicMock:
+    store = MagicMock()
+    store.get_iv_history.return_value = [Decimal(n) / 100 for n in range(1, iv_days + 1)]
+    store.count_prior_gearing_days.return_value = gearing_days
+    store.get_gearing_by_dte.return_value = [Decimal(n) for n in range(1, 11)]
+    return store
+
+
+def test_calibration_skipped_insufficient_history() -> None:
+    store = _cal_store(iv_days=15, gearing_days=15)
+    with capture_logs() as logs:
+        _run_calibration([_cal_snap()], _TODAY, store, MagicMock(), dry_run=False)
+
+    store.update_percentiles.assert_not_called()
+    store.get_gearing_by_dte.assert_not_called()
+    assert any(e["log_level"] == "warning" and e.get("days") == 15 for e in logs)
+
+
+def test_calibration_writes_percentile() -> None:
+    store = _cal_store()
+    conn = MagicMock()
+    _run_calibration([_cal_snap(iv="0.15", gearing="5")], _TODAY, store, conn, dry_run=False)
+
+    store.get_iv_history.assert_called_once_with(conn, 25000, "CE", limit_days=20, before=_TODAY)
+    kwargs = store.update_percentiles.call_args.kwargs
+    assert kwargs["iv_pctile"] == Decimal("0.7500")  # 15 of 20 values <= 0.15
+    assert kwargs["gearing_pctile"] == Decimal("0.5000")  # 5 of 10 values <= 5
+    assert kwargs["strike"] == 25000 and kwargs["snapshot_time"] == "15:20"
+
+
+def test_calibration_dry_run() -> None:
+    store = _cal_store()
+    _run_calibration([_cal_snap()], _TODAY, store, MagicMock(), dry_run=True)
+
+    store.get_iv_history.assert_called_once()  # reads are allowed (D9)
+    store.update_percentiles.assert_not_called()
+
+
+def test_calibration_dry_run_tolerates_missing_tables_but_live_run_raises() -> None:
+    store = _cal_store()
+    store.get_iv_history.side_effect = sqlite3.OperationalError("no such table")
+    _run_calibration([_cal_snap()], _TODAY, store, MagicMock(), dry_run=True)
+    with pytest.raises(sqlite3.OperationalError):
+        _run_calibration([_cal_snap()], _TODAY, store, MagicMock(), dry_run=False)
+
+
+def test_calibration_gate_counts_days_not_rows() -> None:
+    """25 gearing rows over 10 distinct days must not pass the 20-day gate (D5)."""
+    store = _cal_store(iv_days=10, gearing_days=10)
+    store.get_gearing_by_dte.return_value = [Decimal(n) for n in range(25)]
+    _run_calibration([_cal_snap()], _TODAY, store, MagicMock(), dry_run=False)
+
+    store.get_gearing_by_dte.assert_not_called()
+    store.update_percentiles.assert_not_called()
+
+
+def test_calibration_skips_snapshot_without_values() -> None:
+    store = _cal_store()
+    _run_calibration([_cal_snap(iv=None, gearing=None)], _TODAY, store, MagicMock(), False)
+
+    store.get_iv_history.assert_not_called()
+    store.update_percentiles.assert_not_called()
+
+
+def test_telegram_summary_sent() -> None:
+    notifier = MagicMock()
+    notifier.send = AsyncMock(return_value=True)
+    with patch("scripts.pipeline.gamma_daily_watch.build_notifier", return_value=notifier):
+        _send_summary(120, _STATS)
+
+    notifier.send.assert_awaited_once_with(
+        "Gamma watch: 120 strikes captured, 5 on watchlist, 1 elevated, 2 added, 1 removed"
+    )
+
+
+def test_telegram_no_notifier_skips_silently() -> None:
+    with patch("scripts.pipeline.gamma_daily_watch.build_notifier", return_value=None):
+        _send_summary(1, _STATS)  # must not raise
+
+
+def test_telegram_failure_non_fatal() -> None:
+    notifier = MagicMock()
+    notifier.send = AsyncMock(side_effect=RuntimeError("boom"))
+    with (
+        patch("scripts.pipeline.gamma_daily_watch.build_notifier", return_value=notifier),
+        capture_logs() as logs,
+    ):
+        _send_summary(1, _STATS)
+
+    assert any(e["log_level"] == "warning" and "boom" in e["error"] for e in logs)
+
+
+def _run_main(argv: list[str], calls: list[str]) -> dict[str, MagicMock]:
+    mocks: dict[str, MagicMock] = {}
+    names = {
+        "_fetch_and_snapshot": [],
+        "_update_watchlist": _STATS,
+        "_run_calibration": None,
+        "_send_summary": None,
+    }
+    with (
+        patch.object(sys, "argv", argv),
+        patch("scripts.pipeline.gamma_daily_watch._runtime", _fake_runtime),
+    ):
+        patchers = {
+            n: patch(f"scripts.pipeline.gamma_daily_watch.{n}", return_value=r)
+            for n, r in names.items()
+        }
+        for n, p in patchers.items():
+            mocks[n] = p.start()
+            mocks[n].side_effect = lambda *a, _n=n, **k: (calls.append(_n), names[_n])[1]
+        try:
+            main()
+        finally:
+            for p in patchers.values():
+                p.stop()
+    return mocks
+
+
+def test_morning_flag_skips_calibration_and_telegram() -> None:
+    calls: list[str] = []
+    mocks = _run_main(["gamma_daily_watch.py", "--morning"], calls)
+
+    assert calls == ["_fetch_and_snapshot"]
+    mocks["_run_calibration"].assert_not_called()
+    mocks["_send_summary"].assert_not_called()
+
+
+def test_dry_run_skips_telegram_but_calibrates() -> None:
+    calls: list[str] = []
+    mocks = _run_main(["gamma_daily_watch.py", "--dry-run"], calls)
+
+    assert mocks["_run_calibration"].call_args[0][-1] is True
+    mocks["_send_summary"].assert_not_called()
+
+
+def test_full_pipeline_integration() -> None:
+    calls: list[str] = []
+    mocks = _run_main(["gamma_daily_watch.py"], calls)
+
+    assert calls == [
+        "_fetch_and_snapshot",
+        "_update_watchlist",
+        "_run_calibration",
+        "_send_summary",
+    ]
+    assert mocks["_send_summary"].call_args[0] == (0, _STATS)  # captured=len(snaps), D8

@@ -34,6 +34,11 @@ per-strike loop).
 same-day re-runs collapse to the latest `snapshot_time`). `get_all_active_watchlist(conn)` — active entries across all expiries; needed because `get_active_watchlist` takes one expiry and misses last
 week's entries once `current_week_expiry` has rolled (D4).
 
+`update_percentiles(conn, *, snapshot_date, snapshot_time, expiry_date, strike, option_type, iv_pctile, gearing_pctile)` — targeted UPDATE of the two percentile columns for one snapshot key (`None`
+keeps the column; returns False for an unknown key). Calibration reads are day-based (D5): `get_iv_history(..., before=today)` returns one value per prior date (latest snapshot_time), so its `len` is
+a day count; `get_gearing_by_dte(..., before=today)` excludes today; `count_prior_gearing_days(conn, dte, before)` is the distinct-day count the 20-day gate uses (the gearing list length counts
+strikes, not days). Without `before`, both getters keep their legacy every-row behaviour.
+
 ## Derived fields (`derive.py`)
 
 Pure, zero-I/O `derive_snapshots(chain, expiry_date, today, snapshot_time, prior_oi)` builds `GammaChainSnapshot` rows for strikes within ±10% of spot (`gamma_gearing` = gamma × spot² / ask, `None`
@@ -51,8 +56,13 @@ prior snapshot *date*; a strike missing from it never triggers removal. `expired
 
 `src/gamma/` never imports from `scripts/`. Scripts are thin orchestration; rules live here.
 
+## Daily watch script (`scripts/pipeline/gamma_daily_watch.py`)
+
+Runs end to end: expiry resolution, chain fetch + `derive_snapshots`, snapshot persistence, `_update_watchlist`, `_run_calibration`, Telegram summary. `--morning` stops after persistence (D6);
+`--dry-run` reads the store but never writes and sends nothing (D9). `_run_calibration` ranks today's IV and DTE-bucket gearing against prior days only, gated on 20 distinct prior days, and writes via
+`update_percentiles`; the percentile maths is a script-local helper (no `calibration.py`). The Telegram send is non-fatal (`asyncio.wait_for` timeout, WARNING on failure, skipped when
+`build_notifier()` is None). Percentile columns are read-only for Phase B.
+
 ## What does NOT yet exist
 
-- `gamma_daily_watch.py` is partly built (`scripts/pipeline/`): expiry resolution, chain fetch + derivation, snapshot persistence and watchlist maintenance exist; percentile calibration and the
-  Telegram summary are still open (B2.5).
-- Calibration update path for `strike_iv_pctile_20d` and `gamma_gearing_pctile_dte` percentile columns — schema present, population logic not yet implemented.
+- Phase B (`gamma_scan.py`, `gamma_signal_log`) — sibling story `docs/plan/gamma-near-expiry/gamma-scan-phase-b/`.

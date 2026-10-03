@@ -541,6 +541,7 @@ class GammaStore:
         strike: int,
         option_type: typing.Literal["CE", "PE"],
         limit_days: int = 20,
+        before: datetime.date | None = None,
     ) -> list[decimal.Decimal]:
         """Fetch the trailing IV values across the last limit_days.
 
@@ -549,11 +550,34 @@ class GammaStore:
             strike: Strike price.
             option_type: Option type ('CE' | 'PE').
             limit_days: Maximum number of historical trading days to look back.
+            before: When given, only dates strictly before it are read and each
+                date contributes ONE value (its latest snapshot_time), so
+                ``len(result)`` is the number of distinct prior days (D5).
+                When None, every snapshot of the last ``limit_days`` dates is
+                returned.
 
         Returns:
             A list of Decimal objects representing the historical IV values,
             ordered chronologically (oldest to newest).
         """
+        if before is not None:
+            rows = conn.execute(
+                """
+                SELECT iv_val FROM (
+                    SELECT snapshot_date, iv_val, ROW_NUMBER() OVER (
+                               PARTITION BY snapshot_date
+                               ORDER BY snapshot_time DESC, expiry_date ASC
+                           ) AS rn
+                    FROM gamma_chain_snapshots
+                    WHERE strike = ? AND option_type = ?
+                      AND iv_val IS NOT NULL AND snapshot_date < ?
+                ) WHERE rn = 1
+                ORDER BY snapshot_date DESC
+                LIMIT ?
+                """,
+                (strike, option_type, before.isoformat(), limit_days),
+            ).fetchall()
+            return [decimal.Decimal(row["iv_val"]) for row in reversed(rows)]
         rows = conn.execute(
             """
             SELECT iv_val FROM gamma_chain_snapshots
@@ -575,7 +599,11 @@ class GammaStore:
         return [decimal.Decimal(row["iv_val"]) for row in reversed(rows)]
 
     def get_gearing_by_dte(
-        self, conn: sqlite3.Connection, target_dte: int, limit_days: int = 60
+        self,
+        conn: sqlite3.Connection,
+        target_dte: int,
+        limit_days: int = 60,
+        before: datetime.date | None = None,
     ) -> list[decimal.Decimal]:
         """Fetch all gamma_gearing values for target DTE over limit_days.
 
@@ -584,25 +612,105 @@ class GammaStore:
             target_dte: The calendar DTE to match.
             limit_days: Number of distinct trailing snapshot dates
                 to look back.
+            before: When given, only snapshot dates strictly before it are
+                read (so today's own rows never rank against themselves).
 
         Returns:
             A list of Decimal objects representing the gamma_gearing values,
             ordered by snapshot_date DESC.
         """
+        cutoff = before.isoformat() if before is not None else "9999-12-31"
         rows = conn.execute(
             """
             SELECT gamma_gearing FROM gamma_chain_snapshots
             WHERE dte_calendar = ?
               AND gamma_gearing IS NOT NULL
+              AND snapshot_date < ?
               AND snapshot_date IN (
                 SELECT DISTINCT snapshot_date FROM gamma_chain_snapshots
                 WHERE dte_calendar = ?
                   AND gamma_gearing IS NOT NULL
+                  AND snapshot_date < ?
                 ORDER BY snapshot_date DESC
                 LIMIT ?
             )
             ORDER BY snapshot_date DESC, snapshot_time DESC
             """,
-            (target_dte, target_dte, limit_days),
+            (target_dte, cutoff, target_dte, cutoff, limit_days),
         ).fetchall()
         return [decimal.Decimal(row["gamma_gearing"]) for row in rows]
+
+    def count_prior_gearing_days(
+        self, conn: sqlite3.Connection, target_dte: int, before: datetime.date
+    ) -> int:
+        """Count distinct snapshot dates before ``before`` with gearing at a DTE.
+
+        ``get_gearing_by_dte`` returns one value per strike, so its length
+        counts strikes, not days; the D5 history gate needs days.
+
+        Args:
+            conn: An open SQLite connection.
+            target_dte: The calendar DTE to match.
+            before: Only snapshot dates strictly before this are counted.
+
+        Returns:
+            Number of distinct prior snapshot dates.
+        """
+        row = conn.execute(
+            """
+            SELECT COUNT(DISTINCT snapshot_date) AS n FROM gamma_chain_snapshots
+            WHERE dte_calendar = ? AND gamma_gearing IS NOT NULL AND snapshot_date < ?
+            """,
+            (target_dte, before.isoformat()),
+        ).fetchone()
+        return int(row["n"])
+
+    def update_percentiles(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        snapshot_date: datetime.date,
+        snapshot_time: str,
+        expiry_date: datetime.date,
+        strike: int,
+        option_type: str,
+        iv_pctile: decimal.Decimal | None = None,
+        gearing_pctile: decimal.Decimal | None = None,
+    ) -> bool:
+        """Write the two percentile columns for one snapshot key.
+
+        A ``None`` argument leaves that column untouched; no other column is
+        modified.
+
+        Args:
+            conn: An open SQLite connection.
+            snapshot_date: Snapshot date of the row.
+            snapshot_time: Snapshot time (HH:MM) of the row.
+            expiry_date: Expiry of the row.
+            strike: Strike of the row.
+            option_type: 'CE' | 'PE'.
+            iv_pctile: New ``strike_iv_pctile_20d``, or None to keep.
+            gearing_pctile: New ``gamma_gearing_pctile_dte``, or None to keep.
+
+        Returns:
+            True if a row matched the key, False for an unknown key (no-op).
+        """
+        cur = conn.execute(
+            """
+            UPDATE gamma_chain_snapshots
+            SET strike_iv_pctile_20d = COALESCE(?, strike_iv_pctile_20d),
+                gamma_gearing_pctile_dte = COALESCE(?, gamma_gearing_pctile_dte)
+            WHERE snapshot_date = ? AND snapshot_time = ? AND expiry_date = ?
+              AND strike = ? AND option_type = ?
+            """,
+            (
+                _dec(iv_pctile),
+                _dec(gearing_pctile),
+                snapshot_date.isoformat(),
+                snapshot_time,
+                expiry_date.isoformat(),
+                strike,
+                option_type,
+            ),
+        )
+        return cur.rowcount > 0

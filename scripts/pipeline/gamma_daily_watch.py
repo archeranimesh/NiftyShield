@@ -8,11 +8,14 @@ manage the watchlist, calibrate percentiles, and send Telegram updates.
 from __future__ import annotations
 
 import argparse
+import asyncio
 import sqlite3
 import sys
+from bisect import bisect_right
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 
 import structlog
 
@@ -26,6 +29,8 @@ from src.gamma.store import GammaStore
 from src.gamma.watchlist import GEARING_AVG_DAYS, evaluate_watchlist
 from src.market_calendar.holidays import is_trading_day
 from src.models.options import OptionChain
+from src.notifications.markdown import escape_markdown
+from src.notifications.telegram import build_notifier
 from src.utils.logging import setup_logging
 
 _SCRIPT_NAME = "scripts.pipeline.gamma_daily_watch"
@@ -81,6 +86,10 @@ def resolve_expiries(today: date) -> tuple[date, date]:
 
 _NIFTY_INSTRUMENT = "NSE_INDEX|Nifty 50"
 _HISTORY_DAYS = GEARING_AVG_DAYS
+_MIN_HISTORY_DAYS = 20
+_GEARING_WINDOW_DAYS = 60
+_NOTIFY_TIMEOUT_S = 15.0
+_PCTILE_QUANT = Decimal("0.0001")
 
 
 def _fetch_chain(client: UpstoxMarketClient, expiry_date: date) -> OptionChain | None:
@@ -208,6 +217,135 @@ def _update_watchlist(
     return stats
 
 
+def _percentile(value: Decimal, history: list[Decimal]) -> Decimal:
+    """Fraction of ``history`` values that are <= ``value``, to 4 dp (§5c).
+
+    ``history`` must be non-empty and must exclude the value's own day.
+    """
+    rank = bisect_right(sorted(history), value)
+    return (Decimal(rank) / Decimal(len(history))).quantize(_PCTILE_QUANT)
+
+
+def _calibrate_snap(
+    snap: GammaChainSnapshot,
+    store: GammaStore,
+    conn: sqlite3.Connection,
+    today: date,
+    iv_cache: dict[tuple[int, str], list[Decimal]],
+    gearing_cache: dict[int, list[Decimal] | None],
+) -> tuple[Decimal | None, Decimal | None]:
+    """Compute (IV percentile, DTE-bucket gearing percentile) for one snapshot.
+
+    Each is None when its prior history is under 20 distinct snapshot days
+    (decision D5) or the snapshot's own value is missing.
+    """
+    iv_pct = None
+    if snap.iv_val is not None:
+        key = (snap.strike, snap.option_type)
+        if key not in iv_cache:
+            iv_cache[key] = store.get_iv_history(
+                conn, snap.strike, snap.option_type, limit_days=_MIN_HISTORY_DAYS, before=today
+            )
+        hist = iv_cache[key]
+        if len(hist) < _MIN_HISTORY_DAYS:
+            logger.warning(
+                "gamma_daily_watch.insufficient_iv_history",
+                strike=snap.strike,
+                opt=snap.option_type,
+                days=len(hist),
+            )
+        else:
+            iv_pct = _percentile(snap.iv_val, hist)
+    gearing_pct = None
+    if snap.gamma_gearing is not None:
+        dte = snap.dte_calendar
+        if dte not in gearing_cache:
+            days = store.count_prior_gearing_days(conn, dte, today)
+            if days < _MIN_HISTORY_DAYS:
+                logger.warning("gamma_daily_watch.insufficient_gearing_history", dte=dte, days=days)
+                gearing_cache[dte] = None
+            else:
+                gearing_cache[dte] = store.get_gearing_by_dte(
+                    conn, dte, limit_days=_GEARING_WINDOW_DAYS, before=today
+                )
+        bucket = gearing_cache[dte]
+        if bucket:
+            gearing_pct = _percentile(snap.gamma_gearing, bucket)
+    return iv_pct, gearing_pct
+
+
+def _run_calibration(
+    today_snaps: list[GammaChainSnapshot],
+    today: date,
+    store: GammaStore,
+    conn: sqlite3.Connection | None,
+    dry_run: bool,
+) -> None:
+    """Rank today's IV and DTE-bucket gearing against prior days (§5c) and store them.
+
+    Gated on 20 distinct prior snapshot days, never rows (D5); today is never in
+    the history it is ranked against. ``dry_run`` reads history but writes
+    nothing (D9); a missing table is tolerated in dry-run only.
+
+    Args:
+        today_snaps: Snapshot rows captured this run.
+        today: Reference date; history is strictly before it.
+        store: Gamma store.
+        conn: Open connection (None skips calibration).
+        dry_run: Compute and log only.
+    """
+    if conn is None:
+        return
+    iv_cache: dict[tuple[int, str], list[Decimal]] = {}
+    gearing_cache: dict[int, list[Decimal] | None] = {}
+    written = 0
+    try:
+        for snap in today_snaps:
+            iv_pct, gearing_pct = _calibrate_snap(snap, store, conn, today, iv_cache, gearing_cache)
+            if iv_pct is None and gearing_pct is None:
+                continue
+            if dry_run:
+                written += 1
+                continue
+            store.update_percentiles(
+                conn,
+                snapshot_date=snap.snapshot_date,
+                snapshot_time=snap.snapshot_time,
+                expiry_date=snap.expiry_date,
+                strike=snap.strike,
+                option_type=snap.option_type,
+                iv_pctile=iv_pct,
+                gearing_pctile=gearing_pct,
+            )
+            written += 1
+    except sqlite3.OperationalError:
+        if not dry_run:
+            raise
+        logger.warning("gamma_daily_watch.dry_run_no_tables")
+        return
+    logger.info("gamma_daily_watch.calibrated", rows=written, dry_run=dry_run)
+
+
+def _send_summary(captured: int, stats: dict[str, int]) -> None:
+    """Push the run summary to Telegram; never fatal (D7).
+
+    Skipped silently when no notifier is configured. The send runs under an
+    explicit timeout; any failure is logged as a WARNING.
+    """
+    notifier = build_notifier()
+    if notifier is None:
+        return
+    text = escape_markdown(
+        f"Gamma watch: {captured} strikes captured, "
+        f"{stats['added'] + stats['retained']} on watchlist, {stats['elevated']} elevated, "
+        f"{stats['added']} added, {stats['removed']} removed"
+    )
+    try:
+        asyncio.run(asyncio.wait_for(notifier.send(text), timeout=_NOTIFY_TIMEOUT_S))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("gamma_daily_watch.notify_failed", error=str(exc))
+
+
 def main() -> None:
     """Main execution entry point."""
     pass
@@ -260,7 +398,7 @@ def main() -> None:
         )
 
         if not args.morning:
-            _update_watchlist(
+            stats = _update_watchlist(
                 today_snaps=snaps,
                 current_week_expiry=current_week_expiry,
                 today=today,
@@ -268,6 +406,9 @@ def main() -> None:
                 conn=conn,
                 dry_run=args.dry_run,
             )
+            _run_calibration(snaps, today, store, conn, args.dry_run)
+            if not args.dry_run:
+                _send_summary(len(snaps), stats)
 
 
 if __name__ == "__main__":

@@ -660,3 +660,105 @@ def test_get_all_active_watchlist_spans_expiries_and_skips_removed(store, db_con
 
 def test_get_all_active_watchlist_empty(store, db_conn):
     assert store.get_all_active_watchlist(db_conn) == []
+
+
+def _calib_snap(
+    date: datetime.date,
+    time: str = "15:20",
+    *,
+    iv: str | None = None,
+    gearing: str | None = None,
+    dte: int = 2,
+    strike: int = 25000,
+) -> GammaChainSnapshot:
+    return GammaChainSnapshot(
+        snapshot_date=date,
+        snapshot_time=time,
+        expiry_date=datetime.date(2026, 6, 30),
+        strike=strike,
+        option_type="CE",
+        dte_calendar=dte,
+        nifty_spot=decimal.Decimal("25000"),
+        nifty_futures=None,
+        india_vix=None,
+        delta_val=None,
+        gamma_val=None,
+        vega_val=None,
+        theta_val=None,
+        iv_val=decimal.Decimal(iv) if iv else None,
+        gamma_gearing=decimal.Decimal(gearing) if gearing else None,
+        distance_pct=None,
+        best_bid=None,
+        best_ask=None,
+        bid_ask_spread=None,
+        oi=None,
+        oi_change_1d=None,
+        volume_day=None,
+        strike_iv_pctile_20d=None,
+        gamma_gearing_pctile_dte=None,
+        created_at=datetime.datetime(2026, 6, 1, tzinfo=datetime.timezone.utc),
+    )
+
+
+def test_update_percentiles_writes_only_given_columns(store, db_conn):
+    snap = _calib_snap(datetime.date(2026, 6, 1), iv="0.15", gearing="4.0")
+    store.insert_chain_snapshot(db_conn, snap)
+    key = {
+        "snapshot_date": snap.snapshot_date,
+        "snapshot_time": "15:20",
+        "expiry_date": snap.expiry_date,
+        "strike": 25000,
+        "option_type": "CE",
+    }
+
+    assert store.update_percentiles(db_conn, **key, iv_pctile=decimal.Decimal("0.35")) is True
+    assert store.update_percentiles(db_conn, **key, gearing_pctile=decimal.Decimal("0.8")) is True
+
+    (row,) = store.get_chain_snapshots(db_conn, snap.expiry_date, snap.snapshot_date)
+    assert row.strike_iv_pctile_20d == decimal.Decimal("0.35")  # not clobbered by 2nd call
+    assert row.gamma_gearing_pctile_dte == decimal.Decimal("0.8")
+    assert row.iv_val == decimal.Decimal("0.15")
+
+
+def test_update_percentiles_unknown_key_is_noop(store, db_conn):
+    ok = store.update_percentiles(
+        db_conn,
+        snapshot_date=datetime.date(2026, 6, 1),
+        snapshot_time="15:20",
+        expiry_date=datetime.date(2026, 6, 30),
+        strike=99999,
+        option_type="CE",
+        iv_pctile=decimal.Decimal("0.5"),
+    )
+    assert ok is False
+
+
+def test_get_iv_history_before_one_value_per_prior_day(store, db_conn):
+    d1, d2, today = (datetime.date(2026, 6, n) for n in (1, 2, 3))
+    store.insert_chain_snapshot(db_conn, _calib_snap(d1, "09:30", iv="0.10"))
+    store.insert_chain_snapshot(db_conn, _calib_snap(d1, "15:20", iv="0.11"))
+    store.insert_chain_snapshot(db_conn, _calib_snap(d2, "15:20", iv="0.12"))
+    store.insert_chain_snapshot(db_conn, _calib_snap(today, "15:20", iv="0.99"))
+
+    hist = store.get_iv_history(db_conn, 25000, "CE", limit_days=20, before=today)
+
+    assert hist == [decimal.Decimal("0.11"), decimal.Decimal("0.12")]
+
+
+def test_get_iv_history_before_empty(store, db_conn):
+    assert store.get_iv_history(db_conn, 25000, "CE", before=datetime.date(2026, 6, 3)) == []
+
+
+def test_gearing_before_and_distinct_day_count(store, db_conn):
+    d1, today = datetime.date(2026, 6, 1), datetime.date(2026, 6, 2)
+    for strike in (25000, 25100, 25200):  # 3 rows on d1, 2 snapshot times
+        store.insert_chain_snapshot(db_conn, _calib_snap(d1, "09:30", gearing="4", strike=strike))
+        store.insert_chain_snapshot(db_conn, _calib_snap(d1, "15:20", gearing="5", strike=strike))
+    store.insert_chain_snapshot(db_conn, _calib_snap(today, gearing="9"))
+
+    vals = store.get_gearing_by_dte(db_conn, 2, 60, before=today)
+
+    assert len(vals) == 6 and decimal.Decimal("9") not in vals
+    assert store.count_prior_gearing_days(db_conn, 2, today) == 1  # rows != days
+    assert store.count_prior_gearing_days(db_conn, 2, d1) == 0  # today excluded
+    assert store.count_prior_gearing_days(db_conn, 7, today) == 0  # other DTE
