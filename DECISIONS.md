@@ -1243,8 +1243,8 @@ these labels.
 settlement, calls `PaperStore.find_stale_flat_legs()` and sends one Telegram warning naming any leg that is flat (BUY-SELL qty == 0) but still `OPEN`/`DEFENDED`. Alert only — no auto-heal; the
 operator repairs with `scripts/dev/backfill_mark_trade_closed_overlay.py`. **Rejected:** atomic `record_close` store API — rewrites every close path (incl. the `roll-validator`-gated `_persist_roll`
 and multi-leg `_close_both_legs`) to remove a millisecond-wide window whose outcome is a recoverable stale flag, not a P&L error. **Why detect:** the failure was silent; startup settlement cannot
-self-heal it (the closing trade already exists). `close_signal_entry` (BUG-066) remains the single-transaction precedent for new close paths. No council: single-discipline, operator-approved
-2026-10-03.
+self-heal it (a flat leg is invisible to it: `get_positions` drops net-zero legs, so settlement never revisits it). `close_signal_entry` (BUG-066) remains the single-transaction precedent for new
+close paths. No council: single-discipline, operator-approved 2026-10-03.
 
 ---
 
