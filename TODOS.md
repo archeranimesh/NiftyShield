@@ -17,8 +17,8 @@ rot them. (Items 3, 5 and 8 closed — numbers kept stable because item text cro
 
 4. **Gamma near-expiry buy (epic)** — `docs/plan/gamma-near-expiry/` — Phase A `risk-gamma-phase-a/` ✅ done; next Phase B `gamma-scan-phase-b/` GS-1 (GS-1..6), blocked until ≥ 5 days of snapshots
    exist. In progress, independent of everything else; finish before starting new stories.
-6. **Strategy payoff charts on Telegram (IC first, any strategy via opt-in registry)** — `docs/plan/strategy-payoff-charts/` — next **PC-2** (`src/strategy/payoff.py`). `chart-core/` (PC-2..19, no
-   option model: generic payoff math + registry + IC wiring) ships now; `chart-model-overlay/` (MO-1..9) is blocked on `greeks-bs-fallback` GF-2 + GF-3, so it waits for item 7.
+6. **Strategy payoff charts on Telegram (IC first, any strategy via opt-in registry)** — `docs/plan/strategy-payoff-charts/` — next **PC-3** (`src/payoff/core.py`). `chart-core/` (PC-2..19, no option
+   model: generic payoff math + registry + IC wiring) ships now; `chart-model-overlay/` (MO-1..9) is blocked on `greeks-bs-fallback` GF-2 + GF-3, so it waits for item 7.
 7. **Greeks Black-Scholes fallback** — `docs/plan/greeks-bs-fallback/` — next **GF-1** (read-only audit scope). Needs Animesh's three modeling decisions (rate / DTE convention / delta tolerance)
    before GF-2. Unblocks delta-based IC entry for the yearly bucket and `strategy-payoff-charts` `chart-model-overlay/`.
 9. **Portfolio snapshot slimdown** — `docs/plan/portfolio-snapshot-slimdown/` — next **FD-1** (pre-delete audit). Epic, fixed order: `finideas-decommission/` (FD-1..7) → `dhan-holdings-removal/`
@@ -85,6 +85,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-03] strategy-payoff-charts PC-2 closed (`bd6e6a1`): leaf `src/payoff/` (`compute_payoff`, `PayoffError` hierarchy, AST import-boundary test); `test-runner` green (4022), `code-reviewer` 0
+  CRITICAL/ERROR, warnings fixed except mypy Optional narrowing (guarded by `_validate`). Loop run: Claude implements all PC tasks, 45 min between iterations.
 - [2026-10-03] Filed BUG-072 (gamma_daily_watch has no trading-day guard; found by a Saturday `--dry-run`). Unconfirmed suspicions left here: gamma-gearing scale vs the 3.0/5.0 floors (print a live
   gearing distribution, then council Q2 before GS-2) and per-row `ask=0` WARNING noise. Gamma cron line stays commented out until B072.1 lands. Docs only.
 - [2026-10-03] gamma-near-expiry B2.5 closed (`3906c15`): percentile calibration (`update_percentiles`, 20-distinct-day gate, D5) + non-fatal Telegram summary; Phase A complete; `test-runner` green
