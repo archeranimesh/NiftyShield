@@ -3,7 +3,7 @@
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
 spec.
 
-**Open: PC-11.**
+**Open: PC-12.**
 - [x] **PC-1** — Scaffold the `strategy-payoff-charts/` epic + both sub-stories; register in `TODOS.md` + README | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 7210c31
 - [x] **PC-2** — `src/payoff/` leaf package: `core.py` (`PayoffLeg`, `StrategyPayoff`, `compute_payoff`), `errors.py` (`PayoffError` hierarchy), import-boundary test, `Decimal` | Owner: Claude |
   Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: bd6e6a1
@@ -18,8 +18,8 @@ spec.
 - [x] **PC-9** — Message-budget fix: payoff photos must not starve the EOD text budget | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 03454e0
 - [x] **PC-10** — `src/payoff/registry.py`: `PayoffRegistry` (injectable), split adapter Protocols (`PayoffAdapter`, `HasTitle`), `register_payoff`, `DefaultPositionAdapter` with injected strike
   resolver | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: cd1273e
-- [ ] **PC-11** — `send_payoff_chart(sender: PhotoSender, ...)` — non-raising entry point: registry lookup → compute → render off-loop (`to_thread`) → `send_photo` | Owner: Antigravity | Model: n/a |
-  Review: code-reviewer | SHA: — code-reviewer | SHA: —
+- [x] **PC-11** — `send_payoff_chart(sender: PhotoSender, ...)` — non-raising entry point: registry lookup → compute → render off-loop (`to_thread`) → `send_photo` | Owner: Antigravity | Model: n/a |
+  Review: code-reviewer | SHA: c991aaa code-reviewer | SHA: —
 - [ ] **PC-12** — Hook audit (read-only): find the central open / EOD / close hook point; record the decision in `stories.md` | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: —
 - [ ] **PC-13** — `src/strategy/payoff_registrations.py`: explicit idempotent `ensure_registered()` registering `iron_condor_v1` / `iron_condor_v2` | Owner: Claude | Model: claude-sonnet-5 | Review:
   greeks-analyst | SHA: —
