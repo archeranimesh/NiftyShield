@@ -28,3 +28,4 @@ aiohttp==3.10.5
 duckdb>=0.9.0
 python-telegram-bot>=21.0
 
+matplotlib>=3.8
