@@ -56,6 +56,7 @@ from src.instruments.strike_selector import (
 from src.notifications.entry_message import EntryMessage, format_entry_message
 from src.notifications.formatting import LegRow
 from src.notifications.markdown import escape_markdown
+from src.notifications.payoff_chart import send_payoff_chart
 from src.notifications.telegram import build_notifier
 from src.notifications.telegram_gateway import TelegramGateway
 from src.paper.constants import (
@@ -64,7 +65,9 @@ from src.paper.constants import (
     LOT_SIZE,
 )
 from src.paper.store import PaperStore
+from src.payoff.registry import PayoffContext
 from src.strategy.ic_expiry_config_v2 import CONFIGS_V2, IronCondorV2ExpiryConfig
+from src.strategy.payoff_registrations import ensure_registered
 from src.utils.logging import setup_logging
 
 load_dotenv()
@@ -780,6 +783,20 @@ async def _run_entry(pending_alerts: list[asyncio.Task]) -> None:
                 db_path=str(args.db_path),
             )
             await tg.send_notification(msg)
+            # Payoff chart: non-raising; no current_pnl (fresh entry) and no margin.
+            ensure_registered()
+            await send_payoff_chart(
+                tg,
+                config.strategy_name,
+                PayoffContext(
+                    positions=store.get_positions(config.strategy_name),
+                    spot=nifty_spot,
+                    lot_size=LOT_SIZE,
+                    strategy_name=config.strategy_name,
+                    extras={"dte": dte},
+                ),
+                dte=dte,
+            )
         except Exception as exc:  # noqa: BLE001 — telegram is non-fatal
             logger.warning("telegram.send_failed", error=str(exc))
 

@@ -221,6 +221,18 @@ def mock_telegram():
         yield inst
 
 
+@pytest.fixture(autouse=True)
+def mock_payoff_chart():
+    """Stub the payoff-chart send (no matplotlib render, no BOD file, no network)."""
+    with (
+        patch("scripts.strategies.ic.paper_ic_entry_v2.ensure_registered"),
+        patch(
+            "scripts.strategies.ic.paper_ic_entry_v2.send_payoff_chart", new_callable=AsyncMock
+        ) as m,
+    ):
+        yield m
+
+
 @pytest.fixture
 def mock_delta_tracker():
     """No-op fixture, kept only so existing test signatures don't need editing.
@@ -697,6 +709,45 @@ async def test_dry_run_does_not_call_subprocess(
 
     mock_subprocess.assert_not_called()
     mock_telegram.send_notification.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_entry_sends_payoff_chart_once_after_text(
+    mock_gates, mock_store, mock_client, mock_subprocess, mock_telegram, mock_payoff_chart
+) -> None:
+    """One payoff chart is sent after the text, keyed by the real strategy_name."""
+    order: list[str] = []
+    mock_telegram.send_notification.side_effect = lambda *_a, **_k: order.append("text")
+    mock_payoff_chart.side_effect = lambda *_a, **_k: order.append("chart")
+    argv = [
+        "paper_ic_entry_v2.py",
+        "--expiry-type",
+        "monthly",
+        "--no-dry-run",
+        "--bod-path",
+        "dummy.json",
+    ]
+    with patch.object(sys, "argv", argv):
+        await run()
+
+    assert order == ["text", "chart"]
+    args, kwargs = mock_payoff_chart.call_args
+    assert args[0] is mock_telegram
+    assert args[1] == "paper_ic_nifty_v2_monthly"
+    assert args[2].strategy_name == "paper_ic_nifty_v2_monthly"
+    assert args[2].extras["dte"] == kwargs["dte"]
+
+
+@pytest.mark.asyncio
+async def test_dry_run_sends_no_payoff_chart(
+    mock_gates, mock_store, mock_client, mock_subprocess, mock_telegram, mock_payoff_chart
+) -> None:
+    """Dry run never persists legs, so it sends no chart."""
+    argv = ["paper_ic_entry_v2.py", "--expiry-type", "monthly", "--bod-path", "dummy.json"]
+    with patch.object(sys, "argv", argv):
+        await run()
+
+    mock_payoff_chart.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
