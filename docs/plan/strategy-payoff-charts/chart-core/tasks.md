@@ -3,7 +3,7 @@
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
 spec.
 
-**Open: PC-6.**
+**Open: PC-7.**
 - [x] **PC-1** — Scaffold the `strategy-payoff-charts/` epic + both sub-stories; register in `TODOS.md` + README | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 7210c31
 - [x] **PC-2** — `src/payoff/` leaf package: `core.py` (`PayoffLeg`, `StrategyPayoff`, `compute_payoff`), `errors.py` (`PayoffError` hierarchy), import-boundary test, `Decimal` | Owner: Claude |
   Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: bd6e6a1
@@ -11,7 +11,8 @@ spec.
 - [x] **PC-4** — Acceptance matrix `tests/unit/payoff/test_acceptance.py`: IC, CSP, CC, Collar hand-computed fixtures | Owner: Claude | Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: 1524ed0
 - [x] **PC-5** — `src/notifications/payoff_chart.py`: `render_payoff_png` generic chart body via the matplotlib `Figure` API (no `pyplot`); add matplotlib dep | Owner: Antigravity | Model: n/a |
   Review: code-reviewer | SHA: 17501d4
-- [ ] **PC-6** — `payoff_chart.py`: stat strip (Max P/L or "Unlimited", R:R, Net Credit/Debit, Breakevens + %, Margin when given) | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: —
+- [x] **PC-6** — `payoff_chart.py`: stat strip (Max P/L or "Unlimited", R:R, Net Credit/Debit, Breakevens + %, Margin when given) | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA:
+  bc7f656
 - [ ] **PC-7** — `TelegramNotifier.send_photo` — multipart `sendPhoto`, non-fatal, honours the budget | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: —
 - [ ] **PC-8** — `TelegramGateway.send_photo` delegating (+ `protocol.py` only if a typed caller needs it) | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: —
 - [ ] **PC-9** — Message-budget fix: payoff photos must not starve the EOD text budget | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
