@@ -3,7 +3,7 @@
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
 spec.
 
-**Open: PC-16.**
+**Open: PC-17.**
 - [x] **PC-1** — Scaffold the `strategy-payoff-charts/` epic + both sub-stories; register in `TODOS.md` + README | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 7210c31
 - [x] **PC-2** — `src/payoff/` leaf package: `core.py` (`PayoffLeg`, `StrategyPayoff`, `compute_payoff`), `errors.py` (`PayoffError` hierarchy), import-boundary test, `Decimal` | Owner: Claude |
   Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: bd6e6a1
@@ -25,7 +25,7 @@ spec.
   Owner: Claude | Model: claude-sonnet-5 | Review: greeks-analyst | SHA: 985e0b6
 - [x] **PC-14** — Wire entry V1 (`paper_ic_entry.py`): `send_payoff_chart` after the `ICEntryMessage` text send | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 36a6634
 - [x] **PC-15** — Wire entry V2 (`paper_ic_entry_v2.py`): same | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 8cc2b3b
-- [ ] **PC-16** — Wire EOD snapshot (`paper_ic_snapshot.py` `process_variant`): one PNG per open variant | Owner: Claude | Model: claude-sonnet-5 | Review: greeks-analyst | SHA: —
+- [x] **PC-16** — Wire EOD snapshot (`paper_ic_snapshot.py` `process_variant`): one PNG per open variant | Owner: Claude | Model: claude-sonnet-5 | Review: greeks-analyst | SHA: 5f244d4
 - [ ] **PC-17** — Wire close V1 (`ic_nifty_v1.py` `_send_close_notification`): PNG after the text send | Owner: Claude | Model: claude-sonnet-5 | Review: greeks-analyst | SHA: —
 - [ ] **PC-18** — Wire close V2 (`ic_nifty_v2.py` `_send_close_notification` mirror) | Owner: Claude | Model: claude-sonnet-5 | Review: greeks-analyst | SHA: —
 - [ ] **PC-19** — Docs close: `CONTEXT.md` + `DECISIONS.md` + `TODOS.md` + README + epic README + "register a strategy" recipe in `src/strategy/CLAUDE.md`; re-index graph | Owner: Claude | Model:
