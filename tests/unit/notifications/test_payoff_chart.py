@@ -67,3 +67,38 @@ def test_render_wraps_failures(monkeypatch):
     monkeypatch.setattr(pc, "expiry_pnl_series", lambda *a, **k: 1 / 0)
     with pytest.raises(RenderError):
         render_payoff_png(_ic())
+
+
+def _strip(payoff, **kw):
+    from src.notifications.payoff_chart import build_stat_strip
+
+    return dict(build_stat_strip(payoff, **kw))
+
+
+def test_stat_strip_without_margin():
+    rows = _strip(_ic(), spot=D(23250))
+    assert "Est. Margin" not in rows
+    assert rows["Net Credit"] == "₹7,500.00"
+    assert "Breakevens" in rows and "%" in rows["Breakevens"]
+    assert _is_png(render_payoff_png(_ic(), spot=D(23250), margin=None))
+
+
+def test_stat_strip_with_margin():
+    rows = _strip(_ic(), margin=D(100000))
+    assert rows["Est. Margin"] == "₹100,000.00"
+    assert "%" not in rows["Breakevens"]
+    assert _is_png(render_payoff_png(_ic(), margin=D(100000)))
+
+
+def test_stat_strip_unbounded_side():
+    rows = _strip(_naked_call())
+    assert rows["Max Loss"] == "Unlimited"
+    assert "R:R" not in rows
+    assert _is_png(render_payoff_png(_naked_call()))
+
+
+def test_stat_strip_net_debit():
+    long_call = compute_payoff([PayoffLeg("CE", D(24000), 75, D(75), "long_call")])
+    rows = _strip(long_call)
+    assert "Net Debit" in rows and rows["Max Profit"] == "Unlimited"
+    assert _is_png(render_payoff_png(long_call))

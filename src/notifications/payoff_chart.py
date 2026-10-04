@@ -13,7 +13,7 @@ from matplotlib.axes import Axes
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure
 
-from src.notifications.formatting import format_money, format_strike
+from src.notifications.formatting import format_money, format_pct, format_strike
 from src.payoff.core import StrategyPayoff, expiry_pnl_series
 from src.payoff.errors import RenderError
 
@@ -79,6 +79,60 @@ def _pnl_dot_label(payoff: StrategyPayoff, current_pnl: Decimal, margin: Decimal
     return f"{base} ({pct}%)"
 
 
+def _breakeven_text(be: Decimal, spot: Decimal | None) -> str:
+    text = _label(be)
+    if spot is None or spot == 0:
+        return text
+    pct = float((be - spot) / spot * 100)
+    sign = "+" if pct >= 0 else "-"
+    return f"{text} ({sign}{format_pct(abs(pct))})"
+
+
+def build_stat_strip(
+    payoff: StrategyPayoff, *, spot: Decimal | None = None, margin: Decimal | None = None
+) -> list[tuple[str, str]]:
+    """Return the ordered ``(label, value)`` pairs shown in the chart's stat strip.
+
+    Args:
+        payoff: Computed payoff.
+        spot: Current underlying; enables breakeven distance percentages.
+        margin: Margin used; adds an ``Est. Margin`` entry only when not None.
+
+    Returns:
+        Label/value pairs; ``None`` max profit / loss render as ``Unlimited`` and a
+        ``None`` R:R is omitted.
+    """
+    unlimited = "Unlimited"
+    rows = [
+        ("Max Profit", unlimited if payoff.max_profit is None else format_money(payoff.max_profit)),
+        ("Max Loss", unlimited if payoff.max_loss is None else format_money(payoff.max_loss)),
+    ]
+    if payoff.rr_ratio is not None:
+        rows.append(("R:R", f"1:{payoff.rr_ratio.quantize(Decimal('0.01'))}"))
+    credit = payoff.net_premium >= 0
+    rows.append(("Net Credit" if credit else "Net Debit", format_money(abs(payoff.net_premium))))
+    if payoff.breakevens:
+        rows.append(("Breakevens", " – ".join(_breakeven_text(b, spot) for b in payoff.breakevens)))
+    if margin is not None:
+        rows.append(("Est. Margin", format_money(margin)))
+    return rows
+
+
+def _draw_stat_strip(fig: Figure, rows: list[tuple[str, str]]) -> None:
+    """Draw ``rows`` as a two-line text band above the axes."""
+    half = (len(rows) + 1) // 2
+    for i, line in enumerate((rows[:half], rows[half:])):
+        fig.text(
+            0.5,
+            0.99 - 0.045 * i,
+            "    ".join(f"{k}: {v}" for k, v in line),
+            ha="center",
+            va="top",
+            fontsize=9,
+            fontweight="bold",
+        )
+
+
 def render_payoff_png(
     payoff: StrategyPayoff,
     *,
@@ -94,7 +148,7 @@ def render_payoff_png(
         payoff: Computed payoff (from ``compute_payoff``).
         spot: Current underlying price; draws a spot line and widens the range.
         current_pnl: Current P&L; draws a marker at ``(spot, current_pnl)``.
-        dte: Days to expiry; accepted for the stat strip (PC-6), unused here.
+        dte: Days to expiry; accepted for caller symmetry, unused by the chart.
         margin: Margin used; denominator for the P&L percentage when given.
         title: Chart title, supplied by the caller.
 
@@ -109,6 +163,8 @@ def render_payoff_png(
         xs, ys = expiry_pnl_series(payoff, lo, hi, _POINTS)
         fig = Figure(figsize=(9, 5), facecolor="white")
         FigureCanvasAgg(fig)
+        fig.subplots_adjust(top=0.80)
+        _draw_stat_strip(fig, build_stat_strip(payoff, spot=spot, margin=margin))
         ax = fig.add_subplot(111)
         x = [float(v) for v in xs]
         y = [float(v) for v in ys]
