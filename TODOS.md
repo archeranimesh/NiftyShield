@@ -17,7 +17,7 @@ rot them. (Items 3, 5 and 8 closed — numbers kept stable because item text cro
 
 4. **Gamma near-expiry buy (epic)** — `docs/plan/gamma-near-expiry/` — Phase A `risk-gamma-phase-a/` ✅ done; next Phase B `gamma-scan-phase-b/` GS-1 (GS-1..6), blocked until ≥ 5 days of snapshots
    exist. In progress, independent of everything else; finish before starting new stories.
-6. **Strategy payoff charts on Telegram (IC first, any strategy via opt-in registry)** — `docs/plan/strategy-payoff-charts/` — next **PC-5** (`src/notifications/payoff_chart.py`). `chart-core/`
+6. **Strategy payoff charts on Telegram (IC first, any strategy via opt-in registry)** — `docs/plan/strategy-payoff-charts/` — next **PC-6** (`src/notifications/payoff_chart.py`). `chart-core/`
    (PC-2..19, no option model: generic payoff math + registry + IC wiring) ships now; `chart-model-overlay/` (MO-1..9) is blocked on `greeks-bs-fallback` GF-2 + GF-3, so it waits for item 7.
 7. **Greeks Black-Scholes fallback** — `docs/plan/greeks-bs-fallback/` — next **GF-1** (read-only audit scope). Needs Animesh's three modeling decisions (rate / DTE convention / delta tolerance)
    before GF-2. Unblocks delta-based IC entry for the yearly bucket and `strategy-payoff-charts` `chart-model-overlay/`.
@@ -85,6 +85,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-04] chart-core PC-5 closed (`17501d4`): render_payoff_png chart body via matplotlib Figure API + matplotlib dep
 - [2026-10-04] strategy-payoff-charts PC-4 closed (`1524ed0`): acceptance matrix (IC x2, CSP, CC, Collar) all matched hand arithmetic, no core change; `test-runner` green (4036), `code-reviewer` 0
   CRITICAL/ERROR. Loop paused one tick on a transient red `test_reentry_dedup_same_day_writes_once` (failed ~00:50 IST, passes at 06:47 IST; suspect UTC-vs-local date boundary in the dedup, unfixed).
 - [2026-10-03] strategy-payoff-charts PC-3 closed (`cf7aadb`): `expiry_pnl_at` / `expiry_pnl_series` (share `_pnl` with `compute_payoff`, a deliberate deviation from the spec's "should call");
