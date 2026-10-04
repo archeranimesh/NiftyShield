@@ -381,6 +381,24 @@ written for the per-call-site fallback; if a central hook exists for a point, co
 
 **Commit:** `docs(plan): record payoff-chart hook audit findings`
 
+### Findings (PC-12, audited 2026-10-04)
+
+**Decision: no central hook at any of the three lifecycle points. Wire per call site; PC-14..18 stand as written, no collapse.**
+
+- **Open:** `format_entry_message` (`src/notifications/entry_message.py`) is a pure text renderer, so it is not a send point. It has five callers, each of which builds its own `EntryMessage` and sends
+  it itself: `paper_ic_entry.py:838`, `paper_ic_entry_v2.py:754`, `collar_overlay_v1.py:678`, `record_paper_trade.py:738` and `paper_3track_overlay_entry.py:1603`. `PaperExecutor` is persistence only
+  and sends nothing. Wire at the two IC entry scripts (PC-14 / PC-15).
+- **EOD:** IC EOD messages are sent by `scripts/strategies/ic/paper_ic_snapshot.py` (`notifier.send_notification` at `:693` / `:712`), per variant. `src/reporting/eod_pt_summary.py` is the only
+  cross-strategy EOD path, but it posts a raw `aiohttp` `sendMessage` (no `TelegramGateway`, so no `send_photo`) and renders a position table rather than a per-variation audit. It is not a usable
+  hook. Wire at `paper_ic_snapshot.py` (PC-16). The two paths both cover the ICs, so the digest and the chart are separate messages; no dedup is needed.
+- **Close:** `StrategyMonitor` dispatches to each strategy's own `apply_action`; `PaperStrategy.apply_action` is a Protocol method with no shared base class or mixin, and each of the eight strategies
+  has its own `apply_action`. The close card is sent from a per-class `_send_close_notification` (`ic_nifty_v1.py:778`, `ic_nifty_v2.py:2191`; also CC / PP / Collar), and `ic_close_executor`
+  (`close_ic_legs`) only persists. `auto_close.py`'s `_send_close_notification` serves the overlays, not the ICs. `format_exit_message` is again a pure renderer with nine callers. Wire inside the two
+  IC `_send_close_notification` methods (PC-17 / PC-18).
+- **Consequence:** registration alone does not yield a chart; each future strategy needs a registration line plus one `send_payoff_chart` call at its own open / EOD / close site. PC-19's recipe must
+  say so.
+- **Out of scope, noted:** `record_paper_trade.py` (manual entry / close cards for any strategy) is a fourth IC-capable entry/close path not in the story scope guard; manual IC records get no chart.
+
 ---
 
 ## PC-13 — IC registration module (`payoff_registrations.py`)
