@@ -1,5 +1,6 @@
 """Tests for src.notifications.payoff_chart (Agg, no display)."""
 
+import dataclasses
 import sys
 from decimal import Decimal as D
 
@@ -103,3 +104,15 @@ def test_stat_strip_net_debit():
     assert "Net Debit" in rows and rows["Max Profit"] == "Unlimited"
     assert rows["Max Loss"] == "₹5,625.00"
     assert _is_png(render_payoff_png(long_call))
+
+
+def test_stat_strip_guaranteed_profit_is_min_profit():
+    locked = dataclasses.replace(_ic(), max_loss=D(500))
+    rows = _strip(locked)
+    assert "Max Loss" not in rows and rows["Min Profit"] == "₹500.00"
+    assert _is_png(render_payoff_png(locked))
+
+
+def test_stat_strip_zero_max_loss_is_min_profit():
+    flat = dataclasses.replace(_ic(), max_loss=D(0))
+    assert _strip(flat)["Min Profit"] == "₹0.00"

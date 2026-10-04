@@ -100,12 +100,13 @@ def build_stat_strip(
 
     Returns:
         Label/value pairs; ``None`` max profit / loss render as ``Unlimited`` and a
-        ``None`` R:R is omitted. Max loss is shown as a magnitude.
+        ``None`` R:R is omitted. Max loss is shown as a magnitude;
+        a non-negative worst case (guaranteed profit) is labelled ``Min Profit``.
     """
     unlimited = "Unlimited"
     rows = [
         ("Max Profit", unlimited if payoff.max_profit is None else format_money(payoff.max_profit)),
-        ("Max Loss", unlimited if payoff.max_loss is None else format_money(abs(payoff.max_loss))),
+        _worst_case_row(payoff.max_loss, unlimited),
     ]
     if payoff.rr_ratio is not None:
         rows.append(("R:R", f"1:{payoff.rr_ratio.quantize(Decimal('0.01'))}"))
@@ -116,6 +117,15 @@ def build_stat_strip(
     if margin is not None:
         rows.append(("Est. Margin", format_money(margin)))
     return rows
+
+
+def _worst_case_row(max_loss: Decimal | None, unlimited: str) -> tuple[str, str]:
+    """Return the worst-case row: ``Max Loss`` magnitude, or ``Min Profit`` if it cannot lose."""
+    if max_loss is None:
+        return ("Max Loss", unlimited)
+    if max_loss < 0:
+        return ("Max Loss", format_money(-max_loss))
+    return ("Min Profit", format_money(max_loss))
 
 
 def _draw_stat_strip(fig: Figure, rows: list[tuple[str, str]]) -> None:
