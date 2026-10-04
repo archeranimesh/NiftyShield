@@ -10,7 +10,7 @@ The **status** and **next** markers below are a *summary* of each story's `tasks
 
 ## Active Epics
 
-**`strategy-payoff-charts/`** · 🟡 In progress — `chart-core/` PC-3 done, next **PC-4** Stockmock-style payoff diagram for any strategy (opt-in `@register_payoff` registry; Iron Condors first, one PNG
+**`strategy-payoff-charts/`** · 🟡 In progress — `chart-core/` PC-4 done, next **PC-5** Stockmock-style payoff diagram for any strategy (opt-in `@register_payoff` registry; Iron Condors first, one PNG
 per variation) attached to the entry, EOD-audit, and close Telegram messages. Two sub-stories: `chart-core/` (PC-1..19 — strategy-agnostic payoff math + registry + matplotlib expiry-payoff renderer +
 `sendPhoto` on `TelegramNotifier`/`TelegramGateway` + IC registration and wiring into `paper_ic_entry`/`_v2`, `paper_ic_snapshot`, both `_send_close_notification`; no option model, ships now) →
 `chart-model-overlay/` (MO-1..9 — blue T+0 curve + ±1σ/±2σ bands + POP; **blocked on `greeks-bs-fallback/` GF-2 + GF-3** for the shared `src/pricing/` pricer + IV solver). Modeling decisions (rate /
