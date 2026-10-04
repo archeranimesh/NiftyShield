@@ -100,12 +100,12 @@ def build_stat_strip(
 
     Returns:
         Label/value pairs; ``None`` max profit / loss render as ``Unlimited`` and a
-        ``None`` R:R is omitted.
+        ``None`` R:R is omitted. Max loss is shown as a magnitude.
     """
     unlimited = "Unlimited"
     rows = [
         ("Max Profit", unlimited if payoff.max_profit is None else format_money(payoff.max_profit)),
-        ("Max Loss", unlimited if payoff.max_loss is None else format_money(payoff.max_loss)),
+        ("Max Loss", unlimited if payoff.max_loss is None else format_money(abs(payoff.max_loss))),
     ]
     if payoff.rr_ratio is not None:
         rows.append(("R:R", f"1:{payoff.rr_ratio.quantize(Decimal('0.01'))}"))

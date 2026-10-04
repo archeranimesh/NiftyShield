@@ -101,4 +101,5 @@ def test_stat_strip_net_debit():
     long_call = compute_payoff([PayoffLeg("CE", D(24000), 75, D(75), "long_call")])
     rows = _strip(long_call)
     assert "Net Debit" in rows and rows["Max Profit"] == "Unlimited"
+    assert rows["Max Loss"] == "₹5,625.00"
     assert _is_png(render_payoff_png(long_call))
