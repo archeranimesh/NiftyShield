@@ -4,8 +4,10 @@ Uses the matplotlib object-oriented ``Figure`` API (never ``pyplot``) so the
 render owns all its state and is safe to run off the event loop.
 """
 
+import asyncio
 import io
 from decimal import Decimal
+from typing import Protocol
 
 import numpy as np
 import structlog
@@ -14,14 +16,17 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure
 
 from src.notifications.formatting import format_money, format_pct, format_strike
-from src.payoff.core import StrategyPayoff, expiry_pnl_series
-from src.payoff.errors import RenderError
+from src.payoff.core import StrategyPayoff, compute_payoff, expiry_pnl_series
+from src.payoff.errors import PayoffError, RenderError, SendError
+from src.payoff.registry import DEFAULT_REGISTRY, HasTitle, PayoffContext, PayoffRegistry
 
 logger = structlog.get_logger(__name__)
 
 _POINTS = 200
 _GREEN = "#2e8b57"
 _RED = "#c0392b"
+_RENDER_TIMEOUT_S = 30.0
+_SEND_TIMEOUT_S = 30.0
 
 
 def _x_range(payoff: StrategyPayoff, spot: Decimal | None) -> tuple[Decimal, Decimal]:
@@ -213,3 +218,93 @@ def _plot_line(ax: Axes, x: list[float], y: list[float]) -> None:
     xa, ya = np.array(x), np.array(y)
     ax.plot(xa, np.ma.masked_where(ya < 0, ya), color=_GREEN, lw=2)
     ax.plot(xa, np.ma.masked_where(ya >= 0, ya), color=_RED, lw=2)
+
+
+class PhotoSender(Protocol):
+    """Anything that can deliver a PNG (e.g. ``TelegramGateway``)."""
+
+    async def send_photo(self, png: bytes, caption: str = "") -> None: ...
+
+
+async def _build_and_send(
+    sender: PhotoSender,
+    strategy_name: str,
+    ctx: PayoffContext,
+    registry: PayoffRegistry,
+    dte: int | None,
+    current_pnl: Decimal | None,
+    margin: Decimal | None,
+    caption: str,
+) -> None:
+    adapter = registry.get(strategy_name)
+    if adapter is None:
+        logger.warning("payoff_chart.unregistered", strategy=strategy_name)
+        return
+    legs = adapter.legs(ctx)
+    if not legs:
+        logger.info("payoff_chart.no_legs", strategy=strategy_name)
+        return
+    payoff = compute_payoff(legs)
+    title = adapter.title(ctx) if isinstance(adapter, HasTitle) else ""
+    # CPU-bound render runs in a worker thread (Figure API is thread-safe;
+    # to_thread copies contextvars). If GIL contention is ever measured to
+    # matter, move to a ProcessPoolExecutor per the CLAUDE.md async rules.
+    png = await asyncio.wait_for(
+        asyncio.to_thread(
+            render_payoff_png,
+            payoff,
+            spot=ctx.spot,
+            current_pnl=current_pnl,
+            dte=dte,
+            margin=margin,
+            title=title,
+        ),
+        timeout=_RENDER_TIMEOUT_S,
+    )
+    try:
+        await asyncio.wait_for(sender.send_photo(png, caption=caption), timeout=_SEND_TIMEOUT_S)
+    except asyncio.TimeoutError:
+        raise
+    except PayoffError:
+        raise
+    except Exception as exc:
+        raise SendError(f"send_photo failed: {exc}") from exc
+
+
+async def send_payoff_chart(
+    sender: PhotoSender,
+    strategy_name: str,
+    ctx: PayoffContext,
+    *,
+    registry: PayoffRegistry = DEFAULT_REGISTRY,
+    dte: int | None = None,
+    current_pnl: Decimal | None = None,
+    margin: Decimal | None = None,
+    caption: str = "",
+) -> None:
+    """Render and send the payoff chart for a registered strategy; never raises.
+
+    An unregistered strategy logs ``payoff_chart.unregistered`` and sends
+    nothing. All failures and timeouts are logged and swallowed so call sites
+    need no try/except of their own.
+
+    Args:
+        sender: Photo delivery target.
+        strategy_name: Name the strategy registered its adapter under.
+        ctx: Adapter input (positions, spot, lot size).
+        registry: Registry to look the adapter up in.
+        dte: Days to expiry, forwarded to the renderer.
+        current_pnl: Current P&L for the marker dot.
+        margin: Margin used, for the stat strip.
+        caption: Photo caption.
+    """
+    try:
+        await _build_and_send(
+            sender, strategy_name, ctx, registry, dte, current_pnl, margin, caption
+        )
+    except PayoffError as exc:
+        logger.warning("payoff_chart.failed", strategy=strategy_name, error=str(exc))
+    except asyncio.TimeoutError:
+        logger.warning("payoff_chart.timeout", strategy=strategy_name)
+    except Exception:  # intentional: the single non-fatal choke point
+        logger.exception("payoff_chart.unexpected_failure", strategy=strategy_name)
