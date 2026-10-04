@@ -304,6 +304,13 @@ files.
 
 ---
 
+## Loop execution of a plan story — `.claude/skills/plan-loop/SKILL.md`
+
+Claude Code runs plan stories as a self-paced loop of worker subagents (see that skill). Antigravity has no loop mechanism: do one task per session and close it with `python -m scripts.dev.close_task`
+(the deterministic docs-close step shared with that loop).
+
+---
+
 ## Reference material — `.claude/skills/protocol-reference/SKILL.md`
 
 Moved out of this file to keep the resident protocol load-bearing only. Nothing here is optional when it applies. Read that file for:

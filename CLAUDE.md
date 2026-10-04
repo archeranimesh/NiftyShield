@@ -276,6 +276,14 @@ a "legitimate skip" — a read-only/query-only session still closes with a trivi
 
 ---
 
+## Loop execution of a plan story — invoke the `plan-loop` skill
+
+When Animesh asks to run a `docs/plan/` story, epic or `tasks.md` "in a loop" / "as a loop execution", invoke `plan-loop` (`.claude/skills/plan-loop/SKILL.md`) **before the first task** and follow it
+exactly: one fresh `general-purpose` worker subagent per task (never `fork`; it spawns its own `test-runner` / `code-reviewer`), a **45-minute** `ScheduleWakeup` gap by default,
+`scripts/dev/close_task.py` for the docs close, and stop on any red test, unresolved CRITICAL/ERROR finding or council-worthy decision. The main session only orchestrates.
+
+---
+
 ## Reference material — invoke the `protocol-reference` skill
 
 Moved out of this file to keep the resident protocol load-bearing only. Nothing here is optional when it applies. Invoke `protocol-reference` (`.claude/skills/protocol-reference/SKILL.md`) for:
