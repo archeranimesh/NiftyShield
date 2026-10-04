@@ -39,13 +39,16 @@ from src.notifications.formatting import (
     pnl_emoji,
 )
 from src.notifications.markdown import escape_markdown, mdcode
+from src.notifications.payoff_chart import send_payoff_chart
 from src.notifications.telegram_gateway import TelegramGateway
 from src.paper.constants import DEFAULT_BOD_PATH, DEFAULT_DB_PATH, LOT_SIZE
 from src.paper.store import PaperStore
+from src.payoff.registry import PayoffContext
 from src.strategy.ic_expiry_config import CONFIGS
 from src.strategy.ic_expiry_config_v2 import CONFIGS_V2
 from src.strategy.ic_nifty_v1 import IronCondorV1
 from src.strategy.ic_nifty_v2 import IronCondorV2
+from src.strategy.payoff_registrations import ensure_registered
 from src.utils.logging import setup_logging
 
 load_dotenv()
@@ -307,8 +310,14 @@ async def process_variant(
     snap_date: date,
     save: bool,
     strategy_cls: type | None = None,
+    chart_jobs: list[dict[str, Any]] | None = None,
 ) -> str | None:
-    """Process a single IC variant and return the generated report string."""
+    """Process a single IC variant and return the generated report string.
+
+    When ``chart_jobs`` is given and a full report is produced, one dict of
+    ``send_payoff_chart`` keyword arguments is appended for the caller to send
+    after the text report (error reports append nothing).
+    """
     if strategy_cls is None:
         strategy_cls = IronCondorV1
     positions = store.get_positions(config.strategy_name)
@@ -567,6 +576,26 @@ async def process_variant(
         f"{alert_icon} *Alert:* {alert_value}",
         f"⚙️ *Actions:* {actions_value}",
     ]
+    if chart_jobs is not None:
+        chart_jobs.append(
+            {
+                "strategy_name": config.strategy_name,
+                "ctx": PayoffContext(
+                    positions=ic_positions,
+                    spot=nifty_spot,
+                    lot_size=LOT_SIZE,
+                    strategy_name=config.strategy_name,
+                    extras={"dte": dte},
+                ),
+                "dte": dte,
+                "current_pnl": (
+                    (entry_credit - combined_mark) * LOT_SIZE
+                    if combined_mark is not None
+                    else None
+                ),
+                "margin": margin_snapshot.final_margin if margin_snapshot is not None else None,
+            }
+        )
     return "\n".join(lines)
 
 
@@ -613,6 +642,8 @@ async def _run(args: argparse.Namespace) -> None:
     )
 
     reports: list[str] = []
+    # Payoff-chart kwargs keyed by the index of the report they follow.
+    charts_by_report: dict[int, dict[str, Any]] = {}
     has_any_positions = False
 
     for expiry_type, config in CONFIGS.items():
@@ -625,6 +656,7 @@ async def _run(args: argparse.Namespace) -> None:
         if active:
             has_any_positions = True
 
+        jobs: list[dict[str, Any]] = []
         try:
             report = await process_variant(
                 expiry_type,
@@ -635,8 +667,11 @@ async def _run(args: argparse.Namespace) -> None:
                 notifier,
                 snap_date,
                 save,
+                chart_jobs=jobs,
             )
             if report is not None:
+                if jobs:
+                    charts_by_report[len(reports)] = jobs[0]
                 reports.append(report)
         except Exception as exc:  # Intentional: fail-safe variant run
             logger.error(
@@ -657,13 +692,17 @@ async def _run(args: argparse.Namespace) -> None:
         active = [p for p in positions if p.net_qty != 0]
         if active:
             has_any_positions = True
+        jobs = []
         try:
             report = await process_variant(
                 expiry_type, config, store, broker, lookup,
                 notifier, snap_date, save,
                 strategy_cls=IronCondorV2,
+                chart_jobs=jobs,
             )
             if report is not None:
+                if jobs:
+                    charts_by_report[len(reports)] = jobs[0]
                 reports.append(report)
         except Exception as exc:
             logger.error(
@@ -714,6 +753,17 @@ async def _run(args: argparse.Namespace) -> None:
                 logger.warning(
                     "ic_snapshot.telegram_failed", error=str(exc)
                 )
+            job = charts_by_report.get(idx)
+            if job is not None:
+                try:
+                    ensure_registered()
+                    await send_payoff_chart(
+                        notifier, job["strategy_name"], job["ctx"],
+                        dte=job["dte"], current_pnl=job["current_pnl"],
+                        margin=job["margin"],
+                    )
+                except Exception as exc:  # Intentional: non-fatal; guards ensure_registered
+                    logger.warning("ic_snapshot.payoff_chart_failed", error=str(exc))
 
 
 def main() -> None:

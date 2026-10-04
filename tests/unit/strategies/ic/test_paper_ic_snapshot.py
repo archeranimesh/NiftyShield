@@ -22,6 +22,7 @@ from scripts.strategies.ic.paper_ic_snapshot import (
     format_leg_label,
     process_variant,
 )
+from src.paper.constants import LOT_SIZE
 from src.paper.models import PaperPosition
 from src.strategy.ic_expiry_config import CONFIGS
 from src.strategy.ic_expiry_config_v2 import CONFIGS_V2
@@ -82,6 +83,19 @@ def mock_telegram():
         notifier.send_notification = AsyncMock()
         mock_cls.return_value = notifier
         yield notifier
+
+
+@pytest.fixture(autouse=True)
+def mock_payoff_chart():
+    """Stub the payoff-chart send (no matplotlib render, no BOD file, no network)."""
+    with (
+        patch("scripts.strategies.ic.paper_ic_snapshot.ensure_registered"),
+        patch(
+            "scripts.strategies.ic.paper_ic_snapshot.send_payoff_chart",
+            new_callable=AsyncMock,
+        ) as m,
+    ):
+        yield m
 
 
 @pytest.fixture
@@ -1450,3 +1464,90 @@ def test_build_actions_value_omits_unparseable_time_and_none_when_empty(tmp_path
 
     assert _build_actions_value(db, "s", date(2026, 10, 1)) == "`ROLL_WING` \\(ROLL\\_WING\\)"
     assert _build_actions_value(db, "s", date(2026, 10, 2)) == "None"
+
+
+def _chart_args(dry_run: bool) -> argparse.Namespace:
+    return argparse.Namespace(
+        date=date(2026, 6, 26), dry_run=dry_run, db_path="dummy.db", bod_path="dummy.json"
+    )
+
+
+def _one_open_monthly(mock_store) -> str:
+    name = CONFIGS["monthly"].strategy_name
+    positions = [
+        PaperPosition(
+            strategy_name=name,
+            leg_role="short_put",
+            net_qty=-1,
+            avg_cost=Decimal("0.0"),
+            avg_sell_price=Decimal("80.0"),
+            instrument_key="NSE_FO|NIFTY26JUN202624000PE",
+            entry_date=date(2026, 6, 1),
+        )
+    ]
+    mock_store.get_positions.side_effect = lambda n: positions if n == name else []
+    return name
+
+
+@pytest.mark.asyncio
+async def test_sends_one_payoff_chart_per_open_variant_after_text(
+    mock_store, mock_telegram, mock_create_client, mock_parse_chain, mock_ic_class,
+    mock_payoff_chart,
+) -> None:
+    """One open variant + others flat: exactly one chart, after its text, with pnl/dte."""
+    name = _one_open_monthly(mock_store)
+    mock_store.get_margin_snapshot.return_value = MagicMock(final_margin=Decimal("120000"))
+    order: list[str] = []
+    mock_telegram.send_notification.side_effect = lambda *_a, **_k: order.append("text")
+    mock_payoff_chart.side_effect = lambda *_a, **_k: order.append("chart")
+
+    with (
+        patch("sqlite3.connect") as mock_conn,
+        patch("scripts.strategies.ic.paper_ic_snapshot.setup_logging"),
+    ):
+        cur = MagicMock()
+        cur.fetchall.return_value = []
+        mock_conn.return_value.__enter__.return_value.execute.return_value = cur
+        await _run(_chart_args(dry_run=False))
+
+    assert order == ["text", "chart"]
+    args, kwargs = mock_payoff_chart.call_args
+    assert args[0] is mock_telegram
+    assert args[1] == name
+    assert args[2].strategy_name == name
+    assert args[2].spot == Decimal("24500")
+    assert kwargs["dte"] == 0
+    # _compute_combined_pnl mock returns (mark=100, credit=150)
+    assert kwargs["current_pnl"] == Decimal("50.0") * LOT_SIZE
+    assert kwargs["margin"] == Decimal("120000")
+
+
+@pytest.mark.asyncio
+async def test_no_open_position_sends_no_payoff_chart(
+    mock_store, mock_telegram, mock_create_client, mock_payoff_chart,
+) -> None:
+    """No open positions anywhere -> no chart."""
+    mock_store.get_positions.return_value = []
+    with patch("scripts.strategies.ic.paper_ic_snapshot.setup_logging"):
+        await _run(_chart_args(dry_run=False))
+
+    mock_payoff_chart.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_dry_run_sends_no_payoff_chart(
+    mock_store, mock_telegram, mock_create_client, mock_parse_chain, mock_ic_class,
+    mock_payoff_chart,
+) -> None:
+    """--dry-run never sends text, so it sends no chart either."""
+    _one_open_monthly(mock_store)
+    with (
+        patch("sqlite3.connect") as mock_conn,
+        patch("scripts.strategies.ic.paper_ic_snapshot.setup_logging"),
+    ):
+        cur = MagicMock()
+        cur.fetchall.return_value = []
+        mock_conn.return_value.__enter__.return_value.execute.return_value = cur
+        await _run(_chart_args(dry_run=True))
+
+    mock_payoff_chart.assert_not_called()
