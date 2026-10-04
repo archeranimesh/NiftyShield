@@ -39,7 +39,7 @@ decided scope of `greeks-bs-fallback/` (new `src/pricing/` package), not this ep
 
 | Story | Purpose | Status | Depends on | Closing SHA |
 |---|---|---|---|---|
-| `chart-core/` | Generic payoff math + opt-in registry + matplotlib renderer + `send_photo` + IC registration and wiring (entry / EOD / close) | 🟡 In progress (PC-14 done) | — | — |
+| `chart-core/` | Generic payoff math + opt-in registry + matplotlib renderer + `send_photo` + IC registration and wiring (entry / EOD / close) | 🟡 In progress (PC-15 done) | — | — |
 | `chart-model-overlay/` | Blue T+0 curve, ±1σ/±2σ bands, POP for any registered strategy; adapters supply per-leg IV + DTE | ⬜ Not started | `chart-core/` done + `greeks-bs-fallback/` GF-2/GF-3 | — |
 
 Status: ⬜ Not started · 🔄 In progress · ✅ Done. This column is the epic's progress view — per-task checkboxes live only in each sub-story's `tasks.md`.
