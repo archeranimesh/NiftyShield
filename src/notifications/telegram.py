@@ -35,6 +35,7 @@ import structlog
 logger = structlog.get_logger(__name__)
 
 _TELEGRAM_API = "https://api.telegram.org/bot{token}/sendMessage"
+_TELEGRAM_PHOTO_API = "https://api.telegram.org/bot{token}/sendPhoto"
 
 # Lower-cased marker in Telegram's 400 body for a MarkdownV2 entity-parse
 # rejection — the only failure send() retries (once, as plain text; BUG-042).
@@ -90,6 +91,7 @@ class TelegramNotifier:
         budget: int = 10,
     ) -> None:
         self._url = _TELEGRAM_API.format(token=bot_token)
+        self._photo_url = _TELEGRAM_PHOTO_API.format(token=bot_token)
         self._chat_id = chat_id
         self._timeout = timeout
         self._budget = budget
@@ -150,6 +152,50 @@ class TelegramNotifier:
                 return ok
         except Exception as exc:  # Intentional: isolate all API failures
             logger.warning("Telegram notification failed: %s", exc)
+            return False
+
+    async def send_photo(self, png: bytes, *, caption: str = "") -> bool:
+        """Send a PNG to the configured chat via the multipart ``sendPhoto`` API.
+
+        Shares the per-session budget with ``send()`` and follows the same
+        non-fatal contract: the slot is burned before the call, and any
+        failure (non-200, ``ok=False``, transport error) is logged and
+        reported as ``False`` — never raised.
+
+        Args:
+            png: Raw PNG bytes.
+            caption: Optional MarkdownV2 caption, already escaped by the caller.
+
+        Returns:
+            True if Telegram accepted the photo, False otherwise.
+        """
+        if self._messages_sent >= self._budget:
+            logger.warning("telegram.send_photo.budget_exceeded", budget=self._budget)
+            return False
+        self._messages_sent += 1
+        form = aiohttp.FormData()
+        form.add_field("chat_id", str(self._chat_id))
+        form.add_field("photo", png, filename="payoff.png", content_type="image/png")
+        if caption:
+            form.add_field("caption", caption)
+            form.add_field("parse_mode", "MarkdownV2")
+        try:
+            timeout = aiohttp.ClientTimeout(total=self._timeout)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.post(self._photo_url, data=form) as resp:
+                    if resp.status != 200:
+                        body = await _read_error_body(resp)
+                        logger.warning("telegram.send_photo.failed", status=resp.status, body=body)
+                        return False
+                    data = await resp.json()
+                    if not data.get("ok"):
+                        logger.warning(
+                            "telegram.send_photo.failed", description=data.get("description")
+                        )
+                        return False
+                    return True
+        except Exception as exc:  # Intentional: notifier must never abort the caller
+            logger.warning("telegram.send_photo.failed", error=str(exc))
             return False
 
     async def _post(
