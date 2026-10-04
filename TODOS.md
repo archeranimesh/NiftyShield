@@ -17,7 +17,7 @@ rot them. (Items 3, 5 and 8 closed — numbers kept stable because item text cro
 
 4. **Gamma near-expiry buy (epic)** — `docs/plan/gamma-near-expiry/` — Phase A `risk-gamma-phase-a/` ✅ done; next Phase B `gamma-scan-phase-b/` GS-1 (GS-1..6), blocked until ≥ 5 days of snapshots
    exist. In progress, independent of everything else; finish before starting new stories.
-6. **Strategy payoff charts on Telegram (IC first, any strategy via opt-in registry)** — `docs/plan/strategy-payoff-charts/` — next **PC-13** (`src/strategy/payoff_registrations.py`,
+6. **Strategy payoff charts on Telegram (IC first, any strategy via opt-in registry)** — `docs/plan/strategy-payoff-charts/` — next **PC-14** (`scripts/strategies/ic/paper_ic_entry.py`,
    `chart-core/stories.md`). `chart-core/` (PC-2..19, no option model: generic payoff math + registry + IC wiring) ships now; `chart-model-overlay/` (MO-1..9) is blocked on `greeks-bs-fallback` GF-2 +
    GF-3, so it waits for item 7.
 7. **Greeks Black-Scholes fallback** — `docs/plan/greeks-bs-fallback/` — next **GF-1** (read-only audit scope). Needs Animesh's three modeling decisions (rate / DTE convention / delta tolerance)
@@ -86,6 +86,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-04] chart-core PC-13 closed (`985e0b6`): Register IC V1/V2 payoff adapters via ensure_registered under real strategy_name keys
 - [2026-10-04] chart-core PC-12 closed (`f3f43c9`): Hook audit: no central open/EOD/close hook, wire per call site
 - [2026-10-04] chart-core PC-11 closed (`c991aaa`): send_payoff_chart non-raising entry point with off-loop render and timeouts
 - [2026-10-04] chart-core PC-10 closed (`cd1273e`): opt-in PayoffRegistry, split adapter Protocols, DefaultPositionAdapter with injected strike resolver

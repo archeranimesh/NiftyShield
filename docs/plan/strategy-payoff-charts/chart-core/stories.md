@@ -410,11 +410,12 @@ written for the per-call-site fallback; if a central hook exists for a point, co
 **Before any code:** `get_code_snippet("IronCondorV1._compute_combined_pnl")` and the V2 mirror; check what the strategy `name` strings are (`search_code('strategy_name =')` in both files) — the
 registry key must equal the `strategy_name` the call sites pass. Confirm whether the default positions adapter reproduces the four IC legs (it should — that is the point of the design).
 
-**What to implement:** `ensure_registered()` registers `iron_condor_v1` and `iron_condor_v2` (default adapter if sufficient, else a thin IC adapter co-located here that takes strikes + entry credit
-from the V1 / V2 position sets; add a `title()` producing `<strategy> · <expiry_type> · <dte>DTE`). It is idempotent (guards the duplicate-registration error) so every wired site can call it without
-ordering concerns. **Registration is never an import side effect of a strategy module**: `src/strategy/__init__.py` imports `IronCondorV1` but not `IronCondorV2`, and the entry scripts import neither
-strategy class, so import-time registration would silently skip V2 at entry. Each wired site (PC-14..18) calls `ensure_registered()` explicitly. This module is also the template future strategies
-copy: one `registry.register("<strategy_name>")` line inside `ensure_registered`.
+**What to implement (as built, 985e0b6: keys are the real `strategy_name` values from `CONFIGS` / `CONFIGS_V2` — `paper_ic_nifty_v1_{weekly,monthly,leaps,yearly}`, `paper_ic_nifty_v2_monthly`):**
+`ensure_registered()` registers the IC strategies (default adapter if sufficient, else a thin IC adapter co-located here that takes strikes + entry credit from the V1 / V2 position sets; add a
+`title()` producing `<strategy> · <expiry_type> · <dte>DTE`). It is idempotent (guards the duplicate-registration error) so every wired site can call it without ordering concerns. **Registration is
+never an import side effect of a strategy module**: `src/strategy/__init__.py` imports `IronCondorV1` but not `IronCondorV2`, and the entry scripts import neither strategy class, so import-time
+registration would silently skip V2 at entry. Each wired site (PC-14..18) calls `ensure_registered()` explicitly. This module is also the template future strategies copy: one
+`registry.register("<strategy_name>")` line inside `ensure_registered`.
 
 **Review:** `greeks-analyst` — blocking (IC credit definition).
 

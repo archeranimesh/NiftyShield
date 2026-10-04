@@ -3,7 +3,7 @@
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
 spec.
 
-**Open: PC-13.**
+**Open: PC-14.**
 - [x] **PC-1** — Scaffold the `strategy-payoff-charts/` epic + both sub-stories; register in `TODOS.md` + README | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 7210c31
 - [x] **PC-2** — `src/payoff/` leaf package: `core.py` (`PayoffLeg`, `StrategyPayoff`, `compute_payoff`), `errors.py` (`PayoffError` hierarchy), import-boundary test, `Decimal` | Owner: Claude |
   Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: bd6e6a1
@@ -21,8 +21,8 @@ spec.
 - [x] **PC-11** — `send_payoff_chart(sender: PhotoSender, ...)` — non-raising entry point: registry lookup → compute → render off-loop (`to_thread`) → `send_photo` | Owner: Antigravity | Model: n/a |
   Review: code-reviewer | SHA: c991aaa
 - [x] **PC-12** — Hook audit (read-only): find the central open / EOD / close hook point; record the decision in `stories.md` | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: f3f43c9
-- [ ] **PC-13** — `src/strategy/payoff_registrations.py`: explicit idempotent `ensure_registered()` registering `iron_condor_v1` / `iron_condor_v2` | Owner: Claude | Model: claude-sonnet-5 | Review:
-  greeks-analyst | SHA: —
+- [x] **PC-13** — `src/strategy/payoff_registrations.py`: explicit idempotent `ensure_registered()` registering the IC V1/V2 `strategy_name` keys (`paper_ic_nifty_v1_*`, `paper_ic_nifty_v2_monthly`) |
+  Owner: Claude | Model: claude-sonnet-5 | Review: greeks-analyst | SHA: 985e0b6
 - [ ] **PC-14** — Wire entry V1 (`paper_ic_entry.py`): `send_payoff_chart` after the `ICEntryMessage` text send | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
 - [ ] **PC-15** — Wire entry V2 (`paper_ic_entry_v2.py`): same | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: —
 - [ ] **PC-16** — Wire EOD snapshot (`paper_ic_snapshot.py` `process_variant`): one PNG per open variant | Owner: Claude | Model: claude-sonnet-5 | Review: greeks-analyst | SHA: —
