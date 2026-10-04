@@ -223,6 +223,18 @@ class TelegramGateway:
         except Exception as exc:
             logger.warning("send_notification error: %s", exc)
 
+    async def send_photo(self, png: bytes, *, caption: str = "") -> None:
+        """Delegate to TelegramNotifier.send_photo. Non-fatal.
+
+        Args:
+            png: Raw PNG bytes.
+            caption: Optional MarkdownV2 caption, already escaped by the caller.
+        """
+        try:
+            await self._notifier.send_photo(png, caption=caption)
+        except Exception as exc:  # Intentional: notifier must never abort the caller
+            logger.warning("send_photo error: %s", exc)
+
     # ── Private helpers ──────────────────────────────────────────────
 
     async def _get_updates(self, offset: int) -> list[dict]:

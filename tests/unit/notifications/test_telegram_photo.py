@@ -102,3 +102,22 @@ async def test_send_photo_respects_budget() -> None:
         assert await n.send_photo(_PNG) is False
     cs.assert_not_called()
     session.post.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_gateway_send_photo_delegates() -> None:
+    from src.notifications.telegram_gateway import TelegramGateway
+
+    gw = TelegramGateway("tok", "42", ":memory:")
+    gw._notifier = MagicMock(send_photo=AsyncMock(return_value=True))
+    await gw.send_photo(_PNG, caption="cap")
+    gw._notifier.send_photo.assert_awaited_once_with(_PNG, caption="cap")
+
+
+@pytest.mark.asyncio
+async def test_gateway_send_photo_non_fatal() -> None:
+    from src.notifications.telegram_gateway import TelegramGateway
+
+    gw = TelegramGateway("tok", "42", ":memory:")
+    gw._notifier = MagicMock(send_photo=AsyncMock(side_effect=RuntimeError("boom")))
+    await gw.send_photo(_PNG)
