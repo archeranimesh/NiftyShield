@@ -17,8 +17,8 @@ rot them. (Items 3, 5 and 8 closed — numbers kept stable because item text cro
 
 4. **Gamma near-expiry buy (epic)** — `docs/plan/gamma-near-expiry/` — Phase A `risk-gamma-phase-a/` ✅ done; next Phase B `gamma-scan-phase-b/` GS-1 (GS-1..6), blocked until ≥ 5 days of snapshots
    exist. In progress, independent of everything else; finish before starting new stories.
-6. **Strategy payoff charts on Telegram (IC first, any strategy via opt-in registry)** — `docs/plan/strategy-payoff-charts/` — next **PC-7** (`src/notifications/telegram.py`). `chart-core/` (PC-2..19,
-   no option model: generic payoff math + registry + IC wiring) ships now; `chart-model-overlay/` (MO-1..9) is blocked on `greeks-bs-fallback` GF-2 + GF-3, so it waits for item 7.
+6. **Strategy payoff charts on Telegram (IC first, any strategy via opt-in registry)** — `docs/plan/strategy-payoff-charts/` — next **PC-8** (`src/notifications/telegram_gateway.py`). `chart-core/`
+   (PC-2..19, no option model: generic payoff math + registry + IC wiring) ships now; `chart-model-overlay/` (MO-1..9) is blocked on `greeks-bs-fallback` GF-2 + GF-3, so it waits for item 7.
 7. **Greeks Black-Scholes fallback** — `docs/plan/greeks-bs-fallback/` — next **GF-1** (read-only audit scope). Needs Animesh's three modeling decisions (rate / DTE convention / delta tolerance)
    before GF-2. Unblocks delta-based IC entry for the yearly bucket and `strategy-payoff-charts` `chart-model-overlay/`.
 9. **Portfolio snapshot slimdown** — `docs/plan/portfolio-snapshot-slimdown/` — next **FD-1** (pre-delete audit). Epic, fixed order: `finideas-decommission/` (FD-1..7) → `dhan-holdings-removal/`
@@ -85,6 +85,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-04] chart-core PC-7 closed (`cf9f21a`): TelegramNotifier.send_photo: multipart sendPhoto, non-fatal, shares send() budget
 - [2026-10-04] chart-core PC-6 closed (`bc7f656`): Add stat strip (max P/L, R:R, credit/debit, breakevens, margin) to payoff chart
 - [2026-10-04] chart-core PC-5 closed (`17501d4`): render_payoff_png chart body via matplotlib Figure API + matplotlib dep
 - [2026-10-04] strategy-payoff-charts PC-4 closed (`1524ed0`): acceptance matrix (IC x2, CSP, CC, Collar) all matched hand arithmetic, no core change; `test-runner` green (4036), `code-reviewer` 0
