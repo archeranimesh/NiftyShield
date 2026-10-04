@@ -28,7 +28,8 @@ if notifier:
 configured.
 
 `TELEGRAM_MESSAGE_BUDGET` (default `10`) caps the total messages a single notifier instance will send per process lifetime. Increment before the HTTP call, so network timeouts still burn a slot
-(prevents rapid retry loops). Raise the budget via env var for long-lived processes like `intraday_tracker.py`; set to `0` to silence all notifications.
+(prevents rapid retry loops). Raise the budget via env var for long-lived processes like `intraday_tracker.py`; set to `0` to silence all notifications. `send_photo` draws on a separate photo cap
+(`photo_budget`, defaults to `budget`) so payoff charts never starve text.
 
 ---
 

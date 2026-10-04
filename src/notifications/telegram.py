@@ -89,6 +89,7 @@ class TelegramNotifier:
         chat_id: str,
         timeout: int = 10,
         budget: int = 10,
+        photo_budget: int | None = None,
     ) -> None:
         self._url = _TELEGRAM_API.format(token=bot_token)
         self._photo_url = _TELEGRAM_PHOTO_API.format(token=bot_token)
@@ -96,6 +97,10 @@ class TelegramNotifier:
         self._timeout = timeout
         self._budget = budget
         self._messages_sent = 0
+        # Photos draw on their own cap so a run of payoff charts can never starve the
+        # text budget (and vice versa). Defaults to ``budget``, so 0 still silences all.
+        self._photo_budget = budget if photo_budget is None else photo_budget
+        self._photos_sent = 0
 
     async def send(self, text: str) -> bool:
         """Send a MarkdownV2-formatted message to the configured chat.
@@ -157,7 +162,8 @@ class TelegramNotifier:
     async def send_photo(self, png: bytes, *, caption: str = "") -> bool:
         """Send a PNG to the configured chat via the multipart ``sendPhoto`` API.
 
-        Shares the per-session budget with ``send()`` and follows the same
+        Draws on a separate per-session photo budget (``photo_budget``, default
+        equal to ``budget``) so photos never starve ``send()``'s text budget. Same
         non-fatal contract: the slot is burned before the call, and any
         failure (non-200, ``ok=False``, transport error) is logged and
         reported as ``False`` — never raised.
@@ -169,10 +175,10 @@ class TelegramNotifier:
         Returns:
             True if Telegram accepted the photo, False otherwise.
         """
-        if self._messages_sent >= self._budget:
-            logger.warning("telegram.send_photo.budget_exceeded", budget=self._budget)
+        if self._photos_sent >= self._photo_budget:
+            logger.warning("telegram.send_photo.budget_exceeded", budget=self._photo_budget)
             return False
-        self._messages_sent += 1
+        self._photos_sent += 1
         form = aiohttp.FormData()
         form.add_field("chat_id", str(self._chat_id))
         form.add_field("photo", png, filename="payoff.png", content_type="image/png")

@@ -67,13 +67,30 @@ async def test_send_photo_ok_false_is_non_fatal() -> None:
 
 
 @pytest.mark.asyncio
-async def test_send_photo_shares_budget_with_send() -> None:
+async def test_eod_run_sends_all_text_and_photos() -> None:
+    """8 text + 8 photos all deliver on a budget of 8: photos do not eat the text budget."""
     session = _session_mock()
-    n = _notifier(budget=1)
+    n = _notifier(budget=8)
     with patch("src.notifications.telegram.aiohttp.ClientSession", return_value=session):
-        assert await n.send("hi") is True
-        assert await n.send_photo(_PNG) is False
-    assert session.post.call_count == 1
+        results = []
+        for _ in range(8):
+            results.append(await n.send("report"))
+            results.append(await n.send_photo(_PNG))
+    assert all(results)
+    assert session.post.call_count == 16
+
+
+@pytest.mark.asyncio
+async def test_budget_still_caps_runaway() -> None:
+    """Both caps still bind: extra texts and extra photos are suppressed independently."""
+    session = _session_mock()
+    n = TelegramNotifier(bot_token="tok", chat_id="42", budget=2, photo_budget=3)
+    with patch("src.notifications.telegram.aiohttp.ClientSession", return_value=session):
+        texts = [await n.send("t") for _ in range(5)]
+        photos = [await n.send_photo(_PNG) for _ in range(5)]
+    assert texts == [True, True, False, False, False]
+    assert photos == [True, True, True, False, False]
+    assert session.post.call_count == 5
 
 
 @pytest.mark.asyncio
