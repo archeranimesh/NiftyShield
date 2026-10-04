@@ -19,7 +19,7 @@ spec.
 - [x] **PC-10** — `src/payoff/registry.py`: `PayoffRegistry` (injectable), split adapter Protocols (`PayoffAdapter`, `HasTitle`), `register_payoff`, `DefaultPositionAdapter` with injected strike
   resolver | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: cd1273e
 - [x] **PC-11** — `send_payoff_chart(sender: PhotoSender, ...)` — non-raising entry point: registry lookup → compute → render off-loop (`to_thread`) → `send_photo` | Owner: Antigravity | Model: n/a |
-  Review: code-reviewer | SHA: c991aaa code-reviewer | SHA: —
+  Review: code-reviewer | SHA: c991aaa
 - [ ] **PC-12** — Hook audit (read-only): find the central open / EOD / close hook point; record the decision in `stories.md` | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: —
 - [ ] **PC-13** — `src/strategy/payoff_registrations.py`: explicit idempotent `ensure_registered()` registering `iron_condor_v1` / `iron_condor_v2` | Owner: Claude | Model: claude-sonnet-5 | Review:
   greeks-analyst | SHA: —
