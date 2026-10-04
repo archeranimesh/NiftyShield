@@ -32,6 +32,18 @@ def mock_post_expiry_gate():
         yield m
 
 
+@pytest.fixture(autouse=True)
+def mock_payoff_chart():
+    """Stub the payoff-chart send (no matplotlib render, no BOD file, no network)."""
+    with (
+        patch("scripts.strategies.ic.paper_ic_entry.ensure_registered"),
+        patch(
+            "scripts.strategies.ic.paper_ic_entry.send_payoff_chart", new_callable=AsyncMock
+        ) as m,
+    ):
+        yield m
+
+
 @pytest.fixture
 def mock_vix_data():
     """Mock VIX loading/computing functions."""
@@ -308,6 +320,53 @@ async def test_weekly_standalone(
 
     # Verify Telegram notification was sent
     assert mock_telegram.send_notification.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_entry_sends_payoff_chart_once_after_text(
+    mock_vix_data,
+    mock_store,
+    mock_lookup,
+    mock_market_client,
+    mock_subprocess,
+    mock_telegram,
+    mock_payoff_chart,
+):
+    """One payoff chart is sent after the text, keyed by the real strategy_name."""
+    order: list[str] = []
+    mock_telegram.send_notification.side_effect = lambda *_a, **_k: order.append("text")
+    mock_payoff_chart.side_effect = lambda *_a, **_k: order.append("chart")
+    test_args = ["paper_ic_entry.py", "--expiry-type", "weekly", "--no-dry-run",
+                 "--bod-path", "dummy.json"]
+    with patch.object(sys, "argv", test_args):
+        await run()
+
+    assert order == ["text", "chart"]
+    args, kwargs = mock_payoff_chart.call_args
+    assert args[0] is mock_telegram
+    assert args[1] == "paper_ic_nifty_v1_weekly"
+    assert args[2].strategy_name == "paper_ic_nifty_v1_weekly"
+    assert args[2].spot == Decimal("24000")
+    assert args[2].extras["dte"] == kwargs["dte"]
+
+
+@pytest.mark.asyncio
+async def test_entry_skips_payoff_chart_on_dry_run(
+    mock_vix_data,
+    mock_store,
+    mock_lookup,
+    mock_market_client,
+    mock_subprocess,
+    mock_telegram,
+    mock_payoff_chart,
+):
+    """Dry run never persists legs, so it sends no chart."""
+    test_args = ["paper_ic_entry.py", "--expiry-type", "weekly", "--dry-run",
+                 "--bod-path", "dummy.json"]
+    with patch.object(sys, "argv", test_args):
+        await run()
+
+    mock_payoff_chart.assert_not_called()
 
 
 @pytest.mark.asyncio

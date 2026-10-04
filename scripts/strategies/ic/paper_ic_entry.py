@@ -47,6 +47,7 @@ from src.intraday.market_store import IntradayMarketStore
 from src.notifications.entry_message import EntryMessage, format_entry_message
 from src.notifications.formatting import LegRow
 from src.notifications.markdown import escape_markdown
+from src.notifications.payoff_chart import send_payoff_chart
 from src.notifications.telegram import build_notifier
 from src.notifications.telegram_gateway import TelegramGateway
 from src.paper.constants import (
@@ -56,7 +57,9 @@ from src.paper.constants import (
     STRATEGY_CSP,
 )
 from src.paper.store import PaperStore
+from src.payoff.registry import PayoffContext
 from src.strategy.ic_expiry_config import CONFIGS
+from src.strategy.payoff_registrations import ensure_registered
 from src.utils.logging import setup_logging
 
 load_dotenv()
@@ -864,6 +867,20 @@ async def _run_entry(pending_alerts: list[asyncio.Task]) -> None:
                 db_path=str(args.db_path),
             )
             await tg.send_notification(msg)
+            # Payoff chart: non-raising; no current_pnl (fresh entry) and no margin.
+            ensure_registered()
+            await send_payoff_chart(
+                tg,
+                config.strategy_name,
+                PayoffContext(
+                    positions=store.get_positions(config.strategy_name),
+                    spot=nifty_spot,
+                    lot_size=LOT_SIZE,
+                    strategy_name=config.strategy_name,
+                    extras={"dte": dte},
+                ),
+                dte=dte,
+            )
         except Exception as exc:
             # Intentional: telegram delivery failure is non-fatal; log warning and
             # proceed without failing the script.
