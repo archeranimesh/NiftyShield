@@ -86,6 +86,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-05] tradetron-cc-backtest-poc TCP-6 closed (`<pending>`), story archived: verdict partially reproduces (expiries 5 of 5, dates 3 of 5, strikes 4 of 5 differ by 50-200 pts, P&L lower on all
+  five pairs); Tradetron usable as a mechanics cross-check, not for strike or P&L reconciliation; `DECISIONS.md` entry and `docs/reference/tradetron.md` findings added
 - [2026-10-05] tradetron-cc-backtest-poc TCP-5 closed (`9142fc9`): two funded runs (₹40). Run 1 (archived-spec template 999082430) traded one cycle; run 2 (live-code template v2 999082574) traded six,
   matching paper's expiries and three entry/exit date pairs, strikes 0-200 points off; TCP-6 reconciles and writes the verdict
 - [2026-10-05] tradetron-cc-backtest-poc TCP-4 closed (`7de8b32`): flat-position gate replaces the one-shot guard; template created on Tradetron as id 999082430, reads back clean (2 sets, 6

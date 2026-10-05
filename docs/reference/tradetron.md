@@ -246,10 +246,30 @@ lot size the repo assumes before sizing any ported strategy.
 `finished: false`, `readable: false`, `status: active` — `status` is not authoritative, and `readable: false` means `tt_backtest_result` cannot read them. These look like legacy runs, not usable
 baselines. Rows carry no P&L and no `report_url`. Row order was oldest-first in this sample; page with `offset`/`next_offset` or filter by `template_id` to reach recent runs.
 
+**2026-10-05, CC backtest POC (`docs/archive/plan/tradetron-cc-backtest-poc/findings.md`), two funded fleet runs on NIFTY monthly calls, window 2026-08-12 to 2026-10-01, `positional`, `Open` fill:**
+
+- **Cost and billing.** Each run charged ₹20 (1 credit) from the wallet, Tradetron's own quote; the lapsed prepaid pack funded nothing. The account owner saw the website's Backtest button count
+  against the same topped-up wallet ("1 of 10" after a ₹200 top-up), so no separate free allowance was found on this account (user-reported for the website, not verified by tool).
+- **Historical Greeks exist for strike selection.** `Find Strike(..., 'delta', 0.15, 'CE', 'any')` returned a strike on every historical entry date in both runs. Whether its delta matches the Upstox
+  chain delta was not checked; paper strikes were 0 to 200 points lower (inference: a methodology difference, unproven).
+- **Tuesday-expiry monthlies are covered.** The 2026-09-29 and 2026-10-27 NIFTY monthlies traded in the backtest. Weekly Tuesday expiries were not tested.
+- **`Current Month Expiry(..., 0)` stays on the current month until it expires.** On 2026-08-12 (13 days before the 08-25 expiry) it resolved to August, so an entry gated on current-month DTE >= 30
+  never fired. There is no if/else keyword and `Select Expiry` takes a literal offset, so "nearest monthly with at least N days" needs two sets with mutually exclusive DTE gates (current month, next
+  month).
+- **Flat-position re-entry gate works.** `Open Positions Detail('All','CE','NIFTY 50','count') == Number(0)` re-armed the entry after each exit. With only that gate and a time floor, the engine
+  re-entered in the same minute as an exit; add a day or time condition if that is not wanted. The validator's `UNBOUNDED_DAILY_REENTRY` warning is the same fact.
+- **Per-set Exit with a `Net Quantity(Traded Instrument Name('Entry', ...)) != Number(0)` guard worked across several cycles** with no Universal Exit. The keyword notes say a Universal Exit ends a
+  run; whether that would have blocked re-entry was not tested.
+- **Window end force-closes.** On a `positional` run the open leg closed at 15:30 on the last day as a `FinalClose` fill, not a rule exit. Do not read that price as a strategy exit.
+- **Exit reason is not recorded.** The report has no exit-reason column; `exit_attribution` buckets by condition type and flags itself degenerate. A target and a stop cannot be told apart from the
+  report; compare the exit price with the entry price. The fills' `itm_otm` column was ITM on every row and contradicted its own strike (`NOT_PRODUCED`); do not use it.
+- **Default cost model on the report:** slippage 0.05%, STT 0.15%, exchange 0.03503%, GST 18%, no brokerage; about 0.4% of gross on a 12-order short-call book. MAE and MFE are not produced.
+- **Fleet runs finished within a few minutes of submit** (not timed to the second); poll `tt_backtest_status`, then read fills with `tt_backtest_trades` and figures with `tt_backtest_result` for free.
+
 ## Open questions
 
 - Do any recent runs exist on the account? Page `tt_list_backtests` or call `tt_list_my_strategies` and then `tt_backtest_workbench`.
 - Per-run backtest fee, daily free allowance and wallet balance: only `next_run.quote` from `tt_backtest_workbench` is authoritative; never estimate.
-- Whether backtests cover Tuesday-expiry NIFTY weeklies (expiry moved Thursday→Tuesday, April 2026; see `REFERENCES.md`). `tt_check_backtestability` with a real template and window should answer it.
+- Whether backtests cover Tuesday-expiry NIFTY *weeklies*; the monthlies are covered (see Verified findings, 2026-10-05).
 - Whether the IC strategies in `docs/strategies/` can be expressed without BT-unsupported keywords (`Leg SL trail`, `PCR`, `Total OI`).
 - Brokers and underlyings supported on the current plan; signal-bridge payload shape and latency vs. NiftyShield's snapshot cadence.

@@ -228,3 +228,58 @@ What the run shows, with the sample size next to each point (6 backtest round tr
   artifact of the window; the paper cycle 5 exited 10-01 as well.
 - **No loss, delta or DTE exit occurred in this window** in either record, so those paths were not exercised.
 - **Greeks are available in the backtest engine.** `Find Strike` on delta returned a strike on every historical entry date. Whether Tradetron's delta equals the Upstox delta was not checked.
+
+## Reconciliation (TCP-6)
+
+Basis: run 2 (template v2, the live-code rules) against the five paper cycles from TCP-2. Run 1 (archived-spec template) is excluded because it traded one cycle for a spec reason, not a platform one.
+Sample: 6 backtest round trips against 5 paper cycles over two expiries in one falling-market stretch. Thin; treat every comparison as descriptive.
+
+Paired by closest dates (backtest cycle 3, 09-02 to 09-09, has no paper counterpart):
+
+| Paper cycle | Backtest cycle | Strike (paper, backtest) | Credit (paper, backtest) | Exit (paper, backtest) | Gross P&L (paper, backtest) | Backtest minus paper |
+|---|---|---|---|---|---|---|
+| 1 | 1 | 25400, 25600 | 86.725, 63.50 | 24.50, 19.00 | 4,044.63, 2,892.50 | -1,152.13 |
+| 2 | 2 | 25100, 25100 | 60.825, 57.00 | 18.15, 17.05 | 2,773.88, 2,596.75 | -177.13 |
+| 3 | 4 | 24200, 24250 | 53.900, 42.40 | 13.95, 12.55 | 2,596.75, 1,940.25 | -656.50 |
+| 4 | 5 | 24200, 24400 | 97.475, 66.70 | 29.05, 19.30 | 4,447.63, 3,081.00 | -1,366.63 |
+| 5 | 6 | 23900, 23950 | 64.425, 55.15 | 19.10, 20.00 | 2,946.13, 2,284.75 | -661.38 |
+
+Paired totals: paper 16,809.00, backtest 12,795.25, a gap of 4,013.75. The extra backtest cycle (2,242.50) takes the backtest total to 15,037.75. Backtest is lower than paper on all five pairs.
+
+The three kinds of difference, kept apart:
+
+- **Strike selection (measured, cause inferred).** One of five strikes is identical (25100); the other four are 50 to 200 points higher in the backtest, never lower. The credit gap tracks the strike
+  gap (a 200-point difference gives 63.50 vs 86.725 and 66.70 vs 97.475; a 50-point difference gives 42.40 vs 53.900 and 55.15 vs 64.425). Inference: Tradetron's own 0.15 delta picks a further-OTM
+  call than the Upstox chain delta the paper engine used, or the paper engine's 0.12-0.18 band pulled it nearer the money. Neither delta is recorded for any entry, so which is true is unproven. Note
+  the timing mismatch on pair 2, where the strike is the same but the entry dates differ (08-19 vs 08-26), so those credits are not a like-for-like fill comparison either.
+- **Fill price (measured, not separable).** The backtest fills at the 1-minute bar `Open` with 0.05% slippage in its cost model. Paper fills are the logged prices with an unknown entry time and
+  `None%` spread in the notes. Entry times differ (backtest 10:00 sharp; paper's is unknown), so a fill-price effect cannot be isolated from the strike effect here. A `trade_price=Close` run was not
+  done and is not needed to answer the story question.
+- **Charges (measured, small).** The backtest's total costs are 58.70 on 15,037.75 gross, 0.39%, with no brokerage in the profile. Paper's P&L is gross before charges, so this comparison uses gross on
+  both sides. Charges are far too small to explain a 4,013.75 gap.
+
+What lines up, by count: expiries 5 of 5 (09-29 until 09-16, then 10-27); entry and exit date on 3 of 5 paper cycles (backtest cycles 4, 5, 6 against paper 3, 4, 5); exit price at about 29-30% of
+credit on every cycle but the forced last one, matching paper's 25.9-29.8%. What does not: strike on 4 of 5, one extra backtest cycle from same-minute re-entry (paper waited 0 to 7 days), and the last
+exit being a window-end `FinalClose`, not a rule exit.
+
+Not exercised in either record, so no statement can be made: the 2.5x loss stop, the 0.55 delta stop, the DTE <= 5 close, and any exit order when several fire in one tick.
+
+## Verdict
+
+**Partially reproduces.** For this strategy (one short 15-delta monthly NIFTY call), over 2026-08-12 to 2026-10-01 after the April 2026 Tuesday-expiry change, Tradetron's backtest reproduces the
+mechanics and the timing and does not reproduce the strikes or the P&L.
+
+- **Reproduces (measured):** expiry selection under the live-code rule (5 of 5), entry and exit dates on 3 of 5 paper cycles, the 30% profit-target exit price, a working flat-position re-entry gate,
+  and delta-targeted strike selection on historical dates (the engine has historical Greeks for `Find Strike`).
+- **Does not reproduce (measured):** the strike on 4 of 5 cycles, and therefore the credit and the P&L (backtest lower on all five pairs, 4,013.75 lower in total on gross). The cause is inferred to be
+  Tradetron's delta methodology against the Upstox chain delta, not a backtest defect, and is unproven.
+- **Spec differences, not platform defects:** run 1's one-cycle result came from the archived 30-45 DTE Wednesday gate; paper's cycles 1, 3 and 5 sit outside that gate, as TCP-2 predicted.
+- **Not tested:** loss, delta and DTE exits; exit priority when several fire together; the 0.12-0.18 delta band (Tradetron's `Find Strike` mode `any` has no distance cap); the NiftyBees leg and
+  margin.
+
+**Can Tradetron be relied on for POC validation of this strategy class?** As a timing-and-mechanics cross-check, yes: it ran a delta-targeted monthly call end to end, rolled expiry correctly and
+exited on the profit target. As a substitute for NiftyShield's own backtest or paper records for strike-level or P&L reconciliation, no, because the strike differs by up to 200 points and the P&L gap
+follows from that. The evidence is 6 round trips and 5 paper cycles in one regime, so it supports "usable for mechanics" and does not support any claim about profitability or edge.
+
+Spend: two funded runs, ₹40 (₹20 each, Tradetron's quote). Follow-ups outside this story: a longer window with the live-code template (a new story; coverage that far back is unchecked) and the
+Tradetron-versus-Upstox delta comparison that `prompt.md` already names as a separate experiment.

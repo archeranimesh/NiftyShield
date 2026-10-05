@@ -42,8 +42,8 @@ comparison snapshot; automated base-leg rolling; full unattended automation.
 
 ## Active Stories
 
-**`tradetron-cc-backtest-poc/`** · 🟡 In progress · next: **TCP-6** Decide whether a Tradetron backtest can be relied on for POC validation by backtesting the covered-call overlay's short-call leg and
-reconciling it against NiftyShield's paper CC records. Free pre-flight first (TCP-1 to TCP-4); the funded run (TCP-5) needs a wallet top-up at ₹20 per run.
+**`tradetron-cc-backtest-poc/`** · ✅ Archived → `docs/archive/plan/tradetron-cc-backtest-poc/` Verdict: Tradetron backtest partially reproduces the paper CC (mechanics and timing yes, strikes and P&L
+no).
 
 **`signal-outcome-profit-range/`** · ✅ Shipped/Archived 2026-09-22 (SOP-1 `4096c07`, SOP-2 `180ccae`, SOP-3 `a73b6b6`) → `docs/archive/plan/signal-outcome-profit-range/` Shows the profit high/low
 reached since entry (existing `mfe_pct`/`mae_pct` in `paper_signal_marks`) in the daily SIGNAL OUTCOME Telegram message for executed signal-track trades, persisted on `SignalOutcome`.
