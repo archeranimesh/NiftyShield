@@ -33,7 +33,9 @@ import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
 
-from scratch._lib.dhan_data_api import (
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # repo root, so no PYTHONPATH needed
+
+from scratch._lib.dhan_data_api import (  # noqa: E402
     auth_headers,
     bs_delta,
     call,
