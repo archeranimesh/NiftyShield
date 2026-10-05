@@ -34,3 +34,42 @@ Notes for the template (TCP-3):
   paper engine picks one exit when several fire is unverified.
 - Delta and mark values in the paper records are Upstox chain values. The Tradetron comparison inherits the methodology caveat in `prompt.md`.
 - Not read: the full body of `get_expiry_candidates` beyond the docstring, and the rest of `paper_cc_entry.py` after line 215.
+
+## Paper CC ground truth — thin sample (5 completed cycles)
+
+Source: `paper_trades` where `strategy_name = 'paper_nifty_overlay'` and `leg_role = 'overlay_cc'` (`DB_REGISTRY.md` read first; the paper CC rides the overlay strategy, not a `paper_covered_call_v1`
+name). Aggregate: 10 rows, 5 SELL and 5 BUY, all `CLOSED`, trade dates 2026-08-12 to 2026-10-01, quantity 65 (1 lot) on every row. `paper_leg_snapshots` has 37 daily rows for the leg (2026-08-12 to
+2026-10-02) but no delta column. Prices are per unit; P&L is gross (credit minus exit, times 65), before any charges.
+
+| # | Entry date | Expiry (DTE) | Strike | Credit | Exit date | Exit price | Exit / credit | Gross P&L (65) |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 2026-08-12 (Wed) | 2026-09-29 (48) | 25400 | 86.725 | 2026-08-25 | 24.50 | 28.2% | 4,044.63 |
+| 2 | 2026-08-26 (Wed) | 2026-09-29 (34) | 25100 | 60.825 | 2026-09-02 | 18.15 | 29.8% | 2,773.88 |
+| 3 | 2026-09-09 (Wed) | 2026-09-29 (20) | 24200 | 53.900 | 2026-09-16 | 13.95 | 25.9% | 2,596.75 |
+| 4 | 2026-09-16 (Wed) | 2026-10-27 (41) | 24200 | 97.475 | 2026-09-25 | 29.05 | 29.8% | 4,447.63 |
+| 5 | 2026-09-25 (Fri) | 2026-10-27 (32) | 23900 | 64.425 | 2026-10-01 | 19.10 | 29.6% | 2,946.13 |
+
+Total gross P&L across the five cycles: 16,809.00. This is a record of what happened, not a profitability claim.
+
+What the DB does not hold, so the template cannot be reconciled on it:
+
+- **Delta at entry: not recorded.** The entry notes carry strike, OI, DTE and expiry only; `paper_exit_events` has no CC rows and `gate_violations` has none for CC deltas. The 15-delta target is
+  therefore unverifiable from the DB. The ledger holds nothing to compare a Tradetron `Find Strike` strike against except the strike itself.
+- **Exit trigger: not recorded.** `paper_exit_events` for this strategy holds only six `R5_REENTRY_BLOCKED` INFO rows. Inference: all five exits are the 30% profit target, because every exit price is
+  25.9% to 29.8% of its credit (at or under the 0.30 retention in TCP-1) and every credit is above the 15 floor. None of the five is a loss, delta or DTE exit. That is consistent with the ratios, not
+  proven by a logged trigger.
+- **Spread at entry: `None%`** in all five entry notes, so the fill is the logged price with no spread context.
+
+Observations that bear on the template and the comparison:
+
+- Cycle 3 entered at DTE 20 and cycle 1 at DTE 48, both outside the archived 30-45 window. This fits the TCP-1 finding that the code enforces only a 14-DTE floor and no weekday check; cycle 5 was
+  entered on a Friday. The template's Wednesday and 30-45 DTE gates will therefore not reproduce cycles 3 and 5 by construction. This is a spec difference, not a platform defect.
+- Cycles 1-3 share the 2026-09-29 expiry and cycles 4-5 share 2026-10-27. Each entry followed the previous exit within 0 to 7 days (1, 7, 0 and 0 days), so the five cycles are two expiries, not five
+  independent samples.
+- Strikes moved from 25400 to 23900 over the window, so the five strikes track a falling NIFTY and the sample covers one market regime. It says nothing about the loss, delta or DTE exit paths.
+- Both expiries are the last Tuesday of the month, after the April 2026 expiry-day change.
+
+WINDOW: 2026-08-12..2026-10-01
+
+The window starts on the first paper entry and ends on the last paper exit. It covers every cycle and starts after 2026-04-01. The 2026-10-27 expiry is still live at the end date, so the backtest sees
+cycle 5 close on 2026-10-01 only if its own exit rule fires; a template that is still open on 2026-10-01 will be force-closed or left open depending on `type=positional`, to be checked in TCP-5.
