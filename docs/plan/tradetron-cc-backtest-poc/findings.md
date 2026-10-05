@@ -82,7 +82,7 @@ Draft: `template.md` (one set, one short monthly NIFTY call, `Find Strike` on de
 A re-run through the dry-run create returned `validation.ok: true` with no warnings.
 
 **Backtestability.** `tt_check_backtestability`, window 2026-08-12..2026-10-01, verbatim: `verdict: backtestable`, `confidence: high`, `blockers: []`, `warnings: []`, `checks_skipped: []`,
-`run_type_recommendation: positional` (strong), `price_per_run: ₹20`. Eleven checks ran, including `keyword_surface`, `data_coverage`, `underlying_data_coverage` and `coverage_window`. Caveats on what
+`run_type_recommendation: positional` (strong), `price_per_run: ₹20`. 11 checks ran, including `keyword_surface`, `data_coverage`, `underlying_data_coverage` and `coverage_window`. Caveats on what
 this proves: I passed the compiled payload with the `*_json` and `*_display` members stripped, keeping `condition_value`, strike, expiry and variables; the check scans expressions, so I expect no
 difference, but that is an inference. The check confirms `Delta` and `Find Strike` exist in the engine's keyword namespace. It does **not** say the backtest data store holds historical Greeks, so the
 "does the engine have historical Greeks" unknown from `prompt.md` is still open and only the funded run (TCP-5) can answer it.
@@ -182,3 +182,49 @@ is bucketed Take-profit by condition type, not proven); MAE and MFE were not pro
 
 Paper comparison basis: paper P&L is gross and before charges, so compare 2,161.25 gross here with paper cycle 2's 2,773.88 gross, not the net figure. The gap comes from the different strike and
 credit, not from charges.
+
+## Run 2 (TCP-5): live-code rules, template v2
+
+Run 1 traded one cycle because the template used the archived spec (Wednesday, 30-45 DTE on the current month). v2 follows the live code instead: any weekday, entry from 10:00, nearest monthly expiry
+with at least 14 DTE. Tradetron has no if/else inside an expression and `Select Expiry` takes a literal offset, so the rule is two sets with mutually exclusive gates: Set 1 sells the current-month
+call when current-month DTE >= 14, Set 2 sells the next-month call when it is < 14. Each set carries its own Exit (30% of credit with credit >= 15, 2.5x credit, delta >= 0.55, DTE <= 5, guarded by
+`Net Quantity != 0`); there is no Universal Exit, because the keyword docs say only a Universal Exit ends a run, which could block re-entry. The flat-position gate is kept. The 0.12-0.18 delta band
+and the BELOW_FLOOR and WARN signals are not encoded, as before. `template.md` now holds v2; v1 is in git history (`7de8b32`).
+
+- Template v2 id **999082574**, edit_url https://tradetron.tech/strategies/999082574/edit, validated 0 errors (two intended `UNBOUNDED_DAILY_REENTRY` warnings), created via dry-run token
+- Run: job_id `ttbt-999069146261005`, bt_id 999069146261005, window 2026-08-12..2026-10-01, `type=positional`, `trade_price=Open`, 1-min candles, Tradetron fleet
+- report_url: https://tradetron.tech/bt/view/582cd129f3bb7cb3e3ccf981747521c0
+- Price paid: ₹20 (wallet ₹200 to about ₹160 after runs 1 and 2; balance not re-read)
+
+Fills (`tt_backtest_trades`, 12 fills, 6 round trips, book complete). Backtest cycles on the left, the paper cycle with the closest dates on the right. Prices per unit, 65 units, gross.
+
+| # | Backtest entry | Strike (expiry) | Credit | Exit | Exit price (% of credit) | Gross | Paper cycle by dates | Paper strike, credit, exit, gross |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 08-12 10:00 | 25600 (09-29) | 63.50 | 08-19 11:02 | 19.00 (29.9%) | 2,892.50 | 1 (08-12 to 08-25) | 25400, 86.725, 24.50, 4,044.63 |
+| 2 | 08-19 11:02 | 25100 (09-29) | 57.00 | 09-02 15:12 | 17.05 (29.9%) | 2,596.75 | 2 (08-26 to 09-02) | 25100, 60.825, 18.15, 2,773.88 |
+| 3 | 09-02 15:12 | 24700 (09-29) | 49.15 | 09-09 09:57 | 14.65 (29.8%) | 2,242.50 | none | none |
+| 4 | 09-09 10:00 | 24250 (09-29) | 42.40 | 09-16 09:15 | 12.55 (29.6%) | 1,940.25 | 3 (09-09 to 09-16) | 24200, 53.900, 13.95, 2,596.75 |
+| 5 | 09-16 10:00 | 24400 (10-27) | 66.70 | 09-25 09:19 | 19.30 (28.9%) | 3,081.00 | 4 (09-16 to 09-25) | 24200, 97.475, 29.05, 4,447.63 |
+| 6 | 09-25 10:00 | 23950 (10-27) | 55.15 | 10-01 15:30 FinalClose | 20.00 (36.3%) | 2,284.75 | 5 (09-25 to 10-01) | 23900, 64.425, 19.10, 2,946.13 |
+
+Report figures (the report's own numbers): gross 15,037.75, net 14,979.05, costs 58.70 (slippage 14.18, STT 32.56, exchange 9.94, GST 1.79, stamp 0.20, SEBI 0.03, brokerage 0), 12 orders, turnover
+28,369.25. Paper's total gross over its 5 cycles is 16,809.00. Both are gross-before-charges comparisons only in the sense stated here; the two cycle counts differ (6 vs 5), so the totals are not like
+for like.
+
+What the run shows, with the sample size next to each point (6 backtest round trips, 5 paper cycles over 2 expiries, one falling-market regime: thin; the report itself flags SAMPLE_SIZE high):
+
+- **Engine and expiry selection work as intended.** The 08-12 entry, which run 1 missed, fired on 09-29 under the live-code rule, and the 09-16 and 09-25 entries chose the 10-27 expiry, the same
+  expiry as paper cycles 4 and 5. Every expiry matches paper's expiry for the matching date.
+- **Entry and exit dates match paper on three of five paper cycles.** Backtest cycles 4, 5 and 6 reproduce paper cycles 3, 4 and 5 on both entry and exit date, and cycle 2's exit (09-02) matches paper
+  cycle 2's exit.
+- **Strikes are close but not identical.** Of the five comparable pairs, one strike is identical (25100) and the rest are 50 to 200 points higher in the backtest (25600 vs 25400, 24250 vs 24200, 24400
+  vs 24200, 23950 vs 23900). Inference: Tradetron's own 0.15 delta picks a strike at or above the Upstox-based paper strike; neither delta is recorded, so this is not proven.
+- **Credits differ with strike.** Where the strike is identical (25100) the credit is 57.00 vs 60.825 and the exit 17.05 vs 18.15, on different entry dates (08-19 vs 08-26). Where the strike is 200
+  points higher the backtest credit is lower (66.70 vs 97.475, 63.50 vs 86.725), as expected for a further-OTM call.
+- **Cycle counts differ because re-entry timing differs.** The backtest re-enters in the same minute as the exit (09-02 15:12 exit and entry, 09-09 and 09-16 entries 1 minute apart from exits) so it
+  has an extra cycle (08-19 to 09-02, then 09-02 to 09-09). Paper waited 0 to 7 days between cycles. That is a rule difference, not a defect.
+- **Exits look like the 30% profit target.** Every backtest exit price is 28.9% to 29.9% of its credit except the last. Inference only: the report has no exit-reason column, so a target is not
+  distinguishable from another exit type. The last exit is a `FinalClose` at 15:30 on the window's last day, a positional force-close at the window end and not a rule exit, so cycle 6's 36.3% is an
+  artifact of the window; the paper cycle 5 exited 10-01 as well.
+- **No loss, delta or DTE exit occurred in this window** in either record, so those paths were not exercised.
+- **Greeks are available in the backtest engine.** `Find Strike` on delta returned a strike on every historical entry date. Whether Tradetron's delta equals the Upstox delta was not checked.
