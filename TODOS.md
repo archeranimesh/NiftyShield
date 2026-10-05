@@ -51,8 +51,8 @@ rot them. (Items 3, 5 and 8 closed — numbers kept stable because item text cro
     longest wall-clock pole. Do VG0/VG1 now; the Gate A–D tasks are human checkpoints that accrue passively while the items below are built.
 22. **Tradetron delta check and long-window validation** — `docs/plan/tradetron-delta-and-long-window/` — next **TDL-2** (Live Offline Greeks probe). Animesh's screen of the paper strategies before
     any paid-data purchase; TDL-2 may give `greeks-bs-fallback` a far-dated reference. Funded runs need Animesh's per-run approval.
-23. **Dhan data API POC** — `docs/plan/dhan-data-poc/` — next **DDP-3** (DDP-1 docs read and DDP-2 purchase record done). Paid-data option beside the Tradetron screen; validates stored data and the
-    Dec 2026 / Jun 2027 contract behaviour.
+23. **Dhan data API POC** — `docs/plan/dhan-data-poc/` — next **DDP-4** (DDP-1 to DDP-3 done). Paid-data option beside the Tradetron screen; validates stored data and the Dec 2026 / Jun 2027 contract
+    behaviour.
 
 ## Open Bugs
 
@@ -90,6 +90,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-05] DDP-3 done (`bb211f4`): coverage inventory in `dhan-data-poc/findings.md`. Expired options reach ATM±10 only (±11 empty), expiryCode 1-3 valid (0 rejected), 1/5/15/60-min work (25
+  fails); monthly entries at 20+ DTE and IC wings fall outside; no delta, bid or ask.
 - [2026-10-05] DDP-2 done (`2cc680d`): Monthly Plan 499 rupees/month, active to 2026-11-04, recurring payment enabled; yearly plan 399/month (4,788/year). Recorded in `dhan-data-poc/findings.md`.
 - [2026-10-05] DDP-1 done (`0abb226`): Dhan docs read into `dhan-data-poc/findings.md`; 499 rupees/month list price; expired options documented ATM±10 for index, 5y depth, 30-day window, IV but no
   delta. Criteria: depth pass, delta partial, strike reach and agreement left to DDP-3/4.
