@@ -42,6 +42,9 @@ comparison snapshot; automated base-leg rolling; full unattended automation.
 
 ## Active Stories
 
+**`tradetron-delta-and-long-window/`** · 🟡 Not started · next: **TDL-1** Check whether Tradetron's delta matches Upstox's, then use Tradetron as a long-window screen of the paper strategies (CC, PP,
+Collar; IC audited) before any paid-data purchase, and see whether its Greeks give `greeks-bs-fallback` a far-dated reference. Funded runs at ₹20 each need Animesh's approval.
+
 **`tradetron-cc-backtest-poc/`** · ✅ Archived → `docs/archive/plan/tradetron-cc-backtest-poc/` Verdict: Tradetron backtest partially reproduces the paper CC (mechanics and timing yes, strikes and P&L
 no).
 
