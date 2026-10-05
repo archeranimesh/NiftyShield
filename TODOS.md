@@ -86,6 +86,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-05] tradetron-cc-backtest-poc authored (TCP-1..6, none started): Tradetron probe sessions fixed `ATM` vs `ATM-SPOT`; CC backtest evaluation deferred, needs ₹20/run wallet top-up
 - [2026-10-04] chart-core PC-16 closed (`5f244d4`): Wired EOD snapshot: one payoff PNG per open IC variant after its text report
 - [2026-10-04] chart-core PC-15 closed (`8cc2b3b`): Wire V2 entry: send_payoff_chart after text send
 - [2026-10-04] chart-core PC-14 closed (`36a6634`): Wire IC V1 entry: payoff chart sent after the entry text
