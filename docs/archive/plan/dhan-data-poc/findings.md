@@ -66,9 +66,10 @@ One snapshot, taken during a single session; it says nothing about when the Gree
 | 2028-12-26 | 38 | 10 / 16 | 14 | Thin |
 | 2029-06-26 to 2031-06-24 (5 series) | 32 to 35 | 5 to 17 per side | 0 to 8 | Model values only |
 
-Delta and IV are populated on every expiry (IV on 30 or more rows each). Beyond Dec 2026 only about 30 to 39 strikes are listed, and most deltas sit on strikes with no OI and no bid or ask. From Sep
-2027 the call side has no deltas below about 0.4 to 0.5, so the 0.12 to 0.18 delta call strikes are not listed there. Two requests (2027-12-28 and 2028-06-27) hit the rate limit (error 805) in the
-first scan at a 3.2 s gap and returned on a retry at 6 s; use at least 4 s between chain calls.
+Delta and IV are populated on every expiry (IV on 30 or more rows each). Beyond Dec 2026 only about 30 to 39 strikes are listed, and most deltas sit on strikes with no OI and no bid or ask. This
+section first said that from Sep 2027 the call side has no deltas below about 0.4 to 0.5, so the 0.12 to 0.18 delta call strikes are not listed there. **Corrected in DDP-6:** for 2027-12-28 that is
+wrong; CE 28,500 carries delta 0.164 and CE 27,000 carries 0.279 (see "Verdict"). The first-scan counts came from a run that hit rate limits and was not saved. Other far expiries were not re-measured.
+Two requests (2027-12-28 and 2028-06-27) hit the rate limit (error 805) in the first scan at a 3.2 s gap and returned on a retry at 6 s; use at least 4 s between chain calls.
 
 Dec 2026 near delta 0.15, same snapshot: CE 24450 delta 0.150, bid 89.45, ask 92.6, OI 17810; PE 21300 delta -0.149, bid 143.05, ask 149.3, OI 9945. Only about a third of the Dec 2026 rows carry a
 nonzero delta; the rest (deep OTM) are zero. Whether Dhan ever had an all-zero state like Upstox's (zero on every row until 2026-09-21) cannot be told from one snapshot.
@@ -361,3 +362,54 @@ historical data for yearly or LEAPS contracts, in 2025 as in 2026. Its reach end
 
 Related, measured in DDP-5: since 2026-08-17 the 2026-12-29 contract sits in both the `quarterly` and `yearly` Upstox bucket files, and the yearly label has pointed to 2027-06-29 (to 07-22) and then
 2026-12-29 (DTE 160 down to 85). A "yearly" bucket that holds an 85-DTE contract is a quarterly in practice.
+
+## Verdict (DDP-6), 2026-10-05
+
+Scripts: `scratch/data_probes/2026-10-05_upstox_dec2027_strikes_check.py` and `scratch/data_probes/2026-10-05_dhan_dec2027_chain_check.py`; one live call each, read-only, raw JSON in the session
+scratchpad. Spot was 22,555.75; Upstox and Dhan quotes are from the same afternoon, a few minutes apart, so small bid and ask differences are timing.
+
+### Dec 2027 (2027-12-28): strikes a yearly covered call or IC would use
+
+Upstox lists 15 strikes for the expiry (24,000 to 33,000 on the call side) and returns zero delta and zero IV on every one of the 30 rows. Dhan lists 39 strikes; the extra ones are empty far-OTM rows
+with price 0, not tradable strikes. On the traded strikes the two vendors show the same prices and open interest.
+
+| Side and strike | Bid / ask | OI | Dhan delta | Upstox delta |
+|---|---|---|---|---|
+| CE 26,000 | 561 / 566.9 | 235,535 | 0.427 | 0 |
+| CE 27,000 | 333 / 337 | 237,590 | 0.279 | 0 |
+| CE 28,500 | 202 / 204.2 | 65,845 | 0.164 | 0 |
+| CE 30,000 | 122.05 / 124.95 | 244,660 | 0.100 | 0 |
+| PE 22,000 | 626.65 / 629.95 | 113,755 | -0.210 | not quoted |
+| PE 21,000 | 415 / 424.95 | 92,625 | -0.152 | 0 |
+| PE 20,000 | 289.25 / 289.75 | 108,255 | -0.112 | not quoted |
+| PE 18,000 | 125.3 / 142 | 29,795 | -0.052 | 0 |
+
+Thin or unusable, same snapshot: CE 25,500 (OI 130), CE 31,500 (OI 2,080, bid 74.7 against ask 114), PE 22,500 (bid 711 against ask 1,566), PE 16,500 and PE 15,000 (no ask). The call strikes at 0.15
+to 0.25 delta that the CC rule targets are listed and two-sided: 28,500 at 0.164 and 27,000 at 0.279 bracket 0.20. One snapshot, so liquidity on other days is not shown. Dhan's delta is a vendor
+value; the docs do not say whether it is an exchange field or a model value.
+
+### Answer on the full-year purchase
+
+**History: no.** The expired data stops at ATM±10 and about 90 DTE, carries no delta, bid or ask, and holds no yearly or LEAPS contract in 2025 or 2026. It cannot backtest a Dec 2027 covered call or a
+yearly IC, and it cannot show that the yearly premium is better. Monthly entries at 20 or more DTE and IC v1 monthly wings are outside the window; the TDL-1 Tradetron strikes are 15 to 23 strikes out.
+POC criteria after DDP-1, DDP-3 and DDP-4: depth passes; delta is inferred and IV only; coverage is partial; agreement on liquid strikes inside ATM±10 from late July is partial (n 51,214 matched rows,
+LTP inside the minute range 98.7 percent).
+
+**Live far-dated Greeks: yes, this is what Dhan adds.** Upstox's Greeks start inside about 90 DTE (inference, one contract), so Dec 2027 stays blank there until about late September 2027; Jun 2027 is
+blank today at DTE 267 although it trades. Dhan's live chain gives a delta on the same strikes now, and on Dec 2026, where both carry deltas, it agrees with Upstox to about 0.01 to 0.02 delta (n 149).
+That makes Dhan a usable delta source for a yearly covered call opened in December 2026 and for strike selection on a yearly IC, and a candidate reference for `greeks-bs-fallback` GF-5. The premium
+advantage you expect from yearly contracts is not shown by this data; a single snapshot of quotes says what they cost, not that the risk-adjusted return is better.
+
+**Price.** Yearly is 4,788 rupees against 5,988 for twelve monthly payments, a saving of 1,200 (20 percent) before taxes. The monthly plan auto-renews and lapses 2026-11-04 unless renewed.
+Recommendation: buy the yearly plan if Animesh commits to running the yearly covered call or IC, since Dhan is then the only live source of delta for those contracts; otherwise stay monthly and decide
+before 2026-11-04. The purchase is his decision.
+
+**What one month could not show.** Seasonal and regime variety; whether Dec 2027 quotes stay as liquid as on 2026-10-05; the put side beyond one snapshot; fill quality (no historical bid or ask);
+whether Dhan's Greeks are exchange or model values. Agreement between Dhan and Upstox shows consistency, not truth. No profitability or edge claim is made.
+
+### Hand-offs (lines for Animesh; the other stories' files were not edited)
+
+- `tradetron-delta-and-long-window` TDL-4: Dhan expired data is not a comparator for the monthly strikes the strategies pick (outside ATM±10); it covers near-dated and weekly entries only.
+- `tradetron-delta-and-long-window` TDL-10: purchase view is no for history, yes for live far-dated Greeks.
+- `greeks-bs-fallback`: the fallback is still needed for Jun 2027 and Dec 2027 on Upstox; the one decision is whether GF-5 validates against Dhan's live chain with a tolerance no tighter than 0.02.
+- A yearly covered call or yearly IC is a new strategy story, not part of this one; strike availability (above) does not settle sizing, margin or exit rules.

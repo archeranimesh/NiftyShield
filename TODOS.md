@@ -51,8 +51,6 @@ rot them. (Items 3, 5 and 8 closed — numbers kept stable because item text cro
     longest wall-clock pole. Do VG0/VG1 now; the Gate A–D tasks are human checkpoints that accrue passively while the items below are built.
 22. **Tradetron delta check and long-window validation** — `docs/plan/tradetron-delta-and-long-window/` — next **TDL-2** (Live Offline Greeks probe). Animesh's screen of the paper strategies before
     any paid-data purchase; TDL-2 may give `greeks-bs-fallback` a far-dated reference. Funded runs need Animesh's per-run approval.
-23. **Dhan data API POC** — `docs/plan/dhan-data-poc/` — next **DDP-6** (DDP-1 to DDP-5 done). Paid-data option beside the Tradetron screen; validates stored data and the Dec 2026 / Jun 2027 contract
-    behaviour.
 
 ## Open Bugs
 
@@ -90,6 +88,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-05] DDP-6 done (`<pending>`): verdict in `dhan-data-poc/findings.md`; story archived. No for Dhan history; yes for live far-dated Greeks (Dec 2027 CE 28,500 delta 0.164 on Dhan, 0 on
+  Upstox); yearly plan only if a yearly CC or IC is committed to, plan lapses 2026-11-04. DECISIONS.md entry added.
 - [2026-10-05] DDP-5 done (`b74f043`): contract findings in `dhan-data-poc/findings.md`. Upstox Dec 2026 deltas flipped zero to nonzero between 09-29 15:55 and 09-30 09:51 (DTE 91 to 90; chain 22 to
   88 strikes); Jun 2027 zero on all stored days (DTE 343-382, last stored 07-22). Dhan live chain agrees with Upstox to about 0.01-0.02 delta. One decision flagged for greeks-bs-fallback (GF-5 ground
   truth).

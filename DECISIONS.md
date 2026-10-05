@@ -1257,6 +1257,16 @@ close paths. No council: single-discipline, operator-approved 2026-10-03.
 
 ---
 
+## Dhan data API: not a backtest source; live chain is a candidate far-dated delta source (DDP-6, 2026-10-05)
+
+**Decision:** do not buy Dhan's data API for historical backtesting. Its expired-options data reaches only ATM±10, stops at about 90 DTE (no yearly or LEAPS contract in 2025 or 2026), and carries IV
+but no delta, bid or ask. Treat Dhan's live option chain as a candidate delta source for far-dated contracts where Upstox returns zero Greeks (Jun 2027 today; Dec 2027 until about late September
+2027). **Evidence:** on Dec 2026, where both vendors carry deltas, they agree to about 0.01 to 0.02 (n 149); Dec 2027 CE 28,500 reads Dhan delta 0.164 against Upstox 0. **Open for Animesh:** the
+yearly plan (4,788 against 5,988 rupees for twelve months) is worth buying only if a yearly covered call or IC is committed to; the monthly plan lapses 2026-11-04. `greeks-bs-fallback` GF-5 may
+validate against Dhan with a tolerance no tighter than 0.02; that story was not edited. No `src/` change. No council: single-discipline, one-month sample, purchase left to Animesh.
+
+---
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/` (except 0.6c), `src/streaming/` — all empty

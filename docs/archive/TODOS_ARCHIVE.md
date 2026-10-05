@@ -4,6 +4,11 @@
 
 ---
 
+## 2026-10-05 — `dhan-data-poc` story archived
+
+Moved to `docs/archive/plan/dhan-data-poc/`. One-month Dhan data API POC: coverage inventory, validation against the stored Upstox chain, bhavcopy and paper trades, and the Dec 2026 / Jun 2027 Greeks
+questions. Verdict: no for Dhan history (ATM±10 only, no delta, bid or ask, nothing past about 90 DTE); yes for live far-dated Greeks. DDP-1..DDP-6 all done; closing SHA backfilled in the next commit.
+
 ## 2026-10-05 — `tradetron-cc-backtest-poc` story archived
 
 Moved to `docs/archive/plan/tradetron-cc-backtest-poc/`. Backtested the covered-call short-call leg on Tradetron (two funded runs, ₹40) and reconciled against five paper CC cycles. Verdict: partially
