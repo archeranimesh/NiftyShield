@@ -4,9 +4,9 @@
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
 spec.
 
-**Open: TDL-1 to TDL-10.**
+**Open: TDL-2 to TDL-10.**
 
-- [ ] **TDL-1** — Free own-data delta check: read the stored Upstox delta for the six strikes Tradetron chose in run 2 | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: <—>
+- [x] **TDL-1** — Free own-data delta check: read the stored Upstox delta for the six strikes Tradetron chose in run 2 | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: b20ec40
 - [ ] **TDL-2** — Live Offline Greeks probe, Tradetron versus Upstox at one timestamp, near-dated and far-dated; reference table for `greeks-bs-fallback` | Owner: Claude | Model: claude-sonnet-5-5 |
   Review: none | SHA: <—>
 - [ ] **TDL-3** — Long-window pre-flight on CC template v2 (free): data coverage, Greeks, the April 2026 expiry boundary; pick the window | Owner: Claude | Model: claude-sonnet-5-5 | Review: none |

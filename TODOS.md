@@ -49,7 +49,7 @@ rot them. (Items 3, 5 and 8 closed — numbers kept stable because item text cro
     not started, needs a story folder.
 21. **Variance gate — start the observation clock** — `docs/plan/variance-gate/` — next **VG0** (spec reconciliation, Animesh). Cheap, but VG2.A needs ≥9 calendar months of observation, so it is the
     longest wall-clock pole. Do VG0/VG1 now; the Gate A–D tasks are human checkpoints that accrue passively while the items below are built.
-22. **Tradetron delta check and long-window validation** — `docs/plan/tradetron-delta-and-long-window/` — next **TDL-1** (free own-data delta check). Animesh's screen of the paper strategies before
+22. **Tradetron delta check and long-window validation** — `docs/plan/tradetron-delta-and-long-window/` — next **TDL-2** (Live Offline Greeks probe). Animesh's screen of the paper strategies before
     any paid-data purchase; TDL-2 may give `greeks-bs-fallback` a far-dated reference. Funded runs need Animesh's per-run approval.
 
 ## Open Bugs
@@ -88,6 +88,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-05] tradetron-delta-and-long-window TDL-1 closed (`b20ec40`): Tradetron's 0.15 picks sit at Upstox delta 0.139-0.152 (n = 6) while paper's strikes sit at 0.160-0.199 (n = 4); the strike gap
+  is paper's side, not Tradetron's delta; `DECISIONS.md` and the reference doc corrected
 - [2026-10-05] tradetron-delta-and-long-window authored (TDL-1..10, none started): follow-up to the archived CC POC; delta check, long-window CC / PP / Collar screen, IC buildability audit,
   purchase-decision verdict
 - [2026-10-05] tradetron-cc-backtest-poc TCP-6 closed (`7777149`), story archived: verdict partially reproduces (expiries 5 of 5, dates 3 of 5, strikes 4 of 5 differ by 50-200 pts, P&L lower on all
