@@ -11,7 +11,7 @@ None of DDP-1 to DDP-6 is ticked. The probe did part of the groundwork for four 
 | Task | State | What the probe did and did not cover |
 |---|---|---|
 | DDP-1 docs read | Not done | Docs not read. The probe shows what responds, not what the docs state; limits, price and bundled dataset unrecorded. |
-| DDP-2 purchase | Done by Animesh, not recorded | The profile call shows the data plan active. Plan name and price are still to be stated by Animesh; no estimate is recorded here. |
+| DDP-2 purchase | Done and recorded 2026-10-05 | See "Purchase record" below. |
 | DDP-3 coverage inventory | Started | Live chain per expiry and expired-option depth sampled. Per-strategy table, strike-range limit, candle sizes and delta bands not done. |
 | DDP-4 old-data validation | Not started | No comparison against stored Upstox chain, bhavcopy or paper trades. |
 | DDP-5 contract questions | Started | Dhan's Dec 2026 and Jun 2027 live chains were measured. The Upstox flip date, the relabelling and the 16 deep-OTM strikes were not. |
@@ -19,7 +19,24 @@ None of DDP-1 to DDP-6 is ticked. The probe did part of the groundwork for four 
 
 ## Subscription state (DDP-2 input)
 
-The profile endpoint reported the data plan as Active with validity to 2026-11-04 16:01 (one month from purchase). Plan name and price: not yet stated by Animesh.
+The profile endpoint reported the data plan as Active with validity to 2026-11-04 16:01 (one month from purchase).
+
+## Purchase record (DDP-2), 2026-10-05
+
+From a screenshot of the Dhan account page "Data APIs from Dhan", supplied by Animesh. Taxes are not shown on that page. No credentials, client ids or payment links are recorded.
+
+| Item | Value |
+|---|---|
+| Status | Active; access until 04 Nov 2026 |
+| Plan bought | Monthly Plan, 499 rupees per month |
+| Recurring payment | Enabled (auto-renews unless cancelled before 04 Nov 2026) |
+| Yearly plan on offer | 399 rupees per month, 4,788 rupees paid per year |
+| Features listed | Real-time price; historical data for 5 years; 20-level market depth; option chain on APIs; full market depth; expired options data |
+| Access method | Dhan Data API with the access token from the existing Dhan token flow (`src.auth.dhan_verify`), credentials in `.env` |
+
+Yearly against twelve monthly payments: 4,788 against 5,988 rupees before taxes, a saving of 1,200 rupees (20 percent). That is the figure DDP-6 weighs; it is arithmetic on the displayed prices, not a
+verdict.
+
 
 ## Endpoint probe, 2026-10-05
 
