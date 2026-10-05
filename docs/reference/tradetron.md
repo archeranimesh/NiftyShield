@@ -250,8 +250,9 @@ baselines. Rows carry no P&L and no `report_url`. Row order was oldest-first in 
 
 - **Cost and billing.** Each run charged ₹20 (1 credit) from the wallet, Tradetron's own quote; the lapsed prepaid pack funded nothing. The account owner saw the website's Backtest button count
   against the same topped-up wallet ("1 of 10" after a ₹200 top-up), so no separate free allowance was found on this account (user-reported for the website, not verified by tool).
-- **Historical Greeks exist for strike selection.** `Find Strike(..., 'delta', 0.15, 'CE', 'any')` returned a strike on every historical entry date in both runs. Whether its delta matches the Upstox
-  chain delta was not checked; paper strikes were 0 to 200 points lower (inference: a methodology difference, unproven).
+- **Historical Greeks exist for strike selection.** `Find Strike(..., 'delta', 0.15, 'CE', 'any')` returned a strike on every historical entry date in both runs. Checked in TDL-1 (2026-10-05): the
+  Upstox delta of the six picked strikes was 0.139 to 0.152 in stored chain snapshots, so the two deltas agree at the chosen strikes (n = 6); paper's strikes, 0 to 200 points lower, carried Upstox
+  delta 0.160 to 0.199, so the paper side explains the gap, not Tradetron's delta.
 - **Tuesday-expiry monthlies are covered.** The 2026-09-29 and 2026-10-27 NIFTY monthlies traded in the backtest. Weekly Tuesday expiries were not tested.
 - **`Current Month Expiry(..., 0)` stays on the current month until it expires.** On 2026-08-12 (13 days before the 08-25 expiry) it resolved to August, so an entry gated on current-month DTE >= 30
   never fired. There is no if/else keyword and `Select Expiry` takes a literal offset, so "nearest monthly with at least N days" needs two sets with mutually exclusive DTE gates (current month, next

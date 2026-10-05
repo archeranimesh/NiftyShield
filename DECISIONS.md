@@ -12,8 +12,10 @@
 selection (5 of 5), entry and exit dates (3 of 5 paper cycles) and the 30% profit-target exit, but its 0.15-delta strikes were 50 to 200 points above paper's on 4 of 5 cycles and its P&L was lower on
 all five pairs (4,013.75 gross lower in total). Rule: use Tradetron to check that a strategy's timing, expiry and exit mechanics are expressible and behave, never to reconcile strike-level or P&L
 figures against NiftyShield's own backtest or paper records, and build the template from the live code, not an archived spec. Evidence is thin (6 backtest round trips, 5 paper cycles, one regime); the
-loss, delta and DTE exits were not exercised and the cause of the strike gap (Tradetron delta vs Upstox delta) is an unproven inference. Revisit if the Tradetron-versus-Upstox delta experiment shows
-the deltas agree. Detail: `docs/archive/plan/tradetron-cc-backtest-poc/findings.md`.
+loss, delta and DTE exits were not exercised. Update (2026-10-05, TDL-1, `tradetron-delta-and-long-window`): the assumed cause of the strike gap, Tradetron's delta differing from Upstox's, is not
+supported. Tradetron's 0.15 picks had an Upstox delta of 0.139-0.152 in the stored chain snapshots (n = 6), while paper's strikes sat at 0.160-0.199 (n = 4); the gap looks like paper selecting nearer
+the money, cause still open. The rule above stays until that is resolved (TDL-6 reads the paper entry code). Detail: `docs/archive/plan/tradetron-cc-backtest-poc/findings.md` and
+`docs/plan/tradetron-delta-and-long-window/findings.md`.
 
 **`doc_update_gate.sh` stays tuned-advisory, not blocking (2026-09-22, RDO-11):** measured over the full observation window (2026-08-27 → 2026-09-22, 116 non-tests-only commits touching `src/` or
 `scripts/` `*.py`), 84 of those commits (72%) would have tripped the gate — staged code with no `TODOS.md` / `CONTEXT.md` / `DECISIONS.md` / `docs/plan/README.md` in the same commit — and the
