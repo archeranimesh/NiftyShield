@@ -4,10 +4,10 @@
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
 spec.
 
-**Open: TCP-1, TCP-2, TCP-3, TCP-4, TCP-5, TCP-6.**
+**Open: TCP-2, TCP-3, TCP-4, TCP-5, TCP-6.**
 
-- [ ] **TCP-1** — Confirm the live CC thresholds and entry rule from `evaluate_cc()` and `cc_overlay_v1.py`, diff against the archived spec | Owner: Claude | Model: claude-sonnet-5-5 | Review: none |
-  SHA: <—>
+- [x] **TCP-1** — Confirm the live CC thresholds and entry rule from `evaluate_cc()` and `cc_overlay_v1.py`, diff against the archived spec | Owner: Claude | Model: claude-sonnet-5-5 | Review: none |
+  SHA: 475ffd6
 - [ ] **TCP-2** — Build the paper CC ground-truth table from the DB (read `DB_REGISTRY.md` first) and choose the backtest window | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: <—>
 - [ ] **TCP-3** — Draft the CC template, validate it, run `tt_check_backtestability`, record a GO / PARTIAL / STOP verdict | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: <—>
 - [ ] **TCP-4** — Create the template on Tradetron and record its id (skip if TCP-3 is STOP) | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: <—>

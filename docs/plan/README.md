@@ -42,7 +42,7 @@ comparison snapshot; automated base-leg rolling; full unattended automation.
 
 ## Active Stories
 
-**`tradetron-cc-backtest-poc/`** · ⬜ Not started · next: **TCP-1** Decide whether a Tradetron backtest can be relied on for POC validation by backtesting the covered-call overlay's short-call leg and
+**`tradetron-cc-backtest-poc/`** · 🟡 In progress · next: **TCP-2** Decide whether a Tradetron backtest can be relied on for POC validation by backtesting the covered-call overlay's short-call leg and
 reconciling it against NiftyShield's paper CC records. Free pre-flight first (TCP-1 to TCP-4); the funded run (TCP-5) needs a wallet top-up at ₹20 per run.
 
 **`signal-outcome-profit-range/`** · ✅ Shipped/Archived 2026-09-22 (SOP-1 `4096c07`, SOP-2 `180ccae`, SOP-3 `a73b6b6`) → `docs/archive/plan/signal-outcome-profit-range/` Shows the profit high/low
