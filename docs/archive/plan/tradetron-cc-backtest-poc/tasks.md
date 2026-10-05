@@ -14,7 +14,7 @@ spec.
 - [x] **TCP-4** — Create the template on Tradetron and record its id (skip if TCP-3 is STOP) | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: 7de8b32
 - [x] **TCP-5** — Run the funded backtest (₹20 per run; Animesh tops up the wallet first, ₹100 minimum, ₹200 recommended) and log run ids | Owner: Animesh | Model: n/a | Review: none | SHA: 9142fc9
 - [x] **TCP-6** — Reconcile against paper trades, write the verdict, save learnings to the reference doc and `DECISIONS.md` if warranted, close the story | Owner: Claude | Model: claude-sonnet-5-5 |
-  Review: none | SHA: <pending>
+  Review: none | SHA: 7777149
 
 ## Story done when
 

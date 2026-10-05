@@ -8,7 +8,7 @@
 
 Moved to `docs/archive/plan/tradetron-cc-backtest-poc/`. Backtested the covered-call short-call leg on Tradetron (two funded runs, ₹40) and reconciled against five paper CC cycles. Verdict: partially
 reproduces (expiry selection 5 of 5, entry and exit dates 3 of 5, strikes differ by 50 to 200 points on 4 of 5, P&L lower on all five pairs); Tradetron is a mechanics cross-check, not a strike or P&L
-reconciliation source. TCP-1..TCP-6 all done; final SHA `<pending>`.
+reconciliation source. TCP-1..TCP-6 all done; final SHA `7777149`.
 
 ## 2026-10-01 — `project-template-blueprint` story archived
 
@@ -102,7 +102,7 @@ Three sub-stories shipped over 2026-09-01..09-03: `measurement/` (MEAS-1 `token_
 trim + `NOTES.md` split, FIX-3 `session-close` off the context-cloning fork, FIX-4 `graph_snippet.py` MCP-field strip), and `suggestions-sweep/` (SWEEP-1 cluster map, SWEEP-2/3 `PreToolUse` hooks,
 SWEEP-4 `commit_preflight.py`, SWEEP-5/6 tool-param + shell/protocol text, SWEEP-7 the Step 4b drain path). Closing SHA `2d896a9`. Archived to `docs/archive/plan/token-efficiency/`. No `TODOS.md`
 Feature Backlog line to move — the epic was driven via `/work` on its `prompt.md` path, never listed. Per-task SHAs and As-built detail are in the archived `stories.md` files. Follow-ups left open:
-DEBT-8..DEBT-12 in `docs/plan/technical-debt/` (verify the SWEEP hooks changed behaviour; reconcile the `<pending>`-SHA policy conflict); the epic's own "re-run `token_audit.py` on post-hook sessions"
+DEBT-8..DEBT-12 in `docs/plan/technical-debt/` (verify the SWEEP hooks changed behaviour; reconcile the `7777149`-SHA policy conflict); the epic's own "re-run `token_audit.py` on post-hook sessions"
 check.
 
 ## 2026-08-28 — `session-entry-point` epic archived

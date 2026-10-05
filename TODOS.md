@@ -86,7 +86,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
-- [2026-10-05] tradetron-cc-backtest-poc TCP-6 closed (`<pending>`), story archived: verdict partially reproduces (expiries 5 of 5, dates 3 of 5, strikes 4 of 5 differ by 50-200 pts, P&L lower on all
+- [2026-10-05] tradetron-cc-backtest-poc TCP-6 closed (`7777149`), story archived: verdict partially reproduces (expiries 5 of 5, dates 3 of 5, strikes 4 of 5 differ by 50-200 pts, P&L lower on all
   five pairs); Tradetron usable as a mechanics cross-check, not for strike or P&L reconciliation; `DECISIONS.md` entry and `docs/reference/tradetron.md` findings added
 - [2026-10-05] tradetron-cc-backtest-poc TCP-5 closed (`9142fc9`): two funded runs (₹40). Run 1 (archived-spec template 999082430) traded one cycle; run 2 (live-code template v2 999082574) traded six,
   matching paper's expiries and three entry/exit date pairs, strikes 0-200 points off; TCP-6 reconciles and writes the verdict
@@ -344,19 +344,19 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 - [2026-09-22] `doc-format-migration/` `plan-folders/` DFM-1 — enumerated and tiered all 19 non-archived `docs/plan/` folders (outside this epic + `_TEMPLATE/`) into the confirmed A/B/C/D table in
   `plan-folders/stories.md`. 15 tier A (active), 3 tier B flagged for Animesh (`broker-abstraction/`, `historical-data-abstraction/`, `phase2-integrations/` — unstarted, 0 shipped tasks, not in any
   active-work list; B is the closest fit but not a clean match), 1 tier D (`dev-foundation/` — already ✅ Shipped/Archived but its `code-health/` sub-story never moved to `docs/archive/plan/`; filed a
-  follow-up `git mv`, not a conversion target). SHA `<pending>`.
+  follow-up `git mv`, not a conversion target). SHA `7777149`.
 - [2026-09-22] `doc-format-migration/` `plan-folders/` DFM-2 — converted tier-A folder `backtest-engine/` to canonical epic shape: added root `prompt.md` (router) + `README.md` (both missing before);
   `phase1..4/` sub-story shape was already canonical, no changes beyond reflow. `reflow_md.py` applied repo-wide across the folder; `check_story_structure.py --all` and `check_checkbox_consistency.py`
   both clean for `backtest-engine/`. Added a status line to `docs/plan/README.md` §Active Stories (the folder had none before). Proof-of-approach pass — 13 remaining tier-A folders still open. SHA
   `150fab9`.
 - [2026-09-22] `root-doc-organization/` (`docs/archive/plan/root-doc-organization/`) — RDO-16 step 4 confirmed: this session's own SessionStart produced no `state_doc_freshness.sh` staleness warning,
   and a manual re-run reproduced the clean result — the flag that fired last session for `PLANNER.md`/`CONTEXT_TREE.md`/`README.md` cleared once those docs were refreshed. All four loop-closure steps
-  verified end to end; RDO-16 closes, completing every task box in the story, so the story archived in the same commit per §Completion → archive. SHA `<pending>`.
+  verified end to end; RDO-16 closes, completing every task box in the story, so the story archived in the same commit per §Completion → archive. SHA `7777149`.
 - [2026-09-22] `root-doc-organization/` RDO-16 (steps 1-3 of 4) — this session's own `state_doc_freshness.sh` SessionStart flag (`PLANNER.md`/`CONTEXT_TREE.md`/`README.md` behind code) was acted on:
   all three refreshed against current `src/`/`scripts/` state (signals pipeline, paper-backbone completions, `.claude/skills/` + `hooks/` drift, stale May-June roadmap items reconciled). RDO-16 stays
   open — step 4 (flag clears at next SessionStart) can only be confirmed in a future session.
 - [2026-09-22] `root-doc-organization/` RDO-11 — measured the full observation window (2026-08-27 → 2026-09-22): 84 of 116 code commits (72%) would have tripped `doc_update_gate.sh`, `[skip-docs]`
-  used zero times. Kept the gate tuned-advisory (flipping to blocking would have blocked ~3 of 4 commits on an unused escape hatch); recorded in `DECISIONS.md` §Developer Tooling. SHA `<pending>`.
+  used zero times. Kept the gate tuned-advisory (flipping to blocking would have blocked ~3 of 4 commits on an unused escape hatch); recorded in `DECISIONS.md` §Developer Tooling. SHA `7777149`.
 - [2026-09-22] `signal-outcome-profit-range/` SOP-3 (`docs/archive/plan/signal-outcome-profit-range/`) — `_format_outcome_notification` renders a "📈 High / 📉 Low" line in the executed branch only,
   using the existing `_E(...)` / `format_money(..., signed=True)` escaping pattern; omitted (no blank-line artifact) when either field is `None`. SHA `a73b6b6`. Story complete (SOP-1..3) — archived to
   `docs/archive/plan/signal-outcome-profit-range/`.
@@ -642,7 +642,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
   content. Probe: `scratch/data_probes/2026-09-08_signal_model_probe.py`. Live `morning_signal` now gets 3/3 responses. Suite green (3334), code-reviewer 0 ERROR/CRITICAL. — SHA `9a2e9d3`
 - [2026-09-08] signals S5.4 — `scripts/signal_eod.py` on-demand performance report: aggregates `get_all_outcomes` over a `--from`/`--to`/`--phase` window into OVERALL (win rate, realised EV,
   deterministic md5 coin-flip baseline), per-model direction accuracy (09:10 snapshot spot as open proxy), confidence calibration, NO_TRADE move check, phase breakdown. No unit tests (per S5.4 spec).
-  — SHA: <pending>
+  — SHA: 7777149
 - [2026-09-08] signals S5.3 — `scripts/signal_eod.py` 03:00 PM outcome recorder: reads the day's `DailySignal`, captures entry/exit premium (manual flags or `--auto` weekly-expiry BOD lookup + live
   LTP), writes one `SignalOutcome` row; NO_TRADE / non-executed signals still logged for direction accuracy. `phase` from `SIGNAL_PHASE` env / key-set. No unit tests (per S5.3 spec). — a387349
 - [2026-09-08] signals S5.2 — `scripts/morning_signal.py` 09:15 AM cron: pure wiring over `assemble_market_snapshot` → `build_providers` → `asyncio.gather` fan-out (return_exceptions) →
@@ -658,7 +658,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
   impls + `SignalStore.get_recent_snapshots` + tests) and S5.2c (`snapshot.py` assemble_market_snapshot), one commit each per Animesh. Touched signals_tasks.md, signals_stories.md,
   docs/plan/README.md. No SHA.
 - [2026-09-08] signals S5.2a — built src/signals/market_inputs.py: fetch_gift_nifty (GLOBAL_INDEX|SGX NIFTY LTP), fetch_usd_inr (nearest-monthly NCD_FO USDINR future via InstrumentLookup),
-  fetch_fii_data (NSE fiidiiTradeReact cash-market net → FIIData); each raises DataFetchError on failure, no fallbacks + 9 offline tests. SHA: <pending>
+  fetch_fii_data (NSE fiidiiTradeReact cash-market net → FIIData); each raises DataFetchError on failure, no fallbacks + 9 offline tests. SHA: 7777149
 - [2026-09-07] signals/ S5.2 split (docs-only) — S5.2 needs gift_nifty / fii / usd_inr and the repo has no fetcher; Animesh's call: probe Upstox/Dhan/Nuvama APIs rather than scrape NSE or hard-code
   defaults. Added S5.2a (persistent source-discovery spike `scratch/data_probes/2026-09-07_signal_input_sources.py` + `src/signals/market_inputs.py`
   + offline tests) and S5.2b (`src/signals/snapshot.py` assemble_market_snapshot); S5.2 rewritten as wiring-only. Touched signals_tasks.md, signals_stories.md, docs/plan/README.md. No SHA (uncommitted
@@ -726,7 +726,7 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
 
 - **2026-09-07** — `docs/plan/signals/` S1.1a shipped: `FIIData` redefined from index-F&O positioning (`net_futures_cr`/`net_options_cr` — unreachable per S5.2a spike) to cash-market net flows
   (`fii_cash_net_cr`/`dii_cash_net_cr`, NSE `fiidiiTradeReact`). `src/signals/models.py`
-  + `prompt.py` + 8 signals test files. Split out of S5.2a per Animesh. 77 signals tests green. SHA: `<pending>`. Next: S5.2b (`snapshot.py`).
+  + `prompt.py` + 8 signals test files. Split out of S5.2a per Animesh. 77 signals tests green. SHA: `7777149`. Next: S5.2b (`snapshot.py`).
 - **2026-09-06** — `docs/plan/telegram-markdown-migration/strategy-rollout/` ROLL-14 shipped: 3-track overlay entry bootstrap notification migrated to MarkdownV2 kv format. SHA: `129d54e`. Next:
   ROLL-15.
 - **2026-09-06** — `docs/plan/telegram-markdown-migration/strategy-rollout/` ROLL-13 shipped: 3-track base entry notification migrated to MarkdownV2 kv format. SHA: `7adf484`. Next: ROLL-14.
@@ -744,16 +744,16 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
   tests/unit/` run, 12 tests. `test-runner` AutoTrigger cadence amended to "once per task before `code-reviewer` / the commit — not per-edit" in `CLAUDE.md`/`AGENTS.md`/`session-close`. Cluster-2's 2
   rows closed. SHA: `e325e86`.
 - **2026-09-03** — `docs/plan/token-efficiency/suggestions-sweep/` SWEEP-4: `scripts/dev/commit_preflight.py` — CLI the `commit` skill runs (Step 1b) against the staged set: staged-index vs.
-  `--expect` (warn), `ruff format --check` + md-line-length on staged files (blockers), next-marker incl. prose forms + SHA-placeholder (warn), 20 tests. `<pending>` sanctioned as the ticked-box
-  interim SHA (backfilled next commit, no swap-only commit); `check_checkbox_consistency.py` + `docs/plan/README.md` §Task-line format updated to match. Cluster-3's 12 rows closed (8 enforce, 3 fix, 3
-  accept). SHA: `<pending>`.
+  `--expect` (warn), `ruff format --check` + md-line-length on staged files (blockers), next-marker incl. prose forms + SHA-placeholder (warn), 20 tests. `7777149` sanctioned as the ticked-box interim
+  SHA (backfilled next commit, no swap-only commit); `check_checkbox_consistency.py` + `docs/plan/README.md` §Task-line format updated to match. Cluster-3's 12 rows closed (8 enforce, 3 fix, 3
+  accept). SHA: `7777149`.
 - **2026-09-03** — `docs/plan/token-efficiency/suggestions-sweep/` SWEEP-5: new **Tool-call param hygiene** section in `CLAUDE.md` + `AGENTS.md` (after AutoTrigger Rules) + a Rule 0 tool-list line —
   documents the `codebase-memory-mcp` `project=` / `index_repository` `repo_path=` first-call rule, the `AskUserQuestion` plain-array / no-`preview` rule, and the "never `ScheduleWakeup`-poll a
   spawned subagent" rule. Cluster-4's 3 rows closed (enforce-by-doc). Docs-only, no tests. SHA: `2ae951c`.
 - **2026-09-03** — `docs/plan/token-efficiency/suggestions-sweep/` SWEEP-6: shell + subagent-orchestration + protocol-discipline text fixes. `CLAUDE.md` / `AGENTS.md` gain a **Shell mechanics** para
   (Rule 1), a consolidated plan-gate paragraph (Step 3), tightened `CONTEXT.md ✓` / scope wording (Step 1), and a new **Step 3c — Before writing code** (spec pre-step + parallel-subagent git rule);
   `handoff-antigravity` skill (+ `.agents/` mirror) gains a routing-settled callout; `md-organize` Step 7 gains a mirror-path grep line. Clusters 5 / 6 / 7 closed — 4 fix-by-text, 7 accept. Docs-only,
-  no tests. Backfilled SWEEP-4 SHA `2b85b84` and SWEEP-5 SHA `2ae951c` on the same commit. SHA: `<pending>`.
+  no tests. Backfilled SWEEP-4 SHA `2b85b84` and SWEEP-5 SHA `2ae951c` on the same commit. SHA: `7777149`.
 - **2026-09-03** — `docs/plan/token-efficiency/suggestions-sweep/` SWEEP-7 (closes the story and the epic): `session-close` Step 4b gains a drain step — a `suggestions.md` slug at `Count >= 5` retires
   from the active table to a `standalone-actionable` `DEBT-*` line (remediation exists) or an "Accepted / won't-fix" section (pure judgement). Seeded DEBT-8.. DEBT-12 for the five over-threshold slugs
   (`reread-file-already-in-context` 23, `pytest-inlined-not-test-runner` 9, `wide-grep-dump-then-page` 7, `sha-recorded-via-second-commit` 6, `authored-md-prose-over-200-cap` 5); removed all five from
