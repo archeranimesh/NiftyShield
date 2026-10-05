@@ -4,9 +4,9 @@
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
 spec.
 
-**Open: DDP-1 to DDP-6.**
+**Open: DDP-2 to DDP-6.**
 
-- [ ] **DDP-1** — Free docs read: Dhan data API and historical dataset shape, price, pass or fail against the POC criteria | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: <—>
+- [x] **DDP-1** — Free docs read: Dhan data API and historical dataset shape, price, pass or fail against the POC criteria | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: 0abb226
 - [ ] **DDP-2** — Animesh buys the one-month POC; record plan, price and access method (no secrets) | Owner: Animesh | Model: n/a | Review: none | SHA: <—>
 - [ ] **DDP-3** — Coverage inventory on the real dataset against the strikes each strategy trades | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: <—>
 - [ ] **DDP-4** — Old-data validation: Dhan against stored Upstox chain, bhavcopy and paper trades | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: <—>

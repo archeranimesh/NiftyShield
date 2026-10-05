@@ -45,8 +45,9 @@ comparison snapshot; automated base-leg rolling; full unattended automation.
 **`tradetron-delta-and-long-window/`** · 🟡 In progress · next: **TDL-2** Check whether Tradetron's delta matches Upstox's, then use Tradetron as a long-window screen of the paper strategies (CC, PP,
 Collar; IC audited) before any paid-data purchase, and see whether its Greeks give `greeks-bs-fallback` a far-dated reference. Funded runs at ₹20 each need Animesh's approval.
 
-**`dhan-data-poc/`** · 🟡 In progress · next: **DDP-1** Animesh buys one month of Dhan's data API as a proof of concept; the story inventories the strikes and expiries it covers, validates it against
-our stored Upstox chain, bhavcopy and paper trades, settles the Dec 2026 and Jun 2027 zero-Greeks questions, and decides on a full-year purchase.
+**`dhan-data-poc/`** · 🟡 In progress · next: **DDP-2** (Animesh states plan and price; purchase already active) then **DDP-3**; Animesh buys one month of Dhan's data API as a proof of concept; the
+story inventories the strikes and expiries it covers, validates it against our stored Upstox chain, bhavcopy and paper trades, settles the Dec 2026 and Jun 2027 zero-Greeks questions, and decides on a
+full-year purchase.
 
 **`tradetron-cc-backtest-poc/`** · ✅ Archived → `docs/archive/plan/tradetron-cc-backtest-poc/` Verdict: Tradetron backtest partially reproduces the paper CC (mechanics and timing yes, strikes and P&L
 no).
