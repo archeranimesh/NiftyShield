@@ -300,6 +300,7 @@ def compare_upstox(dh: pd.DataFrame) -> None:
     )
     j = m[m["_merge"] == "both"].copy()
     log.debug("matched by flag: %s", j.groupby("flag").size().to_dict())
+    say(f"  matched rows by month: {j.groupby(j['date'].astype(str).str[:7]).size().to_dict()}")
     for label, sub in (("all matched", j), ("dhan candle volume>0", j[j["volume"] > 0])):
         report_pair(label, sub)
 
@@ -354,27 +355,40 @@ def compare_bhavcopy(dh: pd.DataFrame) -> None:
     day = (
         dh.sort_values("ts")
         .groupby(["date", "flag", "opt", "strike"], as_index=False)
-        .agg(close=("close", "last"), oi=("oi", "last"), volume=("volume", "sum"))
+        .agg(
+            close=("close", "last"),
+            oi=("oi", "last"),
+            volume=("volume", "sum"),
+            first_ts=("ts", "min"),
+            last_ts=("ts", "max"),
+        )
     )
     day = add_expiry(day)
     bh = bh.assign(
         strike=bh["strike"].astype(float), option_type=bh["option_type"].str.upper().str[:2]
     )
-    bh = bh.rename(columns={"trade_date": "date", "expiry": "expiry", "option_type": "opt"})
-    for c in ("close", "settle_price"):
-        bh[c] = bh[c].astype(float)
+    bh = bh.rename(columns={"trade_date": "date", "option_type": "opt"})
+    bh["close"] = bh["close"].astype(float)
     j = day.merge(bh, on=["date", "strike", "opt", "expiry"], suffixes=("_dh", "_bh"))
+    # A contract leaves the rolling ATM window as spot moves, so its last candle can be hours before
+    # the close and its volume sum partial. Compare only contracts Dhan covered at the close (and,
+    # for volume, from the open as well).
+    at_close = j["last_ts"].dt.time >= dtime(15, 25)
+    full_day = at_close & (j["first_ts"].dt.time <= dtime(9, 20))
     say(
-        f"  dhan contract-days={len(day)}, matched to bhavcopy={len(j)}, dates={sorted(set(map(str, j['date'])))[:5]}"
+        f"  dhan contract-days={len(day)}, matched to bhavcopy={len(j)} on {sorted(set(map(str, j['date'])))[:5]}; "
+        f"covered at close={int(at_close.sum())}; covered open-to-close={int(full_day.sum())}"
     )
-    if j.empty:
-        return
-    say(f"     close: dhan last candle - bhav close {dist(j['close_dh'] - j['close_bh'])}")
-    say(f"     close: dhan last candle - bhav settle {dist(j['close_dh'] - j['settle_price'])}")
+    c, f = j[at_close], j[full_day]
+    say(f"     close: dhan last candle - bhav close {dist(c['close_dh'] - c['close_bh'])}")
     say(
-        f"     OI: dhan - bhav {dist((j['oi_dh'] - j['oi_bh']).astype(float))}; equal {(j['oi_dh'] == j['oi_bh']).mean():.1%}"
+        f"     OI: dhan - bhav {dist((c['oi_dh'] - c['oi_bh']).astype(float))}; "
+        f"equal {(c['oi_dh'] == c['oi_bh']).mean():.1%}; ratio dhan/bhav {dist(c['oi_dh'] / c['oi_bh'])}"
     )
-    say(f"     volume: dhan - bhav {dist((j['volume_dh'] - j['volume_bh']).astype(float))}")
+    say(f"     volume ratio dhan/bhav (open-to-close only) {dist(f['volume_dh'] / f['volume_bh'])}")
+    say(
+        "     (bhavcopy settle_price is not compared: it looks like the underlying settlement, not an option price)"
+    )
 
 
 def spot_by_date(dh: pd.DataFrame) -> dict[date, float]:
