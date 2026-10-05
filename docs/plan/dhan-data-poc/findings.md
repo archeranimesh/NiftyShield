@@ -208,3 +208,70 @@ Not scored: the CSP roll band of 0.18 to 0.28, which is a separate strategy.
 | Agrees with what we hold | Untested, DDP-4 |
 
 Open for Animesh: a daily Dhan chain capture before 2026-11-04 is still a proposal only. Nothing was scheduled.
+
+## Old-data validation (DDP-4), 2026-10-05
+
+Script: `scratch/data_probes/2026-10-05_dhan_ddp4_validation.py` (commits `a53c71b` to `1306668`). Raw Dhan responses: `data/historical/dhan_poc/` (gitignored; 100 pulls of 1-minute rolling data for
+June to 5 October at ATM, ±5 and ±10, monthly and weekly, CALL and PUT, plus 9 paper-trade pulls; about 54 MB). Run logs: `logs/dhan_ddp4_*.log`. Read-only against Upstox Parquet, bhavcopy and
+`portfolio.sqlite`. Dhan expiry for a rolling contract is inferred from the Tuesday rule, not returned by Dhan. Timestamps were verified: the first candle of each day is 09:15 IST.
+
+### Dhan against the stored Upstox chain
+
+Coverage first, because it limits everything below. The stored intraday chain held only one far expiry in early June (2026-12-29 on 06-02, 2027-06-29 on 06-30 and 07-01). Near expiries appear later:
+on 07-21 the files hold 08-25, 09-29 and 2027-06-29 and not the front monthly 07-28. Seven June trading days (06-15 to 06-19, 06-22, 06-23) have no snapshots at all. Of 112,566 Dhan rows in minutes
+that have a snapshot, 51,214 (45 percent) matched on minute, strike, option type and inferred expiry. In a 20,000-row sample of the unmatched, 61 percent had the strike under another expiry and 39
+percent had no such strike. The inferred expiries are all valid Tuesdays, so the gap is the stored chain's, not the rule's. Matched rows by month: July 6,222; August 20,996; September 20,935; October
+3,061. Nothing before late July could be compared.
+
+| Field | All matched rows (n 51,214) | Rows with Dhan candle volume above zero (n 44,487) |
+|---|---|---|
+| Upstox LTP inside Dhan minute low to high (±0.05) | 98.7 percent (n 51,213) | 98.7 percent (n 44,486) |
+| Upstox LTP minus Dhan close, rupees: p10, median, p90 | -2.65, 0.00, 2.75 | -3.00, 0.00, 3.10 |
+| Relative difference when close is 1 or more: median, p90 | 1 percent, 3 percent | 1 percent, 3 percent |
+| IV, Upstox minus Dhan, vol points: p10, median, p90 | -2.18, 0.00, 2.33 | -1.91, 0.00, 1.97 |
+| Spot, Upstox minus Dhan, index points: p10, median, p90 | -5.40, 0.00, 5.55 | -5.50, 0.00, 5.65 |
+| Open interest exactly equal | 24.6 percent | 13.2 percent |
+| Open interest difference: p10, median, p90 | -21,106, 0, 9,100 | -27,430, 0, 12,415 |
+| Delta, inference: model delta from Dhan IV minus Upstox absolute delta (n 47,228 and 41,162) | -0.04, 0.00, 0.04 | -0.04, 0.00, 0.03 |
+
+Reading, marked as inference where it goes past the figures: the two vendors agree on price, IV and spot to within about 1 to 3 percent of price, about 2 vol points and 5 index points on liquid
+strikes inside ATM±10. Open interest agrees at the median but rarely exactly; the cause (update timing against a different source) is not established. The delta row compares a model value to a model
+value and shows consistency in method, not truth. The 1.3 percent of Upstox prices outside Dhan's minute range were not examined. Agreement between two feeds does not show either is right.
+
+### Dhan against bhavcopy
+
+The stored bhavcopy (`data/offline/options_ohlcv`) has one trade date in the window, 2026-06-30, an expiry day. 80 contracts matched; only 20 were covered by Dhan at the close, because a contract
+leaves the rolling ATM window when spot moves, and none was covered from open to close, so no volume comparison is possible. On the 20: Dhan's last close minus the bhavcopy close has p10 -8.50, median
+-0.18, p90 6.36; Dhan open interest divided by bhavcopy open interest has p10 1.00, median 1.02, p90 1.09. A first pass that used every matched contract gave misleading volume and close figures for
+this reason and is not used. The bhavcopy `settle_price` column looks like the underlying settlement, not an option price (one sample: 23865.75); inference from that sample, not compared. Sample size
+is too small to say more.
+
+### Dhan against paper trades
+
+| Result | Count |
+|---|---|
+| Paper rows since 2026-06-01 | 317 |
+| Key not in the offline BOD file (expired contracts; no other table or file maps them) | 203 |
+| Later expiry code (ATM only) | 57 |
+| Beyond expiry code 3 | 27 |
+| Outside ATM±10 on the day | 23 |
+| Not an option | 1 |
+| Checkable (all on 2026-09-30 and 10-01) | 6 |
+
+The six checkable rows are IC v1 weekly (2), IC v2 monthly (2) and signal track (2). Entry price inside Dhan's day low to high (±0.05): 4 of 6. The two outside: an IC v2 monthly SELL of PE 22300 (27
+October) at 120.75, 1.10 below Dhan's low of 121.85, which fits a bid-side paper fill against traded prices (inference); and a signal-track SELL of PE 22550 (27 October) at 399.00 against a Dhan high
+of 317.45. The second is inconclusive: Dhan returned 201 of 375 minutes for that strike because it left the pulled offsets as spot fell (inference), so the true day high is missing. Paper entry times
+are unknown except for signal-track trades, whose `paper_signal_entries` rows carry `entry_ts`, premium, bid and ask; that table was not used here and could sharpen the check. The 2026-08-12 onward
+window the story named is effectively uncheckable beyond these six, because the keys of earlier trades cannot be resolved to a strike.
+
+### TDL-1 test points
+
+All six Tradetron strikes from TDL-1 sit 15 to 23 strikes from the day-open ATM (08-12 25600 at 23; 08-19 25100 at 20; 09-02 24700 at 18; 09-09 24250 at 15; 09-16 24400 at 23; 09-25 23950 at 17),
+outside the ATM±10 window. They cannot be reused as test points against Dhan expired data.
+
+### Against the POC criterion "agrees with what we hold"
+
+Partial pass. On liquid strikes within ATM±10 from late July to 5 October the two sources agree closely on price, IV and spot (n above). Not tested or not testable: the 0.15 to 0.25 delta strikes that
+monthly entries use (outside the window); everything before late July (stored chain holds no near expiry); the bhavcopy beyond one expiry day; paper trades beyond six. A disagreement was found nowhere
+that the evidence lets either source be named wrong.
+
