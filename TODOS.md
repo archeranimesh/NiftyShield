@@ -86,6 +86,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-05] tradetron-cc-backtest-poc TCP-3 closed (`7112e6b`): template validates, `tt_check_backtestability` = backtestable (high); decision GO; `entered` guard never resets (re-entry GAP, decide
+  in TCP-4); historical Greeks still unverified until TCP-5
 - [2026-10-05] tradetron-cc-backtest-poc TCP-2 closed (`94cf55c`): 5 paper CC cycles over 2 expiries recorded in `findings.md`; entry delta and exit trigger not in DB; WINDOW 2026-08-12..2026-10-01
 - [2026-10-05] tradetron-cc-backtest-poc TCP-1 closed (`475ffd6`): live CC rules recorded in `findings.md`; the 21-day time stop no longer exists (EC-5 → DTE<=5), delta stop 0.55, profit 30%, loss
   2.5x
