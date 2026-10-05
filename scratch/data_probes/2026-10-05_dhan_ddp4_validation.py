@@ -1,7 +1,7 @@
 """DDP-4 old-data validation for the Dhan Data API POC (docs/plan/dhan-data-poc).
 
 Scratch, read-only against Dhan, the Upstox Parquet chain, bhavcopy and portfolio.sqlite. No orders.
-Raw Dhan responses go to data/historical/dhan_poc/ (gitignored); logs to data/historical/dhan_poc/logs/.
+Raw Dhan responses go to data/historical/dhan_poc/ (gitignored); logs to logs/dhan_ddp4_<phase>_<ts>.log.
 Pulls are resumable: a call whose file already exists is skipped.
 
 Usage (run from the repo root; stdout carries aggregates only, details go to the log file):
@@ -45,6 +45,7 @@ from scratch._lib.dhan_data_api import (  # noqa: E402
 )
 
 BASE = Path("data/historical/dhan_poc")
+LOG_DIR = Path("logs")  # repo-level logs/ (gitignored), like the other cron and script logs
 CHAIN_DIR = "data/historical/option_chain/intraday"
 DB_PATH = "data/portfolio/portfolio.sqlite"
 BOD_PATH = "data/instruments/NSE.json.gz"
@@ -79,8 +80,8 @@ def say(msg: str = "") -> None:
 
 def setup_logging(phase: str) -> Path:
     """Log INFO to stdout and DEBUG to a timestamped file under BASE/logs."""
-    (BASE / "logs").mkdir(parents=True, exist_ok=True)
-    path = BASE / "logs" / f"ddp4_{phase}_{datetime.now():%Y%m%d_%H%M%S}.log"
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    path = LOG_DIR / f"dhan_ddp4_{phase}_{datetime.now():%Y%m%d_%H%M%S}.log"
     fh = logging.FileHandler(path)
     fh.setLevel(logging.DEBUG)
     sh = logging.StreamHandler(sys.stdout)
