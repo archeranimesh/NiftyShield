@@ -7,10 +7,6 @@
 | Default underlying | NIFTY 50 |
 | Price execution | Market Price |
 | Exit shorts first | Yes |
-## INIT VARS (top-level)
-| Name | Type | Default expression | Notes |
-|---|---|---|---|
-| entered | Number | `Number(1)` | one-shot guard: 1 = armed, flipped to 2 on entry |
 ## UNIVERSAL EXIT (OR-joined)
 - (group, AND-joined)
   - `LTP(Traded Instrument Name('Entry','instrument','NIFTY 50',1,1,1),'LTP')` `<=` `Math Operation(Traded Instrument('Entry','price','NIFTY 50',1,1,1), Number(0.30), '*')`
@@ -27,7 +23,7 @@
 | Underlying | NIFTY 50 |
 | List | 0 |
 #### Entry condition
-- `Get Runtime("entered")` `==` `Number(1)`
+- `Open Positions Detail('All','CE','NIFTY 50','count')` `==` `Number(0)`
 - `Week Day(NSE)` `==` `Number(3)`
 - `Time(NSE)` `>=` `Number(1000)`
 - `Days Difference (D2-D1)(Today('NSE'), Current Month Expiry('NIFTY 50', 0))` `>=` `Number(30)`
@@ -36,7 +32,3 @@
 | # | Buy/Sell | Underlying | Type | Expiry | Strike | Qty | Product |
 |---|---|---|---|---|---|---|---|
 | 1 | S | NIFTY 50 | CE | Current Month | `Find Strike('NIFTY 50', Select Expiry('month', 0), 'delta', Number(0.15), 'CE', 'any')` | 1 | NRML |
-#### Set Runtime Vars written on entry
-| Name | Type | Value expression |
-|---|---|---|
-| entered | Number | `Number(2)` |

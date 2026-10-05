@@ -118,3 +118,18 @@ assumption, since the paper entry time is not in the findings.
 **Decision: GO.** The template validates and the pre-flight says backtestable with high confidence, so TCP-4 and TCP-5 proceed. The gaps above are known and listed (band, re-entry, exit priority,
 21-day stop, entry-rule difference). GO means the run will execute, not that the delta-based strike will be reproducible: if the backtest store has no historical Greeks, `Find Strike` on delta can
 fail or return nothing at run time, and that would be reported at TCP-5 as the platform result.
+
+## Template created (TCP-4)
+
+Re-entry decision: the one-shot `entered` guard was replaced by a flat-position gate, `Open Positions Detail('All','CE','NIFTY 50','count') == Number(0)` in the entry condition, with the init var and
+Set Runtime block removed from `template.md`. This is the keyword Tradetron's own `tt_find_keyword` recipe names for a flat check; 'Open positions' is deprecated and was not used. Inference: the gate
+lets a new entry fire on any later Wednesday inside the 30-45 DTE window, so it should allow re-entry; the backtest has not yet shown it does. This closes the TCP-3 re-entry GAP, not the entry-day and
+DTE differences.
+
+`tt_validate_markdown`: valid, 0 errors, 0 warnings (one info notice, entry bullets AND-joined by default). Created with `tt_create_strategy` using the dry-run token (`dry_run_verified: true`).
+
+- Template id: **999082430**, name `NS CC Short Call POC`
+- edit_url: https://tradetron.tech/strategies/999082430/edit
+- Read back with `tt_get_strategy`: 2 sets (CC short call, Universal Exit), 6 conditions (the 3 intended plus the blank Add Repair / Exit / Repair Once envelopes), 1 leg. Matches the draft. One
+  warning, `UNKNOWN_TOP_LEVEL_KEY` for `description_review` and `api_controlled`, is added by Tradetron's own read.
+- Not deployed. The wallet was not touched.
