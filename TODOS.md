@@ -86,6 +86,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-05] tradetron-cc-backtest-poc TCP-5 closed (`9142fc9`): two funded runs (₹40). Run 1 (archived-spec template 999082430) traded one cycle; run 2 (live-code template v2 999082574) traded six,
+  matching paper's expiries and three entry/exit date pairs, strikes 0-200 points off; TCP-6 reconciles and writes the verdict
 - [2026-10-05] tradetron-cc-backtest-poc TCP-4 closed (`7de8b32`): flat-position gate replaces the one-shot guard; template created on Tradetron as id 999082430, reads back clean (2 sets, 6
   conditions, 1 leg), not deployed; TCP-5 needs Animesh's wallet top-up
 - [2026-10-05] tradetron-cc-backtest-poc TCP-3 closed (`7112e6b`): template validates, `tt_check_backtestability` = backtestable (high); decision GO; `entered` guard never resets (re-entry GAP, decide
