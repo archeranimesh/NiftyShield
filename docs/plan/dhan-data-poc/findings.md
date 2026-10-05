@@ -31,7 +31,7 @@ Script: `scratch/data_probes/2026-10-05_dhan_data_api_probe.py`. Read-only; 19 o
 | Daily and intraday candles | Respond with open, high, low, close, volume. Intraday tested at 5-minute candles, 150 rows over four days. |
 | Live option chain | 244 strikes on the nearest expiry. Per strike: LTP, IV, OI, volume, top bid and ask, delta, gamma, theta, vega. |
 | Expiry list | 18 expiries from 2026-10-06 to 2031-06-24. |
-| Expired options (rolling) | Fields: open, high, low, close, iv, oi, volume, strike, spot. No delta, Greeks, bid or ask. Worked at ATM and ATM±10, weekly and monthly; 60-minute candles only. |
+| Expired options (rolling) | Fields: open, high, low, close, iv, oi, volume, strike, spot; no delta, Greeks, bid or ask. Worked at ATM, ATM±10; 60-minute only (script limit). |
 | Expired options, history depth | Five-day windows 60 to 1825 days back all returned rows (earliest 2021-10-02 to 2021-10-06), so both expiry regimes (before and after April 2026) are present. |
 
 ## Live chain by expiry, 2026-10-05 snapshot
@@ -62,8 +62,8 @@ Measured so far, pending DDP-1 and DDP-3: the dataset reaches back past April 20
 model delta from IV and must be stated as such. Coverage of the 0.12 to 0.18 delta strikes: pass for live Dec 2026, unknown for expired data (offsets tested only to ATM±10, and the strategies' strike
 offsets are not yet read from code). Agreement with held data: untested (DDP-4).
 
-Open items this probe raised, for DDP-3 to settle: how far out the strike offset reaches on weekly and monthly expiries; 1-minute candles; the per-request window cap; request quotas; whether the
-expired data has any delta at all or the docs name one.
+Open items this probe raised, for DDP-3 to settle: how far out the strike offset reaches on weekly and monthly expiries; other candle sizes on expired data (1, 5, 15, 25); the `expiryCode` values
+(annexure) and what "near expiry" means for far-dated contracts; ATM+11 to confirm the reach is a hard limit; request quotas; whether the expired data has any delta at all or the docs name one.
 
 ## Dhan docs read (DDP-1), 2026-10-05
 
@@ -77,14 +77,24 @@ not read verbatim, so exact wording is unchecked. Each row is marked stated (S) 
 | Expired strike coverage | ATM+10 to ATM-10 for index options near expiry; ATM+3 to ATM-3 for all other contracts. Strikes are ATM-relative, not a full chain | S |
 | Expired expiry coverage | Weekly and monthly, index and stock options; "near expiry" wording leaves far-dated reach unclear | S / U |
 | History depth | Last 5 years | S |
-| Candle sizes | 1, 5, 15, 25 and 60 minutes. The probe only saw 60-minute work on expired data; 1-minute not yet tested | S |
-| Max window per request | Up to 30 days per call | S |
+| Candle sizes | 1, 5, 15, 25 and 60 minutes. The docs' own example request uses 1-minute candles on expired data; the probe tried 60 only | S |
+| Max window per request | Expired options: 30 days per call. Intraday candles (`/charts/intraday`): 90 days per call | S |
 | Rate limit, data APIs | Not stated. Error 805 "too many requests or connections" exists; error 806 "Data APIs not subscribed" | U |
 | Live option chain fields | Delta, theta, gamma, vega, IV, LTP, average price, previous close, volume, OI, previous OI, top bid and ask with quantities, security id | S |
 | Live chain rate limit | One unique request per 3 seconds (the probe saw 805 at a 3.2 s gap, so allow 4 s or more) | S |
 | Live chain strikes | All available strikes per underlying and expiry | S |
+| Live chain is a snapshot | No date parameter, so no historical Greeks from the chain; Greeks can only be captured forward from now | S |
+| Daily and intraday candles | `/charts/historical` and `/charts/intraday`: OHLC and volume; open interest only via the optional `oi` flag. Intraday 5 years back. No bid, ask, delta or IV | S |
+| Full market depth | 20-level and 200-level depth over WebSocket, NSE equity and derivatives, live only (50 instruments per 20-level connection, 1 per 200-level). No historical depth | S |
+| `expiryCode` values | Expired-options page says "refer here" and lists none; the annexure entry is still to be read | U |
+| Meaning of "near expiry" | The ATM±10 window is for index options "near expiry"; the page does not define the term, so far-dated contracts may get only ATM±3 | U |
+| Strike basis | Expired strikes are stored relative to spot (rolling ATM offsets), minute level, pre-processed by Dhan | S |
 | Price | 499 rupees plus taxes per month, renews every 30 days. Free-for-trades promotion discontinued per Dhan's support page | S |
 | Bundled "historical data set" | Not a downloadable dataset: the subscription is API access to historical, expired-options, live, tick and expired-futures data | S |
+
+Limits this puts on the POC (from the docs, 2026-10-05): Dhan stores no historical bid or ask, so it cannot answer fill-quality or spread questions for backtests, whatever the volume of data. Any
+historical delta is a model delta from the stored IV, to be labelled so. The live chain's Greeks can be captured forward only; a daily Dhan chain capture before the plan lapses on 2026-11-04 is the
+only way to build an overlapping Greeks history against the stored Upstox chain (a proposal for DDP-3, not yet decided; chain calls need at least 4 s spacing).
 
 Discrepancy to settle in DDP-3: the docs name ATM±10 for index options, and the probe reached ATM±10 only. Whether the 0.12 to 0.18 delta strikes sit inside ATM±10 depends on strike step and expiry;
 that is DDP-3's check, not a docs fact.
@@ -99,3 +109,16 @@ that is DDP-3's check, not a docs fact.
 | Agrees with what we hold on overlapping dates | Cannot tell | Needs data; DDP-4 |
 
 Price recorded here is Dhan's published list price, not a figure Animesh stated; DDP-2 still needs his actual plan and price.
+
+## Probe script review, 2026-10-05
+
+Review of `scratch/data_probes/2026-10-05_dhan_data_api_probe.py` against the claims above. The script is read-only and prints no credentials. Gaps in what it tested, to carry into DDP-3:
+
+| Gap | Effect on the findings |
+|---|---|
+| Expired interval hardcoded to 60 | Earlier "60-minute only" wording was a script limit; corrected above |
+| Strikes tried: ATM, ATM+10, ATM-10 only | ATM±10 reach is documented, not measured; ATM+11 untried |
+| `expiryCode` fixed at 1, weekly tried for ATM CALL only | Far-dated expired data (Dec 2026, Jun 2027) untested; weekly PUT and weekly ATM±10 untested |
+| Chain probe fetches first and last expiry, CE delta only | The 8-expiry table above came from a run whose script is not in `scratch/data_probes/`, so it cannot be reproduced from disk |
+| Chain gap 3.2 s | At the documented 3 s limit; caused the 805 errors. Use 4 s or more |
+| Output to stdout only | No raw responses saved; DDP-3 should write raw JSON to the scratchpad |
