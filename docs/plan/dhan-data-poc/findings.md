@@ -347,3 +347,17 @@ The fallback is still needed: Upstox returns no Greeks on Jun 2027 at DTE 267, c
 stay zero until about late March 2027 (inference). One decision: whether GF-5's ground truth for the computed delta is Dhan's live chain, which covers Jun 2027 where Upstox is blank, with Dec 2026 as
 the overlap where both vendors carry deltas (agreement 0.01 to 0.02, so GF-5's tolerance should not be tighter than 0.02). Dhan's Jun 2027 chain is thin (33 strikes, 10 two-sided quotes), so a Dhan
 delta there is itself a thin reference.
+
+### Dhan expired data for 2025: no yearly contract, 2026-10-05
+
+Script: `scratch/data_probes/2026-10-05_dhan_2025_yearly_check.py`; ATM calls, 60-minute candles, expiry codes 1 to 3, MONTH and WEEK, five 2025 windows (January, June, September, October, December).
+Dhan returns no expiry date, so each contract's expiry is inferred by solving Black-Scholes for time to expiry from the stored close, spot, strike and IV. That inference runs about 20 to 35 percent
+long (for example, 28 days for a 22-day contract), so only the pattern is used, not the dates.
+
+The codes behave as the next three monthly series (code 1 about 25 DTE, code 2 about 55 and code 3 about 85 to 90 DTE) and the three weeklies. The roll test shows it: over 2025-09-15 to 10-14, code 1
+rolls to the next month on 09-30 (the September expiry), and code 3 jumps on 10-01 from a contract about 70 DTE out to one about 90 DTE out, which on the calendar is the 2025-12-30 expiry (inference).
+So the Dec 2025 contract first appears on Dhan's expired data on 2025-10-01, at about 90 DTE, and never earlier. No 2025 window returned a contract more than about 90 DTE out, so Dhan holds no
+historical data for yearly or LEAPS contracts, in 2025 as in 2026. Its reach ends at the same ~90 DTE as the point where Upstox's Greeks start (an observation, with no cause established).
+
+Related, measured in DDP-5: since 2026-08-17 the 2026-12-29 contract sits in both the `quarterly` and `yearly` Upstox bucket files, and the yearly label has pointed to 2027-06-29 (to 07-22) and then
+2026-12-29 (DTE 160 down to 85). A "yearly" bucket that holds an 85-DTE contract is a quarterly in practice.
