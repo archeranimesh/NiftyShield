@@ -334,11 +334,16 @@ The 16 deep OTM puts at 20,050 to 20,800 (no calls at those strikes carry a real
 have no LTP. Dhan shows a nonzero delta on 4 of 16 (the same three plus 20,300, which Upstox leaves at zero). The remaining 12 on Dhan are zero delta but carry IV values between 0.66 and 0.88, which
 looks like a placeholder; none had an LTP. Neither vendor has a usable delta where no trade or quote exists, so these strikes need a model value from either source, and Dhan does not supply one.
 
+### Live Upstox check on Jun 2027, 2026-10-05 21:11 IST
+
+One read-only chain call per expiry (`scratch/data_probes/2026-10-05_upstox_jun2027_greeks_check.py`, raw JSON in the session scratchpad). Jun 2027 (DTE 267): 14 strikes, 28 rows, no row with 0 <
+abs(delta) < 1, IV zero on every row, while 13 rows have a traded price and open interest and 12 have a two-sided quote. So the zero state is not an early-listing artefact: the contracts trade and
+quote and Upstox still returns no Greeks. Control call on 2026-12-29: 106 strikes, 156 nonzero deltas, 199 two-sided rows, identical to the 15:55 snapshot, so the call and the parser work. Dhan lists
+33 strikes for the same Jun 2027 expiry with 20 nonzero deltas, so on this day Dhan has Greeks where Upstox has none (one snapshot; Dhan's are model values or not, the docs do not say).
+
 ### Decision for Animesh on `greeks-bs-fallback` (flagged, story not edited)
 
-One decision: whether GF-5's ground truth for the fallback is Dhan's live Dec 2026 chain (where both vendors now carry deltas, so a computed delta can be tested against two sources at DTE 85), and
-whether to accept an inter-vendor offset of about 0.01 to 0.02 as the floor for the GF-5 tolerance. Behind that sits a fact only a live check can supply: whether Upstox's Jun 2027 chain is still
-all-zero today (DTE 267). If it is, the fallback is still needed from 2026-12-30, when the yearly bucket should move to Jun 2027 at DTE near 180 (inference from the earlier relabelling), and stays
-needed until DTE falls to about 90 around late March 2027 (inference, from the 90-DTE hypothesis above). If Jun 2027 already shows Greeks, the zero state was an early-listing artefact and the fallback
-shrinks to the placeholder and no-quote rows. Recommended order: one live Upstox call on Jun 2027, then decide the GF-5 ground truth.
-
+The fallback is still needed: Upstox returns no Greeks on Jun 2027 at DTE 267, consistent with the DTE 90 cutoff hypothesis (inference). The yearly bucket should move to Jun 2027 around 2026-12-30 and
+stay zero until about late March 2027 (inference). One decision: whether GF-5's ground truth for the computed delta is Dhan's live chain, which covers Jun 2027 where Upstox is blank, with Dec 2026 as
+the overlap where both vendors carry deltas (agreement 0.01 to 0.02, so GF-5's tolerance should not be tighter than 0.02). Dhan's Jun 2027 chain is thin (33 strikes, 10 two-sided quotes), so a Dhan
+delta there is itself a thin reference.
