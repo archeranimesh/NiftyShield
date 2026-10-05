@@ -4,13 +4,13 @@
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
 spec.
 
-**Open: DDP-5 to DDP-6.**
+**Open: DDP-6.**
 
 - [x] **DDP-1** — Free docs read: Dhan data API and historical dataset shape, price, pass or fail against the POC criteria | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: 0abb226
 - [x] **DDP-2** — Animesh buys the one-month POC; record plan, price and access method (no secrets) | Owner: Animesh | Model: n/a | Review: none | SHA: 2cc680d
 - [x] **DDP-3** — Coverage inventory on the real dataset against the strikes each strategy trades | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: bb211f4
 - [x] **DDP-4** — Old-data validation: Dhan against stored Upstox chain, bhavcopy and paper trades | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: 67c0ae0
-- [ ] **DDP-5** — Contract questions: Dec 2026 and Jun 2027 Greeks, yearly-bucket relabelling, zero-window delta | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: <—>
+- [x] **DDP-5** — Contract questions: Dec 2026 and Jun 2027 Greeks, yearly-bucket relabelling, zero-window delta | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: b74f043
 - [ ] **DDP-6** — Verdict on the full-year purchase, hand-offs to the Tradetron story, close and archive | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: <—>
 
 ## Story done when
