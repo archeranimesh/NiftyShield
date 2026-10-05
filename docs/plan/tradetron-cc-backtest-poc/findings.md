@@ -73,3 +73,48 @@ WINDOW: 2026-08-12..2026-10-01
 
 The window starts on the first paper entry and ends on the last paper exit. It covers every cycle and starts after 2026-04-01. The 2026-10-27 expiry is still live at the end date, so the backtest sees
 cycle 5 close on 2026-10-01 only if its own exit rule fires; a template that is still open on 2026-10-01 will be force-closed or left open depending on `type=positional`, to be checked in TCP-5.
+
+## Pre-flight verdict (TCP-3)
+
+Draft: `template.md` (one set, one short monthly NIFTY call, `Find Strike` on delta 0.15, Universal Exit). Not saved to Tradetron; the dry-run create built the payload and nothing was posted.
+
+**Validation.** `tt_validate_markdown` returned 0 errors. The one warning (`RUNTIME_GATE_ON_ZERO`, a guard gated on `== Number(0)`) was fixed by rebasing the `entered` guard to 1 armed, 2 after entry.
+A re-run through the dry-run create returned `validation.ok: true` with no warnings.
+
+**Backtestability.** `tt_check_backtestability`, window 2026-08-12..2026-10-01, verbatim: `verdict: backtestable`, `confidence: high`, `blockers: []`, `warnings: []`, `checks_skipped: []`,
+`run_type_recommendation: positional` (strong), `price_per_run: ₹20`. Eleven checks ran, including `keyword_surface`, `data_coverage`, `underlying_data_coverage` and `coverage_window`. Caveats on what
+this proves: I passed the compiled payload with the `*_json` and `*_display` members stripped, keeping `condition_value`, strike, expiry and variables; the check scans expressions, so I expect no
+difference, but that is an inference. The check confirms `Delta` and `Find Strike` exist in the engine's keyword namespace. It does **not** say the backtest data store holds historical Greeks, so the
+"does the engine have historical Greeks" unknown from `prompt.md` is still open and only the funded run (TCP-5) can answer it.
+
+**Rules encoded.**
+
+| Live rule (TCP-1) | In the template | Note |
+|---|---|---|
+| Delta target 0.15 | `Find Strike(..., 'delta', 0.15, 'CE', 'any')` in the leg's Strike cell | Mode `any` has no distance cap; the 0.12-0.18 band is **GAP**, not expressible |
+| Profit target, mark <= 30% of credit, credit >= 15 | Exit group (AND): LTP <= 0.30 x entry price AND entry price >= 15 | Encoded. Entry price from `Traded Instrument('Entry','price',...)` |
+| Loss stop, mark >= 2.5x credit | Exit: LTP >= 2.5 x entry price | Encoded |
+| Delta stop >= 0.55 | Exit: `Delta(Traded Instrument Name(...)) >= 0.55` | Encoded; call delta is positive. Delta is Tradetron's own, not Upstox's |
+| DTE <= 5 close | Exit: `Days Difference(Today('NSE'), traded leg expiry) <= 5` | Encoded. Calendar days, not trading days |
+| 21-day time stop | Not encoded | Removed from the code by EC-5; the story spec line is stale (see TCP-1) |
+| Delta WARN at 0.45, BELOW_FLOOR INFO | Not encoded | Both are informational in the code, no close |
+
+**Entry rules are the archived spec, not the live code.** The template gates on Wednesday (`Week Day(NSE) == 3`) and DTE 30 to 45, as the story specifies. TCP-1 found live code has no weekday check
+and only a 14-DTE floor, and paper cycles 3 (DTE 20) and 5 (Friday) fall outside the gate. They cannot be reproduced by this template; a mismatch there is a spec difference. The 10:00 entry time is my
+assumption, since the paper entry time is not in the findings.
+
+**Gaps and unknowns.**
+
+- **Re-entry: GAP.** The `entered` one-shot guard never resets, so a positional run takes one cycle. Paper had five cycles over two expiries, with re-entry 0 to 7 days after each exit. A fair
+  reconciliation needs the guard reset on exit or a flat-position gate instead; decide in TCP-4 before the template is created.
+- **Exit priority.** All four exits are OR-joined in one Universal Exit, so the engine takes whichever it sees first. How the paper engine orders simultaneous signals (`_sort_results`) was not read.
+- **Find Strike leg-drop hazard** applies (returns None, the leg is skipped). With a single leg that means no entry, which the prompt accepts. The exits read a missing leg through Traded Instrument
+  and evaluate False when nothing is open.
+- **Naked short.** The call is sold at Entry with no NiftyBees cover. A backtest does not model margin; the NiftyBees leg is out of scope.
+- **Entry fill.** `Market Price` with the engine default fill `Open`; the `Close` sensitivity run is TCP-5.
+- **Backtest evaluates bar open and close only**, so a mid-minute stop crossing can be missed (about 1 in 10 within a week of expiry, per the authoring reference, measured 2026-09-04). The DTE <= 5
+  phase is the exposed one.
+
+**Decision: GO.** The template validates and the pre-flight says backtestable with high confidence, so TCP-4 and TCP-5 proceed. The gaps above are known and listed (band, re-entry, exit priority,
+21-day stop, entry-rule difference). GO means the run will execute, not that the delta-based strike will be reproducible: if the backtest store has no historical Greeks, `Find Strike` on delta can
+fail or return nothing at run time, and that would be reported at TCP-5 as the platform result.
