@@ -31,7 +31,7 @@ Script: `scratch/data_probes/2026-10-05_dhan_data_api_probe.py`. Read-only; 19 o
 | Daily and intraday candles | Respond with open, high, low, close, volume. Intraday tested at 5-minute candles, 150 rows over four days. |
 | Live option chain | 244 strikes on the nearest expiry. Per strike: LTP, IV, OI, volume, top bid and ask, delta, gamma, theta, vega. |
 | Expiry list | 18 expiries from 2026-10-06 to 2031-06-24. |
-| Expired options (rolling) | Fields: open, high, low, close, iv, oi, volume, strike, spot; no delta, Greeks, bid or ask. Worked at ATM, ATM±10; 60-minute only (script limit). |
+| Expired options (rolling) | Fields: open, high, low, close, iv, oi, volume, strike, spot; no delta, Greeks, bid or ask. Worked at ATM and ATM±10, weekly and monthly; 60-minute only (script limit). |
 | Expired options, history depth | Five-day windows 60 to 1825 days back all returned rows (earliest 2021-10-02 to 2021-10-06), so both expiry regimes (before and after April 2026) are present. |
 
 ## Live chain by expiry, 2026-10-05 snapshot
