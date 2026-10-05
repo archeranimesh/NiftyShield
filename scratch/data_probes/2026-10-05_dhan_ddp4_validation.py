@@ -470,7 +470,6 @@ def report_paper(paper: pd.DataFrame, dp: pd.DataFrame) -> None:
     if dp.empty or chk.empty:
         say("  no paper pulls yet (run pull-paper) or nothing checkable")
         return
-    dp = add_expiry(dp)
     res = []
     for r in chk.itertuples():
         rows = dp[
