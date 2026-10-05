@@ -150,7 +150,7 @@ Fills (`tt_backtest_trades`, 2 fills, book complete):
 | Entry | 2026-08-26 10:00 | NIFTY 29SEP2026 25250 CE | S 65 | 47.25 | 24365.8 |
 | Exit (Universal Exit, flagged Target) | 2026-09-02 09:16 | same | B 65 | 14.00 | 23819.4 |
 
-Exit price is 29.6% of the entry credit, consistent with the 30% profit target. Gross 2,146.25 (65 x 33.25). Charges not read.
+Exit price is 29.6% of the entry credit, consistent with the 30% profit target. Gross 2,161.25 (65 x 33.25). Charges not read.
 
 Against paper (5 cycles, 2 expiries; thin sample):
 
@@ -163,3 +163,22 @@ Against paper (5 cycles, 2 expiries; thin sample):
   defects.
 - **Greeks in the backtest engine:** `Find Strike` on delta returned a strike and entered, so the engine does evaluate delta for strike selection on historical dates. Whether those deltas are correct
   was not checked.
+
+Report figures for run 1 (`tt_backtest_result`, the report's own numbers, free to re-read; capital basis 100,000 is the engine's):
+
+| Item | Value |
+|---|---|
+| Gross P&L | 2,161.25 |
+| Net P&L | 2,152.97 |
+| Total costs | 8.28 (brokerage 0.00, slippage 1.99, STT 4.61, exchange 1.39, SEBI 0.004, GST 0.25, stamp 0.03) |
+| Turnover | 3,981.25 over 2 orders |
+| Round trips | 1, one win, held 7 days (10,036 min) |
+| Sessions | 36 in window, 34 with no trade |
+| Cost profile | slippage 0.05%, STT 0.15%, no brokerage, statutory charges applied |
+| Margin basis | SPAN-style proxy, naked short call about 10% of notional |
+
+Report caveats, verbatim in substance: with 1 round trip every ratio is withheld or descriptive only; exit attribution cannot tell a target from a stop (the export has no exit reason, so the one exit
+is bucketed Take-profit by condition type, not proven); MAE and MFE were not produced. The 30% profit-target reading of the exit rests on the exit price being 29.6% of the credit.
+
+Paper comparison basis: paper P&L is gross and before charges, so compare 2,161.25 gross here with paper cycle 2's 2,773.88 gross, not the net figure. The gap comes from the different strike and
+credit, not from charges.
