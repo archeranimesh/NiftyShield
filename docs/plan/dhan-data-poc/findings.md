@@ -275,3 +275,70 @@ Partial pass. On liquid strikes within ATM±10 from late July to 5 October the t
 monthly entries use (outside the window); everything before late July (stored chain holds no near expiry); the bhavcopy beyond one expiry day; paper trades beyond six. A disagreement was found nowhere
 that the evidence lets either source be named wrong.
 
+## Contract questions (DDP-5), 2026-10-05
+
+Script: `scratch/data_probes/2026-10-05_dhan_ddp5_contract.py`; it scans all 18,987 stored intraday files (2026-06-01 to 10-05, 5-minute cadence, IST file names) and keeps the 2026-12-29 and
+2027-06-29 expiries. A row counts as "nonzero delta" when 0 < |delta| < 1: Upstox also writes delta 1.0000 on deep ITM calls that have no traded price (51 of 176 rows at the flip, 43 of 212 on 10-05),
+and those are placeholders, not Greeks. Dhan's side is the live chain saved on 2026-10-05 at 17:01 (`data/historical/dhan_poc/ddp3/`), one snapshot; Upstox's comparison file is the 15:55 snapshot of
+the same day.
+
+### When Upstox's Dec 2026 Greeks started
+
+| Item | Last all-zero snapshot | First nonzero snapshot |
+|---|---|---|
+| Time | 2026-09-29 15:55 | 2026-09-30 09:51 (the first stored file that day; no 09:00 to 09:50 files exist for 09-30, so the flip happened somewhere between the two) |
+| DTE | 91 | 90 |
+| Rows for 2026-12-29 | 44 | 176 |
+| Strikes listed | 22 (steps of 500, 1,000, 1,500) | 88 (steps of 50 near the money, 500 to 1,500 away) |
+| Strike range | 15,000 to 33,000 | 15,000 to 33,000 |
+| Rows with 0 < abs(delta) < 1 | 0 | 90 (141 rows have delta above 0, including the 51 placeholders) |
+| Rows with IV above zero | 0 | 90 |
+
+Zero on every row held for all 59 stored days of Dec 2026 data before the flip (2026-06-01 to 09-29, 6,671 snapshots across the quarterly, yearly and unsuffixed files). By 10-05 15:55 the chain had
+212 rows, 106 strikes, 156 with a delta between 0 and 1.
+
+The cause is an inference. Two things changed at once, the chain widened (22 to 88 strikes, 44 to 176 rows) and DTE crossed from 91 to 90, and the stored data cannot separate them. What the data does
+support: the other far-dated expiry I can read behaves the same way. The 2026-09-29 expiry carries nonzero deltas on every stored day from DTE 85 down, and 2026-12-29 is all-zero at DTE 91 to 211 (59
+stored days) and nonzero at DTE 90 and under (3 stored days: 09-30, 10-01, 10-05). A cutoff of about 90 days to expiry fits both, but the 2026-09-29 contract is stored only from DTE 85, so it cannot
+test the cutoff from above. Treat "90 DTE" as a hypothesis with one contract behind it.
+
+### Yearly-bucket relabelling
+
+| Expiry | Stored in files | Bucket label | Greeks |
+|---|---|---|---|
+| 2026-12-29 | 06-01 to 06-11, then 07-22 on (`yearly`) and 08-17 on (`quarterly`) | `yearly` from 07-22, also `quarterly` from 08-17 | Zero to 09-29, nonzero from 09-30 |
+| 2027-06-29 | 06-12 to 07-22 (`yearly` from 07-06; earlier files have no suffix) | `yearly` | Zero on all 1,722 stored snapshots, DTE 343 to 382 |
+
+The 2027-06-29 contract was the yearly bucket from 06-12 and was last stored on 2026-07-22; both expiries appear on 07-22 only. From 07-22 the `yearly` file holds 2026-12-29 instead (the story's
+"about 07-24" was one trading day late: 07-22 is the first file with Dec 2026 in a `yearly` file). Jun 2027 is stored nowhere after 07-22 in the intraday files, and 19 of the 233 EOD files (2026-06-12
+to 07-21) carry it. So Upstox's current Jun 2027 Greeks, at DTE 267 today, were never measured by this repo; the one live Upstox call that would settle it is not made here.
+
+### Dhan on Dec 2026 and Jun 2027, 2026-10-05 live chain
+
+Dhan has no historical chain, so it cannot be asked what it showed during Upstox's zero window (June to 09-29). The expired endpoint has no yearly flag and stops at expiry code 3. All that can be said
+is how Dhan's live chain compares to Upstox's on the same day.
+
+| Item | 2026-12-29 | 2027-06-29 |
+|---|---|---|
+| Dhan rows, delta nonzero, IV above zero, two-sided quotes | 498, 172, 321, 191 | 66, 20, 38, 10 |
+| Dhan and Upstox both nonzero, strikes matched | 149 of 212 matched | not stored |
+| Absolute delta, Dhan minus Upstox: p10, median, p90 (n 149) | -0.095, -0.003, 0.105; largest 0.207 | n/a |
+| IV, Upstox minus Dhan, vol points: p10, median, p90 (n 149) | -3.93, -1.16, 3.53 | n/a |
+
+The two sets of deltas are not close enough to call identical. Near delta 0.15 on Dec 2026 puts Upstox's absolute delta runs about 0.01 above Dhan's (PE 21300: Dhan -0.149, Upstox -0.159), and on
+calls about 0.01 below (CE 24450: Dhan 0.150, Upstox 0.136). The sign pattern (puts higher, calls lower on Upstox) looks like a different forward or rate assumption, but that is an inference; the docs
+do not name either vendor's model. Timing also differs (17:01 against 15:55), so some of the spread is the clock. The docs do not say whether Dhan's chain Greeks are exchange fields or model values,
+so no claim is made; at DTE 85 on a 0.1 to 0.5 delta strike they agree to about 0.01 to 0.02.
+
+The 16 deep OTM puts at 20,050 to 20,800 (no calls at those strikes carry a real delta): Upstox shows a nonzero delta on 3 of 16 (20,200, 20,500, 20,800), so 13 are zero on 10-05 15:55, and all 13
+have no LTP. Dhan shows a nonzero delta on 4 of 16 (the same three plus 20,300, which Upstox leaves at zero). The remaining 12 on Dhan are zero delta but carry IV values between 0.66 and 0.88, which
+looks like a placeholder; none had an LTP. Neither vendor has a usable delta where no trade or quote exists, so these strikes need a model value from either source, and Dhan does not supply one.
+
+### Decision for Animesh on `greeks-bs-fallback` (flagged, story not edited)
+
+One decision: whether GF-5's ground truth for the fallback is Dhan's live Dec 2026 chain (where both vendors now carry deltas, so a computed delta can be tested against two sources at DTE 85), and
+whether to accept an inter-vendor offset of about 0.01 to 0.02 as the floor for the GF-5 tolerance. Behind that sits a fact only a live check can supply: whether Upstox's Jun 2027 chain is still
+all-zero today (DTE 267). If it is, the fallback is still needed from 2026-12-30, when the yearly bucket should move to Jun 2027 at DTE near 180 (inference from the earlier relabelling), and stays
+needed until DTE falls to about 90 around late March 2027 (inference, from the 90-DTE hypothesis above). If Jun 2027 already shows Greeks, the zero state was an early-listing artefact and the fallback
+shrinks to the placeholder and no-quote rows. Recommended order: one live Upstox call on Jun 2027, then decide the GF-5 ground truth.
+
