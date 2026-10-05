@@ -103,7 +103,7 @@ not read verbatim, so exact wording is unchecked. Each row is marked stated (S) 
 | Live chain is a snapshot | No date parameter, so no historical Greeks from the chain; Greeks can only be captured forward from now | S |
 | Daily and intraday candles | `/charts/historical` and `/charts/intraday`: OHLC and volume; open interest only via the optional `oi` flag. Intraday 5 years back. No bid, ask, delta or IV | S |
 | Full market depth | 20-level and 200-level depth over WebSocket, NSE equity and derivatives, live only (50 instruments per 20-level connection, 1 per 200-level). No historical depth | S |
-| `expiryCode` values | Expired-options page says "refer here" and lists none; the annexure entry is still to be read | U |
+| `expiryCode` values | Annexure: 0 near, 1 next, 2 far. Measured on `rollingoption`: 1, 2, 3 accepted; 0 and 4 rejected (DH-905), so the annexure scheme does not fit this endpoint | S / measured |
 | Meaning of "near expiry" | The ATM±10 window is for index options "near expiry"; the page does not define the term, so far-dated contracts may get only ATM±3 | U |
 | Strike basis | Expired strikes are stored relative to spot (rolling ATM offsets), minute level, pre-processed by Dhan | S |
 | Price | 499 rupees plus taxes per month, renews every 30 days. Free-for-trades promotion discontinued per Dhan's support page | S |
@@ -135,7 +135,76 @@ Review of `scratch/data_probes/2026-10-05_dhan_data_api_probe.py` against the cl
 |---|---|
 | Expired interval hardcoded to 60 | Earlier "60-minute only" wording was a script limit; corrected above |
 | Strikes tried: ATM, ATM+10, ATM-10 only | ATM±10 reach is documented, not measured; ATM+11 untried |
-| `expiryCode` fixed at 1, weekly tried for ATM CALL only | Far-dated expired data (Dec 2026, Jun 2027) untested; weekly PUT and weekly ATM±10 untested |
+| `expiryCode` fixed at 1, weekly tried for ATM CALL only | Closed by the DDP-3 matrix below: codes 1 to 3, weekly and monthly, CALL and PUT, ATM±10 and ±11 |
 | Chain probe fetches first and last expiry, CE delta only | The 8-expiry table above came from a run whose script is not in `scratch/data_probes/`, so it cannot be reproduced from disk |
 | Chain gap 3.2 s | At the documented 3 s limit; caused the 805 errors. Use 4 s or more |
 | Output to stdout only | No raw responses saved; DDP-3 should write raw JSON to the scratchpad |
+
+## Coverage inventory (DDP-3), 2026-10-05
+
+Script: `scratch/data_probes/2026-10-05_dhan_ddp3_coverage.py` (plumbing in `scratch/_lib/dhan_data_api.py`); raw responses are in the session scratchpad, not the repo. Read-only; about 75 calls.
+Window for the matrix: 2026-09-26 to 2026-10-05, 60-minute candles, 35 rows per full case. Trading days present: 09-28, 09-29, 09-30, 10-01, 10-05 (10-02 is a market holiday). Model deltas below are
+an inference: Black-Scholes from the stored IV, spot and strike, with the expiry taken from the Tuesday rule and r=6.5%. Dhan returns no delta for expired data. Sample size is five trading days, so
+the deltas show the shape of the window, not a distribution.
+
+### Measured, expired options (`rollingoption`)
+
+| Question | Result |
+|---|---|
+| Strike reach | ATM±10 works; ATM±11 returns zero rows in all 24 weekly and monthly cases tried (CALL and PUT, codes 1 to 3). ATM±10 sits 2.1 to 2.3 percent from spot. A hard limit |
+| Which expiries get ATM±10 | Code 1 (weekly and monthly): all 35 rows. Code 2 weekly: 14 rows, only 09-28 and 09-29. Code 2 monthly and code 3 (weekly, monthly): zero rows at ±10; ATM only |
+| Expiry codes accepted | 1, 2, 3 for both WEEK and MONTH. Code 0 and 4 rejected. The yearly bucket is not offered (`expiryFlag` is WEEK or MONTH only), and nothing past code 3 exists |
+| Candle sizes | 1, 5, 15 and 60 minutes work (1,540 / 308 / 104 / 28 rows over a 7-day window, which includes the 10-02 holiday). 25 minutes returns HTTP 400, though the docs list it |
+| Fields present | iv, oi, volume non-zero on 34 to 35 of 35 rows at ATM; IV thins at the edge (PUT ATM+10 monthly 21 of 35, weekly 15 of 35). No delta, bid or ask |
+| Date range | Depth probe in the earlier section: rows back to 2021-10; both expiry regimes present |
+
+Model delta at the ATM±10 edge on the OTM side (call at ATM+10, put at ATM-10), inferred, by days to expiry:
+
+| Expiry type | Days to expiry | Call edge delta | Put edge delta |
+|---|---|---|---|
+| Weekly, code 1 | 1 | 0.02 to 0.05 | 0.03 to 0.04 |
+| Weekly, code 1 | 5 to 6 | 0.07 to 0.11 | 0.07 to 0.11 |
+| Monthly, code 1 | 22 to 27 | 0.27 to 0.32 | 0.23 to 0.26 |
+
+The window holds strikes from about 0.5 delta out to the edge value, so a target delta is covered only if it is above the edge value on that day. Scaling by the square root of time (inference), the
+monthly edge would be near 0.20 at 14 days to expiry and near 0.15 at 7 days.
+
+### Live option chain, all 18 expiries, 2026-10-05
+
+The earlier 8-expiry table is reproduced: 2026-12-29 has 249 strikes, 78 CE and 94 PE with delta, 191 two-sided quotes; 2027-03-30 has 32, 9 and 10, 19; 2027-06-29 has 33, 11 and 9, 10. Near expiries
+(10-06 to 11-23) carry 232 to 258 strikes with 60 to 123 deltas per side and 145 to 283 two-sided quotes. 2027-12-28 returned HTTP 429 at 4 s spacing on this run, so the second run's figure stands
+only from the earlier probe. Raw chains are saved.
+
+### Per-strategy coverage (entry rules read from code, 2026-10-05)
+
+Delta targets are from `src/strategy/` (CC and PP in `nifty_track_comparison_v1.py`, collar in `collar_entry.py`, IC in `ic_expiry_config.py` and `ic_expiry_config_v2.py`). The POC criterion in
+`prompt.md` named a 0.12 to 0.18 band; the code uses 0.08 to 0.25, so the criterion is restated per strategy here. Entry DTE for CC and PP was not read, so verdicts are stated by DTE.
+
+| Strategy | Entry delta in code | Expired-data verdict | Reason |
+|---|---|---|---|
+| CC, PP (track comparison) | target 0.20, band 0.15 to 0.25 | Partly covered | Reachable at about 14 days to expiry or less (edge near 0.20); not at 22 to 27 days (edge 0.23 to 0.32) |
+| Collar | CC 0.18, 0.20, 0.15; PP 0.20, 0.25, 0.15; entry needs 14+ DTE | Partly covered | At 14 DTE the edge is near 0.20, so 0.20 and 0.25 candidates fit and 0.15 and 0.18 do not |
+| IC v1 weekly | shorts 0.10 put, 0.08 call (±0.04); wings 200 points | Partly covered | Shorts fit at 5 to 6 DTE (edge 0.07 to 0.11), thin at 1 DTE (edge 0.02 to 0.05); wings beyond ±10 |
+| IC v1 monthly | shorts 0.15 put, 0.10 call (±0.06); wings 500 points | Missing | Edge at 22 to 27 DTE is 0.23 to 0.32, well above both targets; wings beyond reach |
+| IC v2 monthly | shorts 0.25 put, 0.22 call (±0.03); long wings 0.10 (floor 0.05) | Partly covered | Put target touches the edge at 22 to 27 DTE; call 0.22 just outside; long wings outside |
+
+Not scored: the CSP roll band of 0.18 to 0.28, which is a separate strategy.
+
+### What the expired dataset cannot give, as measured
+
+- Delta or Greeks: none. Any delta is a model delta from IV, and IV thins at the edge.
+- Bid and ask: none, here or anywhere historical (depth is live-only). No fill quality.
+- Strikes beyond ATM±10 on any expiry, and anything beyond ATM on codes 2 monthly and 3.
+- Dec 2026 and Jun 2027 expired data: not offered. Codes stop at 3 and `expiryFlag` has no yearly option; those contracts exist only on the live chain until they expire.
+- Margin, charges and exchange-quoted Greeks.
+
+### Against the POC criteria
+
+| Criterion | Score after DDP-3 |
+|---|---|
+| Expiries and strikes the rules pick | Partial: near-dated and weekly entries are inside the window; monthly entries at 20+ days and all wings are not |
+| Reaches back past April 2026 | Pass (depth probe) |
+| Carries delta or IV | IV only; delta is inferred |
+| Agrees with what we hold | Untested, DDP-4 |
+
+Open for Animesh: a daily Dhan chain capture before 2026-11-04 is still a proposal only. Nothing was scheduled.
