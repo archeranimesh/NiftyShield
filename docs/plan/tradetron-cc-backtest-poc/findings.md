@@ -133,3 +133,33 @@ DTE differences.
 - Read back with `tt_get_strategy`: 2 sets (CC short call, Universal Exit), 6 conditions (the 3 intended plus the blank Add Repair / Exit / Repair Once envelopes), 1 leg. Matches the draft. One
   warning, `UNKNOWN_TOP_LEVEL_KEY` for `description_review` and `api_controlled`, is added by Tradetron's own read.
 - Not deployed. The wallet was not touched.
+
+## Run 1 (TCP-5)
+
+Submitted by Claude through `tt_backtest_strategy` at Animesh's instruction, after he funded the wallet with ₹200.
+
+- Template 999082430, window 2026-08-12..2026-10-01, `type=positional`, `trade_price=Open`, candle 1 min, engine `tradetron-fleet`
+- job_id `ttbt-999069114261005`, bt_id 999069114261005
+- report_url: https://tradetron.tech/bt/view/605e68bb2d3316438f4af791391e56ec
+- Price paid: ₹20 (1 credit from the wallet, Tradetron's own charge; the prepaid pack funded nothing)
+
+Fills (`tt_backtest_trades`, 2 fills, book complete):
+
+| Fill | Date and time | Instrument | Side | Price | Underlying |
+|---|---|---|---|---|---|
+| Entry | 2026-08-26 10:00 | NIFTY 29SEP2026 25250 CE | S 65 | 47.25 | 24365.8 |
+| Exit (Universal Exit, flagged Target) | 2026-09-02 09:16 | same | B 65 | 14.00 | 23819.4 |
+
+Exit price is 29.6% of the entry credit, consistent with the 30% profit target. Gross 2,146.25 (65 x 33.25). Charges not read.
+
+Against paper (5 cycles, 2 expiries; thin sample):
+
+- **Only one cycle traded.** The backtest took paper's cycle 2 date pair (entry 08-26, exit 09-02) with the same expiry (09-29), but a different strike (25250 vs 25100) and credit (47.25 vs 60.825).
+  Paper's exit price was 18.15 (29.8% of credit).
+- **Strike gap of 150 points on the same day.** Inference: Tradetron's own delta differs from the Upstox chain delta paper used; neither delta is recorded for the entry, so this cannot be proven.
+  Entry fills also differ (backtest `Open` at 10:00; paper's entry time is unknown).
+- **Cycle 1 (08-12) was not reproduced.** Inference, not observed per day: `Current Month Expiry` on 08-12 resolved to the 08-25 expiry (13 DTE), which fails the 30-45 gate. It rolled to the 09-29
+  expiry by 08-26. Cycles 3-5 (DTE 20, 41, 32) were not reproduced either: the gate cannot fire on 09-09, 09-16 or 09-25 with the current-month expiry. These are template-spec differences, not engine
+  defects.
+- **Greeks in the backtest engine:** `Find Strike` on delta returned a strike and entered, so the engine does evaluate delta for strike selection on historical dates. Whether those deltas are correct
+  was not checked.
