@@ -86,6 +86,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-05] tradetron-cc-backtest-poc TCP-2 closed (`94cf55c`): 5 paper CC cycles over 2 expiries recorded in `findings.md`; entry delta and exit trigger not in DB; WINDOW 2026-08-12..2026-10-01
 - [2026-10-05] tradetron-cc-backtest-poc TCP-1 closed (`475ffd6`): live CC rules recorded in `findings.md`; the 21-day time stop no longer exists (EC-5 → DTE<=5), delta stop 0.55, profit 30%, loss
   2.5x
 - [2026-10-05] tradetron-cc-backtest-poc authored (TCP-1..6, none started): Tradetron probe sessions fixed `ATM` vs `ATM-SPOT`; CC backtest evaluation deferred, needs ₹20/run wallet top-up
