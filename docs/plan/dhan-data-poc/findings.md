@@ -64,3 +64,38 @@ offsets are not yet read from code). Agreement with held data: untested (DDP-4).
 
 Open items this probe raised, for DDP-3 to settle: how far out the strike offset reaches on weekly and monthly expiries; 1-minute candles; the per-request window cap; request quotas; whether the
 expired data has any delta at all or the docs name one.
+
+## Dhan docs read (DDP-1), 2026-10-05
+
+Sources: dhanhq.co/docs/v2 "Expired Options Data", "Option Chain" and "Annexure" pages; dhan.co support page "How does the DhanHQ Data API subscription work". Fetched through a summarising web tool,
+not read verbatim, so exact wording is unchecked. Each row is marked stated (S) or unclear (U).
+
+| Item | What the docs say | S/U |
+|---|---|---|
+| Expired options endpoint | `POST /charts/rollingoption`; params: segment, interval, securityId, instrument, expiryCode, expiryFlag (WEEK or MONTH), strike, drvOptionType, requiredData, dates | S |
+| Expired fields | open, high, low, close, iv, volume, strike, oi, spot. No delta, Greeks, bid or ask are named | S |
+| Expired strike coverage | ATM+10 to ATM-10 for index options near expiry; ATM+3 to ATM-3 for all other contracts. Strikes are ATM-relative, not a full chain | S |
+| Expired expiry coverage | Weekly and monthly, index and stock options; "near expiry" wording leaves far-dated reach unclear | S / U |
+| History depth | Last 5 years | S |
+| Candle sizes | 1, 5, 15, 25 and 60 minutes. The probe only saw 60-minute work on expired data; 1-minute not yet tested | S |
+| Max window per request | Up to 30 days per call | S |
+| Rate limit, data APIs | Not stated. Error 805 "too many requests or connections" exists; error 806 "Data APIs not subscribed" | U |
+| Live option chain fields | Delta, theta, gamma, vega, IV, LTP, average price, previous close, volume, OI, previous OI, top bid and ask with quantities, security id | S |
+| Live chain rate limit | One unique request per 3 seconds (the probe saw 805 at a 3.2 s gap, so allow 4 s or more) | S |
+| Live chain strikes | All available strikes per underlying and expiry | S |
+| Price | 499 rupees plus taxes per month, renews every 30 days. Free-for-trades promotion discontinued per Dhan's support page | S |
+| Bundled "historical data set" | Not a downloadable dataset: the subscription is API access to historical, expired-options, live, tick and expired-futures data | S |
+
+Discrepancy to settle in DDP-3: the docs name ATM±10 for index options, and the probe reached ATM±10 only. Whether the 0.12 to 0.18 delta strikes sit inside ATM±10 depends on strike step and expiry;
+that is DDP-3's check, not a docs fact.
+
+### POC criteria scored from docs alone
+
+| Criterion | Score | Why |
+|---|---|---|
+| Covers the expiries and 0.12 to 0.18 delta strikes the rules pick | Cannot tell | ATM±10 is documented; reach to those deltas is unmeasured, and far-dated historical reach is unstated. To DDP-3 |
+| Reaches back past April 2026 | Pass | 5 years stated; the probe returned 2021 rows |
+| Carries delta or IV | Partial pass | IV is stated for expired data; delta is not. Any historical delta is a model delta from IV and must be labelled so. Live chain has delta |
+| Agrees with what we hold on overlapping dates | Cannot tell | Needs data; DDP-4 |
+
+Price recorded here is Dhan's published list price, not a figure Animesh stated; DDP-2 still needs his actual plan and price.
