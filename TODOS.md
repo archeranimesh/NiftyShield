@@ -51,6 +51,8 @@ rot them. (Items 3, 5 and 8 closed — numbers kept stable because item text cro
     longest wall-clock pole. Do VG0/VG1 now; the Gate A–D tasks are human checkpoints that accrue passively while the items below are built.
 22. **Tradetron delta check and long-window validation** — `docs/plan/tradetron-delta-and-long-window/` — next **TDL-2** (Live Offline Greeks probe). Animesh's screen of the paper strategies before
     any paid-data purchase; TDL-2 may give `greeks-bs-fallback` a far-dated reference. Funded runs need Animesh's per-run approval.
+23. **Dhan data API POC** — `docs/plan/dhan-data-poc/` — next **DDP-1** (free docs read before Animesh buys the one-month POC). Paid-data option beside the Tradetron screen; validates stored data and
+    the Dec 2026 / Jun 2027 contract behaviour.
 
 ## Open Bugs
 
@@ -88,6 +90,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-05] dhan-data-poc authored (DDP-1..6, none started): one-month Dhan data API POC; coverage inventory, old-data validation, Dec 2026 / Jun 2027 Greeks questions, full-year verdict. Found the
+  stored Upstox Dec 2026 chain had zero delta through 2026-09-21 and nonzero by 2026-10-01 (daily 09:00 sample; flip date unknown)
 - [2026-10-05] tradetron-delta-and-long-window TDL-1 closed (`b20ec40`): Tradetron's 0.15 picks sit at Upstox delta 0.139-0.152 (n = 6) while paper's strikes sit at 0.160-0.199 (n = 4); the strike gap
   is paper's side, not Tradetron's delta; `DECISIONS.md` and the reference doc corrected
 - [2026-10-05] tradetron-delta-and-long-window authored (TDL-1..10, none started): follow-up to the archived CC POC; delta check, long-window CC / PP / Collar screen, IC buildability audit,
