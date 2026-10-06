@@ -127,12 +127,16 @@ class DhanMarketClient:
         session: aiohttp.ClientSession,
         rate_limiter: RateLimiter,
         clock: Clock,
+        access_token: str,
+        client_id: str,
         max_retries: int = 3,
     ) -> None:
         self._session = session
         self._rate_limiter = rate_limiter
         self._clock = clock
         self.max_retries = max_retries
+        self._access_token = access_token
+        self._client_id = client_id
 
     async def _fetch_with_backoff(self, url: str, params: dict[str, Any]) -> dict[str, Any]:
         retries = 0
@@ -140,8 +144,13 @@ class DhanMarketClient:
             await self._rate_limiter.acquire()
             try:
                 # Explicit timeout on every call
+                headers = {
+                    "access-token": self._access_token,
+                    "client-id": self._client_id,
+                    "Content-Type": "application/json",
+                }
                 async with self._session.post(
-                    url, json=params, timeout=aiohttp.ClientTimeout(total=10.0)
+                    url, json=params, headers=headers, timeout=aiohttp.ClientTimeout(total=10.0)
                 ) as resp:
                     if resp.status in (401, 403):
                         raise AuthenticationError("Authentication failed")

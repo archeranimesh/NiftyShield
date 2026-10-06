@@ -122,7 +122,9 @@ async def test_805_backs_off_then_raises(mock_session_post):
     mock_session_post.return_value = _make_mock_response(json_data={"errorCode": "805"})
 
     async with aiohttp.ClientSession() as session:
-        client = DhanMarketClient(session, DummyRateLimiter(), clock, max_retries=1)
+        client = DhanMarketClient(
+            session, DummyRateLimiter(), clock, "dummy_token", "dummy_client_id", max_retries=1
+        )
         with pytest.raises(DataFetchError, match="Error 805 after max retries"):
             await client.get_option_chain("NSE_INDEX|Nifty 50", date(2027, 12, 30))
 
@@ -136,7 +138,9 @@ async def test_806_raises_not_subscribed(mock_session_post):
     mock_session_post.return_value = _make_mock_response(json_data={"errorCode": "806"})
 
     async with aiohttp.ClientSession() as session:
-        client = DhanMarketClient(session, DummyRateLimiter(), clock)
+        client = DhanMarketClient(
+            session, DummyRateLimiter(), clock, "dummy_token", "dummy_client_id"
+        )
         with pytest.raises(NotSubscribedError, match="Not subscribed"):
             await client.get_option_chain("NSE_INDEX|Nifty 50", date(2027, 12, 30))
 
@@ -147,7 +151,9 @@ async def test_timeout_raises(mock_session_post):
     mock_session_post.return_value = _make_mock_response(exception=asyncio.TimeoutError())
 
     async with aiohttp.ClientSession() as session:
-        client = DhanMarketClient(session, DummyRateLimiter(), clock)
+        client = DhanMarketClient(
+            session, DummyRateLimiter(), clock, "dummy_token", "dummy_client_id"
+        )
         with pytest.raises(DataFetchError, match="Request timed out"):
             await client.get_option_chain("NSE_INDEX|Nifty 50", date(2027, 12, 30))
 
@@ -158,7 +164,9 @@ async def test_auth_failure(mock_session_post):
     mock_session_post.return_value = _make_mock_response(status=401)
 
     async with aiohttp.ClientSession() as session:
-        client = DhanMarketClient(session, DummyRateLimiter(), clock)
+        client = DhanMarketClient(
+            session, DummyRateLimiter(), clock, "dummy_token", "dummy_client_id"
+        )
         with pytest.raises(AuthenticationError):
             await client.get_option_chain("NSE_INDEX|Nifty 50", date(2027, 12, 30))
 
@@ -176,7 +184,9 @@ async def test_live_read():
             await asyncio.sleep(s)
 
     async with aiohttp.ClientSession() as session:
-        client = DhanMarketClient(session, DummyRateLimiter(), RealClock())
+        client = DhanMarketClient(
+            session, DummyRateLimiter(), RealClock(), "dummy_token", "dummy_client_id"
+        )
         # Just verifying it makes the request without throwing immediately
         from src.client.exceptions import AuthenticationError, DataFetchError
 
@@ -188,7 +198,7 @@ async def test_live_read():
 async def test_unknown_underlying_raises():
     from src.client.exceptions import DataFetchError
 
-    client = DhanMarketClient(None, None, None)
+    client = DhanMarketClient(None, None, None, "dummy_token", "dummy_client_id")
     with pytest.raises(DataFetchError, match="Unknown underlying"):
         await client.get_option_chain("UNKNOWN", date(2026, 10, 29))
 
@@ -221,3 +231,33 @@ def test_parse_dec2026_normalises_all_zero_greeks():
     # We can check existing missing delta test or one from the fixture, but the logic handles it.
 
     # d) a real non-zero leg is unchanged (already covered above implicitly)
+
+
+@pytest.mark.asyncio
+async def test_dhan_client_request_parameters(mock_session_post):
+    clock = FakeClock()
+    mock_session_post.return_value = _make_mock_response(
+        json_data={"data": {"oc": {}, "last_price": 20000}}
+    )
+
+    async with aiohttp.ClientSession() as session:
+        client = DhanMarketClient(
+            session, DummyRateLimiter(), clock, "real_token", "real_client_id"
+        )
+        await client.get_option_chain("NSE_INDEX|Nifty 50", date(2026, 10, 29))
+
+    mock_session_post.assert_called_once()
+    args, kwargs = mock_session_post.call_args
+    assert args[0] == "https://api.dhan.co/v2/optionchain"
+
+    assert "json" in kwargs
+    payload = kwargs["json"]
+    assert payload["UnderlyingScrip"] == 13
+    assert payload["UnderlyingSeg"] == "IDX_I"
+    assert payload["Expiry"] == "2026-10-29"
+
+    assert "headers" in kwargs
+    headers = kwargs["headers"]
+    assert headers["access-token"] == "real_token"
+    assert headers["client-id"] == "real_client_id"
+    assert headers["Content-Type"] == "application/json"
