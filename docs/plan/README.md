@@ -10,6 +10,15 @@ The **status** and **next** markers below are a *summary* of each story's `tasks
 
 ## Active Epics
 
+**`yearly-overlays/`** · ⬜ Not started — December-only (`--expiry-type yearly`) CC / PP / Collar as an independent book beside the monthly overlays; IC `leaps` (quarterly) and `yearly` (December)
+unchanged. Six sub-stories: `yearly-foundation/` (YF-1..5 audit, fixtures, `OverlayTenorPolicy`, clock-injectable resolver, namespace read-paths) → `yearly-cc/` (YC-1..2) and `yearly-pp/` (YP-1..2) →
+`yearly-collar/` (YL-1..2) → `yearly-ops-wiring/` (YW-1..3) → `yearly-validation/` (YV-1..5, independence + dry-run + live smoke + IC coexistence + paper-run runbook). No DB schema change expected
+(confirmed in YF-1). Requested by Animesh 2026-10-06.
+
+**`dhan-far-expiry-chain/`** · ⬜ Not started — Dhan live chain as the Greeks source for Dec 2027 (Upstox returns zero past ~100 DTE), daily forward capture, and a data-calibrated liquidity gate and
+roll window. Three sub-stories: `dhan-chain-adapter/` (DA-0..3) → `far-expiry-capture/` (FC-1..5) → `far-expiry-liquidity-gate/` (FG-1..3, blocked on captured history). Deadline: Dhan data plan lapses
+2026-11-04 (DA-0 renewal decision). Feeds `yearly-overlays/`. Requested by Animesh 2026-10-06.
+
 **`strategy-payoff-charts/`** · 🟡 In progress — `chart-core/` PC-16 done, next **PC-17** Stockmock-style payoff diagram for any strategy (opt-in `@register_payoff` registry; Iron Condors first, one
 PNG per variation) attached to the entry, EOD-audit, and close Telegram messages. Two sub-stories: `chart-core/` (PC-1..19 — strategy-agnostic payoff math + registry + matplotlib expiry-payoff
 renderer + `sendPhoto` on `TelegramNotifier`/`TelegramGateway` + IC registration and wiring into `paper_ic_entry`/`_v2`, `paper_ic_snapshot`, both `_send_close_notification`; no option model, ships
