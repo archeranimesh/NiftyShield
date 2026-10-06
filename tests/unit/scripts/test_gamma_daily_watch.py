@@ -545,6 +545,17 @@ def test_calibration_skipped_insufficient_history() -> None:
     store.update_percentiles.assert_not_called()
     store.get_gearing_by_dte.assert_not_called()
     assert any(e["log_level"] == "warning" and e.get("days") == 15 for e in logs)
+    iv_events = [e for e in logs if e["event"] == "gamma_daily_watch.insufficient_iv_history"]
+    assert len(iv_events) == 1
+    assert (iv_events[0]["strikes"], iv_events[0]["min_days"]) == (1, 15)
+
+
+def test_calibration_sufficient_history_logs_no_iv_warning() -> None:
+    store = _cal_store()
+    with capture_logs() as logs:
+        _run_calibration([_cal_snap()], _TODAY, store, MagicMock(), dry_run=False)
+
+    assert not any(e["event"] == "gamma_daily_watch.insufficient_iv_history" for e in logs)
 
 
 def test_calibration_writes_percentile() -> None:

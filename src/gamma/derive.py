@@ -66,6 +66,11 @@ def derive_snapshots(
                     created_at,
                 )
             )
+    ask_too_low = sum(1 for r in rows if r.gamma_val is not None and r.gamma_gearing is None)
+    if ask_too_low:
+        logger.warning(
+            "gamma.derive.ask_too_low_for_gearing", expiry=str(expiry_date), count=ask_too_low
+        )
     return rows
 
 
@@ -96,7 +101,7 @@ def _build_row(
         vega_val=leg.vega,
         theta_val=leg.theta,
         iv_val=leg.iv,
-        gamma_gearing=_gamma_gearing(leg, strike, spot),
+        gamma_gearing=_gamma_gearing(leg, spot),
         distance_pct=abs(spot - strike) / spot,
         best_bid=leg.bid,
         best_ask=leg.ask,
@@ -110,12 +115,9 @@ def _build_row(
     )
 
 
-def _gamma_gearing(leg: OptionLeg, strike: int, spot: Decimal) -> Decimal | None:
+def _gamma_gearing(leg: OptionLeg, spot: Decimal) -> Decimal | None:
     """Return gamma × spot² / ask, or None if gamma is missing or ask is too low."""
-    if leg.gamma is None:
-        return None
-    if leg.ask <= _MIN_ASK_FOR_GEARING:
-        logger.warning("gamma.derive.ask_too_low_for_gearing", strike=strike, ask=str(leg.ask))
+    if leg.gamma is None or leg.ask <= _MIN_ASK_FOR_GEARING:
         return None
     return leg.gamma * spot * spot / leg.ask
 

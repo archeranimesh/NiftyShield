@@ -251,14 +251,7 @@ def _calibrate_snap(
                 conn, snap.strike, snap.option_type, limit_days=_MIN_HISTORY_DAYS, before=today
             )
         hist = iv_cache[key]
-        if len(hist) < _MIN_HISTORY_DAYS:
-            logger.warning(
-                "gamma_daily_watch.insufficient_iv_history",
-                strike=snap.strike,
-                opt=snap.option_type,
-                days=len(hist),
-            )
-        else:
+        if len(hist) >= _MIN_HISTORY_DAYS:
             iv_pct = _percentile(snap.iv_val, hist)
     gearing_pct = None
     if snap.gamma_gearing is not None:
@@ -327,6 +320,14 @@ def _run_calibration(
             raise
         logger.warning("gamma_daily_watch.dry_run_no_tables")
         return
+    short = [len(h) for h in iv_cache.values() if len(h) < _MIN_HISTORY_DAYS]
+    if short:
+        logger.warning(
+            "gamma_daily_watch.insufficient_iv_history",
+            strikes=len(short),
+            min_days=min(short),
+            max_days=max(short),
+        )
     logger.info("gamma_daily_watch.calibrated", rows=written, dry_run=dry_run)
 
 

@@ -72,7 +72,8 @@ def test_derive_snapshots_ask_guard() -> None:
 
     assert len(rows) == 1
     assert rows[0].gamma_gearing is None
-    assert any(e["event"] == "gamma.derive.ask_too_low_for_gearing" for e in logs)
+    events = [e for e in logs if e["event"] == "gamma.derive.ask_too_low_for_gearing"]
+    assert len(events) == 1 and events[0]["count"] == 1
 
 
 def test_derive_snapshots_missing_bid_gives_no_spread() -> None:
