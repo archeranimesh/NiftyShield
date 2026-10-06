@@ -3,7 +3,7 @@
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
 spec.
 
-**Open: PC-17.**
+**Open: none — chart-core complete (PC-19 closed `6ef2a5f`).**
 - [x] **PC-1** — Scaffold the `strategy-payoff-charts/` epic + both sub-stories; register in `TODOS.md` + README | Owner: Claude | Model: claude-sonnet-5 | Review: none | SHA: 7210c31
 - [x] **PC-2** — `src/payoff/` leaf package: `core.py` (`PayoffLeg`, `StrategyPayoff`, `compute_payoff`), `errors.py` (`PayoffError` hierarchy), import-boundary test, `Decimal` | Owner: Claude |
   Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: bd6e6a1
@@ -29,7 +29,7 @@ spec.
 - [x] **PC-17** — Wire close V1 (`ic_nifty_v1.py` `_send_close_notification`): PNG after the text send | Owner: Antigravity | Model: claude-sonnet-5 | Review: greeks-analyst | SHA: 7d9698e
 - [x] **PC-18** — Wire close V2 (`ic_nifty_v2.py` `_send_close_notification` mirror) | Owner: Antigravity | Model: claude-sonnet-5 | Review: greeks-analyst | SHA: e74e9a4
 - [x] **PC-19** — Docs close: `CONTEXT.md` + `DECISIONS.md` + `TODOS.md` + README + epic README + "register a strategy" recipe in `src/strategy/CLAUDE.md`; re-index graph | Owner: Antigravity | Model:
-  claude-sonnet-5 | Review: none | SHA: pending
+  unrecorded | Review: none | SHA: 6ef2a5f claude-sonnet-5 | Review: none | SHA: pending
 
 ## Story done when
 
