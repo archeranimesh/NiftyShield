@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import date
 from decimal import Decimal
 from typing import Protocol
@@ -17,7 +19,7 @@ class ChainSource(Protocol):
 
 
 class UpstoxChainSource:
-    def __init__(self, client: UpstoxMarketClient):
+    def __init__(self, client: UpstoxMarketClient) -> None:
         self.client = client
 
     async def get_chain(self, underlying: str, expiry: str) -> OptionChain:
@@ -26,7 +28,7 @@ class UpstoxChainSource:
 
 
 class DhanChainSource:
-    def __init__(self, client: DhanMarketClient):
+    def __init__(self, client: DhanMarketClient) -> None:
         self.client = client
 
     async def get_chain(self, underlying: str, expiry: str) -> OptionChain:
@@ -51,7 +53,7 @@ def _is_chain_empty_or_zero_delta(chain: OptionChain) -> bool:
 
 
 class CompositeChainSource:
-    def __init__(self, upstox: ChainSource, dhan: ChainSource):
+    def __init__(self, upstox: ChainSource, dhan: ChainSource) -> None:
         self.upstox = upstox
         self.dhan = dhan
 
