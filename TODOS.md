@@ -51,6 +51,9 @@ rot them. (Items 3, 5 and 8 closed — numbers kept stable because item text cro
 22. **Tradetron delta check and long-window validation** — `docs/plan/tradetron-delta-and-long-window/` — next **TDL-2** (Live Offline Greeks probe). Animesh's screen of the paper strategies before
     any paid-data purchase; TDL-2 may give `greeks-bs-fallback` a far-dated reference. Funded runs need Animesh's per-run approval.
 - strategy-payoff-charts follow-up: `spot=None` in `_send_close_notification` missing the "where we closed" marker. Needs `apply_action` to receive the chain or `underlying_price` plumbed through.
+- strategy-payoff-charts follow-up (2026-10-06): `src/notifications/payoff_chart.py` imports matplotlib at module top level, and the entry, snapshot, monitor and IC strategy modules import it at
+  module level, so a venv without matplotlib crashes them at import (found when the cron venv lacked it). Import matplotlib lazily inside the render function so a missing dependency costs only the
+  chart, per the renderer-degrades contract; add a test that imports the strategy modules with matplotlib blocked.
 
 ## Open Bugs
 
