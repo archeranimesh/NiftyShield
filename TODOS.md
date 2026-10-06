@@ -51,6 +51,7 @@ rot them. (Items 3, 5 and 8 closed — numbers kept stable because item text cro
     longest wall-clock pole. Do VG0/VG1 now; the Gate A–D tasks are human checkpoints that accrue passively while the items below are built.
 22. **Tradetron delta check and long-window validation** — `docs/plan/tradetron-delta-and-long-window/` — next **TDL-2** (Live Offline Greeks probe). Animesh's screen of the paper strategies before
     any paid-data purchase; TDL-2 may give `greeks-bs-fallback` a far-dated reference. Funded runs need Animesh's per-run approval.
+- strategy-payoff-charts follow-up: `spot=None` in `_send_close_notification` missing the "where we closed" marker. Needs `apply_action` to receive the chain or `underlying_price` plumbed through.
 
 ## Open Bugs
 

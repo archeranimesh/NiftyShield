@@ -56,3 +56,12 @@ Every monitor tick while a position is open writes one `paper_signal_marks` row 
 ### Not yet exercised
 
 The SPT-7 go-live gate (G1–G9) and the live pilot: the 6-month paper evaluation window has not elapsed as of this note (2026-09-11).
+
+## Registering a new strategy for payoff charts
+
+Any new strategy that wants a payoff chart at entry, EOD snapshot, or close must explicitly register with `src/payoff/registry.py`. Unregistered strategies silently drop the chart send (logging a warning) without raising.
+
+1. Go to `src/strategy/payoff_registrations.py`.
+2. Find `ensure_registered()`.
+3. Add a block for your new strategy using `register_payoff("my_strategy_name", MyAdapter())`.
+4. If your legs match the standard schema (long/short put/call with an `instrument_key` and a net qty), you can use the default adapter: `DefaultPositionAdapter(resolver=_resolve_payoff_leg)`

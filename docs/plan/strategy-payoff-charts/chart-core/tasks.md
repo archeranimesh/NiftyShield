@@ -26,10 +26,10 @@ spec.
 - [x] **PC-14** — Wire entry V1 (`paper_ic_entry.py`): `send_payoff_chart` after the `ICEntryMessage` text send | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 36a6634
 - [x] **PC-15** — Wire entry V2 (`paper_ic_entry_v2.py`): same | Owner: Claude | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 8cc2b3b
 - [x] **PC-16** — Wire EOD snapshot (`paper_ic_snapshot.py` `process_variant`): one PNG per open variant | Owner: Claude | Model: claude-sonnet-5 | Review: greeks-analyst | SHA: 5f244d4
-- [ ] **PC-17** — Wire close V1 (`ic_nifty_v1.py` `_send_close_notification`): PNG after the text send | Owner: Claude | Model: claude-sonnet-5 | Review: greeks-analyst | SHA: —
-- [ ] **PC-18** — Wire close V2 (`ic_nifty_v2.py` `_send_close_notification` mirror) | Owner: Claude | Model: claude-sonnet-5 | Review: greeks-analyst | SHA: —
-- [ ] **PC-19** — Docs close: `CONTEXT.md` + `DECISIONS.md` + `TODOS.md` + README + epic README + "register a strategy" recipe in `src/strategy/CLAUDE.md`; re-index graph | Owner: Claude | Model:
-  claude-sonnet-5 | Review: none | SHA: —
+- [x] **PC-17** — Wire close V1 (`ic_nifty_v1.py` `_send_close_notification`): PNG after the text send | Owner: Antigravity | Model: claude-sonnet-5 | Review: greeks-analyst | SHA: 7d9698e
+- [x] **PC-18** — Wire close V2 (`ic_nifty_v2.py` `_send_close_notification` mirror) | Owner: Antigravity | Model: claude-sonnet-5 | Review: greeks-analyst | SHA: e74e9a4
+- [x] **PC-19** — Docs close: `CONTEXT.md` + `DECISIONS.md` + `TODOS.md` + README + epic README + "register a strategy" recipe in `src/strategy/CLAUDE.md`; re-index graph | Owner: Antigravity | Model:
+  claude-sonnet-5 | Review: none | SHA: pending
 
 ## Story done when
 

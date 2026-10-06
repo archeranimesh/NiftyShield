@@ -1273,3 +1273,6 @@ validate against Dhan with a tolerance no tighter than 0.02; that story was not 
 - Expired instruments via Upstox — blocked (paid). NSE F&O Bhavcopy is the adopted alternative (free)
 - Liquidity buffer rule + OI-based margin haircut — deferred to Phase 2 `src/risk/` expansion
 
+
+## Payoff Charts
+- **strategy-payoff-charts**: Matplotlib is used for rendering off the event loop (`to_thread`). Charts are additive and non-fatal. `spot=None` was used for the IC close charts because `apply_action` doesn't currently receive the option chain, deviating from the initial spec to avoid widening the scope.

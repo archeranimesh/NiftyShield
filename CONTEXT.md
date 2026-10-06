@@ -158,3 +158,5 @@ Strategy leg tables (instrument keys, entry prices, quantities, protected MF por
 ## Session Log
 
 Full session log has moved to **[TODOS.md](TODOS.md)**.
+
+- `strategy-payoff-charts`: Payoff chart generation via matplotlib is wired to IC V1/V2 entry, EOD snapshot, and close. Charts are sent after text notifications. The registry is opt-in (`src/payoff/registry.py`).
