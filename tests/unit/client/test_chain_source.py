@@ -210,8 +210,10 @@ async def test_upstox_exception_propagates():
 
 @pytest.mark.asyncio
 async def test_upstox_empty_dhan_all_none_raises():
-    upstox = FakeUpstoxClient(empty=True)
-    dhan = FakeDhanClient(all_zero=True)
-    source = CompositeChainSource(UpstoxChainSource(upstox), DhanChainSource(dhan))
-    with pytest.raises(DataFetchError, match="both Upstox and Dhan failed to return usable data"):
+    upstox = FakeChainSource(create_mock_chain([]))
+    dhan = FakeChainSource(create_mock_chain([None, None]))
+    source = CompositeChainSource(upstox, dhan)
+    with pytest.raises(
+        DataFetchError, match="Both Upstox and Dhan returned empty or zero-delta chains"
+    ):
         await source.get_chain("NSE_INDEX|Nifty 50", "2026-12-31")
