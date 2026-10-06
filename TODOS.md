@@ -1147,3 +1147,5 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
   greeks-analyst: bid=0 spread guard fixed. SHA backfill in next commit.
 - [2026-10-03] BUG-072 B072.1: `gamma_daily_watch.main()` trading-day guard (`2305977`) — real run exits 0 before any fetch, `--dry-run` warns and continues. B072.2 (live-day dry-run, enable 15:20
   cron) pending.
+- [2026-10-06] dhan-chain-adapter DA-1..DA-3 done: Dhan option chain client built, sanitised fixtures added, Upstox Dec 2026 check done, source composite built and tested, NOT yet wired into any
+  caller (DA-4).
