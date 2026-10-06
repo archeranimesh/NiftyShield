@@ -265,6 +265,8 @@ src/
                               #   Expired instruments + historical candles raise NotImplementedError. get_order_margin() (2026-07-22): pre-trade margin calculator via POST /v2/charges/margin.
     ├── mock_client.py        # MockBrokerClient: offline BrokerClient implementation
                               #   — deterministic fakes for all protocol methods, including a netting-benefit factor for get_order_margin() BUY+SELL baskets
+    ├── dhan_market.py        # DhanMarketClient (async) + pure parse_dhan_option_chain. Rate limiter, 805 backoff, missing/zero Greeks normalization.
+    ├── chain_source.py       # ChainSource Protocol + CompositeChainSource (Dhan fallback on all-zero Upstox Greeks) + Upstox/Dhan wrappers.
     └── factory.py            # Composition root. create_client(env) → BrokerClient.
                               #   env: "prod" → UpstoxLiveClient (UPSTOX_ANALYTICS_TOKEN), "sandbox" → UpstoxLiveClient (UPSTOX_SANDBOX_TOKEN), "test" → MockBrokerClient.
                               #   ONLY file in src/ that imports concrete clients.

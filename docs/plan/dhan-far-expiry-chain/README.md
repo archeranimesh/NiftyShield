@@ -40,7 +40,7 @@ Decided with Animesh on 2026-10-06:
 
 | Story | Purpose | Status | Depends on | Closing SHA |
 |---|---|---|---|---|
-| `dhan-chain-adapter/` | Renewal decision, fixtures, `DhanMarketClient`, chain-source selection | ⬜ Not started | — | — |
+| `dhan-chain-adapter/` | Renewal decision, fixtures, `DhanMarketClient`, chain-source selection | ✅ Done | — | 7abac89 |
 | `far-expiry-capture/` | Storage decision, daily capture entrypoint, cron, liquidity report | ⬜ Not started | `dhan-chain-adapter` | — |
 | `far-expiry-liquidity-gate/` | Calibrated gate with fallback ladder, roll-window decision | ⬜ Not started | `far-expiry-capture` (data) | — |
 

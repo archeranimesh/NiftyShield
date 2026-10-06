@@ -4,11 +4,12 @@ Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task
 
 **Open: DA-0..DA-3.**
 
-- [ ] **DA-0** — Decide Dhan data-plan renewal before 2026-11-04 and record it in `findings.md` | Owner: Animesh | Model: n/a | Review: none | SHA: —
-- [ ] **DA-1** — Record sanitised live fixtures (Dec 2026, Dec 2027) and check whether Upstox now returns Greeks for Dec 2026 | Owner: Antigravity | Model: claude-sonnet-5-5 | Review: none | SHA: —
-- [ ] **DA-2** — `DhanMarketClient.get_option_chain` + pure `parse_dhan_option_chain` + injectable 4 s rate limiter with 805 backoff and timeouts | Owner: Antigravity | Model: n/a | Review:
-  greeks-analyst | SHA: —
-- [ ] **DA-3** — Chain-source `Protocol` + composite that falls back to Dhan only on all-zero Upstox Greeks | Owner: Antigravity | Model: claude-sonnet-5-5 | Review: greeks-analyst | SHA: —
+- [ ] **DA-0 — Decide Dhan data-plan renewal before 2026-11-04 and record it in `findings.md` | Owner: Animesh | Model: n/a | Review: none | SHA: —
+- [x] **DA-1** — Record sanitised live fixtures (Dec 2026, Dec 2027) and check whether Upstox now returns Greeks for Dec 2026 | Owner: Antigravity | Model: claude-sonnet-5-5 | Review: none | SHA:
+  7abac89
+- [x] **DA-2** — `DhanMarketClient.get_option_chain` + pure `parse_dhan_option_chain` + injectable 4 s rate limiter with 805 backoff and timeouts | Owner: Antigravity | Model: n/a | Review:
+  greeks-analyst | SHA: 7abac89
+- [x] **DA-3** — Chain-source `Protocol` + composite that falls back to Dhan only on all-zero Upstox Greeks | Owner: Antigravity | Model: claude-sonnet-5-5 | Review: greeks-analyst | SHA: 7abac89
 
 ## Story done when
 

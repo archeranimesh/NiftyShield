@@ -21,7 +21,8 @@ referenced below): **[DECISIONS.md](DECISIONS.md)**. Verbatim snapshot of the pr
 Top-level `src/` packages, one line each (detail → `CONTEXT_TREE.md`):
 
 - `src/auth/` — Upstox OAuth + Nuvama request_id + Dhan manual-token login/verify flows.
-- `src/client/` — `BrokerClient` protocol + 4 impls (Upstox live/sandbox, Mock); `factory.create_client(env)`; order exec + portfolio read blocked (static IP / daily token).
+- `src/client/` — `BrokerClient` / `ChainSource` protocols + impls (Upstox live/sandbox, Mock, Dhan, Composite); `factory.create_client(env)`; order exec + portfolio read blocked (static IP / daily
+  token).
 - `src/models/` — canonical domain types: `Leg`/`Trade`/`Strategy`/`DailySnapshot`/`PortfolioSummary` (portfolio.py), MF types (mf.py), `OptionLeg`/`OptionChain` frozen Pydantic (options.py).
 - `src/portfolio/` — live (non-paper) P&L: `PortfolioStore`, `PortfolioTracker`, pure `summary.py`/`formatting.py`, `SnapshotService`, `overlay_coverage.py`; finideas strategies (ILTS, FinRakshak).
 - `src/paper/` — paper-trading engine. Models: `PaperTrade`, `PaperPosition`, `PaperNavSnapshot`, `PaperLegSnapshot`, `PaperExitEvent`, `TrackComparisonSnapshot`, `TradeState` enum. `PaperStore`
@@ -159,4 +160,5 @@ Strategy leg tables (instrument keys, entry prices, quantities, protected MF por
 
 Full session log has moved to **[TODOS.md](TODOS.md)**.
 
-- `strategy-payoff-charts`: Payoff chart generation via matplotlib is wired to IC V1/V2 entry, EOD snapshot, and close. Charts are sent after text notifications. The registry is opt-in (`src/payoff/registry.py`).
+- `strategy-payoff-charts`: Payoff chart generation via matplotlib is wired to IC V1/V2 entry, EOD snapshot, and close. Charts are sent after text notifications. The registry is opt-in
+  (`src/payoff/registry.py`).
