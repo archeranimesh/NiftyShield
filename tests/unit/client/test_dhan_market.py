@@ -174,24 +174,42 @@ async def test_auth_failure(mock_session_post):
 @pytest.mark.live
 @pytest.mark.asyncio
 async def test_live_read():
+    import os
     import time
 
-    class RealClock:
-        def time(self):
+    from src.client.dhan_market import Clock, SpacingRateLimiter
+
+    class RealClock(Clock):
+        def time(self) -> float:
             return time.time()
 
-        async def sleep(self, s):
-            await asyncio.sleep(s)
+        async def sleep(self, seconds: float) -> None:
+            import asyncio
+
+            await asyncio.sleep(seconds)
+
+    token = os.environ.get("DHAN_ACCESS_TOKEN", "")
+    client_id = os.environ.get("DHAN_CLIENT_ID", "")
+
+    if not token or not client_id:
+        pytest.skip("Dhan credentials not configured in environment")
 
     async with aiohttp.ClientSession() as session:
-        client = DhanMarketClient(
-            session, DummyRateLimiter(), RealClock(), "dummy_token", "dummy_client_id"
-        )
-        # Just verifying it makes the request without throwing immediately
-        from src.client.exceptions import AuthenticationError, DataFetchError
+        clock = RealClock()
+        rate_limiter = SpacingRateLimiter(4.0, clock)
+        client = DhanMarketClient(session, rate_limiter, clock, token, client_id)
 
-        with pytest.raises((DataFetchError, AuthenticationError)):
-            await client.get_option_chain("NSE_INDEX|Nifty 50", date(2027, 12, 30))
+        chain = await client.get_option_chain("NSE_INDEX|Nifty 50", date(2026, 12, 29))
+
+        assert chain.strikes, "Chain should not be empty"
+        has_delta = False
+        for strike in chain.strikes.values():
+            if (strike.ce and strike.ce.delta is not None) or (
+                strike.pe and strike.pe.delta is not None
+            ):
+                has_delta = True
+                break
+        assert has_delta, "No leg with a populated delta found"
 
 
 @pytest.mark.asyncio
