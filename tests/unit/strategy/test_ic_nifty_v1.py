@@ -2005,3 +2005,129 @@ def test_resolve_roll_target_key_bod_lookup_raises_returns_none() -> None:
         key = strat._resolve_roll_target_key(Decimal("26000"), "CE", date(2026, 6, 26))
 
     assert key is None
+
+
+# ── Payoff chart notification tests ──────────────────────────────────────────
+@pytest.mark.asyncio
+async def test_send_close_notification_sends_payoff_chart() -> None:
+    """1. Happy path: sends a chart after text"""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from src.models.portfolio import TradeAction
+    from src.paper.models import PaperTrade
+
+    notifier = MagicMock()
+    notifier.send_notification = AsyncMock()
+
+    strat = IronCondorV1(notifier=notifier)
+    positions = [
+        _make_position(
+            leg_role="short_put",
+            instrument_key=_SHORT_PUT_KEY,
+            avg_sell_price=_SHORT_PUT_SELL,
+            net_qty=-65,
+            entry_date=date(2026, 4, 20),
+        )
+    ]
+    closed_trades = [
+        PaperTrade(
+            strategy_name=_STRATEGY,
+            leg_role="short_put",
+            instrument_key=_SHORT_PUT_KEY,
+            trade_date=date(2026, 5, 1),
+            action=TradeAction.BUY,
+            quantity=75,
+            price=Decimal("7.70"),
+            notes="close",
+        )
+    ]
+
+    with (
+        patch("src.strategy.ic_nifty_v1.ensure_registered"),
+        patch("src.strategy.ic_nifty_v1.send_payoff_chart", new_callable=AsyncMock) as mock_chart,
+    ):
+        await strat._send_close_notification(
+            "CLOSE_FULL", "PROFIT_TARGET", closed_trades, positions
+        )
+
+        notifier.send_notification.assert_called_once()
+        mock_chart.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_send_close_notification_chart_error_non_fatal() -> None:
+    """2. Error path: send_payoff_chart raises, but close still succeeds."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from src.models.portfolio import TradeAction
+    from src.paper.models import PaperTrade
+
+    notifier = MagicMock()
+    notifier.send_notification = AsyncMock()
+
+    strat = IronCondorV1(notifier=notifier)
+    positions = [
+        _make_position(
+            leg_role="short_put",
+            instrument_key=_SHORT_PUT_KEY,
+            avg_sell_price=_SHORT_PUT_SELL,
+            net_qty=-65,
+        )
+    ]
+    closed_trades = [
+        PaperTrade(
+            strategy_name=_STRATEGY,
+            leg_role="short_put",
+            instrument_key=_SHORT_PUT_KEY,
+            trade_date=date(2026, 5, 1),
+            action=TradeAction.BUY,
+            quantity=75,
+            price=Decimal("7.70"),
+            notes="close",
+        )
+    ]
+
+    with (
+        patch("src.strategy.ic_nifty_v1.ensure_registered"),
+        patch("src.strategy.ic_nifty_v1.send_payoff_chart", new_callable=AsyncMock) as mock_chart,
+    ):
+        mock_chart.side_effect = Exception("chart render failed")
+        await strat._send_close_notification(
+            "CLOSE_FULL", "PROFIT_TARGET", closed_trades, positions
+        )
+
+        notifier.send_notification.assert_called_once()
+        mock_chart.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_send_close_notification_no_chart_when_notifier_none_or_empty_trades() -> None:
+    """3. No chart sent when self._notifier is None or closed_trades is empty."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    strat_no_notifier = IronCondorV1(notifier=None)
+
+    with (
+        patch("src.strategy.ic_nifty_v1.ensure_registered"),
+        patch("src.strategy.ic_nifty_v1.send_payoff_chart", new_callable=AsyncMock) as mock_chart,
+    ):
+        # Notifier is None
+        await strat_no_notifier._send_close_notification(
+            "CLOSE_FULL", "PROFIT_TARGET", [MagicMock()], []
+        )
+        mock_chart.assert_not_called()
+
+        # closed_trades empty
+        notifier = MagicMock()
+        notifier.send_notification = AsyncMock()
+        strat_empty = IronCondorV1(notifier=notifier)
+        await strat_empty._send_close_notification("CLOSE_FULL", "PROFIT_TARGET", [], [])
+        mock_chart.assert_not_called()
+        notifier.send_notification.assert_not_called()
+
+        # positions is empty
+        strat_no_pos = IronCondorV1(notifier=notifier)
+        await strat_no_pos._send_close_notification(
+            "CLOSE_FULL", "PROFIT_TARGET", [MagicMock()], []
+        )
+        mock_chart.assert_not_called()

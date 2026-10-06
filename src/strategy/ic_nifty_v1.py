@@ -35,12 +35,15 @@ from src.market_calendar.holidays import market_today
 from src.models.options import OptionChain, OptionLeg
 from src.notifications.exit_message import ExitKind, ExitMessage, format_exit_message
 from src.notifications.formatting import CloseLegRow
-from src.paper.constants import DEFAULT_BOD_PATH
+from src.notifications.payoff_chart import send_payoff_chart
+from src.paper.constants import DEFAULT_BOD_PATH, LOT_SIZE
 from src.paper.models import PaperPosition, PaperTrade
+from src.payoff.registry import PayoffContext
 from src.strategy import roll_utils
 from src.strategy._price_utils import BodLookupCache
 from src.strategy.ic_close_executor import close_ic_legs, roll_ic_legs
 from src.strategy.ic_expiry_config_v2 import ProfitLockConfig
+from src.strategy.payoff_registrations import ensure_registered
 from src.strategy.protocol import ApprovedAction, LegClose, LegSpec, SignalEvent
 
 _CLOSE_ROLE_LABELS = {
@@ -918,6 +921,32 @@ class IronCondorV1:
             await self._notifier.send_notification(text)
         except Exception as exc:
             log.warning("ic_nifty_v1.send_notification_failed", error=str(exc))
+
+        if positions:
+            try:
+                ensure_registered()
+                ctx = PayoffContext(
+                    positions=positions,
+                    spot=None,
+                    lot_size=LOT_SIZE,
+                    strategy_name=self.strategy_name,
+                    extras={"dte": dte},
+                )
+                margin = (
+                    self._store.get_margin_snapshot(self.strategy_name, entry_dates[0])
+                    if self._store and entry_dates
+                    else None
+                )
+                await send_payoff_chart(
+                    self._notifier,
+                    self.strategy_name,
+                    ctx,
+                    dte=dte,
+                    current_pnl=this_exit_pnl,
+                    margin=margin.final_margin if margin else None,
+                )
+            except Exception as exc:
+                log.warning("ic_nifty_v1.send_payoff_chart_failed", error=str(exc))
 
     # ── Private helpers ───────────────────────────────────────────────────────
 
