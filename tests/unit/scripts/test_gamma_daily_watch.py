@@ -7,6 +7,7 @@ import sys
 from contextlib import contextmanager
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -676,3 +677,27 @@ def test_full_pipeline_integration() -> None:
         "_send_summary",
     ]
     assert mocks["_send_summary"].call_args[0] == (0, _STATS)  # captured=len(snaps), D8
+
+
+def test_import_loads_dotenv_for_cron(tmp_path: Path) -> None:
+    """Importing the script pulls .env into the env — cron exports no UPSTOX_ENV."""
+    import os
+    import subprocess
+
+    token = "dummy-token"  # pragma: allowlist secret
+    (tmp_path / ".env").write_text(f"UPSTOX_ENV=prod\nUPSTOX_ANALYTICS_TOKEN={token}\n")
+    root = Path(__file__).resolve().parents[3]
+    env = {k: v for k, v in os.environ.items() if not k.startswith("UPSTOX_")}
+    env["PYTHONPATH"] = str(root)
+    code = (
+        "import scripts.pipeline.gamma_daily_watch as m; print(m.settings.upstox_analytics_token)"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert out.stdout.strip() == token, out.stderr

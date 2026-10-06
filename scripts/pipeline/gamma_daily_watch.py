@@ -18,6 +18,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 import structlog
+from dotenv import load_dotenv
 
 from src.client.exceptions import DataFetchError
 from src.client.upstox_market import UpstoxMarketClient, parse_upstox_option_chain
@@ -32,6 +33,9 @@ from src.models.options import OptionChain
 from src.notifications.markdown import escape_markdown
 from src.notifications.telegram import build_notifier
 from src.utils.logging import setup_logging
+
+# Cron exports no UPSTOX_ENV, and config treats unset as "test" (ignores .env).
+load_dotenv()
 
 _SCRIPT_NAME = "scripts.pipeline.gamma_daily_watch"
 logger = structlog.get_logger(_SCRIPT_NAME)
