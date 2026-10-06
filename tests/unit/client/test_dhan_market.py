@@ -174,7 +174,6 @@ async def test_auth_failure(mock_session_post):
 @pytest.mark.live
 @pytest.mark.asyncio
 async def test_live_read():
-    import os
     import time
 
     from src.client.dhan_market import Clock, SpacingRateLimiter
@@ -188,8 +187,10 @@ async def test_live_read():
 
             await asyncio.sleep(seconds)
 
-    token = os.environ.get("DHAN_ACCESS_TOKEN", "")
-    client_id = os.environ.get("DHAN_CLIENT_ID", "")
+    from src.config import settings
+
+    token = settings.dhan_access_token or ""
+    client_id = settings.dhan_client_id or ""
 
     if not token or not client_id:
         pytest.skip("Dhan credentials not configured in environment")
@@ -242,7 +243,9 @@ def test_parse_dec2026_normalises_all_zero_greeks():
     pe_12000 = chain.strikes[Decimal("12000")].pe
     assert pe_12000.delta == Decimal("-0.0018")
     assert pe_12000.gamma == Decimal("0")
+    assert pe_12000.theta == Decimal("-0.17191")
     assert pe_12000.vega == Decimal("0.63033")
+    assert pe_12000.iv is not None
 
 
 @pytest.mark.parametrize(
@@ -257,41 +260,14 @@ def test_parse_dec2026_normalises_all_zero_greeks():
     ],
 )
 def test_greek_normalisation_edges(leg_data, expected_delta):
-    from datetime import date
-
     from src.client.dhan_market import _parse_leg
 
     leg_data["last_price"] = 100
-    leg_data["open_interest"] = 10
+    leg_data["oi"] = 10
     leg_data["implied_volatility"] = 15.0
 
     leg = _parse_leg(leg_data, Decimal("10000"))
     assert leg.delta == expected_delta
-
-    with open("tests/fixtures/dhan_chain/dec2026.json") as f:
-        data = json.load(f)
-
-    chain = parse_dhan_option_chain(data, date(2026, 12, 31))
-
-    # a) CE 22000 -> delta/gamma/theta/vega all None while ltp and oi are preserved
-    ce_22000 = chain.strikes[Decimal("22000")].ce
-    assert ce_22000.delta is None
-    assert ce_22000.gamma is None
-    assert ce_22000.theta is None
-    assert ce_22000.vega is None
-    assert ce_22000.ltp == Decimal("1209")
-    assert ce_22000.oi == 699780
-
-    # b) PE strike with delta -0.0018, gamma 0, vega 0.63033 keeps gamma Decimal("0")
-    pe_12000 = chain.strikes[Decimal("12000")].pe
-    assert pe_12000.delta == Decimal("-0.0018")
-    assert pe_12000.gamma == Decimal("0")
-    assert pe_12000.vega == Decimal("0.63033")
-
-    # c) a leg with absent key or JSON null is still None
-    # We can check existing missing delta test or one from the fixture, but the logic handles it.
-
-    # d) a real non-zero leg is unchanged (already covered above implicitly)
 
 
 @pytest.mark.asyncio
@@ -322,3 +298,20 @@ async def test_dhan_client_request_parameters(mock_session_post):
     assert headers["access-token"] == "real_token"
     assert headers["client-id"] == "real_client_id"
     assert headers["Content-Type"] == "application/json"
+
+
+def test_zero_iv_normalised_to_none():
+    from decimal import Decimal
+
+    from src.client.dhan_market import _parse_leg
+
+    leg_data = {
+        "last_price": 100,
+        "oi": 10,
+        "implied_volatility": 0.0,
+        "greeks": {"delta": 0.5, "gamma": 0.1, "theta": -0.2, "vega": 0.3},
+    }
+    leg = _parse_leg(leg_data, Decimal("10000"))
+    assert leg.iv is None
+    assert leg.delta == Decimal("0.5")
+    assert leg.gamma == Decimal("0.1")

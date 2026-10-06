@@ -206,3 +206,12 @@ async def test_upstox_exception_propagates():
         await composite.get_chain("NSE_INDEX|Nifty 50", "2026-10-29")
 
     assert not fake_dhan.called
+
+
+@pytest.mark.asyncio
+async def test_upstox_empty_dhan_all_none_raises():
+    upstox = FakeUpstoxClient(empty=True)
+    dhan = FakeDhanClient(all_zero=True)
+    source = CompositeChainSource(UpstoxChainSource(upstox), DhanChainSource(dhan))
+    with pytest.raises(DataFetchError, match="both Upstox and Dhan failed to return usable data"):
+        await source.get_chain("NSE_INDEX|Nifty 50", "2026-12-31")

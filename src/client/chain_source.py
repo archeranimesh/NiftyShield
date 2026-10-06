@@ -63,7 +63,6 @@ class CompositeChainSource:
                 expiry=expiry,
                 status="empty_or_zero",
             )
-            logger.info("Upstox chain empty or has zero deltas, falling back to Dhan")
             dhan_chain = await self.dhan.get_chain(underlying, expiry)
 
             if _is_chain_empty_or_zero_delta(dhan_chain):
