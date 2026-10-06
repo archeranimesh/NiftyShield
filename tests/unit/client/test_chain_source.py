@@ -3,8 +3,33 @@ from decimal import Decimal
 
 import pytest
 
-from src.client.chain_source import CompositeChainSource
+from src.client.chain_source import CompositeChainSource, DhanChainSource, UpstoxChainSource
+from src.client.exceptions import DataFetchError
 from src.models.options import OptionChain, OptionChainStrike, OptionLeg
+
+
+class FakeUpstoxClient:
+    def __init__(self, raw_data_or_exc):
+        self.raw_data_or_exc = raw_data_or_exc
+        self.called_with = None
+
+    async def get_option_chain(self, underlying, expiry):
+        self.called_with = (underlying, expiry)
+        if isinstance(self.raw_data_or_exc, Exception):
+            raise self.raw_data_or_exc
+        return self.raw_data_or_exc
+
+
+class FakeDhanClient:
+    def __init__(self, parsed_chain_or_exc):
+        self.parsed_chain_or_exc = parsed_chain_or_exc
+        self.called_with = None
+
+    async def get_option_chain(self, underlying, expiry):
+        self.called_with = (underlying, expiry)
+        if isinstance(self.parsed_chain_or_exc, Exception):
+            raise self.parsed_chain_or_exc
+        return self.parsed_chain_or_exc
 
 
 class FakeChainSource:
@@ -87,7 +112,7 @@ async def test_both_fail_raises():
     composite = CompositeChainSource(FakeChainSource(upstox_chain), dhan_source)
 
     with pytest.raises(
-        RuntimeError, match="Both Upstox and Dhan returned empty or zero-delta chains"
+        DataFetchError, match="Both Upstox and Dhan returned empty or zero-delta chains"
     ):
         await composite.get_chain("NSE_INDEX|Nifty 50", "2026-10-29")
 
@@ -138,5 +163,46 @@ async def test_dhan_all_zero_raises():
     dhan_source = FakeChainSource(dhan_chain)
     composite = CompositeChainSource(FakeChainSource(upstox_chain), dhan_source)
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(DataFetchError):
         await composite.get_chain("NSE_INDEX|Nifty 50", "2026-10-29")
+
+
+@pytest.mark.asyncio
+async def test_upstox_wrapper(monkeypatch):
+    fake_client = FakeUpstoxClient({"some": "raw_data"})
+
+    # mock parse_upstox_option_chain to just return a dummy
+    dummy_chain = create_mock_chain([Decimal("0.5")])
+    import src.client.chain_source
+
+    monkeypatch.setattr(src.client.chain_source, "parse_upstox_option_chain", lambda x: dummy_chain)
+
+    source = UpstoxChainSource(fake_client)
+    res = await source.get_chain("NSE_INDEX|Nifty 50", "2026-10-29")
+
+    assert res is dummy_chain
+    assert fake_client.called_with == ("NSE_INDEX|Nifty 50", "2026-10-29")
+
+
+@pytest.mark.asyncio
+async def test_dhan_wrapper():
+    expected_chain = create_mock_chain([Decimal("0.5")])
+    fake_client = FakeDhanClient(expected_chain)
+    source = DhanChainSource(fake_client)
+
+    res = await source.get_chain("NSE_INDEX|Nifty 50", "2026-10-29")
+    assert res is expected_chain
+    assert fake_client.called_with == ("NSE_INDEX|Nifty 50", date(2026, 10, 29))
+
+
+@pytest.mark.asyncio
+async def test_upstox_exception_propagates():
+    fake_upstox = FakeChainSource(DataFetchError("Upstox down"))
+    fake_dhan = FakeChainSource(create_mock_chain([Decimal("0.5")]))
+
+    composite = CompositeChainSource(fake_upstox, fake_dhan)
+
+    with pytest.raises(DataFetchError, match="Upstox down"):
+        await composite.get_chain("NSE_INDEX|Nifty 50", "2026-10-29")
+
+    assert not fake_dhan.called

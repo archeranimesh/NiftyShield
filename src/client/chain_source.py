@@ -1,7 +1,11 @@
-from typing import Any, Protocol
+from datetime import date
+from decimal import Decimal
+from typing import Protocol
 
 import structlog
 
+from src.client.dhan_market import DhanMarketClient
+from src.client.exceptions import DataFetchError
 from src.client.upstox_market import UpstoxMarketClient, parse_upstox_option_chain
 from src.models.options import OptionChain
 
@@ -21,35 +25,24 @@ class UpstoxChainSource:
         return parse_upstox_option_chain(raw_data)
 
 
-class DhanMarketClient(Protocol):
-    async def get_option_chain(
-        self, security_id: int, segment: str, expiry: str
-    ) -> list[dict[str, Any]]: ...
-
-
-def parse_dhan_option_chain(data: list[dict[str, Any]]) -> OptionChain:
-    # To be built
-    raise NotImplementedError("parse_dhan_option_chain not implemented")
-
-
 class DhanChainSource:
     def __init__(self, client: DhanMarketClient):
         self.client = client
 
     async def get_chain(self, underlying: str, expiry: str) -> OptionChain:
-        if underlying == "NSE_INDEX|Nifty 50":
-            security_id = 13
-            segment = "IDX_I"
-        else:
-            raise ValueError(f"Unknown underlying for Dhan: {underlying}")
-
-        raw_data = await self.client.get_option_chain(security_id, segment, expiry)
-        return parse_dhan_option_chain(raw_data)
+        expiry_date = date.fromisoformat(expiry)
+        return await self.client.get_option_chain(underlying, expiry_date)
 
 
 def _is_chain_empty_or_zero_delta(chain: OptionChain) -> bool:
     if not chain.strikes:
         return True
+
+    for strike in chain.strikes.values():
+        for leg in (strike.ce, strike.pe):
+            if leg is not None and leg.delta is not None and leg.delta != Decimal("0"):
+                return False
+    return True
 
     for strike in chain.strikes.values():
         if (strike.ce and strike.ce.delta) or (strike.pe and strike.pe.delta):
@@ -66,12 +59,40 @@ class CompositeChainSource:
         upstox_chain = await self.upstox.get_chain(underlying, expiry)
 
         if _is_chain_empty_or_zero_delta(upstox_chain):
+            logger.info(
+                "Fetched OptionChain",
+                source="upstox",
+                underlying=underlying,
+                expiry=expiry,
+                status="empty_or_zero",
+            )
             logger.info("Upstox chain empty or has zero deltas, falling back to Dhan")
             dhan_chain = await self.dhan.get_chain(underlying, expiry)
 
             if _is_chain_empty_or_zero_delta(dhan_chain):
-                raise RuntimeError("Both Upstox and Dhan returned empty or zero-delta chains")
+                logger.info(
+                    "Fetched OptionChain",
+                    source="dhan",
+                    underlying=underlying,
+                    expiry=expiry,
+                    status="empty_or_zero",
+                )
+                raise DataFetchError("Both Upstox and Dhan returned empty or zero-delta chains")
 
+            logger.info(
+                "Fetched OptionChain",
+                source="dhan",
+                underlying=underlying,
+                expiry=expiry,
+                status="success",
+            )
             return dhan_chain
 
+        logger.info(
+            "Fetched OptionChain",
+            source="upstox",
+            underlying=underlying,
+            expiry=expiry,
+            status="success",
+        )
         return upstox_chain

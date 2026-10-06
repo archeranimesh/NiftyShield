@@ -110,6 +110,9 @@ def parse_dhan_option_chain(data: dict[str, Any], expiry: date) -> OptionChain:
     return OptionChain(underlying_spot=underlying_spot, expiry=expiry, strikes=strikes)
 
 
+_DHAN_UNDERLYING_MAP = {"NSE_INDEX|Nifty 50": (13, "IDX_I")}
+
+
 class DhanMarketClient:
     def __init__(self, session: aiohttp.ClientSession, rate_limiter: RateLimiter, clock: Clock):
         self._session = session
@@ -123,7 +126,7 @@ class DhanMarketClient:
             await self._rate_limiter.acquire()
             try:
                 # Explicit timeout on every call
-                async with self._session.get(url, params=params, timeout=10.0) as resp:
+                async with self._session.post(url, json=params, timeout=10.0) as resp:
                     if resp.status in (401, 403):
                         raise AuthenticationError("Authentication failed")
 
@@ -154,7 +157,15 @@ class DhanMarketClient:
         raise DataFetchError("Max retries exceeded")
 
     async def get_option_chain(self, underlying: str, expiry: date) -> OptionChain:
+        if underlying not in _DHAN_UNDERLYING_MAP:
+            raise DataFetchError(f"Unknown underlying for Dhan: {underlying}")
+        security_id, segment = _DHAN_UNDERLYING_MAP[underlying]
+
         url = "https://api.dhan.co/v2/optionchain"
-        params = {"underlying": underlying, "expiry": expiry.isoformat()}
+        params = {
+            "UnderlyingScrip": security_id,
+            "UnderlyingSeg": segment,
+            "Expiry": expiry.isoformat(),
+        }
         data = await self._fetch_with_backoff(url, params)
         return parse_dhan_option_chain(data, expiry)
