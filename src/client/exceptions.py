@@ -47,3 +47,7 @@ class InsufficientMarginError(OrderRejectedError):
 
 class InstrumentNotFoundError(BrokerError):
     """Invalid instrument key — terminal."""
+
+
+class NotSubscribedError(BrokerError):
+    """User not subscribed to this segment/data (e.g. Dhan 806) — terminal."""
