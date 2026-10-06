@@ -1,0 +1,142 @@
+from datetime import date
+from decimal import Decimal
+
+import pytest
+
+from src.client.chain_source import CompositeChainSource
+from src.models.options import OptionChain, OptionChainStrike, OptionLeg
+
+
+class FakeChainSource:
+    def __init__(self, chain: OptionChain | Exception):
+        self.chain_or_exc = chain
+        self.called = False
+
+    async def get_chain(self, underlying: str, expiry: str) -> OptionChain:
+        self.called = True
+        if isinstance(self.chain_or_exc, Exception):
+            raise self.chain_or_exc
+        return self.chain_or_exc
+
+
+def create_mock_chain(deltas: list[Decimal | None]) -> OptionChain:
+    strikes = {}
+    for i, d in enumerate(deltas):
+        # We just fill CE to simplify, PE delta defaults to None
+        ce_leg = OptionLeg(
+            ltp=Decimal("0"),
+            bid=Decimal("0"),
+            ask=Decimal("0"),
+            oi=0,
+            volume=0,
+            delta=d,
+            gamma=None,
+            theta=None,
+            vega=None,
+            iv=None,
+            strike=Decimal(1000 + i),
+        )
+        pe_leg = OptionLeg(
+            ltp=Decimal("0"),
+            bid=Decimal("0"),
+            ask=Decimal("0"),
+            oi=0,
+            volume=0,
+            delta=None,
+            gamma=None,
+            theta=None,
+            vega=None,
+            iv=None,
+            strike=Decimal(1000 + i),
+        )
+        strikes[Decimal(1000 + i)] = OptionChainStrike(ce=ce_leg, pe=pe_leg)
+    return OptionChain(underlying_spot=Decimal("1000"), expiry=date(2026, 10, 29), strikes=strikes)
+
+
+@pytest.mark.asyncio
+async def test_upstox_greeks_present_dhan_not_called():
+    upstox_chain = create_mock_chain([Decimal("0.5")])
+    dhan_source = FakeChainSource(create_mock_chain([Decimal("0.5")]))
+
+    composite = CompositeChainSource(FakeChainSource(upstox_chain), dhan_source)
+    res = await composite.get_chain("NSE_INDEX|Nifty 50", "2026-10-29")
+
+    assert res is upstox_chain
+    assert not dhan_source.called
+
+
+@pytest.mark.asyncio
+async def test_upstox_all_zero_falls_back_to_dhan():
+    upstox_chain = create_mock_chain([Decimal("0")])
+    dhan_chain = create_mock_chain([Decimal("0.5")])
+
+    dhan_source = FakeChainSource(dhan_chain)
+    composite = CompositeChainSource(FakeChainSource(upstox_chain), dhan_source)
+
+    res = await composite.get_chain("NSE_INDEX|Nifty 50", "2026-10-29")
+    assert res is dhan_chain
+    assert dhan_source.called
+
+
+@pytest.mark.asyncio
+async def test_both_fail_raises():
+    upstox_chain = create_mock_chain([Decimal("0")])
+    dhan_chain = create_mock_chain([Decimal("0")])
+
+    dhan_source = FakeChainSource(dhan_chain)
+    composite = CompositeChainSource(FakeChainSource(upstox_chain), dhan_source)
+
+    with pytest.raises(
+        RuntimeError, match="Both Upstox and Dhan returned empty or zero-delta chains"
+    ):
+        await composite.get_chain("NSE_INDEX|Nifty 50", "2026-10-29")
+
+
+@pytest.mark.asyncio
+async def test_partial_zero_is_not_fallback_trigger():
+    upstox_chain = create_mock_chain([Decimal("0"), Decimal("0.5")])
+    dhan_source = FakeChainSource(create_mock_chain([Decimal("0.5")]))
+
+    composite = CompositeChainSource(FakeChainSource(upstox_chain), dhan_source)
+    res = await composite.get_chain("NSE_INDEX|Nifty 50", "2026-10-29")
+
+    assert res is upstox_chain
+    assert not dhan_source.called
+
+
+@pytest.mark.asyncio
+async def test_all_None_treated_as_all_zero():
+    upstox_chain = create_mock_chain([None, None])
+    dhan_chain = create_mock_chain([Decimal("0.5")])
+
+    dhan_source = FakeChainSource(dhan_chain)
+    composite = CompositeChainSource(FakeChainSource(upstox_chain), dhan_source)
+
+    res = await composite.get_chain("NSE_INDEX|Nifty 50", "2026-10-29")
+    assert res is dhan_chain
+    assert dhan_source.called
+
+
+@pytest.mark.asyncio
+async def test_empty_upstox_chain_triggers_fallback():
+    upstox_chain = create_mock_chain([])
+    dhan_chain = create_mock_chain([Decimal("0.5")])
+
+    dhan_source = FakeChainSource(dhan_chain)
+    composite = CompositeChainSource(FakeChainSource(upstox_chain), dhan_source)
+
+    res = await composite.get_chain("NSE_INDEX|Nifty 50", "2026-10-29")
+    assert res is dhan_chain
+    assert dhan_source.called
+
+
+@pytest.mark.asyncio
+async def test_dhan_all_zero_raises():
+    upstox_chain = create_mock_chain([])
+    dhan_chain = create_mock_chain([Decimal("0")])
+
+    dhan_source = FakeChainSource(dhan_chain)
+    composite = CompositeChainSource(FakeChainSource(upstox_chain), dhan_source)
+
+    with pytest.raises(RuntimeError):
+        await composite.get_chain("NSE_INDEX|Nifty 50", "2026-10-29")
