@@ -230,6 +230,49 @@ def test_parse_dec2026_normalises_all_zero_greeks():
 
     chain = parse_dhan_option_chain(data, date(2026, 12, 31))
 
+    ce_22000 = chain.strikes[Decimal("22000")].ce
+    assert ce_22000.delta is None
+    assert ce_22000.gamma is None
+    assert ce_22000.theta is None
+    assert ce_22000.vega is None
+    assert ce_22000.iv is None
+    assert ce_22000.ltp == Decimal("1209")
+    assert ce_22000.oi == 699780
+
+    pe_12000 = chain.strikes[Decimal("12000")].pe
+    assert pe_12000.delta == Decimal("-0.0018")
+    assert pe_12000.gamma == Decimal("0")
+    assert pe_12000.vega == Decimal("0.63033")
+
+
+@pytest.mark.parametrize(
+    "leg_data, expected_delta",
+    [
+        ({"greeks": {"delta": 0.0, "gamma": 0.0, "theta": 0.0, "vega": 0.0}}, None),
+        ({"greeks": {"delta": -0.0, "gamma": 0.0, "theta": 0.0, "vega": 0.0}}, None),
+        ({"greeks": {"delta": "0.0", "gamma": "0.0", "theta": "0.0", "vega": "0.0"}}, None),
+        ({"greeks": {"gamma": 0.0, "theta": 0.0, "vega": 0.0}}, None),
+        ({"greeks": {"delta": None, "gamma": 0.0, "theta": 0.0, "vega": 0.0}}, None),
+        ({"greeks": {"delta": 0.5, "gamma": 0.0, "theta": 0.0, "vega": 0.0}}, Decimal("0.5")),
+    ],
+)
+def test_greek_normalisation_edges(leg_data, expected_delta):
+    from datetime import date
+
+    from src.client.dhan_market import _parse_leg
+
+    leg_data["last_price"] = 100
+    leg_data["open_interest"] = 10
+    leg_data["implied_volatility"] = 15.0
+
+    leg = _parse_leg(leg_data, Decimal("10000"))
+    assert leg.delta == expected_delta
+
+    with open("tests/fixtures/dhan_chain/dec2026.json") as f:
+        data = json.load(f)
+
+    chain = parse_dhan_option_chain(data, date(2026, 12, 31))
+
     # a) CE 22000 -> delta/gamma/theta/vega all None while ltp and oi are preserved
     ce_22000 = chain.strikes[Decimal("22000")].ce
     assert ce_22000.delta is None

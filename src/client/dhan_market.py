@@ -65,10 +65,11 @@ def _parse_leg(leg_data: dict[str, Any] | None, strike: Decimal) -> OptionLeg | 
 
     # A real zero delta on a deep-OTM strike is a legitimate value.
     # However, Dhan encodes entirely missing/uncomputable Greeks by returning 0 for all four Greeks.
-    # If delta, gamma, theta, and vega are ALL exactly 0, we normalise them all to None.
+    # A missing (None) Greek counts as zero for the all-zero check (e.g. if one is absent and rest are zero).
+    # If delta, gamma, theta, and vega are ALL effectively zero (0 or None), we normalise them all to None.
     # This rule is keyed only on Greeks, preserving valid ltp/oi/volume data.
     d0 = Decimal("0")
-    if delta == d0 and gamma == d0 and theta == d0 and vega == d0:
+    if delta in (d0, None) and gamma in (d0, None) and theta in (d0, None) and vega in (d0, None):
         delta = gamma = theta = vega = None
 
     if "implied_volatility" not in leg_data:
@@ -76,6 +77,9 @@ def _parse_leg(leg_data: dict[str, Any] | None, strike: Decimal) -> OptionLeg | 
     else:
         iv_raw = leg_data["implied_volatility"]
         iv = None if iv_raw is None else Decimal(str(iv_raw))
+        # A traded option never has exactly zero IV; Dhan sends 0 for missing IV.
+        if iv == d0:
+            iv = None
 
     return OptionLeg(
         ltp=Decimal(str(leg_data.get("last_price", 0))),
