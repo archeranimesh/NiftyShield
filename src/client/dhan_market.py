@@ -29,7 +29,7 @@ class RateLimiter(Protocol):
 class SpacingRateLimiter:
     """Enforces a minimum time spacing between requests."""
 
-    def __init__(self, spacing: float, clock: Clock):
+    def __init__(self, spacing: float, clock: Clock) -> None:
         self._spacing = spacing
         self._clock = clock
         self._last_req = -float("inf")
@@ -62,6 +62,14 @@ def _parse_leg(leg_data: dict[str, Any] | None, strike: Decimal) -> OptionLeg | 
     gamma = _parse_greek(greeks, "gamma")
     theta = _parse_greek(greeks, "theta")
     vega = _parse_greek(greeks, "vega")
+
+    # A real zero delta on a deep-OTM strike is a legitimate value.
+    # However, Dhan encodes entirely missing/uncomputable Greeks by returning 0 for all four Greeks.
+    # If delta, gamma, theta, and vega are ALL exactly 0, we normalise them all to None.
+    # This rule is keyed only on Greeks, preserving valid ltp/oi/volume data.
+    d0 = Decimal("0")
+    if delta == d0 and gamma == d0 and theta == d0 and vega == d0:
+        delta = gamma = theta = vega = None
 
     if "implied_volatility" not in leg_data:
         iv = None
@@ -114,7 +122,13 @@ _DHAN_UNDERLYING_MAP = {"NSE_INDEX|Nifty 50": (13, "IDX_I")}
 
 
 class DhanMarketClient:
-    def __init__(self, session: aiohttp.ClientSession, rate_limiter: RateLimiter, clock: Clock):
+    def __init__(
+        self,
+        session: aiohttp.ClientSession,
+        rate_limiter: RateLimiter,
+        clock: Clock,
+        max_retries: int = 3,
+    ) -> None:
         self._session = session
         self._rate_limiter = rate_limiter
         self._clock = clock
@@ -126,7 +140,9 @@ class DhanMarketClient:
             await self._rate_limiter.acquire()
             try:
                 # Explicit timeout on every call
-                async with self._session.post(url, json=params, timeout=10.0) as resp:
+                async with self._session.post(
+                    url, json=params, timeout=aiohttp.ClientTimeout(total=10.0)
+                ) as resp:
                     if resp.status in (401, 403):
                         raise AuthenticationError("Authentication failed")
 
