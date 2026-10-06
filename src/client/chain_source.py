@@ -46,11 +46,6 @@ def _is_chain_empty_or_zero_delta(chain: OptionChain) -> bool:
                 return False
     return True
 
-    for strike in chain.strikes.values():
-        if (strike.ce and strike.ce.delta) or (strike.pe and strike.pe.delta):
-            return False
-    return True
-
 
 class CompositeChainSource:
     def __init__(self, upstox: ChainSource, dhan: ChainSource) -> None:

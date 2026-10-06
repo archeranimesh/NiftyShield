@@ -132,7 +132,7 @@ class DhanMarketClient:
         self._session = session
         self._rate_limiter = rate_limiter
         self._clock = clock
-        self.max_retries = 3
+        self.max_retries = max_retries
 
     async def _fetch_with_backoff(self, url: str, params: dict[str, Any]) -> dict[str, Any]:
         retries = 0

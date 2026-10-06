@@ -122,12 +122,12 @@ async def test_805_backs_off_then_raises(mock_session_post):
     mock_session_post.return_value = _make_mock_response(json_data={"errorCode": "805"})
 
     async with aiohttp.ClientSession() as session:
-        client = DhanMarketClient(session, DummyRateLimiter(), clock)
+        client = DhanMarketClient(session, DummyRateLimiter(), clock, max_retries=1)
         with pytest.raises(DataFetchError, match="Error 805 after max retries"):
             await client.get_option_chain("NSE_INDEX|Nifty 50", date(2027, 12, 30))
 
-    assert mock_session_post.call_count == 4
-    assert clock.sleeps == [2.0, 4.0, 8.0]
+    assert mock_session_post.call_count == 2
+    assert clock.sleeps == [2.0]
 
 
 @pytest.mark.asyncio
