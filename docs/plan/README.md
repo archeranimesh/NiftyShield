@@ -56,8 +56,8 @@ comparison snapshot; automated base-leg rolling; full unattended automation.
 
 ## Active Stories
 
-**`tradetron-delta-and-long-window/`** · 🟡 In progress · next: **TDL-2** Check whether Tradetron's delta matches Upstox's, then use Tradetron as a long-window screen of the paper strategies (CC, PP,
-Collar; IC audited) before any paid-data purchase, and see whether its Greeks give `greeks-bs-fallback` a far-dated reference. Funded runs at ₹20 each need Animesh's approval.
+**`tradetron-delta-and-long-window/`** · 🟡 In progress · next: **TDL-3** (TDL-1, TDL-2 done) Check whether Tradetron's delta matches Upstox's, then use Tradetron as a long-window screen of the paper
+strategies (CC, PP, Collar; IC audited) before any paid-data purchase, and see whether its Greeks give `greeks-bs-fallback` a far-dated reference. Funded runs at ₹20 each need Animesh's approval.
 
 **`dhan-data-poc/`** · ✅ Archived → `docs/archive/plan/dhan-data-poc/` Verdict: no for Dhan history (ATM±10, no delta, nothing past about 90 DTE); yes for its live far-dated Greeks.
 

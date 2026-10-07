@@ -48,8 +48,8 @@ rot them. (Items 3, 5 and 8 closed — numbers kept stable because item text cro
     not started, needs a story folder.
 21. **Variance gate — start the observation clock** — `docs/plan/variance-gate/` — next **VG0** (spec reconciliation, Animesh). Cheap, but VG2.A needs ≥9 calendar months of observation, so it is the
     longest wall-clock pole. Do VG0/VG1 now; the Gate A–D tasks are human checkpoints that accrue passively while the items below are built.
-22. **Tradetron delta check and long-window validation** — `docs/plan/tradetron-delta-and-long-window/` — next **TDL-2** (Live Offline Greeks probe). Animesh's screen of the paper strategies before
-    any paid-data purchase; TDL-2 may give `greeks-bs-fallback` a far-dated reference. Funded runs need Animesh's per-run approval.
+22. **Tradetron delta check and long-window validation** — `docs/plan/tradetron-delta-and-long-window/` — next **TDL-3** (long-window pre-flight on CC template v2). Animesh's screen of the paper
+    strategies before any paid-data purchase; TDL-2 may give `greeks-bs-fallback` a far-dated reference. Funded runs need Animesh's per-run approval.
 - strategy-payoff-charts follow-up: `spot=None` in `_send_close_notification` missing the "where we closed" marker. Needs `apply_action` to receive the chain or `underlying_price` plumbed through.
 - strategy-payoff-charts follow-up (2026-10-06): `src/notifications/payoff_chart.py` imports matplotlib at module top level, and the entry, snapshot, monitor and IC strategy modules import it at
   module level, so a venv without matplotlib crashes them at import (found when the cron venv lacked it). Import matplotlib lazily inside the render function so a missing dependency costs only the
@@ -91,6 +91,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-07] tradetron-delta-and-long-window TDL-2 closed (`39938a3`): Tradetron delta matches Upstox to ~0.004 on monthly and Dec near-ATM (weekly pair off by 0.03); Dec Greeks nonzero on both
+  sides today, so the yearly zero-Greeks pattern did not reproduce near the money; next TDL-3.
 - [2026-10-07] Planning session (no code): scaffolded `docs/plan/data-source-routing/` epic (4 sub-stories, council question + `submit.sh` in `council/`, status ⬜); `broker-abstraction/` banner-marked
   superseded in part; coordination notes added to `yearly-overlays/` and `dhan-far-expiry-chain/` READMEs. Next: DSM-1 (capability matrix), then DSM-2 council run (Animesh). Open for Animesh: Kite
   scope, Option A/B identity (council Q1), Dhan token renewal.
@@ -1152,5 +1154,5 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
   cron) pending.
 - [2026-10-06] dhan-chain-adapter DA-1..DA-3 done: Dhan option chain client built, sanitised fixtures added, Upstox Dec 2026 check done, source composite built and tested, NOT yet wired into any
   caller (DA-4).
-- [2026-10-07] dhan-chain-adapter DA-4 relocated to `yearly-overlays/yearly-foundation/` YF-6 (bootstraps consume raw Upstox rows with `instrument_key`; needs an `OptionChain`->row adapter +
-  key resolver, no consumer until a yearly tenor exists). Only DA-0 (Animesh renewal decision) remains open on the story.
+- [2026-10-07] dhan-chain-adapter DA-4 relocated to `yearly-overlays/yearly-foundation/` YF-6 (bootstraps consume raw Upstox rows with `instrument_key`; needs an `OptionChain`->row adapter + key
+  resolver, no consumer until a yearly tenor exists). Only DA-0 (Animesh renewal decision) remains open on the story.
