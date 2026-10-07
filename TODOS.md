@@ -43,7 +43,7 @@ state. Arrows: `A → B` means B cannot start until A is done. `‖` means the t
 | 2 | `technical-debt/` | 20 | opportunistic | fires only when the named file is touched | none |
 | 3 | `strategy-payoff-charts/` `chart-model-overlay/` | 6 | MO-1 | `greeks-bs-fallback` GF-2 + GF-3 | none |
 | 3 | `chain-decay-analysis/` | 12 | CDA-1 | after `greeks-bs-fallback` (monthly bucket only) | none |
-| 3 | `backtest-engine/` phase1..4 → `backtest-eval-core/` → `signals-eval-core/` | 11, 13, 14 | 1.3a / 1.4 | engine 1.3 + 1.4 → eval-core; eval-core + 1.12 → signals-eval-core | Gate D; `entry-event-filter/` |
+| 3 | `backtest-engine/` → `backtest-eval-core/` → `signals-eval-core/` | 11, 13, 14 | 1.3a / 1.4 | engine 1.3 + 1.4 → eval-core; eval-core + 1.12 → signals-eval-core | Gate D; `entry-event-filter/` |
 | 3 | `strategy-refactor-blueprint/` | 10 | BP-1 | BP-2 after item 2; BP-3 is a council | none |
 | 3 | `phase2-integrations/` | 17 | PV-1 | after `portfolio-snapshot-slimdown` (Dhan ETF panel removed) | OE-1 unblocks `broker-abstraction` BA-14 / BA-15 |
 | 3 | `entry-event-filter/` | 16 | EF-1 | ES12 shipped; after `backtest-engine` Phase 2 | none |
