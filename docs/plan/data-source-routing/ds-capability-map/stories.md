@@ -5,74 +5,41 @@
 
 ---
 
-## DSM-1 — Capability matrix
+## DSM-1 — Roll-critical verification
 
 **Files to change / create:**
-- `docs/plan/data-source-routing/ds-capability-map/capability_matrix.md` — the matrix. No checkboxes.
-- `scratch/data_probes/<date>_<topic>.py` — only for probes that need a live call; follow `SCRATCH.md`, extract rather than re-derive. Read-only calls only.
+- `docs/plan/data-source-routing/ds-capability-map/roll_checks.md` — the findings. No checkboxes.
+- `scratch/data_probes/<date>_<topic>.py` — only for checks needing live data; follow `SCRATCH.md`, extract rather than re-derive, read-only calls only.
 
 **Before any code:**
-- Read `docs/archive/plan/dhan-data-poc/findings.md` and the existing `scratch/data_probes/` scripts; reuse them.
-- `search_code("dhan_access_token")`, `search_graph("DhanMarketClient")` — how the token is read today.
+- Read `docs/archive/council/data_architecture/2026-10-07_data-source-routing.md` Stage 3 §Q5 and the Dissenting Notes for Q1.
+- Reuse existing probes in `scratch/data_probes/`; `search_graph("InstrumentLookup")`, `get_code_snippet("InstrumentLookup")` for how the BOD file is loaded.
 
-**What to produce:**
+**What to produce (three checks, in this order — the first can block the roll):**
 
-One row per capability x broker, columns: source, limits, token lifecycle, Greeks model, verification status (probe / doc / unverified), owner if unverified.
+1. **Upstox BOD coverage.** Does the Upstox instrument master list NIFTY Dec 2027 option contracts (CE and PE across the strike range the yearly strategies select), as of the date checked? Use
+   `InstrumentLookup.get_all_option_expiries("NIFTY")` and a strike count. State the date of the BOD file. If Dec 2027 is absent, say when Upstox typically lists a new December series (look at how Dec
+   2026 appeared in earlier BOD files if any are kept) and flag that the council requires a separate architectural decision before the roll (ledger key cannot be written).
+2. **Dhan failure shapes.** The exact response for error 806 ("Data APIs not subscribed") and for a missing, expired or invalid access token, plus the 805 shape already seen. Needed by DSC-3 / DSN-1
+   to classify failures. If a live trigger is impractical (it would need a lapsed plan or a bad token), mark `unverified — owner Animesh` and record where the primary docs state it.
+3. **Upstox Greeks flip, second expiry.** DDP-5 measured Dec 2026 (zero at DTE 91, non-zero at DTE 90). Confirm on one more expiry from stored chains, or mark unverified. The council set the
+   source-switch trigger as 2 consecutive trading days of non-zero delta on held contracts, not a DTE value, so this is context for the dual-read band, not a gate.
 
-Capabilities: live LTP (single and batch ceiling), live option chain with Greeks, historical candles (daily, intraday, lookback), expired options, India VIX, instrument master (format, refresh), order
-margin (single and basket), market stream (feed modes, limits), and the token / subscription lifecycle.
-
-Questions that must be closed or explicitly left open:
-
-1. **Dhan token renewal.** Can a token be renewed or minted programmatically (renew endpoint, API-key flow, TOTP flow)? If renewal needs a still-valid token, say so. Cite the primary doc page.
-2. **India VIX on Dhan.** Segment and security id, or "not available".
-3. **Batch LTP ceiling** on both brokers and the rate limit.
-4. **Order margin on Dhan.** Endpoint and whether it needs the paid plan.
-5. **805 / 806 behaviour.** Exact response shape and what a lapsed plan returns.
-6. **Live feed.** Confirm against the primary page: modes, fields (confirm no Greeks), connection and instrument limits, whether it needs the paid plan.
-7. **Upstox far-expiry Greeks flip.** DDP-5 (`docs/archive/plan/dhan-data-poc/findings.md`) measured one expiry: Dec 2026 deltas went from zero to non-zero between 2026-09-29 15:55 and 2026-09-30
-   09:51 (DTE 91 to 90); Jun 2027 stayed zero on every stored day (DTE 343-382). Confirm on a second expiry from stored chains; Dec 2027 would flip at about 2027-09-29 if 90 DTE holds.
-8. **Dhan MCP and Agent Skills.** Record only what the primary pages state and whether either is relevant to runtime; both are out of scope for the data path.
-
-The primary pages may be unreachable from a cloud session (egress policy). If so, mark those cells `unverified — owner Animesh` rather than filling them from a summary.
+Primary Dhan doc pages may be unreachable from a cloud session; if so, mark those cells `unverified — owner Animesh` instead of filling from a summary.
 
 **Tests:** none (docs and read-only probes).
 
-**Commit:** `docs(plan): capability matrix for data-source routing`
+**Commit:** `docs(plan): roll-critical data source checks`
 
 ---
 
-## DSM-2 — Run the council
+## DSM-2 — Run the council (done)
 
-**Files to change / create:** none by Claude. Output lands at `docs/council/<date>_data-source-routing.md`.
-
-**What to do (Animesh):**
-
-1. Start the council server: `cd tools/llm-council && ./start.sh`.
-2. If DSM-1 closed any question in `council/question.md` §Mechanics, update `question.md` first so the council is not asked about a settled fact.
-3. `bash docs/plan/data-source-routing/council/submit.sh` (add `--dry-run` to the `ask_council` call for a preview).
-4. Commit the output file.
-
-**Commit:** `docs(council): data-source-routing ruling`
+Council ran 2026-10-07; output added in `1cc4c30` and archived to `docs/archive/council/data_architecture/2026-10-07_data-source-routing.md` by DSM-3.
 
 ---
 
-## DSM-3 — Absorb the ruling
+## DSM-3 — Absorb the ruling (done)
 
-**Files to change / create:**
-- `DECISIONS.md` — one row per Summary Table decision, source = the council file.
-- `docs/council/README.md` — a row in §"Topics Already Covered".
-- `docs/plan/data-source-routing/ds-chain-seam/stories.md`, `ds-chain-monitoring/stories.md` — replace the "specced after council" stubs with full specs from the Summary Table.
-- `docs/plan/data-source-routing/README.md` — amend open decisions 2 and 4 with the outcome.
-
-**Before any code:** invoke `protocol-reference` §1; read Stage 3 first, then Dissenting Notes and Additional Rules Surfaced.
-
-**What to do:**
-
-1. Follow §1's mandatory post-read actions in order; do not spec any code task until `DECISIONS.md` reflects the ruling.
-2. Log Dissenting Notes under "Noted, deferred".
-3. If the ruling adds a persisted column, add a `schema.md` to the owning story and check `DB_REGISTRY.md` first.
-
-**Tests:** none (docs-only).
-
-**Commit:** `docs(decisions): absorb data-source-routing council ruling`
+`DECISIONS.md` row added; `docs/council/README.md` topic row added (archived); `ds-chain-seam/` and `ds-chain-monitoring/` specced from the Summary Table; the broader capability matrix re-homed as
+`ds-router-migration/` DSR-0; epic README open decisions amended. Q4 clarified by Animesh on 2026-10-07 (action-class split, delta-independent backstop, freshness bound tied to cadence).

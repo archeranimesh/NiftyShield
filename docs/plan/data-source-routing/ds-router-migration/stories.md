@@ -5,6 +5,25 @@
 
 ---
 
+## DSR-0 — Capability matrix
+
+**Files to change / create:**
+- `docs/plan/data-source-routing/ds-router-migration/capability_matrix.md` — the matrix. No checkboxes.
+- `scratch/data_probes/<date>_<topic>.py` — only for checks needing live data; follow `SCRATCH.md`, read-only calls only.
+
+**Before any code:** read `docs/archive/plan/dhan-data-poc/findings.md`, `ds-capability-map/roll_checks.md`, and the ruling in `DECISIONS.md`.
+
+**What to produce:** one row per capability and broker (live LTP incl. batch ceiling, candles, expired options, India VIX, instrument master, order margin, market stream, token and subscription
+lifecycle) with source, limits, token lifecycle, Greeks model, and verification status (probe / doc / unverified, owner if unverified). Close or explicitly leave open: Dhan token renewal (endpoint, or
+renewal needs a valid token), India VIX on Dhan, batch LTP ceilings, a Dhan order-margin endpoint and plan requirement, and the live-feed, MCP and Agent Skills claims. Those last three were only
+summaries pasted on 2026-10-07 (pages unreachable from the session); mark them unverified until read from the primary page.
+
+**Tests:** none (docs and read-only probes).
+
+**Commit:** `docs(plan): capability matrix for router migration`
+
+---
+
 ## DSR-1 — Prior-art audit and cluster plan
 
 **Files to change / create:**
@@ -36,3 +55,5 @@
   and config in `src/client/` + `src/config.py` + `factory.py`. Default config reproduces Upstox-only behaviour.
 - **DSR-3..n:** per cluster — inject the router instead of constructing `UpstoxMarketClient`; no behaviour change under default config.
 - **DSR-last:** a health tracker per capability: 806 or stale token marks the capability unhealthy, falls back to the next source, alerts once, and re-probes on a backoff. Reuses DSN-1's alert path.
+- **DSR-4:** programmatic Dhan token renewal, only if DSR-0 finds a supported endpoint. A renewal job needs its own failure alert (a missed day must not silently break a chain that depends on a
+  still-valid token). If no endpoint exists, record that in `capability_matrix.md` and tick the task with the reason.

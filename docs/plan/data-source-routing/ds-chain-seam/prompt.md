@@ -16,7 +16,8 @@ this seam is a standing dependency, not a bootstrap one-off.
 **In bounds:** `src/client/` (capability protocols, resolver, chain sources, routing config), `factory.py` wiring for the chain capability, `src/config.py` routing settings, tests.
 
 **Out of bounds:** LTP / candle routing and migration of the 27 direct `UpstoxMarketClient` importers (`ds-router-migration/`); the overlay bootstraps themselves (`yearly-foundation` YF-6 consumes
-this story's output); `OptionLeg` and the Parquet / SQLite schemas, unless the council ruling picks Option B; any order, margin or positions path.
+this story's output); `OptionLeg`, `OptionChain` and the Parquet / SQLite schemas (council chose Option A: they stay frozen; provenance columns belong to `ds-chain-monitoring/`); any order, margin or
+positions path.
 
 ## Design review
 
@@ -31,8 +32,8 @@ helper that builds a domain model, run `get_code_snippet` first (CLAUDE.md Step 
 
 ## Task overview
 
-DSC-1 canonical types and capability protocols → DSC-2 bidirectional contract resolver (Upstox BOD + Dhan master) → DSC-3 chain sources return `ChainSnapshot` with source tag → DSC-4 chain routing
-config and factory wiring.
+DSC-1 `ContractRef` / `ChainSnapshot` / `ContractResolver` → DSC-2 resolver over the Upstox BOD and Dhan master → DSC-3 chain sources return `ChainSnapshot` with per-expiry fallback and health → DSC-4
+chain routing config and factory wiring → DSC-5 cross-process Dhan throttle.
 
 ## Definition of done
 

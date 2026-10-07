@@ -1267,6 +1267,42 @@ validate against Dhan with a tolerance no tighter than 0.02; that story was not 
 
 ---
 
+## Data source routing: side-table contract resolver, per-capability routing, Greeks provenance for the yearly book (2026-10-07, council)
+
+Council ruling (`docs/archive/council/data_architecture/2026-10-07_data-source-routing.md`, Stage 3; Grok ranked 1, GPT 2) for epic `docs/plan/data-source-routing/`. Extends, does not reopen,
+`docs/council/2026-07-02_paper-delta-source-architecture.md` (callers resolve the `position_deltas` map; `src/risk/` stays pure).
+
+- **Q1 contract identity:** **Option A.** `OptionLeg` / `OptionChain` stay frozen. New frozen `ContractRef(underlying, expiry, strike, side)` and `ChainSnapshot(chain, greeks_source, fetched_at,
+  instrument_keys)` in `src/models/contract.py`; separate `ContractResolver` (`to_native` / `from_native`) built from each broker's master by exact joins, never fuzzy; duplicate or ambiguous mappings
+  are structural errors. `instrument_keys` maps to **Upstox ledger keys** even when `greeks_source="dhan"`, and may be partial. A missing key aborts the **ledger write**, not the chain read. Persisted
+  keys are not migrated.
+- **Q2 routing:** **Per-capability, no global broker switch.** Ordered source list per capability via `Settings` (`market_data.chain.sources`, `...quote.sources`, `...candles.sources`,
+  `market_data.chain.dhan_min_interval_s`). Health keyed by `(source, capability)`. Per-request, per-expiry fallback on empty or all-zero Upstox delta (this is expected past about 90 DTE, not an
+  outage). 805: back off, floor 4 s, stay on Dhan. 806 or stale token: mark chain-on-Dhan unhealthy, alert, fall back to Upstox. Transport failure: one bounded retry. Throttle shared across the
+  capture cron and the monitor daemon (cross-process). Orders, positions and margin stay out of the routing map.
+- **Q3 provenance across the transition:** **Switch at a logged seam.** Flip a position's Greeks source Dhan to Upstox only after 2 consecutive trading days of non-zero Upstox delta on the **held**
+  contracts, not at a DTE threshold. On the flip snapshot persist both deltas; if they differ by more than 0.05 absolute or 25% relative, suppress delta stops, delta re-entry and delta entry gates for
+  that position for that session only, with a WARNING. The band is provisional: revise it from the first dual-read week. Collar legs sharing an expiry use the same source.
+- **Q4 stale or missing Greeks (yearly):** Live routed delta, then last-known capture delta, then fail closed. **Clarified 2026-10-07 (Animesh): split by action class.** Delta-dependent actions (new
+  entries, rolls and re-entries gated on delta, delta-stop exits, `check_entry_allowed`) run on live routed delta only; with none they do nothing and alert. Delta-independent automation (profit
+  target, DTE and time exits, expiry settlement, LTP P&L) keeps running. Last-known delta is for degraded aggregation (age up to 1 trading day) and labelled display (up to 3). The +/-1 approximation
+  is banned from yearly gates and stops. Alert when the newest usable delta is older than 1 trading day. No local Black '76 before the roll. **Added:** a delta-independent backstop alert (premium
+  multiple or spot distance to strike) while Greeks are unavailable, alert-only in paper. Freshness bound = at least 2x the monitor cadence plus one 4 s throttle slot, validated at startup.
+- **Q5 scope:** Split sound. **Pre-roll:** resolver and `ChainSnapshot`; per-expiry fallback with the 805 / 806 / empty-chain taxonomy; `greeks_source` and `delta_asof` tags from the first Dec 2027
+  read; token-staleness alert (not renewal); cross-process Dhan throttle; **Upstox BOD coverage check for Dec 2027**; yearly bootstrap wiring (YF-6). **Post-roll:** LTP and candle routers, the
+  27-importer migration, `MarketStream`, programmatic token renewal, Kite, local Black '76, BA-14 / BA-15. New yearly code adds no direct `UpstoxMarketClient` chain import.
+
+**Persisted columns (additive, `TEXT NULL`, old rows stay `NULL` = unknown provenance, never inferred):** `paper_leg_snapshots.delta_source` (`upstox` / `dhan` / `last_known` / `unavailable`),
+`paper_leg_snapshots.delta_asof`, `paper_overlay_pnl_snapshots.chain_source`, `paper_overlay_pnl_snapshots.chain_fetched_at`. No new tables; the far-expiry capture store is the last-known cache. A
+pre-existing yearly position needs an explicit recorded source assignment before the monitor may act on its delta.
+
+**Noted, deferred (dissent):** (Q3) pin to Dhan for the position's life, rejected because a Dhan lapse would leave no legal delta source; gate on IVR instead of delta, rejected as not a substitute for
+directional exposure. The 0.05 / 25% band is a judgment, not a measurement. (Q4) a 7-day cache age was proposed and rejected as unsupported. (Q1) if Upstox's BOD does not list Dec 2027 at roll time, a
+dedicated architectural decision is needed before the roll; do not silently fall back to serialised `ContractRef` identity. **Open for Animesh:** yearly monitor cadence (proposal: 300 s or slower, set
+in DSN-4); backstop thresholds; Kite stays deferred pending confirmation.
+
+---
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/` (except 0.6c), `src/streaming/` — all empty
@@ -1275,4 +1311,5 @@ validate against Dhan with a tolerance no tighter than 0.02; that story was not 
 
 
 ## Payoff Charts
-- **strategy-payoff-charts**: Matplotlib is used for rendering off the event loop (`to_thread`). Charts are additive and non-fatal. `spot=None` was used for the IC close charts because `apply_action` doesn't currently receive the option chain, deviating from the initial spec to avoid widening the scope.
+- **strategy-payoff-charts**: Matplotlib is used for rendering off the event loop (`to_thread`). Charts are additive and non-fatal. `spot=None` was used for the IC close charts because `apply_action`
+  doesn't currently receive the option chain, deviating from the initial spec to avoid widening the scope.

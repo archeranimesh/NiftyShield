@@ -19,10 +19,10 @@ schema change expected (confirmed in YF-1). Requested by Animesh 2026-10-06.
 roll window. Three sub-stories: `dhan-chain-adapter/` (DA-0..3) → `far-expiry-capture/` (FC-1..5) → `far-expiry-liquidity-gate/` (FG-1..3, blocked on captured history). Deadline: Dhan data plan lapses
 2026-11-04 (DA-0 renewal decision). Feeds `yearly-overlays/`. Requested by Animesh 2026-10-06.
 
-**`data-source-routing/`** · ⬜ Not started · next: **DSM-1** — capability-based routing of market data between Upstox and Dhan (per-capability config, health-aware fallback), because the yearly book
-needs Dhan Greeks daily from the Dec 2026 roll. Four sub-stories: `ds-capability-map/` (DSM-1..3, includes the council run in `council/`) → `ds-chain-seam/` (DSC-1..4, contract resolver +
-`ChainSnapshot`) → `ds-chain-monitoring/` (DSN-1..4, Dhan token freshness, chain-in-monitor, stale-Greeks policy; pre-roll) → `ds-router-migration/` (DSR-1.., after the roll). Folds in
-`broker-abstraction/` (superseded in part). Council-gated. Requested by Animesh 2026-10-07.
+**`data-source-routing/`** · 🔄 In progress (council ruled 2026-10-07, absorbed) · next: **DSM-1** — capability-based routing of market data between Upstox and Dhan (per-capability config, health-aware
+fallback), because the yearly book needs Dhan Greeks daily from the Dec 2026 roll. Four sub-stories: `ds-capability-map/` (DSM-1..3; council run and absorb done, DSM-1 roll-critical checks open) →
+`ds-chain-seam/` (DSC-1..5, contract resolver + `ChainSnapshot` + shared Dhan throttle) → `ds-chain-monitoring/` (DSN-1..5, token alert, yearly read path, stale-Greeks policy, source-flip; pre-roll) →
+`ds-router-migration/` (DSR-0.., after the roll). Folds in `broker-abstraction/` (superseded in part). Requested by Animesh 2026-10-07.
 
 **`strategy-payoff-charts/`** · 🟡 In progress — `chart-core/` ✅ done (`6ef2a5f`), next **MO-1** (blocked on GF-2 + GF-3) Stockmock-style payoff diagram for any strategy (opt-in `@register_payoff`
 registry; Iron Condors first, one PNG per variation) attached to the entry, EOD-audit, and close Telegram messages. Two sub-stories: `chart-core/` (PC-1..19 — strategy-agnostic payoff math + registry

@@ -91,6 +91,9 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-07] DSM-3 done (`<pending>`): council ruling for `data-source-routing/` absorbed into `DECISIONS.md` (Option A resolver, per-capability routing, source-flip seam, Q4 by action
+  class per Animesh); council file archived to `docs/archive/council/data_architecture/`; `ds-chain-seam/` (DSC-1..5) and `ds-chain-monitoring/` (DSN-1..5 + `schema.md`) specced; broader
+  capability matrix re-homed as `ds-router-migration/` DSR-0. Next: DSM-1 (Upstox BOD Dec 2027 coverage, Dhan 806 shapes). Open for Animesh: cadence, backstop thresholds, Kite.
 - [2026-10-07] tradetron-delta-and-long-window TDL-2 closed (`39938a3`): Tradetron delta matches Upstox to ~0.004 on monthly and Dec near-ATM (weekly pair off by 0.03); Dec Greeks nonzero on both
   sides today, so the yearly zero-Greeks pattern did not reproduce near the money; next TDL-3.
 - [2026-10-07] Planning session (no code): scaffolded `docs/plan/data-source-routing/` epic (4 sub-stories, council question + `submit.sh` in `council/`, status ⬜); `broker-abstraction/` banner-marked

@@ -22,9 +22,9 @@ Optional: add `--dry-run` to the `ask_council` call in `submit.sh` first to prev
 
 ## Absorb (task DSM-3)
 
-1. Read `docs/council/<date>_data-source-routing.md` — Stage 3 Chairman Synthesis first, via `protocol-reference` §1.
+1. Read `docs/archive/council/data_architecture/2026-10-07_data-source-routing.md` — Stage 3 Chairman Synthesis first, via `protocol-reference` §1.
 2. Add a row per Summary Table decision to `DECISIONS.md`; log Dissenting Notes under "Noted, deferred".
-3. Add a row to `docs/council/README.md` §"Topics Already Covered" (`data-source-routing`, status `active`; `archived` once absorbed).
+3. Add a row to `docs/council/README.md` §"Topics Already Covered" (`data-source-routing`, status `archived` once absorbed).
 4. Spec `ds-chain-seam/stories.md` and `ds-chain-monitoring/stories.md` from the Summary Table, then amend this epic's README open decisions.
 5. Do not start any `DSC-*` or `DSN-*` task before steps 2-4 are done.
 

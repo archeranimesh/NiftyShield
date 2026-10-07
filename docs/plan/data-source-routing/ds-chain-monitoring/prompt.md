@@ -13,8 +13,8 @@ approximation with a WARNING in paper, which overstates a delta-0.15 far-dated l
 
 ## Scope guard
 
-**In bounds:** Dhan token freshness check / renewal (as DSM-1 allows) and its healthcheck, the monitor and snapshot read path for yearly-tenor legs, per-snapshot `source` persistence, the stale-Greeks
-and source-flip policies as the council rules, the monitor-cadence field on `OverlayTenorPolicy`.
+**In bounds:** Dhan token-staleness alert and its healthcheck (renewal is post-roll, `ds-router-migration/` DSR-4), the monitor and snapshot read path for yearly-tenor legs, per-snapshot `source`
+persistence, the stale-Greeks and source-flip policies as the council rules, the monitor-cadence field on `OverlayTenorPolicy`.
 
 **Out of bounds:** the overlay bootstraps (`yearly-foundation` YF-6), LTP / candle routing (`ds-router-migration/`), streaming (`MarketStream` stays unimplemented), any order path, changes to monthly
 monitor cadence or behaviour.
@@ -31,7 +31,7 @@ Run `docs/refactor/design-principles.md` triggers before DSN-2: the monitor depe
 
 ## Task overview
 
-DSN-1 token freshness and healthcheck → DSN-2 chain-in-monitor / snapshot path with source tag → DSN-3 stale-Greeks and source-flip policy → DSN-4 yearly cadence in `OverlayTenorPolicy`.
+DSN-1 token-staleness alert → DSN-2 yearly read path with provenance columns → DSN-3 stale-Greeks policy by action class → DSN-4 monitor cadence → DSN-5 source-flip seam.
 
 ## Definition of done
 

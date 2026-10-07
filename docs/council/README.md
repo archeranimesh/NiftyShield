@@ -51,6 +51,7 @@ topic slug appears below, read that file first — via `protocol-reference` §1 
 | overlay-pnl-reporting-track-independence | active | `council/2026-08-10_overlay-pnl-reporting-track-independence.md` | overlay P&L invariant (SNAP-5/BUG-032/BUG-028) — see `DECISIONS.md:344` |
 | bug032-ambiguous-match-aggregation-vs-hard-fail | active | `council/2026-08-24_bug032-ambiguous-match-aggregation-vs-hard-fail.md` | not yet absorbed into `DECISIONS.md` — read before citing |
 | mvp-corporate-actions | active | `council/2026-09-25_mvp-corporate-actions.md` | not yet absorbed into `DECISIONS.md` — read before citing |
+| data-source-routing | archived | `archive/council/data_architecture/2026-10-07_data-source-routing.md` | Side-table `ContractResolver` + frozen `OptionLeg`; per-capability routing; switch Greeks source at a logged seam; yearly stale-Greeks by action class — see `DECISIONS.md` |
 
 Superseded-only entries (`donchian-roll-mechanics` 04-30 prelim, `paper-trade-exit-philosophy`
 05-28, `strategy-monitor-watchlist-design` 06-02) are omitted above — the row shown is the
@@ -210,3 +211,4 @@ All decisions below have been absorbed into `DECISIONS.md` and the relevant stra
 |---|---|---|
 | 2026-06-02 | `2026-06-02_strategy-monitor-watchlist-design.md` | **Superseded** by 2026-06-26 version |
 | 2026-06-26 | `2026-06-26_strategy-monitor-watchlist-design.md` | StrategyMonitor watchlist design and storage |
+| 2026-10-07 | `2026-10-07_data-source-routing.md` | Option A side-table resolver (`ContractRef` / `ChainSnapshot`), per-capability routing, Greeks source switch at a logged seam, no +/-1 for yearly gates |

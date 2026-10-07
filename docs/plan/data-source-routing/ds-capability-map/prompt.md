@@ -8,8 +8,9 @@ task id) before writing any code. One task per session. Complete it fully. Stop.
 ## Why this story exists
 
 `broker-abstraction/` BA-0 was meant to gate the abstraction on real data-quality differences and was never run. The archived Dhan POC answered part of it for Dhan. Several load-bearing facts are
-still unknown or secondhand: whether the Dhan token can be renewed programmatically, whether India VIX and batch LTP work on Dhan, whether Dhan can serve order margin, and what the live feed and MCP
-pages actually say (the pages were unreachable from the planning session; only summaries pasted by Animesh exist). Routing built on guesses repeats BA-0's failure mode.
+still unknown or secondhand (the council ruled the roll-critical ones as DSM-1 and the rest post-roll as `ds-router-migration/` DSR-0): whether the Dhan token can be renewed programmatically, whether
+India VIX and batch LTP work on Dhan, whether Dhan can serve order margin, and what the live feed and MCP pages actually say (the pages were unreachable from the planning session; only summaries
+pasted by Animesh exist). Routing built on guesses repeats BA-0's failure mode.
 
 ## Scope guard
 
@@ -28,12 +29,12 @@ Docs-only story; no new module, class or seam. DSM-1 inputs the epic's capabilit
 
 ## Task overview
 
-DSM-1 capability matrix (verify the unknowns) → DSM-2 run the council (Animesh) → DSM-3 absorb the ruling and spec the code stories.
+DSM-1 roll-critical checks (Upstox BOD Dec 2027 coverage, Dhan 806 / stale-token shapes) → DSM-2 council run (done) → DSM-3 absorb the ruling (done). The broader capability matrix moved to
+`ds-router-migration/` DSR-0.
 
 ## Definition of done
 
-`capability_matrix.md` has one row per capability x broker with source, limits, token lifecycle and Greeks model, each cell marked verified-by-probe / verified-by-doc / unverified; the council ruling
-is in `DECISIONS.md`; `ds-chain-seam/stories.md` and `ds-chain-monitoring/stories.md` no longer say "specced after council".
+`roll_checks.md` records the three roll-critical checks, each verified or marked unverified with an owner; the council ruling is in `DECISIONS.md`; both code stories are specced.
 
 ## Perspectives not covered
 
