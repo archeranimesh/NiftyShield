@@ -1149,3 +1149,5 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
   cron) pending.
 - [2026-10-06] dhan-chain-adapter DA-1..DA-3 done: Dhan option chain client built, sanitised fixtures added, Upstox Dec 2026 check done, source composite built and tested, NOT yet wired into any
   caller (DA-4).
+- [2026-10-07] dhan-chain-adapter DA-4 relocated to `yearly-overlays/yearly-foundation/` YF-6 (bootstraps consume raw Upstox rows with `instrument_key`; needs an `OptionChain`->row adapter +
+  key resolver, no consumer until a yearly tenor exists). Only DA-0 (Animesh renewal decision) remains open on the story.

@@ -3,7 +3,7 @@
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
 spec.
 
-**Open: YF-1..YF-5.**
+**Open: YF-1..YF-6.**
 
 - [ ] **YF-1** — Audit every overlay site that hardcodes STRATEGY_OVERLAY, "monthly", `date.today()` or a monthly DTE gate; write `audit.md` | Owner: Claude | Model: claude-sonnet-5-5 | Review: none |
   SHA: —
@@ -13,6 +13,8 @@ spec.
   code-reviewer | SHA: —
 - [ ] **YF-5** — Namespace read-paths (reentry_mixin, collateral_gate, auto_close, overlay_coverage, eod_pt_summary, track_snapshot) recognise the yearly namespace | Owner: Claude | Model:
   claude-sonnet-5-5 | Review: greeks-analyst | SHA: —
+- [ ] **YF-6** — Wire `CompositeChainSource` into the three bootstraps via an `OptionChain` -> raw-row adapter + instrument-key resolver (relocated from `dhan-chain-adapter` DA-4; depends on
+  YF-4) | Owner: Claude | Model: claude-sonnet-5-5 | Review: roll-validator + greeks-analyst | SHA: —
 
 ## Story done when
 
@@ -21,6 +23,8 @@ spec.
 - **YF-3** — a test pins every monthly value; yearly entry present; constant exported.
 - **YF-4** — frozen-date tests give Dec 2026 and Dec 2027; monthly callers unchanged.
 - **YF-5** — each audited consumer has a yearly-namespace test; monthly tests unchanged.
+- **YF-6** — a yearly-tenor bootstrap gets a non-zero-delta chain via Dhan when Upstox Greeks are all zero; the monthly path still uses Upstox untouched; an unresolved instrument key aborts
+  structurally.
 
 ## After each task
 
