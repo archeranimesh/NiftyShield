@@ -118,3 +118,27 @@
 - `test_collateral_gate_counts_yearly_namespace`, `test_coverage_reports_each_namespace_separately`.
 
 **Commit:** `feat(overlay): recognise yearly namespace in read paths`
+
+---
+
+## YF-6 — Chain-source wiring (relocated from `dhan-chain-adapter` DA-4)
+
+**Files to change / create (name any addition before editing; >2 files, wait for go-ahead):**
+- `src/client/chain_rows.py` (new) — pure `chain_to_rows(chain, resolver) -> list[dict]` emitting the raw Upstox row shape (`strike_price`, `call_options`/`put_options` with `instrument_key`,
+  `market_data`, `option_greeks`).
+- `scripts/strategies/three_track/paper_3track_overlay_entry.py` — `auto_cc_bootstrap`, `auto_pp_bootstrap`, `auto_collar_bootstrap` take an injected chain-fetch callable; default is the current
+  Upstox `get_option_chain_sync` path, so monthly behaviour is unchanged.
+- `tests/unit/client/test_chain_rows.py`, extend the YF-4 bootstrap tests.
+
+**Before any code:** `get_code_snippet("CompositeChainSource")`, `src/client/chain_source.py`, `src/client/dhan_market.py::parse_dhan_option_chain`, the BOD `lookup` API for strike/side/expiry
+resolution; findings in `dhan-far-expiry-chain/dhan-chain-adapter/findings.md` §DA-4. `roll-validator` is required (`auto_pp_bootstrap` carries routine-roll logic).
+
+**What to implement:**
+1. Resolver Protocol (strike, side, expiry) -> `instrument_key | None`; BOD-`lookup` implementation.
+2. `chain_to_rows` drops legs whose key cannot be resolved and logs the count; zero resolvable rows aborts the bootstrap structurally (`*_chain_empty`).
+3. Yearly-tenor bootstraps use the composite via the adapter; monthly stays on Upstox.
+
+**Tests:** `test_chain_to_rows_roundtrips_filter_strikes_by_delta`, `test_unresolved_key_leg_dropped`, `test_all_unresolved_aborts`, `test_monthly_default_still_upstox`,
+`test_yearly_zero_greeks_uses_dhan`.
+
+**Commit:** `feat(overlay): route far-expiry bootstrap chain fetch through ChainSource`
