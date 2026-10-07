@@ -9,12 +9,71 @@
 
 ---
 
+## Execution Order and Dependencies (updated 2026-10-07)
+
+**Read this first.** It says which story to run when and what blocks what; `## Feature Backlog` below holds the pointers (list position = `/work` priority). `tasks.md` stays canonical for per-task
+state. Arrows: `A → B` means B cannot start until A is done. `‖` means the two can run in parallel.
+
+**Calendar constraints (drive the order):**
+
+- **2026-11-04** — Dhan data plan lapses unless renewed. `dhan-far-expiry-chain` DA-0 (Animesh) must be decided before this.
+- **2026-12-29** — Dec 2026 expiry; the yearly book must roll to Dec 2027 (Dhan Greeks needed). Everything marked **ROLL** below must land before it. About 12 weeks, one task per session.
+- **about 2027-09-30** — Upstox Greeks expected back for Dec 2027 (DDP-5: Dec 2026 flipped at 90 DTE, one expiry only). `ds-chain-monitoring` DSN-5 (source-flip seam) must land before about
+  2027-09-01.
+- **at least 9 calendar months** of observation for `variance-gate` VG2.A — start VG0 / VG1 now; it is the longest wall-clock pole.
+
+**Order of execution:**
+
+| Wave | Story (folder) | Backlog # | Next task | Needs (hard) | Blocks / feeds |
+|---|---|---|---|---|---|
+| 0 | `dhan-far-expiry-chain/` (DA-0 → FC-1..5 → FG-1..3) | 24 | DA-0 (Animesh) | DA-0 before 2026-11-04; FG-1 needs 15+ captured trading days | YV-5, YF-3 registry (FG-3 writes `roll_dte`) |
+| 0 | `variance-gate/` | 21 | VG0 (Animesh) | none | gates A-D; `options_income/`; `entry-event-filter/` |
+| 0 | `data-source-routing/ds-capability-map/` (DSM-1) | 25 | DSM-1 | council done | `ds-chain-seam` |
+| 1 ROLL | `yearly-overlays/yearly-foundation/` YF-1..5 | 23 | YF-1 | none | all other yearly stories; `ds-chain-monitoring` (needs YF-3) |
+| 1 ROLL | `data-source-routing/ds-chain-seam/` DSC-1..5 | 25 | after DSM-1 | DSM-1 (BOD Dec 2027 result) | YF-6; `ds-chain-monitoring` |
+| 1 ROLL | YF-6 (chain wiring into the 3 bootstraps) | 23 | after YF-4 and DSC-3 | YF-4, DSC-2, DSC-3 | yearly-cc / pp / collar run on the routed chain; YV-5 |
+| 1 ROLL | `yearly-cc/` ‖ `yearly-pp/` → `yearly-collar/` | 23 | after YF-5 | `yearly-foundation` complete (collar: cc and pp) | `yearly-ops-wiring` |
+| 1 ROLL | `data-source-routing/ds-chain-monitoring/` DSN-1..4 | 25 | DSN-1 after DSC-3 | DSC-3; DSN-2..4 also need YF-3 | YV-5 |
+| 1 ROLL | `yearly-ops-wiring/` → `yearly-validation/` | 23 | after collar | collar; YV-5 also needs YF-6, FG-3, capture history, DSN-1..4 | the Dec 2026 roll |
+| 1 | DSN-5 source-flip seam | 25 | after DSN-4 | DSN-2 provenance columns | not needed before about 2027-09; may follow the roll |
+| 2 | `greeks-bs-fallback/` | 7 | GF-1 | Animesh's 3 modeling decisions before GF-2 | `strategy-payoff-charts` MO-1; `chain-decay-analysis` |
+| 2 | `gamma-near-expiry/` Phase B | 4 | GS-1 | 5+ days of snapshots | none |
+| 2 | `tradetron-delta-and-long-window/` | 22 | TDL-3 (Animesh) | none; funded runs need per-run approval | may give `greeks-bs-fallback` a far-dated reference |
+| 2 | `portfolio-snapshot-slimdown/` FD-1..7 → DHR-1..4 | 9 | FD-1 | never interleave the two sub-stories | `phase2-integrations/` |
+| 2 | `technical-debt/` | 20 | opportunistic | fires only when the named file is touched | none |
+| 3 | `strategy-payoff-charts/` `chart-model-overlay/` | 6 | MO-1 | `greeks-bs-fallback` GF-2 + GF-3 | none |
+| 3 | `chain-decay-analysis/` | 12 | CDA-1 | after `greeks-bs-fallback` (monthly bucket only) | none |
+| 3 | `backtest-engine/` phase1..4 → `backtest-eval-core/` → `signals-eval-core/` | 11, 13, 14 | 1.3a / 1.4 | engine 1.3 + 1.4 → eval-core; eval-core + 1.12 → signals-eval-core | Gate D; `entry-event-filter/` |
+| 3 | `strategy-refactor-blueprint/` | 10 | BP-1 | BP-2 after item 2; BP-3 is a council | none |
+| 3 | `phase2-integrations/` | 17 | PV-1 | after `portfolio-snapshot-slimdown` (Dhan ETF panel removed) | OE-1 unblocks `broker-abstraction` BA-14 / BA-15 |
+| 3 | `entry-event-filter/` | 16 | EF-1 | ES12 shipped; after `backtest-engine` Phase 2 | none |
+| 3 | `options_income/` | 15 | S0 | Phase 0.8 gate direction clear (`variance-gate`) | none |
+| 4 post-roll | `data-source-routing/ds-router-migration/` | 25 | DSR-0 | `ds-chain-monitoring` done and the Dec 2026 roll done | token renewal, 27-importer migration |
+| 4 LOW | `broker-abstraction/` (BA-14 / BA-15 only; rest superseded) | 18 | BA-14 | `src/execution/` exists (`phase2-integrations` OE-1) | none |
+| 4 LOW | `historical-data-abstraction/` | 19 | HD-0 | Phase 0.8 gate clears | none |
+
+**Roll-critical path in one line:** `DSM-1 → DSC-1..4 → (YF-1..4 ‖) → YF-6 → yearly-cc ‖ pp → collar → ops-wiring → YV-1..4`, with `DA-0 → FC-1.. → 15+ days → FG-1..3` and `DSC-3 → DSN-1..4` joining
+at **YV-5**. That is roughly 35 single-task sessions in about 12 weeks, so the tracks must run in parallel; the capture (FC) has no slack because it is forward-only.
+
+**Coverage check (2026-10-07):** every active folder in `docs/plan/` has a Backlog pointer above or in the list below. Added today: `yearly-overlays/`, `dhan-far-expiry-chain/` and
+`data-source-routing/` were missing and are now items 23-25. `dev-foundation/` is marked shipped in `docs/plan/README.md` but its folder is still under `docs/plan/` (not listed here on purpose).
+
+---
+
 ## Feature Backlog — Priority Ordered
 
 Forward spec work only — one `docs/plan/` story per line, pointer-only (title · folder · next unchecked task · one-line why). Ordered **story-by-story**: finish a story's `tasks.md` in sequence before
 starting the next story here; this list only decides *which story is next*. Bugs are **not** here — see `## Open Bugs`. Cross-references use folder names, never list positions, so renumbering can't
 rot them. (Items 3, 5 and 8 closed — numbers kept stable because item text cross-references them.)
 
+23. **Yearly overlays (epic)** — `docs/plan/yearly-overlays/` — next **YF-1** (hardcode audit). December-only CC / PP / Collar book beside the monthly overlays; fixed order `yearly-foundation` →
+    `yearly-cc` ‖ `yearly-pp` → `yearly-collar` → `yearly-ops-wiring` → `yearly-validation`. **Deadline: Dec 2026 roll.** YF-6 needs `data-source-routing` DSC-2 / DSC-3; YV-5 needs
+    `dhan-far-expiry-chain` FG-3 and `ds-chain-monitoring` DSN-1..4. Requested by Animesh 2026-10-06.
+24. **Dhan far-expiry chain (epic)** — `docs/plan/dhan-far-expiry-chain/` — next **DA-0** (Animesh: renewal decision **before 2026-11-04**), then `far-expiry-capture/` FC-1. DA-1..3 done. Forward-only
+    daily capture has no slack; `far-expiry-liquidity-gate/` FG-1 needs 15+ captured trading days. Feeds `yearly-overlays` (FG-3 → YF-3 registry; YV-5).
+25. **Data source routing (epic)** — `docs/plan/data-source-routing/` — next **DSM-1** (Upstox BOD lists Dec 2027? Dhan 806 shapes; needs the BOD file from Animesh's machine). Council ruled 2026-10-07
+    (`DECISIONS.md`). Order: `ds-capability-map` → `ds-chain-seam` → `ds-chain-monitoring` (needs `yearly-foundation` YF-3) → `ds-router-migration` (after the Dec 2026 roll). Supersedes most of
+    `broker-abstraction`. Open for Animesh: monitor cadence, backstop thresholds, Kite.
 4. **Gamma near-expiry buy (epic)** — `docs/plan/gamma-near-expiry/` — Phase A `risk-gamma-phase-a/` ✅ done; next Phase B `gamma-scan-phase-b/` GS-1 (GS-1..6), blocked until ≥ 5 days of snapshots
    exist. In progress, independent of everything else; finish before starting new stories.
 6. **Strategy payoff charts on Telegram (IC first, any strategy via opt-in registry)** — `docs/plan/strategy-payoff-charts/` — `chart-core/` ✅ done (`6ef2a5f`); next **MO-1**, blocked:
@@ -36,8 +95,8 @@ rot them. (Items 3, 5 and 8 closed — numbers kept stable because item text cro
     `backtest-engine` Phase 2) and reconsider hard-block then.
 17. **Phase 2 — Research Pipelines & Integrations** — `docs/plan/phase2-integrations/` — next **PV-1** (P&L visualization). Not gated, but its Dhan ETF panel is removed by `dhan-holdings-removal/`, so
     do it after item 9. ZK-1 / OE-1 / PT-1 gated per the story file. 2027+.
-18. **Broker abstraction** — `docs/plan/broker-abstraction/` — next **BA-0**. LOW priority; BA-14 / BA-15 blocked until `src/execution/` (`phase2-integrations` OE-1) exists. Do not start until the
-    Phase 0.8 gate clears.
+18. **Broker abstraction** — `docs/plan/broker-abstraction/` — **superseded in part 2026-10-07** by item 25 (BA-0, BA-1..3, BA-5, BA-6..13 re-homed or deferred); remaining BA-14 / BA-15. LOW priority;
+    BA-14 / BA-15 blocked until `src/execution/` (`phase2-integrations` OE-1) exists. Do not start until the Phase 0.8 gate clears.
 19. **Historical data abstraction** — `docs/plan/historical-data-abstraction/` — next **HD-0**. LOW priority; HD-6 / HD-7 conditional on the HD-0 decision matrix. Do not start until the Phase 0.8 gate
     clears.
 20. **Technical Debt** — `docs/plan/technical-debt/` — DEBT-3 / 5 / 6a / 6b / 6c / 7. Opportunistic, **not sequential** — each item fires only when its named file / module is already being touched for
@@ -91,9 +150,9 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
-- [2026-10-07] DSM-3 done (`<pending>`): council ruling for `data-source-routing/` absorbed into `DECISIONS.md` (Option A resolver, per-capability routing, source-flip seam, Q4 by action
-  class per Animesh); council file archived to `docs/archive/council/data_architecture/`; `ds-chain-seam/` (DSC-1..5) and `ds-chain-monitoring/` (DSN-1..5 + `schema.md`) specced; broader
-  capability matrix re-homed as `ds-router-migration/` DSR-0. Next: DSM-1 (Upstox BOD Dec 2027 coverage, Dhan 806 shapes). Open for Animesh: cadence, backstop thresholds, Kite.
+- [2026-10-07] DSM-3 done (`<pending>`): council ruling for `data-source-routing/` absorbed into `DECISIONS.md` (Option A resolver, per-capability routing, source-flip seam, Q4 by action class per
+  Animesh); council file archived to `docs/archive/council/data_architecture/`; `ds-chain-seam/` (DSC-1..5) and `ds-chain-monitoring/` (DSN-1..5 + `schema.md`) specced; broader capability matrix
+  re-homed as `ds-router-migration/` DSR-0. Next: DSM-1 (Upstox BOD Dec 2027 coverage, Dhan 806 shapes). Open for Animesh: cadence, backstop thresholds, Kite.
 - [2026-10-07] tradetron-delta-and-long-window TDL-2 closed (`39938a3`): Tradetron delta matches Upstox to ~0.004 on monthly and Dec near-ATM (weekly pair off by 0.03); Dec Greeks nonzero on both
   sides today, so the yearly zero-Greeks pattern did not reproduce near the money; next TDL-3.
 - [2026-10-07] Planning session (no code): scaffolded `docs/plan/data-source-routing/` epic (4 sub-stories, council question + `submit.sh` in `council/`, status ⬜); `broker-abstraction/` banner-marked
