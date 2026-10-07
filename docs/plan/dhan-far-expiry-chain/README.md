@@ -65,6 +65,9 @@ Status: ⬜ Not started · 🔄 In progress · ✅ Done. This column is the epic
 - Supplies Greeks to `yearly-overlays/` for Dec 2027; `yearly-overlays/yearly-validation/` YV-5 lists this epic's outputs as roll preconditions.
 - FG-3 writes the yearly `roll_dte` into the policy registry created by `yearly-overlays/yearly-foundation/` YF-3.
 - The POC story `dhan-data-poc` is closed and archived; this epic builds on its findings and does not reopen it.
+- `data-source-routing/` (2026-10-07) takes over the seam work this epic's DA-4 handed off: contract identity, `ChainSnapshot` and capability routing. `far-expiry-capture/` keeps calling
+  `DhanMarketClient` directly and must not wait on it. The capture store is the candidate last-known-delta cache for the stale-Greeks policy, and Dhan token freshness (`ds-chain-monitoring` DSN-1)
+  is a precondition for the capture cron staying healthy.
 
 ## Epic done when
 

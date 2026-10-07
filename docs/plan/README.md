@@ -11,13 +11,18 @@ The **status** and **next** markers below are a *summary* of each story's `tasks
 ## Active Epics
 
 **`yearly-overlays/`** · ⬜ Not started — December-only (`--expiry-type yearly`) CC / PP / Collar as an independent book beside the monthly overlays; IC `leaps` (quarterly) and `yearly` (December)
-unchanged. Six sub-stories: `yearly-foundation/` (YF-1..6 audit, fixtures, `OverlayTenorPolicy`, clock-injectable resolver, namespace read-paths, chain-source wiring) → `yearly-cc/` (YC-1..2) and `yearly-pp/` (YP-1..2) →
-`yearly-collar/` (YL-1..2) → `yearly-ops-wiring/` (YW-1..3) → `yearly-validation/` (YV-1..5, independence + dry-run + live smoke + IC coexistence + paper-run runbook). No DB schema change expected
-(confirmed in YF-1). Requested by Animesh 2026-10-06.
+unchanged. Six sub-stories: `yearly-foundation/` (YF-1..6 audit, fixtures, `OverlayTenorPolicy`, clock-injectable resolver, namespace read-paths, chain-source wiring) → `yearly-cc/` (YC-1..2) and
+`yearly-pp/` (YP-1..2) → `yearly-collar/` (YL-1..2) → `yearly-ops-wiring/` (YW-1..3) → `yearly-validation/` (YV-1..5, independence + dry-run + live smoke + IC coexistence + paper-run runbook). No DB
+schema change expected (confirmed in YF-1). Requested by Animesh 2026-10-06.
 
 **`dhan-far-expiry-chain/`** · ⬜ Not started — Dhan live chain as the Greeks source for Dec 2027 (Upstox returns zero past ~100 DTE), daily forward capture, and a data-calibrated liquidity gate and
 roll window. Three sub-stories: `dhan-chain-adapter/` (DA-0..3) → `far-expiry-capture/` (FC-1..5) → `far-expiry-liquidity-gate/` (FG-1..3, blocked on captured history). Deadline: Dhan data plan lapses
 2026-11-04 (DA-0 renewal decision). Feeds `yearly-overlays/`. Requested by Animesh 2026-10-06.
+
+**`data-source-routing/`** · ⬜ Not started · next: **DSM-1** — capability-based routing of market data between Upstox and Dhan (per-capability config, health-aware fallback), because the yearly book
+needs Dhan Greeks daily from the Dec 2026 roll. Four sub-stories: `ds-capability-map/` (DSM-1..3, includes the council run in `council/`) → `ds-chain-seam/` (DSC-1..4, contract resolver +
+`ChainSnapshot`) → `ds-chain-monitoring/` (DSN-1..4, Dhan token freshness, chain-in-monitor, stale-Greeks policy; pre-roll) → `ds-router-migration/` (DSR-1.., after the roll). Folds in
+`broker-abstraction/` (superseded in part). Council-gated. Requested by Animesh 2026-10-07.
 
 **`strategy-payoff-charts/`** · 🟡 In progress — `chart-core/` ✅ done (`6ef2a5f`), next **MO-1** (blocked on GF-2 + GF-3) Stockmock-style payoff diagram for any strategy (opt-in `@register_payoff`
 registry; Iron Condors first, one PNG per variation) attached to the entry, EOD-audit, and close Telegram messages. Two sub-stories: `chart-core/` (PC-1..19 — strategy-agnostic payoff math + registry

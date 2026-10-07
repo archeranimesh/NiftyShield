@@ -91,6 +91,9 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-07] Planning session (no code): scaffolded `docs/plan/data-source-routing/` epic (4 sub-stories, council question + `submit.sh` in `council/`, status ⬜); `broker-abstraction/` banner-marked
+  superseded in part; coordination notes added to `yearly-overlays/` and `dhan-far-expiry-chain/` READMEs. Next: DSM-1 (capability matrix), then DSM-2 council run (Animesh). Open for Animesh: Kite
+  scope, Option A/B identity (council Q1), Dhan token renewal.
 - [2026-10-05] DDP-6 done (`<pending>`): verdict in `dhan-data-poc/findings.md`; story archived. No for Dhan history; yes for live far-dated Greeks (Dec 2027 CE 28,500 delta 0.164 on Dhan, 0 on
   Upstox); yearly plan only if a yearly CC or IC is committed to, plan lapses 2026-11-04. DECISIONS.md entry added.
 - [2026-10-05] DDP-5 done (`b74f043`): contract findings in `dhan-data-poc/findings.md`. Upstox Dec 2026 deltas flipped zero to nonzero between 09-29 15:55 and 09-30 09:51 (DTE 91 to 90; chain 22 to

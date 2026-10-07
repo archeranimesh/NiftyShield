@@ -4,6 +4,10 @@ Work top-down. Find the first unchecked `- [ ]` and do only that task. See `prom
 
 > Priority: LOW — implement only after Phase 0.8 gate passes.
 
+> **Superseded in part, 2026-10-07 — see `docs/plan/data-source-routing/README.md` §Supersession.** BA-3 and BA-5 are covered by `dhan-far-expiry-chain` DA-2 / DA-3 (`7abac89`). BA-0 is re-scoped as
+> `data-source-routing/ds-capability-map/` DSM-1 (the archived Dhan POC already answers part of it). BA-6..BA-9 (Kite) are deferred pending Animesh's confirmation. BA-1, BA-2, BA-11, BA-12 and BA-13
+> are re-homed in `ds-chain-seam/` and `ds-router-migration/`. BA-14 / BA-15 stay here, gated on `src/execution/`. Do not start a task below without checking that README first.
+
 **Open: BA-0, BA-1, BA-2, BA-3, BA-4, BA-5, BA-6, BA-7, BA-8, BA-9, BA-10, BA-11, BA-12, BA-13, BA-14, BA-15.**
 
 ## Phase 0 — Pre-implementation Research (gates all other phases)

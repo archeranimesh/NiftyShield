@@ -72,6 +72,9 @@ Status: ⬜ Not started · 🔄 In progress · ✅ Done. This column is the epic
 
 - `dhan-far-expiry-chain/` supplies Greeks for Dec 2027 (Upstox returns zero past ~100 DTE). Nothing in this epic blocks on it until the Dec 2026 roll; `yearly-validation/` YV-5 gates the roll on it.
 - `far-expiry-liquidity-gate/` FG-3 writes the yearly `roll_dte` into the policy registry created by YF-3 here.
+- `data-source-routing/` (2026-10-07): the yearly book needs Dhan Greeks every day from the Dec 2026 roll until Upstox Greeks return (about Sep 2027), not only at the roll. `yearly-foundation` YF-6
+  now depends on `data-source-routing/ds-chain-seam/` (contract resolver, `ChainSnapshot`). `yearly-validation` YV-5 additionally requires `ds-chain-monitoring/` (Dhan token freshness,
+  chain-in-monitor path, stale-Greeks policy). `OverlayTenorPolicy` gains a monitor-cadence field (`ds-chain-monitoring` DSN-4).
 
 ## Epic done when
 
