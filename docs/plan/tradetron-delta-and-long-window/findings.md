@@ -45,3 +45,41 @@ test far-dated contracts (TDL-2) or Tradetron's Greeks beyond the strike it sele
 
 Consequence for the open items: the P&L gap should be re-read as "paper sold nearer the money than 0.15" (more credit and more risk), not as a Tradetron bias. The 2026-10-05 `DECISIONS.md` entry and
 the reference-doc note carry the old inference and are corrected in the same commit as this finding.
+
+## Live Greeks probe (TDL-2)
+
+Probe: template 999089294 ("NS Greeks Probe v2", a copy of 999078810 because the original had a running deployment), deployed Live Offline by Animesh as SID **999204818**, run 1, one snapshot at
+2026-10-07 04:00:00 UTC (09:30 IST). Tradetron spot 22624.35, `strike_spot` 22600. Upstox side: `data/historical/option_chain/intraday/2026/10/07/upstox_0930_<bucket>.parquet`, `snapshot_ts` 04:00:02
+UTC, spot 22620.35 (4 points below Tradetron's; the two readings are seconds to a minute apart, inference). Expiries Tradetron resolved: weekly 2026-10-13, `Current Month` offsets 0/1/2 = 2026-10-27 /
+2026-11-23 / 2026-12-29. Strikes: ATM-SPOT 22600 for all three expiries; the `dx` pair is ATM-SPOT +4 CE = 22800 (LTP 596.0 exact match) and -4 PE = 22400 (LTP 338.65 exact match; strike inferred from
+the LTP, not recorded).
+
+<!-- lint-ignore-length -->
+| Instrument | TT delta | UP delta | Δ | TT IV | UP IV | TT LTP | UP LTP |
+|---|---|---|---|---|---|---|---|
+| 10-13 22600 CE | 0.5183 | 0.5507 | -0.032 | 13.33 | 12.33 | 168.80 | 168.35 |
+| 10-13 22600 PE | -0.4799 | -0.4551 | -0.025 | 13.26 | 14.25 | 146.55 | 147.85 |
+| 10-27 22600 CE | 0.5493 | 0.5509 | -0.002 | 13.25 | 13.38 | 325.70 | 324.30 |
+| 10-27 22600 PE | -0.4513 | -0.4491 | -0.002 | 13.49 | 13.39 | 247.15 | 249.45 |
+| 12-29 22600 CE | 0.6001 | 0.6038 | -0.004 | 12.55 | 12.41 | 710.00 | 710.00 |
+| 12-29 22600 PE | -0.4003 | -0.3977 | -0.003 | 12.62 | 12.64 | 405.00 | 405.00 |
+| 12-29 22800 CE | 0.5426 | 0.5457 | -0.003 | 12.42 | 12.32 | 596.00 | 596.00 |
+| 12-29 22400 PE | -0.3477 | -0.3451 | -0.003 | 12.95 | 12.95 | 338.65 | 338.65 |
+
+Dec gamma, theta and vega also agree closely (22600 CE: TT 0.00028 / -3.18 / 42.26, UP 0.0003 / -3.14 / 42.17).
+
+Measured results, n = 8 instruments, one timestamp:
+
+- **Far-dated contract: Tradetron returns nonzero Greeks, and so does Upstox.** On 2026-10-07 09:30 the 2026-12-29 contracts near the money have real Upstox Greeks in both the quarterly and the yearly
+  bucket (the two buckets hold identical rows). The "yearly bucket all-zero Greeks" pattern from 2026-07-22 and 2026-08-06 did **not** reproduce at these strikes today. Where Upstox does show zeros
+  today it is deep ITM, not all-zero: of 176 Dec rows with LTP > 0, 20 have IV 0 and delta ±1.0 (CE 16000 to 21350, PE 24150 and above, e.g. CE 19000 LTP 3827, OI 262535).
+- **Monthly and Dec deltas agree within 0.004** (Tradetron slightly lower in absolute terms on CE and PE alike); IV within 0.14 vol points; Dec LTP identical.
+- **The weekly pair is the outlier**: delta differs by 0.025 to 0.032 and IV by about 1 vol point in opposite directions on CE and PE (TT 13.33 / 13.26, UP 12.33 / 14.25). Tradetron's CE and PE IV
+  agree with each other, Upstox's do not (CE and PE IV 2 points apart), which looks like Upstox's weekly reading, but that is an inference from one pair.
+- Tradetron's `Delta()` therefore matches Upstox's to about 0.004 on monthly and far-dated near-ATM contracts. Together with TDL-1 (0.145 at its 0.15 picks) this supports using Tradetron delta as
+  agreeing with Upstox at strike level.
+- Upstox lists no 2026-11-23 expiry (only 10-13, 10-27, 12-29), while Tradetron's `Current Month` offset 1 resolves to 2026-11-23. Offset 2 reaches December.
+
+Reference for `greeks-bs-fallback` GF-1 and GF-5 (input only; that story's files are untouched): this is a third-party delta on Dec 2026 contracts that agrees with Upstox to ~0.004 near the money, so
+for these strikes today a Black-Scholes fallback would have had nothing to correct. Limits: one timestamp, four Dec strikes, Tradetron's delta methodology unknown (another model, not ground truth),
+and the zero-Greek condition that motivated GF was absent on the day, so this does not test the fallback on the case it exists for. A re-run on a day the yearly bucket shows zeros would.

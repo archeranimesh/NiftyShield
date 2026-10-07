@@ -135,6 +135,11 @@ SL/target/Limit columns.
 - Editing a template that has a running deployment warns `EDIT_RESETS_RUNTIME_COUNTERS`, but `snap` and `spot` on the running SID were unchanged on a re-read after the edit. `tt_apply_strategy_patch`
   edits runtime vars at `/sets/N/conditions/M/extra/variables` (value, display and json together); `condition_action` is not a patchable key.
 
+- **Probe v2 (2026-10-07, SID 999204818, template 999089294, 04:00 UTC):** all 50 vars populated, including 2026-12-29 ATM-SPOT CE/PE Greeks and Dec ATM±4. `Current Month` offsets 0/1/2 resolved to
+  2026-10-27 / 2026-11-23 / 2026-12-29, so offset 2 reaches the Dec contract; Tradetron resolves 11-23 though Upstox lists no such expiry. Tradetron delta matched Upstox to 0.004 on monthly and Dec
+  near-ATM contracts, but differed by 0.03 on the weekly pair (n = 8, one timestamp; table in `docs/plan/tradetron-delta-and-long-window/findings.md`). Tradetron reads are timestamped within seconds
+  of an Upstox 09:30 snapshot (`updated_at` 04:00:00 vs `snapshot_ts` 04:00:02). Template copy 999089294 was needed because 999078810 had a running deployment.
+
 **Not yet established.** Greek units and conventions (per-share vs per-lot, vega per 1% IV, theta per day), source of IV/Greeks (exchange vs Tradetron-computed), refresh latency, and whether Greeks
 are available in the backtest engine. `tt_check_backtestability` on a template using `Delta()` answers the last; the first three need a live read or support (`tt_ask_tt`).
 
