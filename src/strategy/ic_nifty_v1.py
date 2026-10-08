@@ -806,7 +806,7 @@ class IronCondorV1:
             return
 
         positions = positions or []
-        pos_by_role = {p.leg_role: p for p in positions}
+        pos_by_key = {p.instrument_key: p for p in positions}
 
         try:
             lookup: InstrumentLookup | None = InstrumentLookup.from_file(DEFAULT_BOD_PATH)
@@ -817,7 +817,7 @@ class IronCondorV1:
         legs: list[CloseLegRow] = []
         this_exit_pnl = Decimal("0")
         for t in closed_trades:
-            pos = pos_by_role.get(t.leg_role)
+            pos = pos_by_key.get(t.instrument_key)
             is_short = t.leg_role in _SHORT_ROLES
             entry = (
                 (pos.avg_sell_price if is_short else pos.avg_cost) if pos is not None else t.price
@@ -847,7 +847,7 @@ class IronCondorV1:
         entry_dates = [
             ed
             for t in closed_trades
-            if (pos := pos_by_role.get(t.leg_role)) is not None
+            if (pos := pos_by_key.get(t.instrument_key)) is not None
             and (ed := pos.entry_date) is not None
         ]
         held_days = (closed_trades[0].trade_date - min(entry_dates)).days if entry_dates else 0

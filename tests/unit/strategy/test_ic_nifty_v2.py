@@ -1,3 +1,4 @@
+import asyncio
 from datetime import date
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -140,3 +141,53 @@ async def test_ic_v2_send_close_notification_no_chart_when_notifier_none_or_no_t
             positions=[],
         )
         mock_send3.assert_not_called()
+
+
+def test_v2_close_notification_overlapped_legs_use_own_entry_price() -> None:
+    """BUG-074: two open rows under one role are matched to their own entry by instrument_key."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from src.models.portfolio import TradeAction
+    from src.paper.models import PaperPosition, PaperTrade
+
+    notifier = MagicMock()
+    notifier.send_notification = AsyncMock()
+    strat = IronCondorV2(notifier=notifier)  # store=None
+    entries = {"NSE_FO|A21500": Decimal("29.1"), "NSE_FO|B21550": Decimal("40.6")}
+    exits = {"NSE_FO|A21500": Decimal("39.0"), "NSE_FO|B21550": Decimal("40.6")}
+    positions = [
+        PaperPosition(
+            strategy_name="paper_test_strat",
+            leg_role="long_put_hedge",
+            net_qty=65,
+            avg_cost=cost,
+            avg_sell_price=Decimal("0"),
+            instrument_key=key,
+            entry_date=date(2026, 10, 1) if key.startswith("NSE_FO|A") else date(2026, 10, 5),
+        )
+        for key, cost in entries.items()
+    ]
+    closed = [
+        PaperTrade(
+            strategy_name="paper_test_strat",
+            leg_role="long_put_hedge",
+            instrument_key=key,
+            trade_date=date(2026, 10, 8),
+            action=TradeAction.SELL,
+            quantity=65,
+            price=price,
+            notes="close",
+        )
+        for key, price in exits.items()
+    ]
+
+    with patch("src.strategy.ic_nifty_v2.format_exit_message", return_value="msg") as fmt:
+        asyncio.run(
+            strat._send_close_notification("CLOSE_FULL", "PROFIT_TARGET", closed, positions)
+        )
+
+    msg = fmt.call_args.args[0]
+    assert [r.entry for r in msg.legs] == [Decimal("29.1"), Decimal("40.6")]
+    assert [r.pnl for r in msg.legs] == [Decimal("643.5"), Decimal("0.0")]
+    assert msg.this_exit_pnl == Decimal("643.5")
+    assert msg.held_days == 7
