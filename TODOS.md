@@ -76,8 +76,8 @@ rot them. (Items 3, 5 and 8 closed — numbers kept stable because item text cro
     `broker-abstraction`. Open for Animesh: monitor cadence, backstop thresholds, Kite.
 4. **Gamma near-expiry buy (epic)** — `docs/plan/gamma-near-expiry/` — Phase A `risk-gamma-phase-a/` ✅ done; next Phase B `gamma-scan-phase-b/` GS-1 (GS-1..6), blocked until ≥ 5 days of snapshots
    exist. In progress, independent of everything else; finish before starting new stories.
-6. **Strategy payoff charts on Telegram (IC first, any strategy via opt-in registry)** — `docs/plan/strategy-payoff-charts/` — `chart-core/` ✅ done (`6ef2a5f`); next **MO-1**, blocked:
-   `chart-model-overlay/` (MO-1..9) waits on `greeks-bs-fallback` GF-2 + GF-3, i.e. item 7.
+6. **Strategy payoff charts on Telegram (IC first, any strategy via opt-in registry)** — `docs/plan/strategy-payoff-charts/` — `chart-core/` ✅ done (`6ef2a5f`); next **CP-1** (`chart-polish/`, dark
+   Roboto redesign); `chart-model-overlay/` (MO-1..9) stays blocked, it waits on `greeks-bs-fallback` GF-2 + GF-3, i.e. item 7.
 7. **Greeks Black-Scholes fallback** — `docs/plan/greeks-bs-fallback/` — next **GF-1** (read-only audit scope). Needs Animesh's three modeling decisions (rate / DTE convention / delta tolerance)
    before GF-2. Unblocks delta-based IC entry for the yearly bucket and `strategy-payoff-charts` `chart-model-overlay/`.
 9. **Portfolio snapshot slimdown** — `docs/plan/portfolio-snapshot-slimdown/` — next **FD-1** (pre-delete audit). Epic, fixed order: `finideas-decommission/` (FD-1..7) → `dhan-holdings-removal/`

@@ -34,14 +34,16 @@ No `src/` change, no DB schema change. Requested by Animesh 2026-10-08.
 (LM-1..5) → `logging-enforcement/` (LE-1..6: pre-commit checks, print ratchet, vocabulary lint, `LOGGING.md` rewrite). Print policy: interactive scripts may print results, cron-invoked never. New
 `job_runs` table (see the story's `schema.md`). Soft ordering after `design-discipline/design-gate/`. Requested by Animesh 2026-10-08.
 
-**`strategy-payoff-charts/`** · 🟡 In progress — `chart-core/` ✅ done (`6ef2a5f`), next **MO-1** (blocked on GF-2 + GF-3) Stockmock-style payoff diagram for any strategy (opt-in `@register_payoff`
-registry; Iron Condors first, one PNG per variation) attached to the entry, EOD-audit, and close Telegram messages. Two sub-stories: `chart-core/` (PC-1..19 — strategy-agnostic payoff math + registry
+**`strategy-payoff-charts/`** · 🟡 In progress — `chart-core/` ✅ done (`6ef2a5f`), next **CP-1** (`chart-polish/`; `chart-model-overlay/` MO-1 stays blocked on GF-2 + GF-3) Stockmock-style payoff
+diagram for any strategy (opt-in `@register_payoff` registry; Iron Condors first, one PNG per variation) attached to the entry, EOD-audit, and close Telegram messages. Two sub-stories: `chart-core/`
+(PC-1..19 — strategy-agnostic payoff math + registry
 + matplotlib expiry-payoff renderer + `sendPhoto` on `TelegramNotifier`/`TelegramGateway` + IC registration and wiring into `paper_ic_entry`/`_v2`, `paper_ic_snapshot`, both
-  `_send_close_notification`; no option model, ships now) → `chart-model-overlay/` (MO-1..9 — blue T+0 curve + ±1σ/±2σ bands + POP; **blocked on `greeks-bs-fallback/` GF-2 + GF-3** for the shared
-  `src/pricing/` pricer + IV solver). Modeling decisions (rate / DTE convention / delta tolerance) inherited from `greeks-bs-fallback/`. No DB schema change. Requested by Animesh 2026-09-09; renamed
-  from `ic-payoff-charts/` and generalised 2026-10-03. **`token-efficiency/`** · ✅ Shipped/Archived 2026-09-03 → `docs/archive/plan/token-efficiency/` `measurement/` (MEAS-1..2) + `fixed-overhead/`
-  (FIX-1..4) + `suggestions-sweep/` (SWEEP-1..7) all shipped. `token_audit.py`, the `CLAUDE.md`/`AGENTS.md` skill-ification, `session-close` off the fork, the SWEEP `PreToolUse` hooks +
-  `commit_preflight.py`, and the Step 4b drain path (`Count >= 5` → `technical-debt/` DEBT-8..12) all landed. Closing SHA `2d896a9`.
+  `_send_close_notification`; no option model, ships now) → `chart-polish/` (CP-1..11 — dark Roboto redesign: one-row stat header, strike-labelled axis, exact-kink line; no new data) →
+  `chart-model-overlay/` (MO-1..9 — blue T+0 curve + ±1σ/±2σ bands + POP; **blocked on `greeks-bs-fallback/` GF-2 + GF-3** for the shared `src/pricing/` pricer + IV solver). Modeling decisions (rate /
+  DTE convention / delta tolerance) inherited from `greeks-bs-fallback/`. No DB schema change. Requested by Animesh 2026-09-09; renamed from `ic-payoff-charts/` and generalised 2026-10-03.
+  **`token-efficiency/`** · ✅ Shipped/Archived 2026-09-03 → `docs/archive/plan/token-efficiency/` `measurement/` (MEAS-1..2) + `fixed-overhead/` (FIX-1..4) + `suggestions-sweep/` (SWEEP-1..7) all
+  shipped. `token_audit.py`, the `CLAUDE.md`/`AGENTS.md` skill-ification, `session-close` off the fork, the SWEEP `PreToolUse` hooks + `commit_preflight.py`, and the Step 4b drain path (`Count >= 5` →
+  `technical-debt/` DEBT-8..12) all landed. Closing SHA `2d896a9`.
 
 **`doc-format-migration/`** · ✅ Archived → `docs/archive/plan/doc-format-migration/`.
 

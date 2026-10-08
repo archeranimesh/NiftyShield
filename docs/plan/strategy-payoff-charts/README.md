@@ -34,18 +34,22 @@ decided scope of `greeks-bs-fallback/` (new `src/pricing/` package), not this ep
 - **matplotlib** is the plotting library (confirmed). Agg backend, render to an in-memory PNG buffer. No `scipy` — `math.erf` covers the normal CDF.
 - **Est. Margin** is shown only when a `MarginSnapshot` exists for the strategy — it is captured post-entry and OAuth-token-gated, so it is absent at entry and that stat is simply omitted then.
 - **No DB schema change** — this epic only reads existing tables. No `schema.md`.
+- **`chart-polish/` added as a third sub-story** (Animesh, 2026-10-08): `chart-core/`'s own *Perspectives not covered* anticipated a visual follow-up once a real PNG had been judged. Dark theme only,
+  bundled Roboto, header limited to what the repo can already supply (POP waits for `chart-model-overlay/`). Design review and prior-art audit: `chart-polish/prompt.md`.
 
 ## Stories
 
 | Story | Purpose | Status | Depends on | Closing SHA |
 |---|---|---|---|---|
 | `chart-core/` | Generic payoff math + opt-in registry + matplotlib renderer + `send_photo` + IC registration and wiring (entry / EOD / close) | ✅ Done (`6ef2a5f`) | — | `6ef2a5f` |
-| `chart-model-overlay/` | Blue T+0 curve, ±1σ/±2σ bands, POP for any registered strategy; adapters supply per-leg IV + DTE | ⬜ Not started | `chart-core/` done + `greeks-bs-fallback/` GF-2/GF-3 | — |
+| `chart-polish/` | Final PNG form: dark Roboto, one-row stat header, strike-labelled axis, exact-kink line, title + subtitle (CP-1..11) | ⬜ Not started | `chart-core/` | — |
+| `chart-model-overlay/` | Blue T+0 curve, ±1σ/±2σ bands, POP; adapters supply per-leg IV + DTE | ⬜ Not started | `chart-core/` + `chart-polish/` + `greeks-bs-fallback/` GF-2/GF-3 | — |
 
 Status: ⬜ Not started · 🔄 In progress · ✅ Done. This column is the epic's progress view — per-task checkboxes live only in each sub-story's `tasks.md`.
 
-Story order is fixed and is the row order above. `chart-core/` has no external dependency and can start now. `chart-model-overlay/` must not begin until `src/pricing/black_scholes.py` (GF-2) and
-`src/pricing/implied_vol.py` (GF-3) exist and `chart-core/` is complete.
+Story order is fixed and is the row order above. `chart-core/` has no external dependency and is done. `chart-polish/` has none beyond it and can start now. `chart-model-overlay/` must not begin until
+`src/pricing/black_scholes.py` (GF-2) and `src/pricing/implied_vol.py` (GF-3) exist and both earlier stories are complete — it extends the renderer `chart-polish/` rebuilds, so building it first would
+mean writing MO-4..6 twice.
 
 ## Cross-cutting constraints
 

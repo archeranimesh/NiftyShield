@@ -13,13 +13,15 @@ contract, additive-send rule, renderer-degrades rule, opt-in registration, messa
 Story order is fixed — it is the row order of the **Stories** table in this folder's `README.md`:
 
 1. `chart-core/` — generic expiry payoff chart + opt-in strategy registry + `send_photo` plumbing + IC lifecycle wiring. Depends on: nothing.
-2. `chart-model-overlay/` — T+0 curve + ±1σ/±2σ bands + POP. Depends on: `chart-core/` complete **and** `greeks-bs-fallback/` GF-2 + GF-3 shipped.
+2. `chart-polish/` — final dark / Roboto visual form of the PNG (CP-1..11). Depends on: `chart-core/` complete.
+3. `chart-model-overlay/` — T+0 curve + ±1σ/±2σ bands + POP. Depends on: `chart-core/` **and** `chart-polish/` complete **and** `greeks-bs-fallback/` GF-2 + GF-3 shipped.
 
 Do not jump ahead even if a later task looks more urgent.
 
-Open `chart-core/tasks.md`. If it has any unchecked `- [ ]` line, the first one (top to bottom) is your task — stop searching, go to Step 2. Only if every box in `chart-core/tasks.md` is checked:
-**first** confirm `greeks-bs-fallback/` GF-2 and GF-3 are ticked in `docs/plan/greeks-bs-fallback/tasks.md`. If they are not, the epic is blocked — say so and stop. If they are, open
-`chart-model-overlay/tasks.md`; the first unchecked line is your task. If every sub-story `tasks.md` is fully checked, the epic is complete — say so and stop.
+Open `chart-core/tasks.md`. If it has any unchecked `- [ ]` line, the first one (top to bottom) is your task — stop searching, go to Step 2. If every box there is checked, open `chart-polish/tasks.md`
+and apply the same rule (a task with `Owner: Animesh` is a gate: report it and stop, do not implement). Only if every box in both is checked: **first** confirm `greeks-bs-fallback/` GF-2 and GF-3 are
+ticked in `docs/plan/greeks-bs-fallback/tasks.md`. If they are not, the epic is blocked — say so and stop. If they are, open `chart-model-overlay/tasks.md`; the first unchecked line is your task. If
+every sub-story `tasks.md` is fully checked, the epic is complete — say so and stop.
 
 ## Step 2 — confirm you are the right owner
 
