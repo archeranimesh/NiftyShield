@@ -24,10 +24,10 @@ fallback), because the yearly book needs Dhan Greeks daily from the Dec 2026 rol
 `ds-chain-seam/` (DSC-1..5, contract resolver + `ChainSnapshot` + shared Dhan throttle) → `ds-chain-monitoring/` (DSN-1..5, token alert, yearly read path, stale-Greeks policy, source-flip; pre-roll) →
 `ds-router-migration/` (DSR-0.., after the roll). Folds in `broker-abstraction/` (superseded in part). Requested by Animesh 2026-10-07.
 
-**`design-discipline/`** · ⬜ Not started — next **DD-1** (DD-1..10). Makes the `docs/refactor/` design principles a pre-proposal gate: bug-to-principle evidence matrix, GoF-for-Python applicability
-audit, two-tier decision card (baseline + evidence-ranked), tested `scripts/dev/design_scan.py` conformance scan + baseline report (adherence, hotspots, latency, refactor ROI), `design-check` skill
-and plan-gate Design clause, mandatory bug Design lens for `src/`/`scripts/` bugs, presence hook (warn, then block), `code-review-checklist.md` reconciled with the `code-reviewer` agent, refactor
-backlog. No `src/` change, no DB schema change. Requested by Animesh 2026-10-08.
+**`design-discipline/`** · ⬜ Not started — epic, next **DG-1**. Makes the `docs/refactor/` design principles a pre-proposal gate, then measures adherence. `design-gate/` (DG-1..9: bug-to-principle
+evidence, GoF-for-Python audit, refactor-docs triage, two-tier decision card, `design-check` skill and plan gate, Antigravity/`plan-loop`/`new-story` propagation, bug Design lens, presence hook,
+`code-reviewer` + checklist) → `design-baseline/` (DBL-1..4: tested `scripts/dev/design_scan.py`, baseline report with hotspots, latency axis and refactor ROI, refactor backlog, calibration review).
+No `src/` change, no DB schema change. Requested by Animesh 2026-10-08.
 
 **`strategy-payoff-charts/`** · 🟡 In progress — `chart-core/` ✅ done (`6ef2a5f`), next **MO-1** (blocked on GF-2 + GF-3) Stockmock-style payoff diagram for any strategy (opt-in `@register_payoff`
 registry; Iron Condors first, one PNG per variation) attached to the entry, EOD-audit, and close Telegram messages. Two sub-stories: `chart-core/` (PC-1..19 — strategy-agnostic payoff math + registry
