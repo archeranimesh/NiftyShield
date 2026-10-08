@@ -53,7 +53,7 @@
 | Field | Value |
 |---|---|
 | Severity | **Medium** — Telegram message only; DB trades and realised P&L are correct. Latent today, becomes live once BUG-073 closes both overlapped rows in one call |
-| Status | 🔴 Open — sequencing vs BUG-073 undecided (see B074.1) |
+| Status | 🟡 Fix in progress — fixed in `5cd3aca`; B074.4 live confirmation outstanding |
 | Discovered | 2026-10-08 |
 | Location | `src/strategy/ic_nifty_v2.py` close-notification builder (`pos_by_role` at ~2223, lookups at ~2234 and ~2264); `src/strategy/ic_nifty_v1.py` (~809, 820, 850) |
 
@@ -67,6 +67,10 @@ for `avg_sell_price` / `avg_cost`, and `entry_dates` and `held_days` use the sam
 
 **Suggested fix:** key the lookup on `(leg_role, instrument_key)`, or on `instrument_key` alone, matching each `closed_trade` to its own position. Test: two open rows under one role with different
 entries, both closed, and each message row carries its own entry and P&L.
+
+**Implementation progress (2026-10-08, `5cd3aca`):** `pos_by_role` replaced by `pos_by_key` (keyed on `instrument_key`) in `_send_close_notification` of both `ic_nifty_v1.py` and `ic_nifty_v2.py`,
+covering the entry-price lookup and the `entry_dates` / `held_days` lookup. One regression test per strategy: two `long_put_hedge` rows with different entries, each message row and `this_exit_pnl`
+carry their own values (patched `format_exit_message`). Full unit suite 4159 passed; `code-reviewer` 0 CRITICAL / 0 ERROR. Left open: B074.4, confirm on the next live overlap close.
 
 **Why it is separate from BUG-073:** BUG-073 stops rolls from creating role overlaps (roll path); this changes how a close is reported. Each can be reverted alone. Once BUG-073 lands, overlaps should
 no longer arise from rolls, which leaves this latent for stale-position cases only; it can still be hit by any future overlap.

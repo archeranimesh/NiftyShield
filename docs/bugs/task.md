@@ -76,9 +76,9 @@ Detail: `docs/bugs/bugs.md` BUG-072. Fix before the gamma cron line is enabled.
 
 Detail: `docs/bugs/bugs.md` BUG-074. Mostly latent once BUG-073 lands.
 
-- [ ] **B074.1** — Decide sequencing: fix with BUG-073 in one change, or immediately after it as a separate commit (Animesh).
-- [ ] **B074.2** — Add failing tests (two overlapped rows, different entries, each message row carries its own entry and P&L) in the v2 and v1 notifier tests.
-- [ ] **B074.3** — Key the notifier position lookup on `instrument_key` in `ic_nifty_v2.py` and `ic_nifty_v1.py`.
+- [x] **B074.1** — Sequencing: BUG-073 had already landed, so fixed as a separate commit after it. | SHA `5cd3aca`
+- [x] **B074.2** — Add failing tests (two overlapped rows, each message row carries its own entry and P&L) in the v2 and v1 notifier tests. | SHA `5cd3aca`
+- [x] **B074.3** — Key the notifier position lookup on `instrument_key` in `ic_nifty_v2.py` and `ic_nifty_v1.py`. | SHA `5cd3aca`
 - [ ] **B074.4** — Follow-up: after the next live overlap close, confirm the Telegram per-leg P&L sums to the `paper_trades` realised P&L.
 
 ## BUG-075 — V2 roll open-legs written with quantity 1 instead of position size (65 units)
