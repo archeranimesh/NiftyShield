@@ -19,7 +19,7 @@ from src.client.exceptions import DataFetchError
 from src.models.options import OptionChain
 from src.paper.models import PaperPosition
 from src.strategy.monitor import StrategyMonitor
-from src.strategy.protocol import LegSpec, SignalEvent
+from src.strategy.protocol import LegClose, LegSpec, SignalEvent
 
 # Import MockStrategy defined alongside the protocol tests.
 from tests.unit.strategy.test_strategy_protocol import MockStrategy
@@ -494,6 +494,81 @@ async def test_route_event_defaults_legs_to_open_empty_for_close_only_actions() 
 
     dispatched_action = strategy.apply_action.call_args[0][1]
     assert dispatched_action.legs_to_open == []
+
+
+@pytest.mark.asyncio
+async def test_route_event_threads_payload_legs_to_close_into_approved_action() -> None:
+    """BUG-073: a payload ``legs_to_close`` (list of role/instrument dicts) drives the
+    ApprovedAction's legs_to_close instead of the single-role ``short_put`` default —
+    a call-side ROLL_WING must not close a put."""
+    strategy = MockStrategy()
+    strategy.auto_execute = True
+    strategy.apply_action = AsyncMock(return_value=[])
+    event = SignalEvent(
+        event_type="ROLL_WING",
+        severity="ACTION",
+        description="call spread rolled",
+        payload={
+            "side": "call",
+            "auto_execute": True,
+            "auto_action": "ROLL_WING",
+            "legs_to_close": [
+                {"leg_role": "short_call", "instrument_key": "NSE_FO|51364"},
+                {"leg_role": "long_call_hedge", "instrument_key": "NSE_FO|51372"},
+            ],
+        },
+    )
+    strategy.check_signals = AsyncMock(return_value=[event])
+
+    store = _make_store()
+    monitor = _make_monitor(store=store, notifier=_make_notifier(), strategies=[strategy])
+
+    with (
+        patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
+        patch(
+            "src.strategy.monitor.datetime",
+            **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
+        ),
+    ):
+        await monitor._tick()
+
+    dispatched_action = strategy.apply_action.call_args[0][1]
+    assert dispatched_action.legs_to_close == [
+        LegClose(leg_role="short_call", instrument_key="NSE_FO|51364"),
+        LegClose(leg_role="long_call_hedge", instrument_key="NSE_FO|51372"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_route_event_without_payload_legs_to_close_keeps_single_role_default() -> None:
+    """BUG-073 guard: payloads with no ``legs_to_close`` keep the legacy behaviour
+    (``leg_role`` from the payload, else ``short_put``) for every other strategy."""
+    strategy = MockStrategy()
+    strategy.auto_execute = True
+    strategy.apply_action = AsyncMock(return_value=[])
+    event = SignalEvent(
+        event_type="PROFIT_TARGET",
+        severity="ACTION",
+        description="close short call",
+        payload={"leg_role": "overlay_cc", "auto_execute": True, "auto_action": "CLOSE_CC"},
+    )
+    strategy.check_signals = AsyncMock(return_value=[event])
+
+    monitor = _make_monitor(store=_make_store(), notifier=_make_notifier(), strategies=[strategy])
+
+    with (
+        patch("src.strategy.monitor.is_trading_day", return_value=True),
+        patch("src.strategy.monitor.is_market_session_now", return_value=True),
+        patch(
+            "src.strategy.monitor.datetime",
+            **{"now.return_value": _fake_ist_time(10, 0), "side_effect": None},
+        ),
+    ):
+        await monitor._tick()
+
+    dispatched_action = strategy.apply_action.call_args[0][1]
+    assert dispatched_action.legs_to_close == [LegClose(leg_role="overlay_cc")]
 
 
 # ---------------------------------------------------------------------------

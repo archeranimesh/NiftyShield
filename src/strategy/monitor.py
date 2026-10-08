@@ -467,9 +467,15 @@ class StrategyMonitor:
                 # selected in check_signals (e.g. NiftyTrackComparisonV1's ROLL_OVERLAY —
                 # apply_action requires a non-empty legs_to_open and raises otherwise).
                 # Defaults to [] for close-only actions (CLOSE_CC, CLOSE_AND_WAIT, ...).
+                # A payload ``legs_to_close`` (ROLL_WING) names the exact roles/instruments; without
+                # it the single-role default applies (BUG-073: the default closed a put on call rolls).
+                legs_to_close = [
+                    LegClose(leg_role=d["leg_role"], instrument_key=d.get("instrument_key"))
+                    for d in event.payload.get("legs_to_close", [])
+                ] or [LegClose(leg_role=event.payload.get("leg_role", "short_put"))]
                 action = ApprovedAction(
                     action_type=action_type,
-                    legs_to_close=[LegClose(leg_role=event.payload.get("leg_role", "short_put"))],
+                    legs_to_close=legs_to_close,
                     legs_to_open=event.payload.get("legs_to_open", []),
                     rationale="auto-execute",
                     council_rank=1,

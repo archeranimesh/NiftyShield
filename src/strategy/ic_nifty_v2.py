@@ -1899,6 +1899,17 @@ class IronCondorV2:
                 if roll_result.roll_update is not None
                 else []
             )
+            # BUG-073: name the old short + old long of the rolled side so the monitor
+            # closes both (plain dicts: the non-auto-execute path json.dumps the payload).
+            legs_to_close = (
+                [
+                    {"leg_role": leg.leg_role, "instrument_key": leg.instrument_key}
+                    for leg in roll_result.roll_update.legs
+                    if leg.notes.startswith("roll_close_")
+                ]
+                if roll_result.roll_update is not None
+                else []
+            )
             return SignalEvent(
                 event_type="ROLL_WING",
                 severity="ACTION",
@@ -1911,6 +1922,7 @@ class IronCondorV2:
                     "auto_action": "ROLL_WING",
                     "valid_actions": ["ROLL_WING", "CLOSE_FULL"],
                     "legs_to_open": legs_to_open,
+                    "legs_to_close": legs_to_close,
                 },
             )
 

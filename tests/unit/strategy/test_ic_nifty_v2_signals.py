@@ -31,7 +31,7 @@ from src.models.options import OptionChain, OptionChainStrike, OptionLeg
 from src.paper.models import PaperPosition
 from src.strategy.ic_expiry_config_v2 import IC_V2_MONTHLY
 from src.strategy.ic_nifty_v2 import IronCondorV2
-from src.strategy.protocol import ApprovedAction, PaperStrategy
+from src.strategy.protocol import ApprovedAction, PaperStrategy, SignalEvent
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -379,6 +379,67 @@ def test_full_pipeline_roll_wing() -> None:
     assert all(isinstance(leg, LegSpec) for leg in legs_to_open)
     assert all(leg.notes.startswith("roll_open_") for leg in legs_to_open)
     assert all(leg.price is not None and leg.price > 0 for leg in legs_to_open)
+
+
+def _roll_wing_call_chain() -> OptionChain:
+    """Mirror of ``_roll_wing_chain`` on the call side: short call |delta|=0.36.
+
+    Replacement short at 25500 (delta 0.25) and long wing at 26200 (delta 0.10);
+    original width 700 (25100/25800) equals new width 700.
+    """
+    return _chain(
+        {
+            "25100": (_leg("25100", "0.36", ltp="160", bid="159", ask="161"), None),
+            "25500": (_leg("25500", "0.25", ltp="100", bid="97.5", ask="102.5"), None),
+            "26200": (_leg("26200", "0.10", ltp="30", bid="29.25", ask="30.75"), None),
+            "25800": (_leg("25800", "0.04", ltp="30", bid="29.25", ask="30.75"), None),
+            "23900": (None, _leg("23900", "-0.18", ltp="70", bid="69", ask="71")),
+            "23200": (None, _leg("23200", "-0.10", ltp="30", bid="29", ask="31")),
+        }
+    )
+
+
+def _roll_wing_events(chain: OptionChain) -> list[SignalEvent]:
+    """Run check_signals on the standard IC with the roll guards' lookup patched."""
+    import asyncio
+
+    strategy = _make_strategy(original_credit="200")
+    with (
+        patch("src.strategy.ic_nifty_v2.market_today", return_value=_FROZEN_TODAY),
+        patch("src.instruments.lookup.InstrumentLookup.from_file") as mock_from_file,
+    ):
+        lookup = MagicMock()
+        lookup.search_options.side_effect = lambda **kwargs: [
+            {"instrument_key": f"NSE_FO|{int(kwargs['strike'])}00"}
+        ]
+        mock_from_file.return_value = lookup
+        return asyncio.run(strategy.check_signals(chain, _standard_ic_positions()))
+
+
+def test_roll_wing_payload_carries_put_side_closing_legs() -> None:
+    """BUG-073: the ROLL_WING payload names the old short AND old long of the rolled
+    side, with their instrument keys, so the monitor can close both atomically."""
+    (event,) = _roll_wing_events(_roll_wing_chain())
+
+    assert event.event_type == "ROLL_WING"
+    assert event.payload["legs_to_close"] == [
+        {"leg_role": "short_put", "instrument_key": _key("23900", "PE")},
+        {"leg_role": "long_put_hedge", "instrument_key": _key("23200", "PE")},
+    ]
+
+
+def test_roll_wing_payload_call_side_closes_call_legs_not_puts() -> None:
+    """BUG-073: a call-side roll must close short_call + long_call_hedge. Before the
+    fix the monitor fell back to ``short_put`` and closed a healthy put (2026-08-26)."""
+    (event,) = _roll_wing_events(_roll_wing_call_chain())
+
+    assert event.event_type == "ROLL_WING"
+    assert event.payload["side"] == "call"
+    closing = {leg["leg_role"]: leg["instrument_key"] for leg in event.payload["legs_to_close"]}
+    assert closing == {
+        "short_call": _key("25100", "CE"),
+        "long_call_hedge": _key("25800", "CE"),
+    }
 
 
 def test_full_pipeline_forced_close_delta() -> None:
