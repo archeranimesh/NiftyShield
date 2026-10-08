@@ -29,6 +29,11 @@ evidence, GoF-for-Python audit, refactor-docs triage, two-tier decision card, `d
 `code-reviewer` + checklist) → `design-baseline/` (DBL-1..4: tested `scripts/dev/design_scan.py`, baseline report with hotspots, latency axis and refactor ROI, refactor backlog, calibration review).
 No `src/` change, no DB schema change. Requested by Animesh 2026-10-08.
 
+**`logging-consistency/`** · ⬜ Not started — epic, next **LF-1** (audit; needs a redacted `crontab -l` from Animesh). Makes logging consistent and silent cron failures visible: `logging-foundation/`
+(LF-1..8: `run_id` by default, safe serialisation and redaction, `timed()`, `run_entrypoint` runner, `job_runs` heartbeat table, healthcheck freshness, send-failure logging) → `logging-migration/`
+(LM-1..5) → `logging-enforcement/` (LE-1..6: pre-commit checks, print ratchet, vocabulary lint, `LOGGING.md` rewrite). Print policy: interactive scripts may print results, cron-invoked never. New
+`job_runs` table (see the story's `schema.md`). Soft ordering after `design-discipline/design-gate/`. Requested by Animesh 2026-10-08.
+
 **`strategy-payoff-charts/`** · 🟡 In progress — `chart-core/` ✅ done (`6ef2a5f`), next **MO-1** (blocked on GF-2 + GF-3) Stockmock-style payoff diagram for any strategy (opt-in `@register_payoff`
 registry; Iron Condors first, one PNG per variation) attached to the entry, EOD-audit, and close Telegram messages. Two sub-stories: `chart-core/` (PC-1..19 — strategy-agnostic payoff math + registry
 + matplotlib expiry-payoff renderer + `sendPhoto` on `TelegramNotifier`/`TelegramGateway` + IC registration and wiring into `paper_ic_entry`/`_v2`, `paper_ic_snapshot`, both
