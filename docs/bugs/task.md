@@ -144,3 +144,14 @@ Design ruled by council 2026-09-25 (`docs/council/2026-09-25_mvp-corporate-actio
 - [ ] Push `main` (31 commits ahead of origin as of 2026-10-02). Pending Animesh.
 - [ ] `PaperExecutor` manual-approval path (`src/strategy/executor.py:273`) still passes `leg_spec.quantity` as units, so a manually approved roll would write 1 unit (BUG-075 residual, split out on
   archive).
+
+## BUG-076
+
+- [ ] **B076.1** — Restart `scripts.monitor_daemon` so `cf3e0d1` (BUG-075 lots→units) is live for V1 and V2 rolls.
+- [ ] **B076.2** — Decide ledger repair for `paper_trades` ids 453/457 (annotate vs backfill; default annotate per B075.4) and apply it.
+- [ ] **B076.3** — Close the `PaperExecutor` manual-approval roll path (`executor.py:273`) so it scales lots to units.
+
+## BUG-077
+
+- [ ] **B077.1** — Add variant-aware IC headline to the shared exit renderer, matching the IC EOD Audit header.
+- [ ] **B077.2** — Wire IC V1 and V2 close notifiers to pass variant and version; add tests.

@@ -462,3 +462,50 @@ deprioritized below BUG-030/031) so the session-start protocol doesn't pick B019
 
 
 ## BUG-037 [MOVED] — see `docs/archive/bugs/bugs.md` (closed 2026-10-02, SHA `5369c0e`)
+
+---
+
+## BUG-076 — V1 `ROLL_WING` on 2026-10-08 wrote a qty-1 short put because the monitor daemon was still running pre-`cf3e0d1` code; ledger rows 453/457 and the close card/chart are wrong
+
+| Field | Value |
+|---|---|
+| Severity | **High** — wrong position size, wrong P&L, wrong close card and payoff chart; recurs on every roll until the daemon restarts |
+| Status | 🔴 Open — code fix already shipped (`cf3e0d1`, BUG-075); daemon restart and ledger decision pending |
+| Discovered | 2026-10-08 |
+| Location | `scripts/monitor_daemon` process (started 2026-10-08 10:15, fix committed 11:25); `paper_trades` ids 452/453/457 (`paper_ic_nifty_v1_monthly`) |
+
+**Symptom:** the V1 monthly close card showed `[S] NIFTY 21450 PE 70.8 → 70.8 ₹0.00` and a payoff chart with only three visible legs (net credit ₹4.18, breakeven 23500, the 21500 PE long reading as
+naked on the downside). Ledger: id 452 `short_put` BUY 65 @188.65 (`ROLL_WING`, old `51309`), id 453 `short_put` SELL qty **1** @70.8 (`ROLL_WING`, new `51285`), id 457 `short_put` BUY qty **1**
+@70.80 (`CLOSE_FULL`). Every other leg is 65.
+
+**Root cause:** BUG-075 fixed `roll_ic_legs` to scale lots to units, and its note says V1 `ROLL_WING` shared the defect "latent (no V1 roll in the DB)". That latency ended today: the daemon loaded the
+module at 10:15 and was never restarted after `cf3e0d1` landed at 11:25, so the V1 roll ran the old unscaled path. The close notifier then read the qty-1 position (`_send_close_notification` falls
+back to close price as entry when sizing/entry is off), producing the ₹0.00 leg and the near-invisible chart leg. The chart and card code are correct for a correctly sized condor; this is not a
+chart-scope defect.
+
+**Effect on figures:** the put-side roll buyback (id 452, 69.55 → 188.65 on 65 units, about -7,741) is in cycle #8 P&L; the replacement leg's 1-unit round trip nets 0. The card's "this exit" (+4,246)
+therefore omits the new short put's real P&L and the cycle figure (-3,495) is as recorded. Win-rate and since-inception inherit the recorded rows.
+
+**Suggested fix:** (1) restart the daemon so `cf3e0d1` is live; (2) data repair — the BUG-075 precedent (B075.4) was annotate-not-backfill because those pairs opened and closed flat in-session; here
+the same holds (ids 453/457 are a flat 1-unit round trip at 70.8), so default to annotating ledger notes on 453/457 rather than inventing 65-unit fills; Animesh to confirm; (3) the manual-approval
+`PaperExecutor` path (`executor.py:273`) still passes units unscaled (BUG-075 residual) and should be closed so no roll path can write qty 1.
+
+---
+
+## BUG-077 — IC close card headline omits the variant (weekly / monthly / leaps) and does not match the IC EOD Audit header
+
+| Field | Value |
+|---|---|
+| Severity | Low — cosmetic/ambiguity; three variants run concurrently, so a close card cannot be attributed to one |
+| Status | 🔴 Open |
+| Discovered | 2026-10-08 |
+| Location | `src/notifications/exit_message.py::_headline`, `ExitMessage` (no variant field); `ic_nifty_v1.py` ~899 and `ic_nifty_v2.py` `_send_close_notification` (`headline_label="IC v1"`) |
+
+**Symptom:** the close card reads `✅ IC v1 Closed — CLOSE_FULL`, with no timeframe. The entry card carries `— <expiry_type>` and the EOD audit carries `🔵 📅 IC EOD Audit — Monthly | #IC_Monthly_V1`
+plus the code-span strategy id on its own line.
+
+**Root cause:** `ExitMessage` has no `expiry_type`; both IC close notifiers hardcode the label.
+
+**Suggested fix:** render the IC close headline in the EOD-audit shape (colour + timeframe emoji, `IC Closed — <Timeframe>`, `\| #IC_<Timeframe>_<Version>`, strategy id line beneath), sharing the
+title/hashtag builder in `scripts/strategies/ic/paper_ic_snapshot.py` (or a helper extracted to `src/notifications/`) instead of a third format. Non-IC closes (CSP/CC/PP/Collar) unchanged. Tests:
+monthly V1, weekly V1 and monthly V2 headlines; non-IC card unchanged.
