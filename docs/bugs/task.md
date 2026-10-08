@@ -85,8 +85,8 @@ Detail: `docs/bugs/bugs.md` BUG-074. Mostly latent once BUG-073 lands.
 
 Detail: `docs/bugs/bugs.md` BUG-075. Independent of BUG-073; higher impact.
 
-- [ ] **B075.1** — Add failing tests: roll and `PROFIT_LOCK_ZONE2` open trades are written at `lots × LOT_SIZE`; a post-roll position is uniformly sized.
-- [ ] **B075.2** — Scale lots to units on the roll path (`roll_ic_legs` or the roll plan) the way the entry path does.
+- [x] **B075.1** — Add failing tests: roll and `PROFIT_LOCK_ZONE2` open trades are written at `lots × LOT_SIZE`; a post-roll position is uniformly sized. | SHA `cf3e0d1`
+- [x] **B075.2** — Scale lots to units on the roll path (`roll_ic_legs` or the roll plan) the way the entry path does. | SHA `cf3e0d1`
 - [ ] **B075.3** — Quantify the 2026-10-08 profit-lock and profit-target closes: would they have fired on a correctly sized position?
 - [ ] **B075.4** — Repair or annotate the 2026-08-26 and 2026-10-08 cycles (backup first), then re-derive cycle P&L.
 

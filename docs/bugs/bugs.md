@@ -78,7 +78,7 @@ no longer arise from rolls, which leaves this latent for stale-position cases on
 | Field | Value |
 |---|---|
 | Severity | **High** — wrong position size, wrong P&L, and wrong credit/delta/profit-lock inputs after every roll; affects live paper decisions |
-| Status | 🔴 Open |
+| Status | 🟡 Fix in progress — B075.1/B075.2 `cf3e0d1` landed 2026-10-08; B075.3 (impact) and B075.4 (data repair) pending |
 | Discovered | 2026-10-08 |
 | Location | `src/strategy/ic_nifty_v2.py` roll `LegSpec(quantity=1)` (~1037-1061, ~1671, ~1682); `ic_close_executor.py::roll_ic_legs` (unscaled `quantity`) |
 
@@ -96,6 +96,12 @@ recorded; the figures built from them are not. `PROFIT_LOCK_ZONE2` legs (~1671, 
 
 **Suggested fix:** scale lots to units in `roll_ic_legs` the same way the entry path does (or make the roll plan carry units), covering roll and `PROFIT_LOCK_ZONE2` open legs. Tests: a roll writes
 open trades at `lots × LOT_SIZE`, and a roll followed by an immediate evaluation sees a uniformly sized condor.
+
+**Implementation progress (B075.1/B075.2, `cf3e0d1`):** `roll_ic_legs` now writes `leg.quantity * LOT_SIZE`, treating `LegSpec.quantity` as lots. Entry is unaffected: `paper_ic_entry_v2.py` passes
+`--qty LOT_SIZE` directly and the `quantity=1` in `enter()` is never persisted. V1 `ROLL_WING` (`ic_nifty_v1.py` ~1019, ~1110) had the same defect, latent (no V1 roll in the DB), fixed by the same
+change. Tests: happy-path now asserts `LOT_SIZE`, new 2-lot test asserts `2 × LOT_SIZE`; stale `quantity=65` test inputs changed to 1. Unit suite 4157 passed. `code-reviewer`: no CRITICAL; the one
+ERROR (stale test input) fixed. Not fixed: the `PaperExecutor` manual-approval path (`executor.py:273`) still passes `leg_spec.quantity` as units, so a manually approved roll would still write 1 unit;
+`LegSpec.quantity` has no unit comment in `protocol.py`.
 
 **Follow-up:** repair data for the affected cycles (2026-08-26, 2026-10-08): decide backfill versus annotate, with a backup first per the BUG-030 / BUG-032 precedent, then re-derive cycle P&L.
 
