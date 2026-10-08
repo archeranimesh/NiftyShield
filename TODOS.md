@@ -155,6 +155,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-08] BUG-073 closed (`16faf5a`): V2 `ROLL_WING` payload now carries the roll's closing legs and the monitor uses them, so a roll closes the rolled side's old short + long (call-side rolls no
+  longer close a put). Logged BUG-074 (close-notifier overlap P&L) and BUG-075 (roll open-legs qty 1 vs 65, data repair for the 08-26 and 10-08 cycles); BUG-075 is next.
 - [2026-10-08] Scaffolded `design-discipline/` (2-story epic: `design-gate/` DG-1..9, `design-baseline/` DBL-1..4; `8e36063`) and `logging-consistency/` (3 stories, LF/LM/LE; `53e1970`). Docs only, no
   code change. Decisions: warn-then-block hook, bug Design lens for `src/`/`scripts/` only, two-tier card, print allowed in interactive scripts but never cron, `job_runs` table over log-derived
   heartbeat.

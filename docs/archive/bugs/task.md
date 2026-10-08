@@ -1024,3 +1024,13 @@ Detail: `docs/bugs/bugs.md` BUG-071.
 - [x] **B071.1** — Hook exempts payloads carrying `agent_id` (subagent calls); unit-tested. | SHA `dc0c0e9`
 - [x] **B071.2** — `test-runner.md` forbids stash/restore/index git commands and says to report a block verbatim. | SHA `dc0c0e9`
 - [x] **B071.3** — `@test-runner` returned pytest's verbatim summary with no hook block (live proof of `agent_id` exemption). | SHA `24b0eb2`
+
+## BUG-073 — V2 `ROLL_WING` closes the wrong leg and never retires the old long leg (role overlap, duplicate CLOSE_FULL)
+
+Detail: `docs/bugs/bugs.md` BUG-073 (root cause revised 2026-10-08).
+
+- [x] **B073.1** — Add failing tests: call-side roll closes the call legs and leaves the puts; put-side roll leaves one row per role; a follow-on `CLOSE_FULL` closes everything in one call. | SHA
+  `16faf5a`
+- [x] **B073.2** — Carry the rolled side (or closing roles) in the V2 `ROLL_WING` payload and derive `legs_to_close` from it in `monitor.py` instead of the `short_put` default. | SHA `16faf5a`
+- [x] **B073.3** — Pass the plan's `roll_close_*` legs through so both old legs of the rolled side are closed atomically with the opens in `roll_ic_legs`. | SHA `16faf5a`
+- [x] **B073.4** — V1 roll payload and `PROFIT_LOCK_ZONE2` checked against the monitor default: not affected. | SHA `16faf5a`

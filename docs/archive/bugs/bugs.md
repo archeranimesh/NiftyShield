@@ -2939,4 +2939,50 @@ it, which the permission layer denied ("Irreversible Local Destruction"), and it
 `.claude/agents/test-runner.md` does not forbid index/stash-touching git commands, so a blocked agent reaches for `git stash` (a data-loss risk for concurrent edits). Operator ran the suite manually
 (green) to unblock. Fix scope adds: forbid stash/restore/index commands in the agent definition and instruct it to report a block verbatim rather than work around it.
 
-**Implementation progress (2026-10-03):** B071.1/.2 `dc0c0e9`. B071.3: `@test-runner` spawned with no Python change; the `agent_id` exemption held (no hook block). First run reported `52 failed, 3878 passed, 2 skipped, 8 warnings, 24 errors in 29.92s` (Greeks / VIX / bhavcopy ingest tests); a rerun with env echoed (`.venv` Python 3.12.7, exit 0) reported `3954 passed, 2 skipped, 8 warnings in 40.72s`, and the operator's own run was green. Both runs total 3954 tests, so the first failures were real but transient; cause unknown, not reproduced. Comment-indent fix on `inline_full_suite.sh` lines 3–4 committed with the close.
+**Implementation progress (2026-10-03):** B071.1/.2 `dc0c0e9`. B071.3: `@test-runner` spawned with no Python change; the `agent_id` exemption held (no hook block). First run reported `52 failed, 3878
+passed, 2 skipped, 8 warnings, 24 errors in 29.92s` (Greeks / VIX / bhavcopy ingest tests); a rerun with env echoed (`.venv` Python 3.12.7, exit 0) reported `3954 passed, 2 skipped, 8 warnings in
+40.72s`, and the operator's own run was green. Both runs total 3954 tests, so the first failures were real but transient; cause unknown, not reproduced. Comment-indent fix on `inline_full_suite.sh`
+lines 3–4 committed with the close.
+
+---
+
+## BUG-073 — V2 `ROLL_WING` closes the wrong leg and never retires the old long leg; the resulting role overlap leaves a leg open and fires a second `CLOSE_FULL`
+
+| Field | Value |
+|---|---|
+| Severity | **High** — a call-side roll closes a healthy short put; every roll leaves a duplicate hedge/wing open and triggers a duplicate full close |
+| Status | ✅ Fixed — `16faf5a` (root cause revised 2026-10-08; first diagnosis was incomplete) |
+| Discovered | 2026-10-08 |
+| Location | `src/strategy/monitor.py:472`; `src/strategy/ic_nifty_v2.py` ROLL_WING payload (~1900) + roll plan (~1030-1065); `ic_close_executor.py::roll_ic_legs` |
+
+**Symptom:** 2026-10-08 `paper_ic_nifty_v2_monthly` produced two "IC v2 Closed — CLOSE_FULL" messages two minutes apart. The first closed 4 legs; the second closed a lone `NIFTY 21500 PE` (entry 29.1,
+exit 39.0, +₹646.75) and carried the cycle P&L (#11). The identical sequence occurred on 2026-08-26 (CLOSE_FULL at 09:25:15, a second at 09:26:55), so it is 2 for 2 on V2 rolls.
+
+**Root cause (revised):** the overlap is created by the roll itself, not by the close.
+1. `StrategyMonitor` builds the auto-execute action as `legs_to_close=[LegClose(leg_role=event.payload.get("leg_role", "short_put"))]` (`monitor.py:472`). The V2 `ROLL_WING` payload carries `side`,
+   `dte`, `expiry`, `legs_to_open` and no `leg_role`, so every V2 roll closes `short_put` whatever the side.
+2. The roll plan builds four legs (`roll_close_short`, `roll_close_long`, `roll_open_short`, `roll_open_long`), but only the `roll_open_*` legs reach `roll_ic_legs`. The old long leg is never closed
+   and the old short leg only by accident of the default. Evidence: 2026-08-26 call-side roll logged `legs_to_close=['short_put']`; `paper_trades` id 222 is a BUY of 65 `short_put` at 56.05 (a healthy
+   short put closed in error), while the old call legs stayed open (`position_for_role_ambiguous` for `short_call` and `long_call_hedge`). 2026-10-08 put-side roll: ids 432-434 close the old short put
+   and open a new short put and hedge; the old 21500 PE hedge stays open, so `long_put_hedge` has two rows.
+
+**How the duplicate close arises:** `_position_for_role` resolves an overlapped role to the newest `entry_date`, and `apply_action` narrows the close to that instrument (PG-4g / PG-4f, asserted by
+`test_apply_action_close_put_spread_roll_overlap_closes_correct_instrument` and the V1 equivalent). `CLOSE_FULL` therefore closes one row per role, the evaluator still sees the leftover, and fires
+again. That narrowing is deliberate for stale-position cases and is **not** the defect; do not change it as part of this bug.
+
+**Suggested fix:** (a) make the V2 `ROLL_WING` payload carry the side (or the closing roles) and have the monitor derive `legs_to_close` from it instead of the `short_put` default; (b) pass the plan's
+`roll_close_*` legs through so both old legs of the rolled side are closed with the opens in one atomic `roll_ic_legs` write; (c) check the V1 roll payload (it carries `leg_role`) and
+`PROFIT_LOCK_ZONE2`, which shares the monitor default. Tests: call-side roll closes the call legs and leaves the puts; put-side roll leaves exactly one row per role afterwards; follow-on `CLOSE_FULL`
+produces a single close. Roll open-leg quantity is BUG-075; the close-message P&L effect of overlaps is BUG-074.
+
+**Considered, not chosen:** making `CLOSE_*` close every row per role. It treats the symptom, reverses PG-4g, and every roll would still open a duplicate leg.
+
+**Implementation progress (2026-10-08, `16faf5a`):** the V2 `ROLL_WING` event payload now carries `legs_to_close`, a list of `{leg_role, instrument_key}` dicts built from the roll plan's
+`roll_close_*` legs (plain dicts because the non-auto-execute path `json.dumps` the payload). `StrategyMonitor._route_event` builds `ApprovedAction.legs_to_close` from it and keeps the single-role
+default when absent, so no other strategy changes. `apply_action` and `roll_ic_legs` were not touched: they already close every role they are given atomically. Tests: put-side and call-side payload
+tests (`test_ic_nifty_v2_signals.py`), monitor dispatch and legacy-default tests (`test_strategy_monitor.py`); full unit suite 4156 passed. Reviews: `code-reviewer` 0 CRITICAL/ERROR, 1 WARNING (test
+helper type hint, fixed); `roll-validator` SAFE, with two warnings deferred: `apply_action` re-resolves the instrument itself and ignores the key in `legs_to_close` (harmless without an overlap), and
+an empty payload `legs_to_close` falls back to the default (correct for every current payload). B073.4: V1 `ROLL_WING` carries `leg_role` and rolls the short leg only, and `PROFIT_LOCK_ZONE2`
+overrides its closed roles in `apply_action`; both unaffected. **Not fixed here:** rolled-in legs still open at quantity 1 (BUG-075); the close-message P&L effect of overlaps (BUG-074).
+
+---

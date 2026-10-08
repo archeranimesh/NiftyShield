@@ -44,36 +44,7 @@
 
 ---
 
-## BUG-073 — V2 `ROLL_WING` closes the wrong leg and never retires the old long leg; the resulting role overlap leaves a leg open and fires a second `CLOSE_FULL`
-
-| Field | Value |
-|---|---|
-| Severity | **High** — a call-side roll closes a healthy short put; every roll leaves a duplicate hedge/wing open and triggers a duplicate full close |
-| Status | 🔴 Open (root cause revised 2026-10-08; first diagnosis below was incomplete) |
-| Discovered | 2026-10-08 |
-| Location | `src/strategy/monitor.py:472`; `src/strategy/ic_nifty_v2.py` ROLL_WING payload (~1900) + roll plan (~1030-1065); `ic_close_executor.py::roll_ic_legs` |
-
-**Symptom:** 2026-10-08 `paper_ic_nifty_v2_monthly` produced two "IC v2 Closed — CLOSE_FULL" messages two minutes apart. The first closed 4 legs; the second closed a lone `NIFTY 21500 PE` (entry 29.1,
-exit 39.0, +₹646.75) and carried the cycle P&L (#11). The identical sequence occurred on 2026-08-26 (CLOSE_FULL at 09:25:15, a second at 09:26:55), so it is 2 for 2 on V2 rolls.
-
-**Root cause (revised):** the overlap is created by the roll itself, not by the close.
-1. `StrategyMonitor` builds the auto-execute action as `legs_to_close=[LegClose(leg_role=event.payload.get("leg_role", "short_put"))]` (`monitor.py:472`). The V2 `ROLL_WING` payload carries `side`,
-   `dte`, `expiry`, `legs_to_open` and no `leg_role`, so every V2 roll closes `short_put` whatever the side.
-2. The roll plan builds four legs (`roll_close_short`, `roll_close_long`, `roll_open_short`, `roll_open_long`), but only the `roll_open_*` legs reach `roll_ic_legs`. The old long leg is never closed
-   and the old short leg only by accident of the default. Evidence: 2026-08-26 call-side roll logged `legs_to_close=['short_put']`; `paper_trades` id 222 is a BUY of 65 `short_put` at 56.05 (a healthy
-   short put closed in error), while the old call legs stayed open (`position_for_role_ambiguous` for `short_call` and `long_call_hedge`). 2026-10-08 put-side roll: ids 432-434 close the old short put
-   and open a new short put and hedge; the old 21500 PE hedge stays open, so `long_put_hedge` has two rows.
-
-**How the duplicate close arises:** `_position_for_role` resolves an overlapped role to the newest `entry_date`, and `apply_action` narrows the close to that instrument (PG-4g / PG-4f, asserted by
-`test_apply_action_close_put_spread_roll_overlap_closes_correct_instrument` and the V1 equivalent). `CLOSE_FULL` therefore closes one row per role, the evaluator still sees the leftover, and fires
-again. That narrowing is deliberate for stale-position cases and is **not** the defect; do not change it as part of this bug.
-
-**Suggested fix:** (a) make the V2 `ROLL_WING` payload carry the side (or the closing roles) and have the monitor derive `legs_to_close` from it instead of the `short_put` default; (b) pass the plan's
-`roll_close_*` legs through so both old legs of the rolled side are closed with the opens in one atomic `roll_ic_legs` write; (c) check the V1 roll payload (it carries `leg_role`) and
-`PROFIT_LOCK_ZONE2`, which shares the monitor default. Tests: call-side roll closes the call legs and leaves the puts; put-side roll leaves exactly one row per role afterwards; follow-on `CLOSE_FULL`
-produces a single close. Roll open-leg quantity is BUG-075; the close-message P&L effect of overlaps is BUG-074.
-
-**Considered, not chosen:** making `CLOSE_*` close every row per role. It treats the symptom, reverses PG-4g, and every roll would still open a duplicate leg.
+## BUG-073 [MOVED] — see `docs/archive/bugs/bugs.md` (closed 2026-10-08, SHA `16faf5a`)
 
 ---
 

@@ -70,14 +70,7 @@ Detail: `docs/bugs/bugs.md` BUG-072. Fix before the gamma cron line is enabled.
 - [x] **B072.1** — Add the trading-day guard to `main()` (real run: log and exit 0 before any fetch; `--dry-run`: warn and continue) with the three repro tests. | SHA `2305977`
 - [ ] **B072.2** — Confirm on the first trading day: a `--dry-run` during market hours is unchanged, then enable the commented 15:20 cron line in the crontab.
 
-## BUG-073 — V2 `ROLL_WING` closes the wrong leg and never retires the old long leg (role overlap, duplicate CLOSE_FULL)
-
-Detail: `docs/bugs/bugs.md` BUG-073 (root cause revised 2026-10-08).
-
-- [ ] **B073.1** — Add failing tests: call-side roll closes the call legs and leaves the puts; put-side roll leaves one row per role; a follow-on `CLOSE_FULL` closes everything in one call.
-- [ ] **B073.2** — Carry the rolled side (or closing roles) in the V2 `ROLL_WING` payload and derive `legs_to_close` from it in `monitor.py` instead of the `short_put` default.
-- [ ] **B073.3** — Pass the plan's `roll_close_*` legs through so both old legs of the rolled side are closed atomically with the opens in `roll_ic_legs`.
-- [ ] **B073.4** — Check the V1 roll payload and `PROFIT_LOCK_ZONE2` against the same monitor default; fix or record as not affected.
+> BUG-073 closed 2026-10-08 (SHA `16faf5a`) — section moved to `docs/archive/bugs/{bugs,task}.md`.
 
 ## BUG-074 — IC v1/v2 close notification keys positions by `leg_role` (overlapped legs share one entry price)
 
