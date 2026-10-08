@@ -21,10 +21,11 @@ Two further gaps were found the same day. First, nobody knows how much existing 
 
 ## Scope guard
 
-In scope: a decision card; a tested `scripts/dev/design_scan.py` conformance scan and a baseline report (adherence, hotspots, latency, refactor ROI); a `design-check` skill; the CLAUDE.md /
-`AGENTS.md` plan-gate rewording; a bug "Design lens" field; a presence hook; reconciling `code-review-checklist.md` with the `code-reviewer` agent; a refactor backlog.
+In scope: a GoF-pattern Python applicability audit; a decision card; a tested `scripts/dev/design_scan.py` conformance scan and a baseline report (adherence, hotspots, latency, refactor ROI); a
+`design-check` skill; the CLAUDE.md / `AGENTS.md` plan-gate rewording; a bug "Design lens" field; a presence hook; reconciling `code-review-checklist.md` with the `code-reviewer` agent; a refactor
+backlog.
 
-Out of scope: any `src/` code change; any `scripts/` change other than `scripts/dev/design_scan.py` and its tests; `import-linter` contracts (separate story); executing any refactor DD-9 logs.
+Out of scope: any `src/` code change; any `scripts/` change other than `scripts/dev/design_scan.py` and its tests; `import-linter` contracts (separate story); executing any refactor DD-10 logs.
 
 The card has two tiers. **Tier 1 is baseline**: it applies to all code irrespective of bug history (SOLID triggers, `Protocol` over `ABC`, EAFP, PEP 20 simplicity, small named functions, no silent
 failure, explicit types, `Decimal` for money). **Tier 2 is evidence-ranked** from the bug history. Bug history orders the card and supplies examples; it does not bound it.
@@ -50,12 +51,12 @@ Checklist reconciliation: keep `code-review-checklist.md` §1–3 (SOLID trigger
 ## Session-start load hints
 
 `docs/refactor/design-principles.md`, `code-review-checklist.md`, `.claude/agents/code-reviewer.md`, `docs/bugs/bugs.md`, `docs/archive/bugs/bugs.md` (read by `grep -n '^## BUG-'` first, then bodies
-for DD-1). `.claude/hooks/` for DD-7.
+for DD-1). `.claude/hooks/` for DD-8.
 
 ## Task overview
 
-DD-1 evidence matrix → DD-2 decision card → DD-3 `design_scan.py` CLI → DD-4 baseline report → DD-5 skill and plan gate → DD-6 bug Design lens → DD-7 hook → DD-8 reviewer and checklist → DD-9 refactor
-backlog. Order is fixed: the card defines the checks, the scan measures them, the report ranks refactors.
+DD-1 evidence matrix → DD-2 GoF applicability audit → DD-3 decision card → DD-4 `design_scan.py` CLI → DD-5 baseline report → DD-6 skill and plan gate → DD-7 bug Design lens → DD-8 hook → DD-9
+reviewer and checklist → DD-10 refactor backlog. Order is fixed: the card defines the checks, the scan measures them, the report ranks refactors.
 
 ## Definition of done
 
