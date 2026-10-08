@@ -114,6 +114,11 @@ rot them. (Items 3, 5 and 8 closed — numbers kept stable because item text cro
   module level, so a venv without matplotlib crashes them at import (found when the cron venv lacked it). Import matplotlib lazily inside the render function so a missing dependency costs only the
   chart, per the renderer-degrades contract; add a test that imports the strategy modules with matplotlib blocked.
 
+26. **Design discipline (epic)** — `docs/plan/design-discipline/` — next **DG-1** (`design-gate/`, DG-1..9; then `design-baseline/` DBL-1..4). Docs/skill/hook gate making `docs/refactor/` principles a
+    pre-proposal check, then a conformance baseline. Requested by Animesh 2026-10-08. Parked: payoff-chart inline-caption change until DG-5 lands.
+27. **Logging consistency (epic)** — `docs/plan/logging-consistency/` — next **LF-1** (audit; needs a redacted `crontab -l` from Animesh). `logging-foundation/` → `logging-migration/` →
+    `logging-enforcement/`. New `job_runs` heartbeat table. Soft order after item 26's `design-gate/`. Requested by Animesh 2026-10-08.
+
 ## Open Bugs
 
 Confirmed defects in shipped code live in **[`docs/bugs/`](docs/bugs/)** — registry `bugs.md` (status `🔴 Open` → `🟡 Fix in progress` → `✅ Fixed`), tasks `docs/bugs/task.md`. `/work` → Bug branch reads
@@ -150,6 +155,9 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-08] Scaffolded `design-discipline/` (2-story epic: `design-gate/` DG-1..9, `design-baseline/` DBL-1..4; `8e36063`) and `logging-consistency/` (3 stories, LF/LM/LE; `53e1970`). Docs only, no
+  code change. Decisions: warn-then-block hook, bug Design lens for `src/`/`scripts/` only, two-tier card, print allowed in interactive scripts but never cron, `job_runs` table over log-derived
+  heartbeat.
 - [2026-10-07] DSM-3 done (`<pending>`): council ruling for `data-source-routing/` absorbed into `DECISIONS.md` (Option A resolver, per-capability routing, source-flip seam, Q4 by action class per
   Animesh); council file archived to `docs/archive/council/data_architecture/`; `ds-chain-seam/` (DSC-1..5) and `ds-chain-monitoring/` (DSN-1..5 + `schema.md`) specced; broader capability matrix
   re-homed as `ds-router-migration/` DSR-0. Next: DSM-1 (Upstox BOD Dec 2027 coverage, Dhan 806 shapes). Open for Animesh: cadence, backstop thresholds, Kite.
