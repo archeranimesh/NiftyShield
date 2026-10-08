@@ -70,6 +70,13 @@ Detail: `docs/bugs/bugs.md` BUG-072. Fix before the gamma cron line is enabled.
 - [x] **B072.1** — Add the trading-day guard to `main()` (real run: log and exit 0 before any fetch; `--dry-run`: warn and continue) with the three repro tests. | SHA `2305977`
 - [ ] **B072.2** — Confirm on the first trading day: a `--dry-run` during market hours is unchanged, then enable the commented 15:20 cron line in the crontab.
 
+## BUG-073 — IC v1/v2 `CLOSE_*` closes only one position per role during a roll overlap (leg left open, second close fires)
+
+Detail: `docs/bugs/bugs.md` BUG-073.
+
+- [ ] **B073.1** — Add failing regression tests: overlapped role + `CLOSE_FULL` closes every row (v2, v1); `ROLL_WING` still closes only the targeted instrument.
+- [ ] **B073.2** — Close branch passes all open positions for the closed roles to `close_ic_legs` in `ic_nifty_v2.py` and `ic_nifty_v1.py`.
+
 ---
 
 ## BUG-060 — Expired paper overlay legs are never settled or closed

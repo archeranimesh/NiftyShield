@@ -44,6 +44,35 @@
 
 ---
 
+## BUG-073 — IC v1/v2 `CLOSE_FULL` / `CLOSE_*_SPREAD` closes only one position per role during a roll overlap, leaving a leg open and firing a second close
+
+| Field | Value |
+|---|---|
+| Severity | **High** — a "full close" leaves a live leg; duplicate Telegram close messages with split P&L |
+| Status | 🔴 Open |
+| Discovered | 2026-10-08 |
+| Location | `src/strategy/ic_nifty_v2.py::apply_action` (close branch, `effective_legs` + `_leg_close_matches` filter); same shape in `src/strategy/ic_nifty_v1.py` |
+
+**Symptom:** 2026-10-08 `paper_ic_nifty_v2_monthly` produced two "IC v2 Closed — CLOSE_FULL" messages two minutes apart. The first closed 4 legs (23300 CE, 23500 CE, 22050 PE, 21550 PE); the second
+closed a lone `NIFTY 21500 PE` (entry 29.1, exit 39.0, +₹646.75) and carried the cycle P&L (#11). The first message therefore understated the exit and omitted the cycle line.
+
+**Evidence (`logs/monitor_daemon.log`):** 10:15:51 `ROLL_WING` rolled the short put and opened a replacement put wing, leaving two open `long_put_hedge` rows (old 21500 PE, new 21550 PE). 10:17:30
+`profit_lock_close_full` fired and logged `position_for_role_ambiguous leg_role=long_put_hedge match_count=2`; 10:17:32 `legs_closed` listed exactly one `long_put_hedge`. 10:19:11
+`profit_target_close` (`captured_fraction=1.31`) fired `CLOSE_FULL` again and `legs_closed` listed only `long_put_hedge` at 39.00.
+
+**Root cause:** `apply_action` builds `effective_legs` with one `LegClose` per role, resolving each role's `instrument_key` through `_position_for_role`, which on a roll overlap picks only the row
+with the latest `entry_date`. The close branch then passes `close_ic_legs` only the positions that match those `effective_legs` by `instrument_key`. The instrument-exact match is right for `ROLL_WING`
+(close one specific old leg) but wrong for `CLOSE_FULL` / `CLOSE_CALL_SPREAD` / `CLOSE_PUT_SPREAD`, whose contract is "close every open leg under these roles". The older overlap row stays open, the
+evaluator still sees an open position, and it emits another close on the next tick.
+
+**Suggested fix:** in the close branch, pass `close_ic_legs` every open position whose `leg_role` is in `closed` (`close_ic_legs` already filters on role and `net_qty != 0`); keep the instrument-keyed
+`effective_legs` for the roll path only. Apply to `ic_nifty_v1.py` as well. Regression tests: two open rows under one role + `CLOSE_FULL` closes both in one call; `ROLL_WING` still closes only the
+targeted instrument. Follow-up (separate): the Telegram close message should list every closed row, and `pos_by_role` in the notifier collapses overlapped roles to one entry.
+
+**Open question:** whether `ROLL_WING` is meant to leave the old hedge open (the `_position_for_role` docstring treats overlap as normal) or to retire it. Not changed by this fix.
+
+---
+
 ## BUG-072 — `gamma_daily_watch.py` has no trading-day guard: on an exchange holiday or weekend it would persist a stale duplicate of the last session's chain
 
 | Field | Value |
