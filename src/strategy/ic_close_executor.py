@@ -46,7 +46,7 @@ import structlog
 
 from src.instruments.lookup import InstrumentLookup, parse_expiry
 from src.market_calendar.holidays import market_today
-from src.paper.constants import DEFAULT_BOD_PATH
+from src.paper.constants import DEFAULT_BOD_PATH, LOT_SIZE
 from src.paper.models import PaperTrade, TradeAction
 
 if TYPE_CHECKING:
@@ -284,7 +284,8 @@ async def roll_ic_legs(
         close_positions: Currently open positions (already filtered to this
             strategy by the caller).
         closed_roles: leg_role values to close.
-        open_legs: Replacement legs to open — each must carry a resolved
+        open_legs: Replacement legs to open (``quantity`` in lots, scaled to
+            units by ``LOT_SIZE`` here) — each must carry a resolved
             ``price`` (captured at selection time); a leg with ``price``
             ``None`` or non-positive aborts the entire roll.
         strategy_name: Paper strategy name; must start with ``paper_``
@@ -348,7 +349,7 @@ async def roll_ic_legs(
                 instrument_key=leg.instrument_key,
                 trade_date=today,
                 action=TradeAction[leg.action],
-                quantity=leg.quantity,
+                quantity=leg.quantity * LOT_SIZE,  # LegSpec.quantity is lots (BUG-075)
                 price=leg.price,
                 notes=notes,
                 ivr_at_entry=None,

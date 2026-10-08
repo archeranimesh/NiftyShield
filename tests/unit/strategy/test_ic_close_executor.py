@@ -20,6 +20,7 @@ import pytest
 
 from src.client.protocol import BrokerClient
 from src.market_calendar.holidays import market_today
+from src.paper.constants import LOT_SIZE
 from src.paper.models import PaperPosition, TradeAction
 from src.paper.store import PaperStore
 from src.strategy.ic_close_executor import (
@@ -479,7 +480,7 @@ def test_roll_happy_path_writes_close_and_open_legs_atomically(
         LegSpec(
             instrument_key="NSE_FO|51999",
             action="SELL",
-            quantity=65,
+            quantity=1,
             leg_role="short_call",
             notes="roll_open_short delta=0.15",
             price=Decimal("12.50"),
@@ -508,9 +509,43 @@ def test_roll_happy_path_writes_close_and_open_legs_atomically(
     assert close_trade.price == Decimal("38.50")  # from mock_broker LTP
     assert open_trade.action == TradeAction.SELL
     assert open_trade.price == Decimal("12.50")
-    assert open_trade.quantity == 65
+    assert open_trade.quantity == LOT_SIZE  # BUG-075: LegSpec.quantity is lots
     for t in written:
         assert t.notes == "test roll"
+
+
+def test_roll_scales_multi_lot_open_legs_to_units(
+    mock_broker: MagicMock, mock_store: MagicMock
+) -> None:
+    """BUG-075: a 2-lot replacement leg is written as 2 x LOT_SIZE units, matching the close side."""
+    positions = [_make_position("short_put", "NSE_FO|51405", net_qty=-130, avg_sell_price="17.12")]
+    open_legs = [
+        LegSpec(
+            instrument_key="NSE_FO|51999",
+            action="SELL",
+            quantity=2,
+            leg_role="short_put",
+            price=Decimal("12.50"),
+        )
+    ]
+
+    _run(
+        roll_ic_legs(
+            broker=mock_broker,
+            store=mock_store,
+            close_positions=positions,
+            closed_roles={"short_put"},
+            open_legs=open_legs,
+            strategy_name=_STRATEGY,
+            notes="test roll",
+        )
+    )
+
+    (written,), _ = mock_store.record_trades.call_args
+    close_trade = next(t for t in written if t.instrument_key == "NSE_FO|51405")
+    open_trade = next(t for t in written if t.instrument_key == "NSE_FO|51999")
+    assert open_trade.quantity == 2 * LOT_SIZE
+    assert open_trade.quantity == close_trade.quantity
 
 
 def test_roll_marks_only_close_side_trade_closed(
@@ -524,7 +559,7 @@ def test_roll_marks_only_close_side_trade_closed(
         LegSpec(
             instrument_key="NSE_FO|51999",
             action="SELL",
-            quantity=65,
+            quantity=1,
             leg_role="short_call",
             notes="roll_open_short delta=0.15",
             price=Decimal("12.50"),
@@ -555,7 +590,7 @@ def test_roll_open_leg_missing_price_aborts_entire_roll(
         LegSpec(
             instrument_key="NSE_FO|51999",
             action="SELL",
-            quantity=65,
+            quantity=1,
             leg_role="short_call",
             notes="roll_open_short delta=0.15",
             price=None,
@@ -587,7 +622,7 @@ def test_roll_open_leg_non_positive_price_aborts_entire_roll(
         LegSpec(
             instrument_key="NSE_FO|51999",
             action="SELL",
-            quantity=65,
+            quantity=1,
             leg_role="short_call",
             notes="roll_open_short delta=0.15",
             price=Decimal("0"),
@@ -623,7 +658,7 @@ def test_roll_open_only_when_closed_roles_match_nothing_returns_empty(
         LegSpec(
             instrument_key="NSE_FO|51999",
             action="SELL",
-            quantity=65,
+            quantity=1,
             leg_role="short_call",
             notes="roll_open_short delta=0.15",
             price=Decimal("12.50"),
