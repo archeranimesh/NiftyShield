@@ -77,39 +77,6 @@ no longer arise from rolls, which leaves this latent for stale-position cases on
 
 ---
 
-## BUG-075 — V2 roll open-legs are written with quantity 1 (lots) instead of the position size in units (65), so the rolled leg is 1/65 of the intended size
-
-| Field | Value |
-|---|---|
-| Severity | **High** — wrong position size, wrong P&L, and wrong credit/delta/profit-lock inputs after every roll; affects live paper decisions |
-| Status | 🟡 Fix in progress — B075.1/B075.2 `cf3e0d1` landed 2026-10-08; B075.3 (impact) and B075.4 (data repair) pending |
-| Discovered | 2026-10-08 |
-| Location | `src/strategy/ic_nifty_v2.py` roll `LegSpec(quantity=1)` (~1037-1061, ~1671, ~1682); `ic_close_executor.py::roll_ic_legs` (unscaled `quantity`) |
-
-**Symptom:** after a roll the replacement legs are 1 unit while the rest of the condor is 65 (one NIFTY lot). 2026-10-08 `paper_trades`: id 433 `short_put` SELL qty **1** at 110.95 and id 434
-`long_put_hedge` BUY qty **1** at 40.6, against 65 on the closed short put (id 432, BUY 65 at 179.60) and on every other leg. 2026-08-26: ids 223 (`short_call` SELL qty 1 at 81.85) and 224
-(`long_call_hedge` BUY qty 1 at 30.5). The first 10-08 close message shows it: the rolled `22050 PE` reads -₹2.40, which is 1 unit × 2.4 points, and the rolled hedge reads ₹0.00.
-
-**Root cause:** roll `LegSpec`s carry `quantity=1`, meaning one lot. Initial entry legs also use `quantity=1` (`ic_nifty_v2.py:314-335`) but their trades land as 65, so the entry path scales lots to
-units. `roll_ic_legs` builds each open `PaperTrade` with `quantity=leg.quantity` and no scaling, while the close side uses the open position's net quantity in units. The scaling step is missing on the
-roll path only. The exact entry-side scaling site is to be confirmed when fixing.
-
-**Impact (to quantify during the fix):** the 10:17 `profit_lock_close_full` on 2026-10-08 and the later `profit_target_close` (`captured_fraction=1.31`) were evaluated on a position whose short put
-was 1/65 sized, so those decisions may have been wrong. Cycle P&L (#11), since-inception and win rate for the 2026-10-08 cycle, and the 2026-08-26 cycle, are contaminated. The DB rows are correct as
-recorded; the figures built from them are not. `PROFIT_LOCK_ZONE2` legs (~1671, ~1682) share the same executor and probably the same defect; unverified.
-
-**Suggested fix:** scale lots to units in `roll_ic_legs` the same way the entry path does (or make the roll plan carry units), covering roll and `PROFIT_LOCK_ZONE2` open legs. Tests: a roll writes
-open trades at `lots × LOT_SIZE`, and a roll followed by an immediate evaluation sees a uniformly sized condor.
-
-**Implementation progress (B075.1/B075.2, `cf3e0d1`):** `roll_ic_legs` now writes `leg.quantity * LOT_SIZE`, treating `LegSpec.quantity` as lots. Entry is unaffected: `paper_ic_entry_v2.py` passes
-`--qty LOT_SIZE` directly and the `quantity=1` in `enter()` is never persisted. V1 `ROLL_WING` (`ic_nifty_v1.py` ~1019, ~1110) had the same defect, latent (no V1 roll in the DB), fixed by the same
-change. Tests: happy-path now asserts `LOT_SIZE`, new 2-lot test asserts `2 × LOT_SIZE`; stale `quantity=65` test inputs changed to 1. Unit suite 4157 passed. `code-reviewer`: no CRITICAL; the one
-ERROR (stale test input) fixed. Not fixed: the `PaperExecutor` manual-approval path (`executor.py:273`) still passes `leg_spec.quantity` as units, so a manually approved roll would still write 1 unit;
-`LegSpec.quantity` has no unit comment in `protocol.py`.
-
-**Follow-up:** repair data for the affected cycles (2026-08-26, 2026-10-08): decide backfill versus annotate, with a backup first per the BUG-030 / BUG-032 precedent, then re-derive cycle P&L.
-
----
 
 ## BUG-072 — `gamma_daily_watch.py` has no trading-day guard: on an exchange holiday or weekend it would persist a stale duplicate of the last session's chain
 

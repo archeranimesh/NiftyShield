@@ -155,6 +155,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-08] BUG-075 closed and archived (docs only, fix `cf3e0d1`): sizing did not drive the 10-08 profit-lock/target closes (stale BUG-073 hedge did); cycle P&L exact, 1-unit rows net -2.40 /
+  -0.15, annotate not backfill. Residual: `PaperExecutor` manual-approval roll path still writes 1 unit.
 - [2026-10-08] BUG-074 B074.1-B074.3 (`5cd3aca`): IC v1/v2 close notifier looks up positions by `instrument_key` instead of `leg_role`; overlapped legs now carry their own entry and P&L. B074.4 (live
   check) open.
 - [2026-10-08] BUG-075 B075.1/B075.2 (`cf3e0d1`): `roll_ic_legs` scales roll open-leg lots to units (`× LOT_SIZE`); V1 had the same latent defect. B075.3 (profit-lock/target impact) and B075.4 (data

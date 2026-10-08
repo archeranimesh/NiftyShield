@@ -2986,3 +2986,47 @@ an empty payload `legs_to_close` falls back to the default (correct for every cu
 overrides its closed roles in `apply_action`; both unaffected. **Not fixed here:** rolled-in legs still open at quantity 1 (BUG-075); the close-message P&L effect of overlaps (BUG-074).
 
 ---
+
+## BUG-075 — V2 roll open-legs are written with quantity 1 (lots) instead of the position size in units (65), so the rolled leg is 1/65 of the intended size
+
+| Field | Value |
+|---|---|
+| Severity | **High** — wrong position size, wrong P&L, and wrong credit/delta/profit-lock inputs after every roll; affects live paper decisions |
+| Status | ✅ Fixed — `cf3e0d1` (2026-10-08); impact and data-repair analysis closed 2026-10-08, no data change |
+| Discovered | 2026-10-08 |
+| Location | `src/strategy/ic_nifty_v2.py` roll `LegSpec(quantity=1)` (~1037-1061, ~1671, ~1682); `ic_close_executor.py::roll_ic_legs` (unscaled `quantity`) |
+
+**Symptom:** after a roll the replacement legs are 1 unit while the rest of the condor is 65 (one NIFTY lot). 2026-10-08 `paper_trades`: id 433 `short_put` SELL qty **1** at 110.95 and id 434
+`long_put_hedge` BUY qty **1** at 40.6, against 65 on the closed short put (id 432, BUY 65 at 179.60) and on every other leg. 2026-08-26: ids 223 (`short_call` SELL qty 1 at 81.85) and 224
+(`long_call_hedge` BUY qty 1 at 30.5). The first 10-08 close message shows it: the rolled `22050 PE` reads -₹2.40, which is 1 unit × 2.4 points, and the rolled hedge reads ₹0.00.
+
+**Root cause:** roll `LegSpec`s carry `quantity=1`, meaning one lot. Initial entry legs also use `quantity=1` (`ic_nifty_v2.py:314-335`) but their trades land as 65, so the entry path scales lots to
+units. `roll_ic_legs` builds each open `PaperTrade` with `quantity=leg.quantity` and no scaling, while the close side uses the open position's net quantity in units. The scaling step is missing on the
+roll path only. The exact entry-side scaling site is to be confirmed when fixing.
+
+**Impact (to quantify during the fix):** the 10:17 `profit_lock_close_full` on 2026-10-08 and the later `profit_target_close` (`captured_fraction=1.31`) were evaluated on a position whose short put
+was 1/65 sized, so those decisions may have been wrong. Cycle P&L (#11), since-inception and win rate for the 2026-10-08 cycle, and the 2026-08-26 cycle, are contaminated. The DB rows are correct as
+recorded; the figures built from them are not. `PROFIT_LOCK_ZONE2` legs (~1671, ~1682) share the same executor and probably the same defect; unverified.
+
+**Suggested fix:** scale lots to units in `roll_ic_legs` the same way the entry path does (or make the roll plan carry units), covering roll and `PROFIT_LOCK_ZONE2` open legs. Tests: a roll writes
+open trades at `lots × LOT_SIZE`, and a roll followed by an immediate evaluation sees a uniformly sized condor.
+
+**Implementation progress (B075.1/B075.2, `cf3e0d1`):** `roll_ic_legs` now writes `leg.quantity * LOT_SIZE`, treating `LegSpec.quantity` as lots. Entry is unaffected: `paper_ic_entry_v2.py` passes
+`--qty LOT_SIZE` directly and the `quantity=1` in `enter()` is never persisted. V1 `ROLL_WING` (`ic_nifty_v1.py` ~1019, ~1110) had the same defect, latent (no V1 roll in the DB), fixed by the same
+change. Tests: happy-path now asserts `LOT_SIZE`, new 2-lot test asserts `2 × LOT_SIZE`; stale `quantity=65` test inputs changed to 1. Unit suite 4157 passed. `code-reviewer`: no CRITICAL; the one
+ERROR (stale test input) fixed. Not fixed: the `PaperExecutor` manual-approval path (`executor.py:273`) still passes `leg_spec.quantity` as units, so a manually approved roll would still write 1 unit;
+`LegSpec.quantity` has no unit comment in `protocol.py`.
+
+**Impact analysis (B075.3, 2026-10-08):** the sizing defect did not drive the 10:17 `profit_lock_close_full` or the 10:19 `profit_target_close`. `_compute_combined_pnl` sums raw LTPs per leg with no
+quantity weighting, against the entry credit persisted at entry (123.525), so a 1-unit and a 65-unit leg feed `captured_fraction` identically. The distortion was the stale 21500 PE hedge
+(`NSE_FO|51287`, 65 units) left open by the roll (BUG-073, fixed `16faf5a`) and subtracted a second time in the mark. At 10:17 the logged mark was 49.85 (captured 0.596); adding back the stale hedge
+(~39) gives about 89 (captured about 0.28), below the zone-2 trigger of 0.50, so the full close would not have fired (zone 1, 0.25 to 0.50, behaviour not traced). The 10:17 close took the four roles,
+with `long_put_hedge` closed only on the new 51289 leg at 40.60; the 10:19 `CLOSE_FULL` then closed the lone stale hedge at 39.00. With only that hedge left the mark was -38.75 and the captured
+fraction a meaningless 1.31.
+
+**Data repair decision (B075.4): annotate, do not backfill.** Cycle P&L is exact for what was recorded: cycle 11 re-added from the ledger is -2,100.28 against the report's -2,100.27. The 1-unit rows
+contribute only -2.40 on 2026-10-08 (ids 433/438, 110.95 to 113.35; the hedge pair 434/439 nets to zero) and -0.15 on 2026-08-26 (ids 223/226, 81.85 to 82.00; the hedge pair 224/227 nets to zero).
+Each pair opened and closed within one session, so the net position was always flat. Backfilling to 65 units would invent fills that never happened. The cycle report's decay % for cycle 11 (27.5%
+beside a -2,100 P&L) is not a sizing artefact: `_entry_exit_legs` takes the first and last trade per `leg_role`, so a same-role mid-cycle roll swaps the buyback price, as its docstring states. No DB
+change made.
+---

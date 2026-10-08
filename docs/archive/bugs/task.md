@@ -1034,3 +1034,14 @@ Detail: `docs/bugs/bugs.md` BUG-073 (root cause revised 2026-10-08).
 - [x] **B073.2** — Carry the rolled side (or closing roles) in the V2 `ROLL_WING` payload and derive `legs_to_close` from it in `monitor.py` instead of the `short_put` default. | SHA `16faf5a`
 - [x] **B073.3** — Pass the plan's `roll_close_*` legs through so both old legs of the rolled side are closed atomically with the opens in `roll_ic_legs`. | SHA `16faf5a`
 - [x] **B073.4** — V1 roll payload and `PROFIT_LOCK_ZONE2` checked against the monitor default: not affected. | SHA `16faf5a`
+
+## BUG-075 — V2 roll open-legs written with quantity 1 instead of position size (65 units)
+
+Detail: `docs/bugs/bugs.md` BUG-075. Independent of BUG-073; higher impact.
+
+- [x] **B075.1** — Add failing tests: roll and `PROFIT_LOCK_ZONE2` open trades are written at `lots × LOT_SIZE`; a post-roll position is uniformly sized. | SHA `cf3e0d1`
+- [x] **B075.2** — Scale lots to units on the roll path (`roll_ic_legs` or the roll plan) the way the entry path does. | SHA `cf3e0d1`
+- [x] **B075.3** — Quantified: sizing was not the cause; the stale BUG-073 hedge distorted both closes (details in `bugs.md`). | analysis only, fix SHA `cf3e0d1`
+- [x] **B075.4** — Annotate, no backfill: cycle P&L re-derived and exact; 1-unit rows net -2.40 and -0.15. | analysis only, fix SHA `cf3e0d1`
+
+---

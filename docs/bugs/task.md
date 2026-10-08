@@ -81,16 +81,6 @@ Detail: `docs/bugs/bugs.md` BUG-074. Mostly latent once BUG-073 lands.
 - [x] **B074.3** — Key the notifier position lookup on `instrument_key` in `ic_nifty_v2.py` and `ic_nifty_v1.py`. | SHA `5cd3aca`
 - [ ] **B074.4** — Follow-up: after the next live overlap close, confirm the Telegram per-leg P&L sums to the `paper_trades` realised P&L.
 
-## BUG-075 — V2 roll open-legs written with quantity 1 instead of position size (65 units)
-
-Detail: `docs/bugs/bugs.md` BUG-075. Independent of BUG-073; higher impact.
-
-- [x] **B075.1** — Add failing tests: roll and `PROFIT_LOCK_ZONE2` open trades are written at `lots × LOT_SIZE`; a post-roll position is uniformly sized. | SHA `cf3e0d1`
-- [x] **B075.2** — Scale lots to units on the roll path (`roll_ic_legs` or the roll plan) the way the entry path does. | SHA `cf3e0d1`
-- [ ] **B075.3** — Quantify the 2026-10-08 profit-lock and profit-target closes: would they have fired on a correctly sized position?
-- [ ] **B075.4** — Repair or annotate the 2026-08-26 and 2026-10-08 cycles (backup first), then re-derive cycle P&L.
-
----
 
 ## BUG-060 — Expired paper overlay legs are never settled or closed
 
@@ -152,3 +142,5 @@ Design ruled by council 2026-09-25 (`docs/council/2026-09-25_mvp-corporate-actio
 - [ ] Add a `CONTEXT.md` "What Exists" line for `src/strategy/expiry_settlement.py` + `scripts/strategies/three_track/paper_expiry_settle.py` (BUG-060; Step 5a gap).
 - [ ] Decide whether to commit the session-close audit edits: `suggestions.md`, `session_audit.jsonl`, `docs/plan/technical-debt/stories.md` (DEBT-14 note). Pending Animesh.
 - [ ] Push `main` (31 commits ahead of origin as of 2026-10-02). Pending Animesh.
+- [ ] `PaperExecutor` manual-approval path (`src/strategy/executor.py:273`) still passes `leg_spec.quantity` as units, so a manually approved roll would write 1 unit (BUG-075 residual, split out on
+  archive).
