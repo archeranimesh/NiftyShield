@@ -24,9 +24,10 @@ fallback), because the yearly book needs Dhan Greeks daily from the Dec 2026 rol
 `ds-chain-seam/` (DSC-1..5, contract resolver + `ChainSnapshot` + shared Dhan throttle) → `ds-chain-monitoring/` (DSN-1..5, token alert, yearly read path, stale-Greeks policy, source-flip; pre-roll) →
 `ds-router-migration/` (DSR-0.., after the roll). Folds in `broker-abstraction/` (superseded in part). Requested by Animesh 2026-10-07.
 
-**`design-discipline/`** · ⬜ Not started — next **DD-1**. Docs/skill/hook story making the `docs/refactor/` design principles a pre-proposal gate: bug-to-principle evidence matrix, two-tier decision
-card (baseline + evidence-ranked), `design-check` skill and plan-gate Design clause, mandatory bug Design lens for `src/`/`scripts/` bugs, presence hook (warn, then block), reviewer checklist,
-refactor backlog. No `src/` change, no DB schema change. Requested by Animesh 2026-10-08.
+**`design-discipline/`** · ⬜ Not started — next **DD-1** (DD-1..9). Makes the `docs/refactor/` design principles a pre-proposal gate: bug-to-principle evidence matrix, two-tier decision card
+(baseline + evidence-ranked), tested `scripts/dev/design_scan.py` conformance scan + baseline report (adherence, hotspots, latency, refactor ROI), `design-check` skill and plan-gate Design clause,
+mandatory bug Design lens for `src/`/`scripts/` bugs, presence hook (warn, then block), `code-review-checklist.md` reconciled with the `code-reviewer` agent, refactor backlog. No `src/` change, no DB
+schema change. Requested by Animesh 2026-10-08.
 
 **`strategy-payoff-charts/`** · 🟡 In progress — `chart-core/` ✅ done (`6ef2a5f`), next **MO-1** (blocked on GF-2 + GF-3) Stockmock-style payoff diagram for any strategy (opt-in `@register_payoff`
 registry; Iron Condors first, one PNG per variation) attached to the entry, EOD-audit, and close Telegram messages. Two sub-stories: `chart-core/` (PC-1..19 — strategy-agnostic payoff math + registry
