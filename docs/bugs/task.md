@@ -70,21 +70,32 @@ Detail: `docs/bugs/bugs.md` BUG-072. Fix before the gamma cron line is enabled.
 - [x] **B072.1** — Add the trading-day guard to `main()` (real run: log and exit 0 before any fetch; `--dry-run`: warn and continue) with the three repro tests. | SHA `2305977`
 - [ ] **B072.2** — Confirm on the first trading day: a `--dry-run` during market hours is unchanged, then enable the commented 15:20 cron line in the crontab.
 
-## BUG-073 — IC v1/v2 `CLOSE_*` closes only one position per role during a roll overlap (leg left open, second close fires)
+## BUG-073 — V2 `ROLL_WING` closes the wrong leg and never retires the old long leg (role overlap, duplicate CLOSE_FULL)
 
-Detail: `docs/bugs/bugs.md` BUG-073.
+Detail: `docs/bugs/bugs.md` BUG-073 (root cause revised 2026-10-08).
 
-- [ ] **B073.1** — Add failing regression tests: overlapped role + `CLOSE_FULL` closes every row (v2, v1); `ROLL_WING` still closes only the targeted instrument.
-- [ ] **B073.2** — Close branch passes all open positions for the closed roles to `close_ic_legs` in `ic_nifty_v2.py` and `ic_nifty_v1.py`.
+- [ ] **B073.1** — Add failing tests: call-side roll closes the call legs and leaves the puts; put-side roll leaves one row per role; a follow-on `CLOSE_FULL` closes everything in one call.
+- [ ] **B073.2** — Carry the rolled side (or closing roles) in the V2 `ROLL_WING` payload and derive `legs_to_close` from it in `monitor.py` instead of the `short_put` default.
+- [ ] **B073.3** — Pass the plan's `roll_close_*` legs through so both old legs of the rolled side are closed atomically with the opens in `roll_ic_legs`.
+- [ ] **B073.4** — Check the V1 roll payload and `PROFIT_LOCK_ZONE2` against the same monitor default; fix or record as not affected.
 
 ## BUG-074 — IC v1/v2 close notification keys positions by `leg_role` (overlapped legs share one entry price)
 
-Detail: `docs/bugs/bugs.md` BUG-074. Latent until BUG-073 lands.
+Detail: `docs/bugs/bugs.md` BUG-074. Mostly latent once BUG-073 lands.
 
 - [ ] **B074.1** — Decide sequencing: fix with BUG-073 in one change, or immediately after it as a separate commit (Animesh).
 - [ ] **B074.2** — Add failing tests (two overlapped rows, different entries, each message row carries its own entry and P&L) in the v2 and v1 notifier tests.
 - [ ] **B074.3** — Key the notifier position lookup on `instrument_key` in `ic_nifty_v2.py` and `ic_nifty_v1.py`.
 - [ ] **B074.4** — Follow-up: after the next live overlap close, confirm the Telegram per-leg P&L sums to the `paper_trades` realised P&L.
+
+## BUG-075 — V2 roll open-legs written with quantity 1 instead of position size (65 units)
+
+Detail: `docs/bugs/bugs.md` BUG-075. Independent of BUG-073; higher impact.
+
+- [ ] **B075.1** — Add failing tests: roll and `PROFIT_LOCK_ZONE2` open trades are written at `lots × LOT_SIZE`; a post-roll position is uniformly sized.
+- [ ] **B075.2** — Scale lots to units on the roll path (`roll_ic_legs` or the roll plan) the way the entry path does.
+- [ ] **B075.3** — Quantify the 2026-10-08 profit-lock and profit-target closes: would they have fired on a correctly sized position?
+- [ ] **B075.4** — Repair or annotate the 2026-08-26 and 2026-10-08 cycles (backup first), then re-derive cycle P&L.
 
 ---
 
