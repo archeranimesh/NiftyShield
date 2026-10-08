@@ -77,6 +77,15 @@ Detail: `docs/bugs/bugs.md` BUG-073.
 - [ ] **B073.1** — Add failing regression tests: overlapped role + `CLOSE_FULL` closes every row (v2, v1); `ROLL_WING` still closes only the targeted instrument.
 - [ ] **B073.2** — Close branch passes all open positions for the closed roles to `close_ic_legs` in `ic_nifty_v2.py` and `ic_nifty_v1.py`.
 
+## BUG-074 — IC v1/v2 close notification keys positions by `leg_role` (overlapped legs share one entry price)
+
+Detail: `docs/bugs/bugs.md` BUG-074. Latent until BUG-073 lands.
+
+- [ ] **B074.1** — Decide sequencing: fix with BUG-073 in one change, or immediately after it as a separate commit (Animesh).
+- [ ] **B074.2** — Add failing tests (two overlapped rows, different entries, each message row carries its own entry and P&L) in the v2 and v1 notifier tests.
+- [ ] **B074.3** — Key the notifier position lookup on `instrument_key` in `ic_nifty_v2.py` and `ic_nifty_v1.py`.
+- [ ] **B074.4** — Follow-up: after the next live overlap close, confirm the Telegram per-leg P&L sums to the `paper_trades` realised P&L.
+
 ---
 
 ## BUG-060 — Expired paper overlay legs are never settled or closed

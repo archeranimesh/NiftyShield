@@ -67,9 +67,34 @@ evaluator still sees an open position, and it emits another close on the next ti
 
 **Suggested fix:** in the close branch, pass `close_ic_legs` every open position whose `leg_role` is in `closed` (`close_ic_legs` already filters on role and `net_qty != 0`); keep the instrument-keyed
 `effective_legs` for the roll path only. Apply to `ic_nifty_v1.py` as well. Regression tests: two open rows under one role + `CLOSE_FULL` closes both in one call; `ROLL_WING` still closes only the
-targeted instrument. Follow-up (separate): the Telegram close message should list every closed row, and `pos_by_role` in the notifier collapses overlapped roles to one entry.
+targeted instrument. The close-message P&L misreport this exposes is logged separately as BUG-074.
 
 **Open question:** whether `ROLL_WING` is meant to leave the old hedge open (the `_position_for_role` docstring treats overlap as normal) or to retire it. Not changed by this fix.
+
+---
+
+## BUG-074 — IC v1/v2 close notification keys positions by `leg_role`, so overlapped legs share one entry price and the "This exit" P&L is wrong
+
+| Field | Value |
+|---|---|
+| Severity | **Medium** — Telegram message only; DB trades and realised P&L are correct. Latent today, becomes live once BUG-073 closes both overlapped rows in one call |
+| Status | 🔴 Open — sequencing vs BUG-073 undecided (see B074.1) |
+| Discovered | 2026-10-08 |
+| Location | `src/strategy/ic_nifty_v2.py` close-notification builder (`pos_by_role` at ~2223, lookups at ~2234 and ~2264); `src/strategy/ic_nifty_v1.py` (~809, 820, 850) |
+
+**Symptom (predicted, not yet observed):** when one close writes two trades under the same `leg_role`, both message rows take their entry price from a single position, so one row's per-leg P&L and the
+"This exit" total are wrong. On 2026-10-08 the overlapped `long_put_hedge` rows were 21500 PE (entry 29.1, exit 39.0, true +₹646.75) and 21550 PE (entry 40.6, exit 40.6). With one shared entry of 40.6
+the 21500 PE row would show about -₹0.4 per unit instead, and "This exit" is off by roughly ₹650.
+
+**Root cause:** `pos_by_role = {p.leg_role: p for p in positions}` is a dict keyed by role, so the last position wins. Each closed trade then resolves its entry through `pos_by_role.get(t.leg_role)`
+for `avg_sell_price` / `avg_cost`, and `entry_dates` and `held_days` use the same lookup. Nothing keys on `instrument_key`, which is what distinguishes overlapped legs. Same pattern in
+`ic_nifty_v1.py`.
+
+**Suggested fix:** key the lookup on `(leg_role, instrument_key)`, or on `instrument_key` alone, matching each `closed_trade` to its own position. Test: two open rows under one role with different
+entries, both closed, and each message row carries its own entry and P&L.
+
+**Why it is separate from BUG-073:** BUG-073 changes which rows get closed (DB and executor); this changes how a close is reported. Each can be reverted alone. Until BUG-073 lands the second row is
+never closed in the same call, so this cannot trigger yet.
 
 ---
 
