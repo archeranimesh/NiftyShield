@@ -9,7 +9,7 @@
 
 ---
 
-## Execution Order and Dependencies (updated 2026-10-07)
+## Execution Order and Dependencies (updated 2026-10-08)
 
 **Read this first.** It says which story to run when and what blocks what; `## Feature Backlog` below holds the pointers (list position = `/work` priority). `tasks.md` stays canonical for per-task
 state. Arrows: `A → B` means B cannot start until A is done. `‖` means the two can run in parallel.
@@ -40,23 +40,34 @@ state. Arrows: `A → B` means B cannot start until A is done. `‖` means the t
 | 2 | `gamma-near-expiry/` Phase B | 4 | GS-1 | 5+ days of snapshots | none |
 | 2 | `tradetron-delta-and-long-window/` | 22 | TDL-3 (Animesh) | none; funded runs need per-run approval | may give `greeks-bs-fallback` a far-dated reference |
 | 2 | `portfolio-snapshot-slimdown/` FD-1..7 → DHR-1..4 | 9 | FD-1 | never interleave the two sub-stories | `phase2-integrations/` |
+| 2 | `design-discipline/design-gate/` DG-1..9 | 26 | DG-1 | none | `design-baseline` (DG-4); soft-first for `logging-consistency` |
+| 2 | `strategy-payoff-charts/chart-polish/` CP-1..11 | 6 | CP-1 | none (`chart-core` done); CP-10 is an Animesh on-device gate | `chart-model-overlay` MO-4..6 |
+| 2 | `logging-consistency/logging-foundation/` LF-1..8 | 27 | LF-1 | redacted `crontab -l` from Animesh; soft after `design-gate` | `logging-migration` (LF-5) |
 | 2 | `technical-debt/` | 20 | opportunistic | fires only when the named file is touched | none |
-| 3 | `strategy-payoff-charts/` `chart-model-overlay/` | 6 | MO-1 | `greeks-bs-fallback` GF-2 + GF-3 | none |
+| 3 | `strategy-payoff-charts/` `chart-model-overlay/` | 6 | MO-1 | `greeks-bs-fallback` GF-2 + GF-3, and `chart-polish` done | none |
 | 3 | `chain-decay-analysis/` | 12 | CDA-1 | after `greeks-bs-fallback` (monthly bucket only) | none |
+| 3 | `design-discipline/design-baseline/` DBL-1..4 | 26 | DBL-1 | `design-gate` DG-4 | DBL-4 decides the hook mode (warn or block) |
 | 3 | `backtest-engine/` → `backtest-eval-core/` → `signals-eval-core/` | 11, 13, 14 | 1.3a / 1.4 | engine 1.3 + 1.4 → eval-core; eval-core + 1.12 → signals-eval-core | Gate D; `entry-event-filter/` |
 | 3 | `strategy-refactor-blueprint/` | 10 | BP-1 | BP-2 after item 2; BP-3 is a council | none |
 | 3 | `phase2-integrations/` | 17 | PV-1 | after `portfolio-snapshot-slimdown` (Dhan ETF panel removed) | OE-1 unblocks `broker-abstraction` BA-14 / BA-15 |
 | 3 | `entry-event-filter/` | 16 | EF-1 | ES12 shipped; after `backtest-engine` Phase 2 | none |
 | 3 | `options_income/` | 15 | S0 | Phase 0.8 gate direction clear (`variance-gate`) | none |
 | 4 post-roll | `data-source-routing/ds-router-migration/` | 25 | DSR-0 | `ds-chain-monitoring` done and the Dec 2026 roll done | token renewal, 27-importer migration |
+| 4 post-roll | `logging-consistency/logging-migration/` → `logging-enforcement/` | 27 | LM-1 | LF-5 before LM; LM-4 before LE; after the Dec 2026 roll | none |
 | 4 LOW | `broker-abstraction/` (BA-14 / BA-15 only; rest superseded) | 18 | BA-14 | `src/execution/` exists (`phase2-integrations` OE-1) | none |
 | 4 LOW | `historical-data-abstraction/` | 19 | HD-0 | Phase 0.8 gate clears | none |
+
+**Placement notes (2026-10-08):** `chart-polish/`, `design-gate/` and `logging-foundation/` have no deadline and no hard dependency, so they sit in wave 2 and take only the sessions the roll tracks
+leave free; the roll (wave 1) has no slack. `logging-migration/` rewrites logging in many entrypoints that the yearly and data-routing stories also edit, so it waits until after the Dec 2026 roll.
+`chart-polish/` goes before `chart-model-overlay/` because MO-4..6 extend the renderer it rebuilds. `design-baseline/` follows `design-gate` DG-4 and needs real code written under the warn-only hook
+to calibrate against.
 
 **Roll-critical path in one line:** `DSM-1 → DSC-1..4 → (YF-1..4 ‖) → YF-6 → yearly-cc ‖ pp → collar → ops-wiring → YV-1..4`, with `DA-0 → FC-1.. → 15+ days → FG-1..3` and `DSC-3 → DSN-1..4` joining
 at **YV-5**. That is roughly 35 single-task sessions in about 12 weeks, so the tracks must run in parallel; the capture (FC) has no slack because it is forward-only.
 
-**Coverage check (2026-10-07):** every active folder in `docs/plan/` has a Backlog pointer above or in the list below. Added today: `yearly-overlays/`, `dhan-far-expiry-chain/` and
-`data-source-routing/` were missing and are now items 23-25. `dev-foundation/` is marked shipped in `docs/plan/README.md` but its folder is still under `docs/plan/` (not listed here on purpose).
+**Coverage check (2026-10-08):** every active folder in `docs/plan/` has a Backlog pointer above or in the list below. Added 2026-10-07: `yearly-overlays/`, `dhan-far-expiry-chain/` and
+`data-source-routing/` were missing and are now items 23-25. Added 2026-10-08: items 26-27 (`design-discipline/`, `logging-consistency/`) and `chart-polish/` (under item 6). `dev-foundation/` is
+marked shipped in `docs/plan/README.md` but its folder is still under `docs/plan/` (not listed here on purpose).
 
 ---
 
