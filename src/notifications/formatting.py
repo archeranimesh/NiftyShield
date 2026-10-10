@@ -41,6 +41,50 @@ def format_money(value: Decimal, *, signed: bool = False) -> str:
     return f"₹{formatted_num}"
 
 
+def format_money_whole(value: Decimal, *, signed: bool = False) -> str:
+    """Payoff chart header cells — money at 0dp with ₹ (override of §3 money default, width budget)."""
+    if isinstance(value, float):
+        raise TypeError("format_money_whole requires Decimal, not float")
+
+    if not isinstance(value, Decimal):
+        value = Decimal(value)
+
+    value = value.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    if value == 0:
+        value = abs(value)
+
+    is_negative = value < 0
+    abs_val = abs(value)
+
+    formatted_num = f"{abs_val:,}"
+
+    if is_negative:
+        return f"-₹{formatted_num}"
+    if signed and value > 0:
+        return f"+₹{formatted_num}"
+    return f"₹{formatted_num}"
+
+
+def format_money_k(value: Decimal) -> str:
+    """Payoff chart y-axis ticks — k abbreviation (override of §3 money default, width budget)."""
+    if isinstance(value, float):
+        raise TypeError("format_money_k requires Decimal, not float")
+
+    if not isinstance(value, Decimal):
+        value = Decimal(value)
+
+    value = value.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    if value == 0:
+        return "₹0"
+
+    abs_val = abs(value)
+    if abs_val >= 1000:
+        k_val = int(abs_val // 1000)
+        return f"-₹{k_val}k" if value < 0 else f"₹{k_val}k"
+
+    return format_money_whole(value)
+
+
 def format_greek(value: float | None, *, width: int | None = None) -> str:
     """2dp, always signed, '-' placeholder for None (not-applicable, not zero).
 
@@ -76,6 +120,21 @@ def format_pct(value: float) -> str:
     if float(value).is_integer():
         return f"{int(value)}%"
     return f"{value:.1f}%"
+
+
+def format_pct_signed(value: float) -> str:
+    """1dp; value is a plain number where 4 means 4%, not 0.04.
+
+    Like format_pct, but with a leading + on positives.
+    """
+    if value == 0:
+        return "0%"
+
+    is_int = float(value).is_integer()
+    if value > 0:
+        return f"+{int(value)}%" if is_int else f"+{value:.1f}%"
+    else:
+        return f"{int(value)}%" if is_int else f"{value:.1f}%"
 
 
 def format_expiry(value: date) -> str:

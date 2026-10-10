@@ -112,6 +112,8 @@ function's docstring as an override of the §3 default, and (c) be implemented a
 | EOD PT summary table | money at 2dp, no `₹` | `scratch/telegram_formats/2026-08-13_eod_pt_summary.py` | **unregistered — reconcile at PT-1's ROLL task** |
 <!-- lint-ignore-length -->
 | Daily-snapshot waterfall | `k` abbreviation for \|value\| ≥ 1000 (`-3k`) | `scratch/telegram_formats/2026-08-08_daily_snapshot_waterfall_format.py` | **unregistered — no ROLL task; deferred 2026-08-11** |
+| Payoff chart header cells | money at 0dp with `₹` | CP-1 (width budget) | `format_money_whole` |
+| Payoff chart y-axis ticks | `k` abbreviation | CP-1 (width budget) | `format_money_k` |
 
 ---
 

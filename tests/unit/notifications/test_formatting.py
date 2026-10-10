@@ -14,8 +14,11 @@ from src.notifications.formatting import (
     format_expiry,
     format_greek,
     format_money,
+    format_money_k,
+    format_money_whole,
     format_month,
     format_pct,
+    format_pct_signed,
     format_strike,
     leg_role_label,
     pnl_emoji,
@@ -363,3 +366,41 @@ def test_build_position_table_titleless_blank_total_for_entry_message():
     assert lines[0].split() == ["Strategy", "Instrument", "Qty", "Avg", "Exit", "P&L", "Chg"]
     assert lines[-1].strip() == "TOTAL"  # P&L cell blank when total_pnl is None
     assert "NIFTY 23000 29 SEP 26 PE" in out
+
+
+def test_money_whole_groups_and_rounds():
+    assert format_money_whole(Decimal("9607")) == "₹9,607"
+    assert format_money_whole(Decimal("9607.5")) == "₹9,608"
+    assert format_money_whole(Decimal("-48893.4")) == "-₹48,893"
+    assert format_money_whole(Decimal("1486937")) == "₹1,486,937"
+
+
+def test_money_whole_signed_and_zero():
+    assert format_money_whole(Decimal("3200"), signed=True) == "+₹3,200"
+    assert format_money_whole(Decimal("0.4")) == "₹0"
+    assert format_money_whole(Decimal("-0.4")) == "₹0"
+
+
+def test_money_whole_rejects_float():
+    with pytest.raises(TypeError):
+        format_money_whole(9607.5)  # type: ignore
+
+
+def test_money_k_ticks():
+    assert format_money_k(Decimal("10000")) == "₹10k"
+    assert format_money_k(Decimal("-50000")) == "-₹50k"
+    assert format_money_k(Decimal("0")) == "₹0"
+    assert format_money_k(Decimal("500")) == "₹500"
+    assert format_money_k(Decimal("-500")) == "-₹500"
+
+
+def test_money_k_rejects_float():
+    with pytest.raises(TypeError):
+        format_money_k(10000.0)  # type: ignore
+
+
+def test_pct_signed():
+    assert format_pct_signed(3.0) == "+3%"
+    assert format_pct_signed(2.7) == "+2.7%"
+    assert format_pct_signed(-1.4) == "-1.4%"
+    assert format_pct_signed(0) == "0%"
