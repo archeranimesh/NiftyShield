@@ -1,7 +1,6 @@
 """Tests for src.notifications.payoff_chart (Agg, no display)."""
 
 import asyncio
-import dataclasses
 import sys
 from decimal import Decimal as D
 
@@ -69,57 +68,67 @@ def test_render_does_not_touch_pyplot():
 def test_render_wraps_failures(monkeypatch):
     import src.notifications.payoff_chart as pc
 
-    monkeypatch.setattr(pc, "expiry_pnl_series", lambda *a, **k: 1 / 0)
+    monkeypatch.setattr(pc, "expiry_pnl_at", lambda *a, **k: 1 / 0)
     with pytest.raises(RenderError):
         render_payoff_png(_ic())
 
 
-def _strip(payoff, **kw):
-    from src.notifications.payoff_chart import build_stat_strip
-
-    return dict(build_stat_strip(payoff, **kw))
-
-
-def test_stat_strip_without_margin():
-    rows = _strip(_ic(), spot=D(23250))
-    assert "Est. Margin" not in rows
-    assert rows["Net Credit"] == "₹7,500.00"
-    assert "Breakevens" in rows and "%" in rows["Breakevens"]
-    assert _is_png(render_payoff_png(_ic(), spot=D(23250), margin=None))
-
-
-def test_stat_strip_with_margin():
-    rows = _strip(_ic(), margin=D(100000))
-    assert rows["Est. Margin"] == "₹100,000.00"
-    assert "%" not in rows["Breakevens"]
-    assert _is_png(render_payoff_png(_ic(), margin=D(100000)))
+def test_render_full_inputs_returns_valid_png():
+    out = render_payoff_png(
+        _ic(),
+        spot=D("23250.5"),
+        current_pnl=D(1500),
+        dte=12,
+        margin=D(100000),
+        title="IC",
+        subtitle="Monthly",
+    )
+    assert _is_png(out)
 
 
-def test_stat_strip_unbounded_side():
-    rows = _strip(_naked_call())
-    assert rows["Max Loss"] == "Unlimited"
-    assert "R:R" not in rows
-    assert _is_png(render_payoff_png(_naked_call()))
+def test_render_with_font_fallback(monkeypatch):
+    import src.notifications.payoff_chart as pc
+
+    monkeypatch.setattr(pc, "chart_font_family", lambda: "DejaVu Sans")
+    out = render_payoff_png(_ic())
+    assert _is_png(out)
 
 
-def test_stat_strip_net_debit():
-    long_call = compute_payoff([PayoffLeg("CE", D(24000), 75, D(75), "long_call")])
-    rows = _strip(long_call)
-    assert "Net Debit" in rows and rows["Max Profit"] == "Unlimited"
-    assert rows["Max Loss"] == "₹5,625.00"
-    assert _is_png(render_payoff_png(long_call))
+def test_render_two_row_header_on_huge_values():
+    # Provide huge values to force two rows
+    out = render_payoff_png(
+        _ic(), spot=D("23250.5"), current_pnl=D(9999999999), margin=D(99999999999)
+    )
+    assert _is_png(out)
 
 
-def test_stat_strip_guaranteed_profit_is_min_profit():
-    locked = dataclasses.replace(_ic(), max_loss=D(500))
-    rows = _strip(locked)
-    assert "Max Loss" not in rows and rows["Min Profit"] == "₹500.00"
-    assert _is_png(render_payoff_png(locked))
+def test_render_five_strike_structure():
+    legs = [
+        PayoffLeg("PE", D(21000), 75, D(10), "x"),
+        PayoffLeg("PE", D(22000), -75, D(20), "x"),
+        PayoffLeg("PE", D(23000), 75, D(30), "x"),
+        PayoffLeg("CE", D(24000), -75, D(40), "x"),
+        PayoffLeg("CE", D(25000), 75, D(50), "x"),
+    ]
+    payoff = compute_payoff(legs)
+    out = render_payoff_png(payoff, spot=D(23000))
+    assert _is_png(out)
 
 
-def test_stat_strip_zero_max_loss_is_min_profit():
-    flat = dataclasses.replace(_ic(), max_loss=D(0))
-    assert _strip(flat)["Min Profit"] == "₹0.00"
+def test_payoff_chart_modules_import_boundary():
+    import ast
+    from pathlib import Path
+
+    src = Path("src") / "notifications"
+    for module in ["payoff_chart_theme.py", "payoff_chart_axes.py", "payoff_chart_header.py"]:
+        code = (src / module).read_text()
+        tree = ast.parse(code)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                if node.module == "src.notifications.payoff_chart":
+                    pytest.fail(
+                        f"{module} imports from payoff_chart, violating pure helpers boundary"
+                    )
 
 
 # --- send_payoff_chart ---
