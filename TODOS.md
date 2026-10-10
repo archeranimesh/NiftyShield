@@ -38,7 +38,7 @@ state. Arrows: `A → B` means B cannot start until A is done. `‖` means the t
 | 1 | DSN-5 source-flip seam | 25 | after DSN-4 | DSN-2 provenance columns | not needed before about 2027-09; may follow the roll |
 | 2 | `greeks-bs-fallback/` | 7 | GF-1 | Animesh's 3 modeling decisions before GF-2 | `strategy-payoff-charts` MO-1; `chain-decay-analysis` |
 | 2 | `gamma-near-expiry/` Phase B | 4 | GS-1 | 5+ days of snapshots | none |
-| 2 | `tradetron-delta-and-long-window/` | 22 | TDL-4 (Animesh) | none; funded runs need per-run approval | may give `greeks-bs-fallback` a far-dated reference |
+| 2 | `tradetron-delta-and-long-window/` | 22 | TDL-5 (Animesh) | none; funded runs need per-run approval | may give `greeks-bs-fallback` a far-dated reference |
 | 2 | `portfolio-snapshot-slimdown/` FD-1..7 → DHR-1..4 | 9 | FD-1 | never interleave the two sub-stories | `phase2-integrations/` |
 | 2 | `design-discipline/design-gate/` DG-1..9 | 26 | DG-1 | none | `design-baseline` (DG-4); soft-first for `logging-consistency` |
 | 2 | `strategy-payoff-charts/chart-polish/` CP-1..11 | 6 | CP-1 | none (`chart-core` done); CP-10 is an Animesh on-device gate | `chart-model-overlay` MO-4..6 |
@@ -118,8 +118,8 @@ rot them. (Items 3, 5 and 8 closed — numbers kept stable because item text cro
     not started, needs a story folder.
 21. **Variance gate — start the observation clock** — `docs/plan/variance-gate/` — next **VG0** (spec reconciliation, Animesh). Cheap, but VG2.A needs ≥9 calendar months of observation, so it is the
     longest wall-clock pole. Do VG0/VG1 now; the Gate A–D tasks are human checkpoints that accrue passively while the items below are built.
-22. **Tradetron delta check and long-window validation** — `docs/plan/tradetron-delta-and-long-window/` — next **TDL-4** (own-side comparator audit and run budget). Animesh's screen of the paper
-    strategies before any paid-data purchase; TDL-2 may give `greeks-bs-fallback` a far-dated reference. Funded runs need Animesh's per-run approval.
+22. **Tradetron delta check and long-window validation** — `docs/plan/tradetron-delta-and-long-window/` — next **TDL-5** (CC long-window funded run, ₹80 ceiling approved). Animesh's screen of the
+    paper strategies before any paid-data purchase; TDL-2 may give `greeks-bs-fallback` a far-dated reference. Funded runs need Animesh's per-run approval.
 - strategy-payoff-charts follow-up: `spot=None` in `_send_close_notification` missing the "where we closed" marker. Needs `apply_action` to receive the chain or `underlying_price` plumbed through.
 - strategy-payoff-charts follow-up (2026-10-06): `src/notifications/payoff_chart.py` imports matplotlib at module top level, and the entry, snapshot, monitor and IC strategy modules import it at
   module level, so a venv without matplotlib crashes them at import (found when the cron venv lacked it). Import matplotlib lazily inside the render function so a missing dependency costs only the
@@ -193,6 +193,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 - [2026-10-07] DSM-3 done (`<pending>`): council ruling for `data-source-routing/` absorbed into `DECISIONS.md` (Option A resolver, per-capability routing, source-flip seam, Q4 by action class per
   Animesh); council file archived to `docs/archive/council/data_architecture/`; `ds-chain-seam/` (DSC-1..5) and `ds-chain-monitoring/` (DSN-1..5 + `schema.md`) specced; broader capability matrix
   re-homed as `ds-router-migration/` DSR-0. Next: DSM-1 (Upstox BOD Dec 2027 coverage, Dhan 806 shapes). Open for Animesh: cadence, backstop thresholds, Kite.
+- [2026-10-10] tradetron-delta-and-long-window TDL-4 closed (`4900b3e`): no own-side data covers 2021-10 to 2026-04, so the long CC run is a viability screen only; Animesh approved an ₹80 ceiling (4
+  runs at ₹20), each run still reconfirmed in-session; next TDL-5.
 - [2026-10-10] tradetron-delta-and-long-window TDL-3 closed (`8c79dcd`): CC v2 pre-flight `backtestable` over 60 months, no blockers; check gives no data-start or April-2026 expiry info; one run at
   ₹20 planned, spend waits for TDL-4.
 - [2026-10-07] tradetron-delta-and-long-window TDL-2 closed (`39938a3`): Tradetron delta matches Upstox to ~0.004 on monthly and Dec near-ATM (weekly pair off by 0.03); Dec Greeks nonzero on both
