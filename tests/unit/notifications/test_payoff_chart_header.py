@@ -169,3 +169,117 @@ def test_pnl_zero_is_neutral():
     cells = build_header_cells(payoff, current_pnl=Decimal("0.4"))
     pnl_cell = next(c for c in cells if c.label == "P&L NOW")
     assert pnl_cell.value_tone == Tone.NEUTRAL
+
+import math
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_agg import FigureCanvasAgg
+from src.notifications.payoff_chart_header import pack_header, draw_header
+
+class MockTheme:
+    bg = "#0e1117"
+    ink = "#e5e7eb"
+    muted = "#9ca3af"
+    faint = "#1f2937"
+    green = "#26b3a0"
+    red = "#ef5350"
+    fill_alpha_green = 0.22
+    fill_alpha_red = 0.14
+
+def test_pack_one_row_spreads_gaps_equally():
+    widths = [0.8, 0.7, 0.9, 0.6, 0.8, 0.7, 0.7] # 7 widths summing to 5.2
+    avail = 6.58
+    layout = pack_header(widths, avail)
+    assert len(layout.rows) == 1
+    assert layout.scale == 1.0
+    row = layout.rows[0]
+    assert len(row) == 7
+    # Gaps equal and spread to fill avail
+    # min_gap = 0.14. total_w = 5.2. remaining = 1.38. gap = 0.23
+    assert math.isclose(row[1].left - (row[0].left + row[0].width), 0.23)
+    assert math.isclose(row[-1].left + row[-1].width, 6.58)
+
+def test_pack_shrinks_before_wrapping():
+    # 7 widths summing to 6.2, avail = 6.58
+    # min_gap = 0.14 -> 6 * 0.14 = 0.84
+    # required = 6.2 + 0.84 = 7.04 > 6.58
+    # scale = (6.58 - 0.84) / 6.2 = 5.74 / 6.2 = 0.9258 >= 0.8
+    widths = [0.9] * 6 + [0.8]
+    layout = pack_header(widths, 6.58)
+    assert len(layout.rows) == 1
+    assert 0.8 <= layout.scale < 1.0
+    row = layout.rows[0]
+    gap = row[1].left - (row[0].left + row[0].width * layout.scale)
+    assert math.isclose(gap, 0.14)
+
+def test_pack_wraps_below_floor():
+    # sum = 8.0, avail = 6.58. 
+    # scale = (6.58 - 0.84) / 8.0 = 0.7175 < 0.8
+    widths = [1.2, 1.1, 1.2, 1.1, 1.2, 1.1, 1.1]
+    layout = pack_header(widths, 6.58)
+    assert len(layout.rows) == 2
+    assert len(layout.rows[0]) == 4
+    assert len(layout.rows[1]) == 3
+
+def test_pack_edge_cases():
+    l1 = pack_header([], 6.58)
+    assert len(l1.rows) == 0
+
+    l2 = pack_header([2.0], 6.58)
+    assert len(l2.rows) == 1
+    assert l2.rows[0][0].left == 0.0
+
+def test_draw_header_centres_each_cell():
+    fig = Figure(figsize=(7, 4.9))
+    FigureCanvasAgg(fig)
+    cells = [
+        HeaderCell("LABEL1", "VALUE1", Tone.POSITIVE, "SUB1", Tone.MUTED),
+        HeaderCell("L2", "V2", Tone.NEGATIVE)
+    ]
+    
+    rows = draw_header(fig, "Title", "Subtitle", cells, MockTheme(), "sans-serif")
+    assert rows == 1
+    
+    texts = fig.texts
+    
+    # Title and subtitle
+    assert texts[0].get_text() == "Title"
+    assert texts[1].get_text() == "Subtitle"
+    
+    # Cell 0: Label, Value, Sub
+    cell0_label = texts[2]
+    cell0_value = texts[3]
+    cell0_sub = texts[4]
+    
+    # Cell 1: Label, Value (no sub)
+    cell1_label = texts[5]
+    cell1_value = texts[6]
+    
+    assert cell0_label.get_ha() == "center"
+    assert cell0_value.get_ha() == "center"
+    assert cell0_sub.get_ha() == "center"
+    
+    assert cell1_label.get_ha() == "center"
+    assert cell1_value.get_ha() == "center"
+    
+    # Check they share the same X
+    assert cell0_label.get_position()[0] == cell0_value.get_position()[0] == cell0_sub.get_position()[0]
+    assert cell1_label.get_position()[0] == cell1_value.get_position()[0]
+    
+    # Check X increases
+    assert cell0_label.get_position()[0] < cell1_label.get_position()[0]
+    
+    # Check within (0, 1)
+    assert 0 < cell0_label.get_position()[0] < 1
+    assert 0 < cell1_label.get_position()[0] < 1
+
+def test_draw_header_returns_row_count():
+    fig = Figure(figsize=(7, 4.9))
+    FigureCanvasAgg(fig)
+    cells = [
+        HeaderCell("LABEL1", "VALUE1" * 10, Tone.POSITIVE),
+        HeaderCell("LABEL2", "VALUE2" * 10, Tone.NEGATIVE),
+        HeaderCell("LABEL3", "VALUE3" * 10, Tone.NEUTRAL)
+    ]
+    # Absurdly wide values should force wrapping
+    rows = draw_header(fig, "Title", "", cells, MockTheme(), "sans-serif")
+    assert rows == 2
