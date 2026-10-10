@@ -8,7 +8,7 @@ spec.
 - [x] **CP-1** — `format_money_whole` / `format_money_k` / `format_pct_signed` in `formatting.py` + `FORMATTING.md` §5 override rows | Owner: Antigravity | Model: claude-sonnet-5-5 | Review:
   code-reviewer
   | SHA: —
-- [ ] **CP-2** — `payoff_chart_theme.py`: frozen `ChartTheme` + `DARK`, bundled Roboto assets, guarded `chart_font_family` with DejaVu fallback | Owner: Antigravity | Model: claude-sonnet-5-5 |
+- [x] **CP-2** — `payoff_chart_theme.py`: frozen `ChartTheme` + `DARK`, bundled Roboto assets, guarded `chart_font_family` with DejaVu fallback | Owner: Antigravity | Model: claude-sonnet-5-5 |
   Review: code-reviewer | SHA: —
 - [ ] **CP-3** — `payoff_chart_axes.py` pure helpers: `x_range`, `sample_xs`, `strike_ticks` with crowding stagger | Owner: Antigravity | Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: —
 - [ ] **CP-4** — `payoff_chart_header.py`: `HeaderCell` / `Tone` + pure `build_header_cells` (seven cells, sub-lines) | Owner: Antigravity | Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: —
