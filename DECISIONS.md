@@ -577,6 +577,15 @@ the trading day. Volume: ~67K rows/day, ~16M rows/year, ~2–3 GB/year compresse
 intraday delta drift from real Upstox Greeks against BS-reconstructed Greeks quantifies the structural bias in task 1.6a; (3) cannot be back-filled. Operational cost: 3 API calls per 5-min interval =
 225 calls/day; well within Upstox Analytics Token budget. Implementation story: `docs/archive/plan/chain-data/` task CD2.1 (completed 2026-05-29).
 
+**Far-expiry chain capture storage: SQLite, not `ChainWriter` Parquet (2026-10-10, `dhan-far-expiry-chain/far-expiry-capture/` FC-1).** The capture is a forward-only operational feed read by a cron
+heartbeat, a report CLI, FG-1 calibration and the stale-Greeks last-known-delta policy (council 2026-10-07 Q4), so it lives in `portfolio.sqlite` beside `intraday_market_snapshots`. Table
+`far_expiry_chain_snapshots`, `Decimal` as `TEXT`, unique key `(snapshot_date, expiry, strike, option_type, source)` with `INSERT OR REPLACE` for idempotent reruns; DDL in
+`docs/plan/dhan-far-expiry-chain/far-expiry-capture/schema.md`. Rejected `ChainWriter` because (1) `_chain_to_table` quantises `None` to `0.000000` via `q6`, so "Dhan sent no delta" and "delta is
+zero" become indistinguishable — the exact distinction the liquidity report and the Greeks-fallback trigger depend on (Dhan encodes missing Greeks as zero, normalised to `None` by the parser); (2)
+files are named `upstox_{date}_{label}.parquet` with no `source` dimension, so Upstox and Dhan snapshots of one expiry on one date would collide or need a naming fork; (3) the last-known-delta cache
+must answer "newest delta for strike X" by key, which is a point lookup in SQLite and a directory scan in Parquet. **Known gap, not fixed here:** `OptionLeg` carries no bid/ask size, so the store
+holds price, OI, volume, IV and the four Greeks only; adding sizes means widening `OptionLeg` and `parse_dhan_option_chain`, deferred until FG-1 shows spread % and OI are insufficient.
+
 ---
 
 ## OptionChain Model
