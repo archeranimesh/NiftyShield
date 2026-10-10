@@ -71,6 +71,15 @@ class HasTitle(Protocol):
         ...
 
 
+@runtime_checkable
+class HasSubtitle(Protocol):
+    """Optional adapter capability: a custom chart subtitle."""
+
+    def subtitle(self, ctx: PayoffContext) -> str:
+        """Return the chart subtitle for ``ctx``."""
+        ...
+
+
 class PayoffRegistry:
     """Name -> adapter map. Inject a fresh instance for test isolation."""
 

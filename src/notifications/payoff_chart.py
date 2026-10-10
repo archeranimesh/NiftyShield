@@ -11,141 +11,35 @@ from typing import Protocol
 
 import numpy as np
 import structlog
-from matplotlib.axes import Axes
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure
 
-from src.notifications.formatting import format_money, format_pct, format_strike
-from src.payoff.core import StrategyPayoff, compute_payoff, expiry_pnl_series
+from src.notifications.payoff_chart_axes import (
+    draw_breakevens,
+    draw_now_marker,
+    draw_spot,
+    draw_strike_ticks,
+    sample_xs,
+    strike_ticks,
+    style_axes,
+    x_range,
+)
+from src.notifications.payoff_chart_header import build_header_cells, draw_header
+from src.notifications.payoff_chart_theme import DARK, chart_font_family
+from src.payoff.core import StrategyPayoff, compute_payoff, expiry_pnl_at
 from src.payoff.errors import PayoffError, RenderError, SendError
-from src.payoff.registry import DEFAULT_REGISTRY, HasTitle, PayoffContext, PayoffRegistry
+from src.payoff.registry import (
+    DEFAULT_REGISTRY,
+    HasSubtitle,
+    HasTitle,
+    PayoffContext,
+    PayoffRegistry,
+)
 
 logger = structlog.get_logger(__name__)
 
-_POINTS = 200
-_GREEN = "#2e8b57"
-_RED = "#c0392b"
 _RENDER_TIMEOUT_S = 30.0
 _SEND_TIMEOUT_S = 30.0
-
-
-def _x_range(payoff: StrategyPayoff, spot: Decimal | None) -> tuple[Decimal, Decimal]:
-    """Chart x-range: key spots padded by 1.5x span, floored at zero."""
-    pts = list(payoff.key_spots) or ([spot] if spot is not None else [])
-    if not pts:
-        pts = [payoff.legs[0].entry_price]
-    lo, hi = min(pts), max(pts)
-    span = hi - lo
-    if span == 0:
-        span = (spot if spot is not None else lo) * Decimal("0.1")
-    lo, hi = lo - Decimal("1.5") * span, hi + Decimal("1.5") * span
-    if spot is not None:
-        lo, hi = min(lo, spot), max(hi, spot)
-    return max(lo, Decimal("0")), hi
-
-
-def _label(value: Decimal) -> str:
-    """Whole-number spot / strike label via the shared formatter."""
-    return format_strike(int(value.to_integral_value()))
-
-
-def _draw_verticals(ax: Axes, payoff: StrategyPayoff, spot: Decimal | None) -> None:
-    short = {leg.strike for leg in payoff.legs if leg.qty < 0 and leg.strike is not None}
-    for k in payoff.key_spots:
-        is_short = k in short
-        ax.axvline(
-            float(k),
-            ls="--",
-            lw=1.0 if is_short else 0.8,
-            color="#555555" if is_short else "#bbbbbb",
-        )
-    for be in payoff.breakevens:
-        ax.axvline(float(be), ls="--", lw=1.2, color="#1f77b4")
-        ax.text(
-            float(be),
-            1.0,
-            _label(be),
-            transform=ax.get_xaxis_transform(),
-            ha="center",
-            va="bottom",
-            fontsize=8,
-            color="#1f77b4",
-        )
-    if spot is not None:
-        ax.axvline(float(spot), lw=1.6, color="black", label=f"Nifty Spot : {_label(spot)}")
-
-
-def _pnl_dot_label(payoff: StrategyPayoff, current_pnl: Decimal, margin: Decimal | None) -> str:
-    base = f"Target P&L : {format_money(current_pnl)}"
-    denom = margin if margin is not None else payoff.max_profit
-    if denom is None or denom == 0:
-        return base
-    pct = (current_pnl / denom * 100).quantize(Decimal("0.1"))
-    return f"{base} ({pct}%)"
-
-
-def _breakeven_text(be: Decimal, spot: Decimal | None) -> str:
-    text = _label(be)
-    if spot is None or spot == 0:
-        return text
-    pct = float((be - spot) / spot * 100)
-    sign = "+" if pct >= 0 else "-"
-    return f"{text} ({sign}{format_pct(abs(pct))})"
-
-
-def build_stat_strip(
-    payoff: StrategyPayoff, *, spot: Decimal | None = None, margin: Decimal | None = None
-) -> list[tuple[str, str]]:
-    """Return the ordered ``(label, value)`` pairs shown in the chart's stat strip.
-
-    Args:
-        payoff: Computed payoff.
-        spot: Current underlying; enables breakeven distance percentages.
-        margin: Margin used; adds an ``Est. Margin`` entry only when not None.
-
-    Returns:
-        Label/value pairs; ``None`` max profit / loss render as ``Unlimited`` and a
-        ``None`` R:R is omitted. Max loss is shown as a magnitude;
-        a non-negative worst case (guaranteed profit) is labelled ``Min Profit``.
-    """
-    unlimited = "Unlimited"
-    rows = [
-        ("Max Profit", unlimited if payoff.max_profit is None else format_money(payoff.max_profit)),
-        _worst_case_row(payoff.max_loss, unlimited),
-    ]
-    if payoff.rr_ratio is not None:
-        rows.append(("R:R", f"1:{payoff.rr_ratio.quantize(Decimal('0.01'))}"))
-    credit = payoff.net_premium >= 0
-    rows.append(("Net Credit" if credit else "Net Debit", format_money(abs(payoff.net_premium))))
-    if payoff.breakevens:
-        rows.append(("Breakevens", " – ".join(_breakeven_text(b, spot) for b in payoff.breakevens)))
-    if margin is not None:
-        rows.append(("Est. Margin", format_money(margin)))
-    return rows
-
-
-def _worst_case_row(max_loss: Decimal | None, unlimited: str) -> tuple[str, str]:
-    """Return the worst-case row: ``Max Loss`` magnitude, or ``Min Profit`` if it cannot lose."""
-    if max_loss is None:
-        return ("Max Loss", unlimited)
-    if max_loss < 0:
-        return ("Max Loss", format_money(-max_loss))
-    return ("Min Profit", format_money(max_loss))
-
-
-def _draw_stat_strip(fig: Figure, rows: list[tuple[str, str]]) -> None:
-    """Draw ``rows`` as a two-line text band above the axes."""
-    half = (len(rows) + 1) // 2
-    for i, line in enumerate((rows[:half], rows[half:])):
-        fig.text(
-            0.5,
-            0.99 - 0.045 * i,
-            "    ".join(f"{k}: {v}" for k, v in line),
-            ha="center",
-            va="top",
-            fontsize=9,
-            fontweight="bold",
-        )
 
 
 def render_payoff_png(
@@ -156,6 +50,7 @@ def render_payoff_png(
     dte: int | None = None,
     margin: Decimal | None = None,
     title: str = "",
+    subtitle: str = "",
 ) -> bytes:
     """Render the expiry payoff of ``payoff`` to PNG bytes.
 
@@ -163,9 +58,10 @@ def render_payoff_png(
         payoff: Computed payoff (from ``compute_payoff``).
         spot: Current underlying price; draws a spot line and widens the range.
         current_pnl: Current P&L; draws a marker at ``(spot, current_pnl)``.
-        dte: Days to expiry; accepted for caller symmetry, unused by the chart.
+        dte: Days to expiry; accepted for caller symmetry.
         margin: Margin used; denominator for the P&L percentage when given.
         title: Chart title, supplied by the caller.
+        subtitle: Chart subtitle, supplied by the caller.
 
     Returns:
         PNG image bytes.
@@ -174,50 +70,82 @@ def render_payoff_png(
         RenderError: On any rendering failure.
     """
     try:
-        lo, hi = _x_range(payoff, spot)
-        xs, ys = expiry_pnl_series(payoff, lo, hi, _POINTS)
-        fig = Figure(figsize=(9, 5), facecolor="white")
+        family = chart_font_family()
+
+        # Subtitle composition
+        parts = []
+        if subtitle:
+            parts.append(subtitle)
+        if dte is not None:
+            parts.append(f"{dte} DTE")
+        display_subtitle = " · ".join(parts)
+
+        cells = build_header_cells(payoff, spot=spot, margin=margin, current_pnl=current_pnl)
+
+        # We start with height 4.9, layout will adjust if draw_header returns 2
+        fig = Figure(figsize=(7, 4.9), facecolor=DARK.bg)
         FigureCanvasAgg(fig)
-        fig.subplots_adjust(top=0.80)
-        _draw_stat_strip(fig, build_stat_strip(payoff, spot=spot, margin=margin))
+
+        rows = draw_header(fig, title, display_subtitle, cells, DARK, family)
+
+        if rows > 1:
+            fig.set_size_inches(7, 5.7)
+            fig.subplots_adjust(left=0.13, right=0.97, top=0.585, bottom=0.12)
+        else:
+            fig.subplots_adjust(left=0.13, right=0.97, top=0.70, bottom=0.14)
+
         ax = fig.add_subplot(111)
-        x = [float(v) for v in xs]
-        y = [float(v) for v in ys]
+
+        lo, hi = x_range(payoff, spot)
+        xs = sample_xs(payoff, lo, hi)
+        ys = np.array([float(expiry_pnl_at(payoff, Decimal(str(x)))) for x in xs])
+
         ax.fill_between(
-            x, y, 0, where=[v > 0 for v in y], interpolate=True, color=_GREEN, alpha=0.2
+            xs,
+            ys,
+            0,
+            where=ys >= 0,
+            interpolate=True,
+            color=DARK.green,
+            alpha=DARK.fill_alpha_green,
+            lw=0,
         )
-        ax.fill_between(x, y, 0, where=[v < 0 for v in y], interpolate=True, color=_RED, alpha=0.15)
-        _plot_line(ax, x, y)
-        ax.axhline(0, color="black", lw=0.8)
-        _draw_verticals(ax, payoff, spot)
-        if spot is not None and current_pnl is not None:
-            ax.plot(
-                [float(spot)],
-                [float(current_pnl)],
-                "o",
-                color="black",
-                label=_pnl_dot_label(payoff, current_pnl, margin),
-            )
+        ax.fill_between(
+            xs,
+            ys,
+            0,
+            where=ys <= 0,
+            interpolate=True,
+            color=DARK.red,
+            alpha=DARK.fill_alpha_red,
+            lw=0,
+        )
+        ax.plot(
+            xs, np.ma.masked_where(ys < 0, ys), color=DARK.green, lw=1.8, solid_capstyle="round"
+        )
+        ax.plot(xs, np.ma.masked_where(ys > 0, ys), color=DARK.red, lw=1.8, solid_capstyle="round")
+        ax.axhline(0, color=DARK.muted, lw=0.7)
+
+        style_axes(ax, DARK, family)
+        ax.set_xlim(lo, hi)
+
+        s_ticks = strike_ticks(payoff, hi - lo)
+        draw_strike_ticks(ax, s_ticks, DARK, family)
+
+        draw_breakevens(ax, payoff.breakevens, spot, DARK, family)
+
         if spot is not None:
-            ax.legend(loc="upper right", fontsize=8)
-        ax.set_title(title)
-        ax.set_xlabel("Underlying at expiry")
-        ax.set_ylabel("P&L (₹)")
-        ax.grid(axis="y", alpha=0.3)
+            draw_spot(ax, spot, DARK, family)
+            if current_pnl is not None:
+                draw_now_marker(ax, spot, current_pnl, DARK, family)
+
         buf = io.BytesIO()
-        fig.savefig(buf, format="png", dpi=110, bbox_inches="tight")
+        fig.savefig(buf, format="png", dpi=170, facecolor=DARK.bg)
         data = buf.getvalue()
     except Exception as exc:  # intentional: never leak matplotlib/numpy types
         raise RenderError(f"payoff chart render failed: {exc}") from exc
     logger.info("payoff_chart.rendered", title=title, bytes=len(data))
     return data
-
-
-def _plot_line(ax: Axes, x: list[float], y: list[float]) -> None:
-    """Draw the payoff line green above zero, red below (masked segments)."""
-    xa, ya = np.array(x), np.array(y)
-    ax.plot(xa, np.ma.masked_where(ya < 0, ya), color=_GREEN, lw=2)
-    ax.plot(xa, np.ma.masked_where(ya >= 0, ya), color=_RED, lw=2)
 
 
 class PhotoSender(Protocol):
@@ -246,6 +174,7 @@ async def _build_and_send(
         return
     payoff = compute_payoff(legs)
     title = adapter.title(ctx) if isinstance(adapter, HasTitle) else ""
+    subtitle = adapter.subtitle(ctx) if isinstance(adapter, HasSubtitle) else ""
     # CPU-bound render runs in a worker thread (Figure API is thread-safe;
     # to_thread copies contextvars). If GIL contention is ever measured to
     # matter, move to a ProcessPoolExecutor per the CLAUDE.md async rules.
@@ -258,6 +187,7 @@ async def _build_and_send(
             dte=dte,
             margin=margin,
             title=title,
+            subtitle=subtitle,
         ),
         timeout=_RENDER_TIMEOUT_S,
     )
