@@ -2,13 +2,13 @@ import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
+from enum import Enum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from matplotlib.figure import Figure
 
     from .payoff_chart_theme import ChartTheme
-from enum import Enum
 
 from src.notifications.formatting import format_money_whole, format_pct_signed, format_strike
 from src.payoff.core import StrategyPayoff
