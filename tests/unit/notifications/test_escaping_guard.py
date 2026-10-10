@@ -204,7 +204,7 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "immediate enclosing function (main), not the builder it calls - same shape as the "
         "paper_3track_snapshot.py:2030 entry. Line moved from 200 -> 198 by UXM's edits."
     ),
-    ("scripts/healthcheck.py", 324): (
+    ("scripts/healthcheck.py", 373): (
         "heuristic limitation, not a real gap - ROLL-11 migrated this (SHA on the task "
         "line); the message is built and fully escaped inside build_healthcheck_alert() "
         "(escape_markdown() on every label, status word, detail and the bracketed time), "

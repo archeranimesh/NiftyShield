@@ -11,6 +11,9 @@ Validates:
 7. paper_3track_snapshot cron crash detection (BUG-029 follow-up, B029.5):
    flags an unhandled Traceback in today's 15:35 cron run before it's caught
    by the next day's `get_open_exit_events` call.
+8. far-expiry chain capture heartbeat (dhan-far-expiry-chain FC-4): the capture
+   cron runs at 16:10, after this 15:55 check, so it verifies the previous
+   trading day's run recorded SUCCESS; a missed day is unrecoverable data.
 
 Fires a Telegram alert if any check fails or warns, and exits 1.
 Runs silently and exits 0 on success.
@@ -21,7 +24,7 @@ import asyncio
 import shutil
 import sys
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
 
@@ -39,7 +42,7 @@ load_dotenv()
 from src.backtest.vix_ingest import load_vix_series  # noqa: E402
 from src.config import settings  # noqa: E402
 from src.db import connect  # noqa: E402
-from src.market_calendar.holidays import is_trading_day  # noqa: E402
+from src.market_calendar.holidays import is_trading_day, prev_trading_day  # noqa: E402
 from src.notifications.markdown import escape_markdown  # noqa: E402
 from src.notifications.telegram import build_notifier  # noqa: E402
 from src.utils.logging import setup_logging  # noqa: E402
@@ -126,6 +129,49 @@ def _check_3track_snapshot_cron(log_path: Path, target_date: date) -> CheckResul
     return CheckResult("3track Cron", "ok")
 
 
+_FAR_EXPIRY_SERVICE = "capture_far_expiry"
+_IST = timezone(timedelta(hours=5, minutes=30))
+
+
+def _check_far_expiry_capture(db_path: Path, target_date: date) -> CheckResult:
+    """Verify the previous trading day's far-expiry chain capture succeeded.
+
+    The capture cron (16:10) runs after this healthcheck (15:55), so today's
+    heartbeat cannot exist yet. The newest heartbeat must therefore be from
+    ``prev_trading_day(target_date)`` or later and carry ``SUCCESS``. The
+    chain is forward-only data: a missed or failed day cannot be backfilled.
+
+    Args:
+        db_path: Path to the SQLite DB holding ``cron_heartbeats``.
+        target_date: Date being checked.
+
+    Returns:
+        A ``CheckResult`` labelled ``"Far-Expiry Capture"``. No heartbeat yet is
+        a warning (capture not started); stale or failed is critical.
+    """
+    label = "Far-Expiry Capture"
+    try:
+        with connect(db_path) as conn:
+            row = conn.execute(
+                "SELECT last_run, status, message FROM cron_heartbeats WHERE service = ?",
+                (_FAR_EXPIRY_SERVICE,),
+            ).fetchone()
+        if row is None:
+            return CheckResult(label, "warn", "NO RUN", "no heartbeat yet")
+
+        last_run, status, message = row[0], row[1], row[2]
+        last_run_date = datetime.fromisoformat(last_run).astimezone(_IST).date()
+        if last_run_date < prev_trading_day(target_date):
+            return CheckResult(label, "critical", "STALE", f"last run {last_run_date.isoformat()}")
+        if status != "SUCCESS":
+            return CheckResult(label, "critical", "FAILED", message or status)
+        return CheckResult(label, "ok")
+    except Exception as e:
+        # A bad heartbeat row must never take down the other checks (dead man's switch).
+        logger.exception("Far-expiry heartbeat check failed", error=str(e))
+        return CheckResult(label, "warn", "ERROR", str(e))
+
+
 def run_checks(
     target_date: date, db_path: Path, vix_dir: Path, cron_log_path: Path
 ) -> list[CheckResult]:
@@ -208,6 +254,9 @@ def run_checks(
 
     # Check 6: 3track snapshot cron crash detection (BUG-029 / B029.5)
     results.append(_check_3track_snapshot_cron(cron_log_path, target_date))
+
+    # Check 7: far-expiry chain capture heartbeat (dhan-far-expiry-chain FC-4)
+    results.append(_check_far_expiry_capture(db_path, target_date))
 
     return results
 

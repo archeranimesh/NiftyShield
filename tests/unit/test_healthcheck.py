@@ -33,7 +33,13 @@ def test_run_checks_all_pass(mock_disk, mock_load_vix, mock_connect, tmp_path) -
     # 1. DB accessibility check (returns (1,))
     # 2. daily_snapshots check (returns (1,))
     # 3. paper_nav_snapshots check (returns (1,))
-    mock_conn.execute.return_value.fetchone.side_effect = [(1,), (1,), (1,)]
+    # 4. far-expiry capture heartbeat (previous trading day, SUCCESS)
+    mock_conn.execute.return_value.fetchone.side_effect = [
+        (1,),
+        (1,),
+        (1,),
+        ("2026-05-29T10:40:00+00:00", "SUCCESS", None),
+    ]
 
     today = date(2026, 5, 31)
     mock_load_vix.return_value = pd.Series([15.0], index=[today])
@@ -59,6 +65,7 @@ def test_run_checks_all_pass(mock_disk, mock_load_vix, mock_connect, tmp_path) -
         "VIX Data",
         "Disk Space",
         "3track Cron",
+        "Far-Expiry Capture",
     }
 
 
@@ -171,6 +178,65 @@ def test_check_3track_snapshot_cron_missing_file(tmp_path) -> None:
 
     assert result.severity == "warn"
     assert result.status_word == "NO LOG"
+
+
+def _far_expiry_check(row: tuple[str, str, str | None] | None, target_date: date) -> CheckResult:
+    """Run the far-expiry heartbeat check against a mocked ``cron_heartbeats`` row."""
+    with patch("scripts.healthcheck.connect") as mock_connect:
+        conn = mock_connect.return_value.__enter__.return_value
+        conn.execute.return_value.fetchone.return_value = row
+        return healthcheck_module._check_far_expiry_capture(Path("dummy.db"), target_date)
+
+
+def test_far_expiry_capture_ok_when_prev_trading_day_succeeded() -> None:
+    """Monday's 15:55 check is satisfied by Friday's 16:10 IST SUCCESS heartbeat."""
+    result = _far_expiry_check(("2026-10-09T10:40:00+00:00", "SUCCESS", None), date(2026, 10, 12))
+
+    assert result.severity == "ok"
+
+
+def test_far_expiry_capture_no_heartbeat_warns() -> None:
+    """Edge case: capture never ran — warn, not critical, not an exception."""
+    result = _far_expiry_check(None, date(2026, 10, 12))
+
+    assert result.severity == "warn"
+    assert result.status_word == "NO RUN"
+
+
+def test_far_expiry_capture_stale_is_critical() -> None:
+    """A heartbeat older than the previous trading day is a missed (unrecoverable) day."""
+    result = _far_expiry_check(("2026-10-07T10:40:00+00:00", "SUCCESS", None), date(2026, 10, 12))
+
+    assert result.severity == "critical"
+    assert result.status_word == "STALE"
+
+
+def test_far_expiry_capture_failed_status_is_critical() -> None:
+    """A recent heartbeat recording FAILED surfaces the script's message."""
+    result = _far_expiry_check(
+        ("2026-10-09T10:40:00+00:00", "FAILED", "All fetches failed"), date(2026, 10, 12)
+    )
+
+    assert result.severity == "critical"
+    assert result.status_word == "FAILED"
+    assert result.detail == "All fetches failed"
+
+
+def test_far_expiry_capture_malformed_last_run_warns_not_raises() -> None:
+    """Edge case: a corrupt last_run value must not crash the whole healthcheck."""
+    result = _far_expiry_check(("not-a-date", "SUCCESS", None), date(2026, 10, 12))
+
+    assert result.severity == "warn"
+    assert result.status_word == "ERROR"
+
+
+def test_far_expiry_capture_db_error_warns_not_raises() -> None:
+    """Edge case: a DB failure during the lookup degrades to a warning."""
+    with patch("scripts.healthcheck.connect", side_effect=RuntimeError("db down")):
+        result = healthcheck_module._check_far_expiry_capture(Path("dummy.db"), date(2026, 10, 12))
+
+    assert result.severity == "warn"
+    assert result.status_word == "ERROR"
 
 
 @pytest.mark.asyncio
