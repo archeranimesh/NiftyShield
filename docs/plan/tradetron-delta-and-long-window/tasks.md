@@ -14,7 +14,7 @@ spec.
 - [x] **TDL-5** — CC long-window funded run on template v2; cycles, exit mix, regime split, sample size | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: fbadfab
 - [ ] **TDL-6** — PP and Collar: live rules from code and the paper ground-truth table from the DB | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: —
 - [ ] **TDL-7** — PP and Collar templates: validate, pre-flight, create | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: —
-- [ ] **TDL-8** — PP and Collar funded runs and reconciliation | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: —
+- [ ] **TDL-8** — PP and Collar funded runs and reconciliation, plus a NiftyBees baseline run and NiftyBees-plus-overlay comparison | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: —
 - [ ] **TDL-9** — IC v1 and v2 buildability audit (free); GO, PARTIAL or STOP; no template unless GO | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: —
 - [ ] **TDL-10** — Verdict on the data-purchase question, save learnings, close and archive the story | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: —
 
@@ -30,7 +30,8 @@ spec.
   count.
 - **TDL-6** — `findings.md` lists every PP and Collar threshold the templates must encode with a code-sourced value and line, and a paper ground-truth table with sample sizes.
 - **TDL-7** — each PP and Collar template validates, has a recorded `tt_check_backtestability` verdict and GO, PARTIAL or STOP, and exists on Tradetron with its id recorded; or the skip is recorded.
-- **TDL-8** — at least one finished run per built template is logged and reconciled against paper over the overlapping window, with sample size next to each figure.
+- **TDL-8** — at least one finished run per built template is logged and reconciled against paper over the overlapping window, with sample size next to each figure, and a NiftyBees baseline run plus a
+  NiftyBees-plus-CC/PP/Collar comparison table.
 - **TDL-9** — `findings.md` lists which IC v1 and v2 rules Tradetron can and cannot express, with a GO, PARTIAL or STOP verdict; no IC run unless GO and Animesh approves it as a follow-up story.
 - **TDL-10** — the purchase question is answered in `findings.md`, platform findings are in `docs/reference/tradetron.md`, `DECISIONS.md` carries any decision, and the story is archived.
 

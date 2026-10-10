@@ -167,6 +167,9 @@ Committed now: ₹20 (TDL-5 run 1). Everything else is conditional and needs its
 **Approval: given by Animesh on 2026-10-10** for the ceiling of ₹80 (4 runs at the ₹20 quote), "use what is required". The story's spend rule still applies: each run is reconfirmed in-session against
 its workbench quote and the wallet balance before submit, and a quote above ₹20 stops the run for a new approval.
 
+Update 2026-10-10: after TDL-5, Animesh added a NiftyBees baseline run to TDL-8 and raised the ceiling to **₹100** (of which ₹20 is spent; wallet ₹140). Planned: PP, Collar and NiftyBees at ₹20 each,
+one spare run.
+
 ## CC long-window run (TDL-5)
 
 Run: template 999082574 (`NS CC Short Call POC v2`), window 2021-10-11 to 2026-10-01, `positional`, `Open` fill, 1-minute candles. Job `ttbt-999110942261010`, bt_id 999110942261010, report

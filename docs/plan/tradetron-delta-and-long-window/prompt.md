@@ -30,12 +30,14 @@ In scope: read-only queries of stored Upstox Greeks and chain data; free Tradetr
 GO, IC templates on Tradetron; funded runs after Animesh confirms each spend; findings and the save-map below.
 
 Out of scope: any change to `src/` or `scripts/` (a comparison script is allowed only if it will be reused, as a tested CLI in `scripts/dev/`; one-offs stay in `scratch/` per `SCRATCH.md`); editing
-the `greeks-bs-fallback` files (hand it a reference table in `findings.md` and let Animesh decide what GF-1 and GF-5 do with it); any live deployment with real orders; the NiftyBees stock leg and
-margin; IC runs unless TDL-9 returns GO (they become a follow-up story). Never record credentials, broker tokens or the wallet top-up link in any file.
+the `greeks-bs-fallback` files (hand it a reference table in `findings.md` and let Animesh decide what GF-1 and GF-5 do with it); any live deployment with real orders; the NiftyBees stock leg inside
+the overlay templates, and margin (a single NiftyBees buy-and-hold baseline run is in scope from 2026-10-10, see TDL-8); IC runs unless TDL-9 returns GO (they become a follow-up story). Never record
+credentials, broker tokens or the wallet top-up link in any file.
 
 Spend rule: no funded run before its free pre-flight says backtestable and Animesh has confirmed the spend in that session. Quote `next_run.quote` from `tt_backtest_workbench` verbatim; never estimate
 a price. A new run is needed only when the body, dates, type, expiry, fill price or candle frequency changes; reading a finished run is free. Wallet at the start of this story: about ₹160 (unverified;
-read `tt_wallet_balance` first). Expected runs: 1 to 2 for CC, 1 to 2 each for PP and Collar, so roughly 4 to 6 at ₹20 each; the count is an estimate, the price is Tradetron's.
+read `tt_wallet_balance` first). Expected runs: 1 to 2 for CC, 1 to 2 each for PP and Collar, plus one NiftyBees baseline (added 2026-10-10), so roughly 5 to 7 at ₹20 each, ceiling ₹100 approved; the
+count is an estimate, the price is Tradetron's.
 
 ## Design review
 

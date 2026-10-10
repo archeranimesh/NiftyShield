@@ -201,8 +201,11 @@ one-paragraph header and no task checkboxes. Run `python -m scripts.dev.reflow_m
 2. Reconcile against the TDL-6 paper tables on the overlapping window only, cycle by cycle (strike, entry, exit, P&L), separating strike selection, fill price and charges, with the sample size beside
    each comparison. Round-trip count and exit mix as in TDL-5.
 3. Plain verdict per strategy: reproduces, partially or not, and what a long window shows that paper cannot. No profitability claim.
+4. NiftyBees baseline (added 2026-10-10 at Animesh's request): one buy-and-hold NiftyBees run over the TDL-3 window (`tt_backtest_idea` preview is free; quote the run price verbatim; reconfirm the
+   spend). Then a combined table in `findings.md`: NiftyBees alone, plus CC, plus PP, plus Collar, same window, built from each run's daily `series` (free), with the NiftyBees position sized to the
+   overlay lot count and the coverage ratio stated. Columns: P&L, CAGR, max drawdown, worst 6 months, round trips per overlay. Overlay P&L only counts while a call or put is open; say so.
 
-**Done when:** runs are logged and reconciled in `findings.md`.
+**Done when:** runs are logged and reconciled in `findings.md`, and the NiftyBees-plus-overlay comparison table is there.
 
 **Commit:** `docs(plan): add PP and Collar Tradetron runs`
 
