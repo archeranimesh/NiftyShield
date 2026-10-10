@@ -42,7 +42,7 @@ decided scope of `greeks-bs-fallback/` (new `src/pricing/` package), not this ep
 | Story | Purpose | Status | Depends on | Closing SHA |
 |---|---|---|---|---|
 | `chart-core/` | Generic payoff math + opt-in registry + matplotlib renderer + `send_photo` + IC registration and wiring (entry / EOD / close) | ✅ Done (`6ef2a5f`) | — | `6ef2a5f` |
-| `chart-polish/` | Final PNG form: dark Roboto, one-row stat header, strike-labelled axis, exact-kink line, title + subtitle (CP-1..11) | 🔄 CP-1..5 merged (`e004a10`) | `chart-core/` | — |
+| `chart-polish/` | Final PNG form: dark Roboto, one-row stat header, strike-labelled axis, exact-kink line, title + subtitle (CP-1..11) | 🔄 CP-1..9 merged (`0b22d48`) | `chart-core/` | — |
 | `chart-model-overlay/` | Blue T+0 curve, ±1σ/±2σ bands, POP; adapters supply per-leg IV + DTE | ⬜ Not started | `chart-core/` + `chart-polish/` + `greeks-bs-fallback/` GF-2/GF-3 | — |
 
 Status: ⬜ Not started · 🔄 In progress · ✅ Done. This column is the epic's progress view — per-task checkboxes live only in each sub-story's `tasks.md`.

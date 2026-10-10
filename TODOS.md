@@ -166,6 +166,9 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-10] payoff chart polish CP-6..9 (Antigravity run `antigravity/chart-polish-b`: axis drawing helpers, dark Roboto `render_payoff_png` rewire, `HasSubtitle` + IC labels, sample CLI; tasks
+  `a5e1efd` `d2c58bb` `0e156de` `ae1a6c0`) reviewed clean and merged to main (`0b22d48`). Scratch POC removed. Next: **CP-10** (Animesh on-device sign-off via `python -m
+  scripts.dev.render_payoff_sample --out <path>`), then CP-11 docs close.
 - [2026-10-10] payoff chart polish CP-1..5 (Antigravity teamwork run `antigravity/chart-polish-a`) reviewed and merged to main (`e004a10`; tasks `4f36e5b` `5711b82` `2dae9ee` `e6ccec0` `d6e2bac`,
   review fixes `7ef011f` `548d2b4`). Next: Run 2 = CP-6..9 on a fresh `antigravity/chart-polish-b`; CP-10 sign-off and CP-11 docs close stay with Animesh/Claude.
 - [2026-10-10] far-expiry-capture FC-4 closed on Animesh's instruction (`12e7ccb`): cron line recorded in the new `findings.md`; story ✅ Done. First scheduled run is 2026-10-12; its `SUCCESS`

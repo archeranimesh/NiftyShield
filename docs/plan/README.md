@@ -34,9 +34,9 @@ No `src/` change, no DB schema change. Requested by Animesh 2026-10-08.
 (LM-1..5) → `logging-enforcement/` (LE-1..6: pre-commit checks, print ratchet, vocabulary lint, `LOGGING.md` rewrite). Print policy: interactive scripts may print results, cron-invoked never. New
 `job_runs` table (see the story's `schema.md`). Soft ordering after `design-discipline/design-gate/`. Requested by Animesh 2026-10-08.
 
-**`strategy-payoff-charts/`** · 🟡 In progress — `chart-core/` ✅ done (`6ef2a5f`), `chart-polish/` 🔄 CP-1..5 merged (`e004a10`), next **CP-6** (`chart-model-overlay/` MO-1 stays blocked on GF-2 + GF-3)
-Stockmock-style payoff diagram for any strategy (opt-in `@register_payoff` registry; Iron Condors first, one PNG per variation) attached to the entry, EOD-audit, and close Telegram messages. Two
-sub-stories: `chart-core/` (PC-1..19 — strategy-agnostic payoff math + registry
+**`strategy-payoff-charts/`** · 🟡 In progress — `chart-core/` ✅ done (`6ef2a5f`), `chart-polish/` 🔄 CP-1..9 merged (`0b22d48`), next **CP-10** (Animesh sign-off, then CP-11 docs close;
+`chart-model-overlay/` MO-1 stays blocked on GF-2 + GF-3) Stockmock-style payoff diagram for any strategy (opt-in `@register_payoff` registry; Iron Condors first, one PNG per variation) attached to
+the entry, EOD-audit, and close Telegram messages. Two sub-stories: `chart-core/` (PC-1..19 — strategy-agnostic payoff math + registry
 + matplotlib expiry-payoff renderer + `sendPhoto` on `TelegramNotifier`/`TelegramGateway` + IC registration and wiring into `paper_ic_entry`/`_v2`, `paper_ic_snapshot`, both
   `_send_close_notification`; no option model, ships now) → `chart-polish/` (CP-1..11 — dark Roboto redesign: one-row stat header, strike-labelled axis, exact-kink line; no new data) →
   `chart-model-overlay/` (MO-1..9 — blue T+0 curve + ±1σ/±2σ bands + POP; **blocked on `greeks-bs-fallback/` GF-2 + GF-3** for the shared `src/pricing/` pricer + IV solver). Modeling decisions (rate /
