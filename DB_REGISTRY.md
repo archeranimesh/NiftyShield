@@ -26,6 +26,8 @@ Grain column lists the unique key; cardinality is 1 row per that key unless note
 | `daily_snapshots` | `PortfolioStore` → `scripts/portfolio/daily_snapshot.py` | `45 15 * * 1-5` | `(leg_id, snapshot_date)` | **Live** option Greeks/LTP/OI snapshot, joins `legs` — note F |
 | `dhan_{holdings,margin,options}_snapshots` | `src/dhan/store.py` → `dhan_intraday_tracker.py` | intraday `*/5 9-15 * * 1-5` | varies | Dhan-side live holdings/margin/options mirror — note G |
 | `nuvama_{intraday,options,holdings}_snapshots` | `src/nuvama/store.py` → Nuvama polling scripts | intraday | varies | Nuvama-side live positions/holdings mirror — note H |
+<!-- lint-ignore-length -->
+| `far_expiry_chain_snapshots` | `FarExpiryStore.record_chain()` → `capture_far_expiry_chain.py` | daily (post-close) | `(snapshot_date, expiry, strike, option_type, source)` | Far-expiry chain history for liquidity tracking. |
 | `intraday_market_snapshots` | `src/intraday/market_store.py` → `intraday_tracker` | `*/5 9-15 * * 1-5` | timestamp | Nifty spot + India VIX tick snapshots, market hours only. |
 | `mf_nav_snapshots` | `MFStore.upsert_nav_snapshot()` / `upsert_nav_snapshots_bulk()` → AMFI NAV fetcher | daily (see `scripts/mf/`) | `(amfi_code, snapshot_date)` | MF NAV history, AMFI-sourced. |
 
