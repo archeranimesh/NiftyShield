@@ -1,5 +1,13 @@
+import math
+from collections.abc import Sequence
 from dataclasses import dataclass
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from matplotlib.figure import Figure
+
+    from .payoff_chart_theme import ChartTheme
 from enum import Enum
 
 from src.notifications.formatting import format_money_whole, format_pct_signed, format_strike
@@ -27,7 +35,7 @@ def build_header_cells(
     *,
     spot: Decimal | None = None,
     margin: Decimal | None = None,
-    current_pnl: Decimal | None = None
+    current_pnl: Decimal | None = None,
 ) -> list[HeaderCell]:
     cells = []
 
@@ -148,24 +156,25 @@ def build_header_cells(
     return cells
 
 
-import math
-from typing import Sequence
-
 @dataclass(frozen=True)
 class Slot:
     index: int
     left: float
     width: float
 
+
 @dataclass(frozen=True)
 class HeaderLayout:
     rows: list[list[Slot]]
     scale: float
 
-def pack_header(widths: Sequence[float], avail: float, *, min_gap: float = 0.14, floor: float = 0.8) -> HeaderLayout:
+
+def pack_header(
+    widths: Sequence[float], avail: float, *, min_gap: float = 0.14, floor: float = 0.8
+) -> HeaderLayout:
     if not widths:
         return HeaderLayout(rows=[], scale=1.0)
-    
+
     def calc_scale(w_list):
         if sum(w_list) == 0:
             return 1.0
@@ -174,7 +183,7 @@ def pack_header(widths: Sequence[float], avail: float, *, min_gap: float = 0.14,
     def build_row(w_list, scale, index_offset):
         if len(w_list) == 1:
             return [Slot(index_offset, 0.0, w_list[0])]
-        
+
         total_scaled = sum(w * scale for w in w_list)
         gap = (avail - total_scaled) / (len(w_list) - 1)
         slots = []
@@ -187,16 +196,17 @@ def pack_header(widths: Sequence[float], avail: float, *, min_gap: float = 0.14,
     scale = calc_scale(widths)
     if scale >= floor:
         return HeaderLayout(rows=[build_row(widths, scale, 0)], scale=scale)
-    
+
     n1 = math.ceil(len(widths) / 2)
     w1 = widths[:n1]
     w2 = widths[n1:]
-    
+
     final_scale = min(calc_scale(w1), calc_scale(w2))
     row1 = build_row(w1, final_scale, 0)
     row2 = build_row(w2, final_scale, n1)
-    
+
     return HeaderLayout(rows=[row1, row2], scale=final_scale)
+
 
 MARGIN_X = 0.03
 AVAIL_WIDTH_FRAC = 0.94
@@ -215,7 +225,8 @@ LABEL_DY = 0.0
 VALUE_DY = -0.035
 SUB_DY = -0.07
 
-def get_tone_color(tone: Tone, theme) -> str:
+
+def get_tone_color(tone: Tone, theme: "ChartTheme") -> str:
     if tone == Tone.POSITIVE:
         return theme.green
     elif tone == Tone.NEGATIVE:
@@ -224,47 +235,102 @@ def get_tone_color(tone: Tone, theme) -> str:
         return theme.muted
     return theme.ink
 
-def draw_header(fig, title: str, subtitle: str, cells: list[HeaderCell], theme, family: str) -> int:
-    fig.text(MARGIN_X, TITLE_Y, title, fontsize=TITLE_SIZE, fontweight="bold", color=theme.ink, fontfamily=family, va="baseline", ha="left")
+
+def draw_header(
+    fig: "Figure",
+    title: str,
+    subtitle: str,
+    cells: list[HeaderCell],
+    theme: "ChartTheme",
+    family: str,
+) -> int:
+    fig.text(
+        MARGIN_X,
+        TITLE_Y,
+        title,
+        fontsize=TITLE_SIZE,
+        fontweight="bold",
+        color=theme.ink,
+        fontfamily=family,
+        va="baseline",
+        ha="left",
+    )
     if subtitle:
-        fig.text(MARGIN_X, SUBTITLE_Y, subtitle, fontsize=SUBTITLE_SIZE, color=theme.muted, fontfamily=family, va="baseline", ha="left")
+        fig.text(
+            MARGIN_X,
+            SUBTITLE_Y,
+            subtitle,
+            fontsize=SUBTITLE_SIZE,
+            color=theme.muted,
+            fontfamily=family,
+            va="baseline",
+            ha="left",
+        )
 
     if not cells:
         return 0
 
     renderer = fig.canvas.get_renderer()
-    
+
     widths = []
     for cell in cells:
         t1 = fig.text(0, 0, cell.label, fontsize=LABEL_SIZE, fontfamily=family)
         t2 = fig.text(0, 0, cell.value, fontsize=VALUE_SIZE, fontweight="bold", fontfamily=family)
         t3 = fig.text(0, 0, cell.sub, fontsize=SUB_SIZE, fontfamily=family)
-        
+
         w1 = t1.get_window_extent(renderer).width / fig.dpi
         w2 = t2.get_window_extent(renderer).width / fig.dpi
         w3 = t3.get_window_extent(renderer).width / fig.dpi if cell.sub else 0
-        
+
         widths.append(max(w1, w2, w3))
-        
+
         t1.remove()
         t2.remove()
         t3.remove()
 
     avail_inches = fig.get_figwidth() * AVAIL_WIDTH_FRAC
     layout = pack_header(widths, avail_inches)
-    
+
     fig_width = fig.get_figwidth()
-    
+
     for row_idx, row in enumerate(layout.rows):
         y_base = CELL_START_Y - row_idx * ROW_PITCH
-        
+
         for slot in row:
             cell = cells[slot.index]
             x_center = MARGIN_X + (slot.left + (slot.width * layout.scale) / 2) / fig_width
-            
-            fig.text(x_center, y_base + LABEL_DY, cell.label, fontsize=LABEL_SIZE * layout.scale, color=theme.muted, fontfamily=family, ha="center", va="baseline")
-            fig.text(x_center, y_base + VALUE_DY, cell.value, fontsize=VALUE_SIZE * layout.scale, fontweight="bold", color=get_tone_color(cell.value_tone, theme), fontfamily=family, ha="center", va="baseline")
+
+            fig.text(
+                x_center,
+                y_base + LABEL_DY,
+                cell.label,
+                fontsize=LABEL_SIZE * layout.scale,
+                color=theme.muted,
+                fontfamily=family,
+                ha="center",
+                va="baseline",
+            )
+            fig.text(
+                x_center,
+                y_base + VALUE_DY,
+                cell.value,
+                fontsize=VALUE_SIZE * layout.scale,
+                fontweight="bold",
+                color=get_tone_color(cell.value_tone, theme),
+                fontfamily=family,
+                ha="center",
+                va="baseline",
+            )
             if cell.sub:
-                fig.text(x_center, y_base + SUB_DY, cell.sub, fontsize=SUB_SIZE * layout.scale, color=get_tone_color(cell.sub_tone, theme), fontfamily=family, ha="center", va="baseline")
+                fig.text(
+                    x_center,
+                    y_base + SUB_DY,
+                    cell.sub,
+                    fontsize=SUB_SIZE * layout.scale,
+                    color=get_tone_color(cell.sub_tone, theme),
+                    fontfamily=family,
+                    ha="center",
+                    va="baseline",
+                )
 
     return len(layout.rows)

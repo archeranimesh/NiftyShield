@@ -34,20 +34,21 @@ DARK = ChartTheme(
 
 _font_lock = threading.Lock()
 
-@functools.lru_cache(maxsize=None)
+
+@functools.cache
 def chart_font_family(font_dir: Path | None = None) -> str:
     with _font_lock:
         try:
             if font_dir is None:
                 font_dir = Path(__file__).parent / "assets" / "fonts"
-            
+
             reg_path = font_dir / "Roboto-Regular.ttf"
             bold_path = font_dir / "Roboto-Bold.ttf"
-            
+
             fm.fontManager.addfont(str(reg_path))
             fm.fontManager.addfont(str(bold_path))
-            
+
             return "Roboto"
-        except Exception as e:
+        except Exception as e:  # EAFP: font failure must not take the chart down
             logger.warning("payoff_chart.font_fallback", error=str(e))
             return "DejaVu Sans"
