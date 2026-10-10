@@ -41,7 +41,7 @@ Decided with Animesh on 2026-10-06:
 | Story | Purpose | Status | Depends on | Closing SHA |
 |---|---|---|---|---|
 | `dhan-chain-adapter/` | Renewal decision, fixtures, `DhanMarketClient`, chain-source selection | 🔄 In progress | — | — |
-| `far-expiry-capture/` | Storage decision, daily capture entrypoint, cron, liquidity report | 🔄 In progress | `dhan-chain-adapter` | — |
+| `far-expiry-capture/` | Storage decision, daily capture entrypoint, cron, liquidity report | ✅ Done | `dhan-chain-adapter` | `12e7ccb` |
 | `far-expiry-liquidity-gate/` | Calibrated gate with fallback ladder, roll-window decision | ⬜ Not started | `far-expiry-capture` (data) | — |
 
 Status: ⬜ Not started · 🔄 In progress · ✅ Done. This column is the epic's progress view — per-task checkboxes live only in each sub-story's `tasks.md`.

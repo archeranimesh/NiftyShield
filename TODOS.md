@@ -166,6 +166,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-10] far-expiry-capture FC-4 closed on Animesh's instruction (`12e7ccb`): cron line recorded in the new `findings.md`; story ✅ Done. First scheduled run is 2026-10-12; its `SUCCESS`
+  heartbeat is still to be observed (needs a fresh Dhan token). `far-expiry-liquidity-gate/` stays blocked on about 15 captured days.
 - [2026-10-10] healthcheck far-expiry capture heartbeat check (`12e7ccb`): `_check_far_expiry_capture` requires the prior trading day's `capture_far_expiry` SUCCESS heartbeat (capture 16:10 runs after
   the 15:55 healthcheck); NO RUN = warn, STALE/FAILED = critical. FC-4's healthcheck half is done; only the cron install remains (Animesh).
 - [2026-10-10] far-expiry-capture FC-2/FC-3/FC-5 merged (`7f178c1`; feature `51b0fce` `857fe6b` `2751a40`, three review-fix rounds): `src/far_expiry/` SQLite store, `capture_far_expiry_chain.py`,
