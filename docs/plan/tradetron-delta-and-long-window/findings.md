@@ -121,3 +121,48 @@ DTE <= 5, 2.5x) will fire or not on this data, which is the point of the run.
 
 **Decision (spend waits for TDL-4):** one run of template 999082574, window 2021-10-11 to 2026-10-01, `type=positional`, `trade_price=Open`, 1-minute candles. Quote ₹20 (Tradetron's `next_run.quote`,
 credits 1). Expected CC runs: 1, rising to 2 only if the first run fails on pre-April expiry resolution and a later start date is needed. Wallet ₹160 covers it.
+
+## Comparator and budget (TDL-4)
+
+Read-only inventory on 2026-10-10 (`DB_REGISTRY.md` read first; file date ranges from `pyarrow` aggregates, DB figures from one grouped `paper_trades` query). Graph confirms the readers exist:
+`ChainWriter`, `ChainReader` (`get_eod_snapshots`, `get_intraday_snapshots`, `get_strike_delta_series`), `bhavcopy_ingest` (`parse_bhavcopy`, `download_bhavcopy`, `write_to_parquet`),
+`bhavcopy_loader.load_options_ohlcv`, `vix_ingest`, `compute_ivr`, `equity_bhavcopy_ingest` (equity and index).
+
+<!-- lint-ignore-length -->
+| Own-side data | Location | Range found | Size |
+|---|---|---|---|
+| NIFTY options OHLCV (F&O bhavcopy, parquet) | `data/offline/options_ohlcv/` | 2016-01 to 2017-05 and 2026-05 to 2026-06 only; 19 files, 685,452 rows, 330 trade dates | 7.9 MB `data/offline` total |
+| NIFTY futures OHLCV | `data/offline/futures_ohlcv/` | 2026-06 only | 1 file |
+| NIFTY index and equity daily | `data/offline/nifty_index/`, `equity_ohlcv/` | 2025-07 to 2026-09 | 15 files each |
+| Upstox chain, intraday (with delta) | `data/historical/option_chain/intraday/` | 2026-06-01 to 2026-10-07 | 273 MB with `eod` |
+| Upstox chain, EOD | `data/historical/option_chain/eod/` | 2026-06 to 2026-10, 249 files | |
+| India VIX daily | `data/historical/ohlc/india_vix/` | 2016 to 2026 yearly parquet, plus two NSE CSVs | 192 KB |
+| Raw bhavcopy CSV outside the repo | `~/Documents/trade/fno-bhav/` | `fo060224.csv`, `op060224.csv` (one day, 2024-02-06) | 2 files |
+| Paper CC, Collar and PP legs | `paper_trades`, strategy `paper_nifty_overlay` | 2026-08-11 to 2026-10-07, 25 rows (all overlay roles together) | |
+
+Findings:
+
+- **No own-side data covers 2021-10 to 2026-04, about 55 of the 60 months in the TDL-3 window.** The options bhavcopy has a 17-month block in 2016 to 2017 and a 2-month block in 2026; the Upstox chain
+  with delta starts 2026-06-01; paper starts 2026-08-11. Only 2026-05 to 2026-10 has any overlap with a Tradetron run.
+- **A CC, PP or Collar cycle list cannot be built offline today** over the window. It would need the bhavcopy backfilled for 2021-10 to 2026-04 (the existing bootstrap CLI, `bhavcopy_bootstrap`,
+  defaults to 2016-01-01 and can fetch it; not run here) and then a delta source. Bhavcopy has no Greeks, so a model delta would be needed, which overlaps `greeks-bs-fallback` and is out of scope for
+  this story.
+- **Comparator for a long Tradetron run: none outside 2026-08-11 onward** (paper), and the stored Upstox chain from 2026-06-01 for strike-level delta checks. A long run is therefore interpretable only
+  as a **screen of rule viability, cycle count and exit mix**, with rupee P&L scale unreliable (lot-size changes, TDL-3). It cannot be reconciled against anything for the pre-2026 years.
+- **Go or no-go: GO for TDL-5 as a screen**, on that limited reading. TDL-8 depends on PP and Collar templates that do not exist yet (TDL-6, TDL-7), so its go is deferred to TDL-7's verdicts.
+
+Budget proposed (Tradetron's own quote is ₹20 per run for the CC template; PP and Collar quotes are unknown until those templates exist and must be re-read from `tt_backtest_workbench`):
+
+<!-- lint-ignore-length -->
+| Item | Runs | At quote | Condition |
+|---|---|---|---|
+| TDL-5 CC, 2021-10-11 to 2026-10-01 | 1 | ₹20 | funded after in-session reconfirmation |
+| TDL-5 contingency, later start date if pre-April expiry fails | 1 | ₹20 | only if run 1 fails |
+| TDL-8 PP, same window | 1 | ₹20 if quote unchanged | only if TDL-7 gives GO or PARTIAL |
+| TDL-8 Collar, same window | 1 | ₹20 if quote unchanged | only if TDL-7 gives GO or PARTIAL |
+| **Ceiling** | **4** | **₹80** | of ₹160 wallet read 2026-10-10 |
+
+Committed now: ₹20 (TDL-5 run 1). Everything else is conditional and needs its own in-session confirmation, per the story's spend rule.
+
+**Approval: given by Animesh on 2026-10-10** for the ceiling of ₹80 (4 runs at the ₹20 quote), "use what is required". The story's spend rule still applies: each run is reconfirmed in-session against
+its workbench quote and the wallet balance before submit, and a quote above ₹20 stops the run for a new approval.
