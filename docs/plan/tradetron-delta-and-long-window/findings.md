@@ -83,3 +83,41 @@ Measured results, n = 8 instruments, one timestamp:
 Reference for `greeks-bs-fallback` GF-1 and GF-5 (input only; that story's files are untouched): this is a third-party delta on Dec 2026 contracts that agrees with Upstox to ~0.004 near the money, so
 for these strikes today a Black-Scholes fallback would have had nothing to correct. Limits: one timestamp, four Dec strikes, Tradetron's delta methodology unknown (another model, not ground truth),
 and the zero-Greek condition that motivated GF was absent on the day, so this does not test the fallback on the case it exists for. A re-run on a day the yearly bucket shows zeros would.
+
+## Long-window pre-flight (TDL-3)
+
+Template 999082574 (`NS CC Short Call POC v2`), read with `tt_get_strategy`: 2 entry/exit sets plus a blank Universal Exit, leg instrument id 1855 (NIFTY 50). Wallet read first with
+`tt_wallet_balance` on 2026-10-10: **₹160**, backtest price ₹20, prepaid pack 0 spendable (cycle ended 2023-07-24). The template has **no finished run**; `tt_backtest_workbench` shows `runs.count` 0,
+so nothing is readable for free yet.
+
+<!-- lint-ignore-length -->
+| Window | Check call | Verdict (verbatim) | Confidence | Skipped checks | Quote |
+|---|---|---|---|---|---|
+| 2021-10-11 to 2026-10-01 (60 months), leg instrument id omitted by mistake | `tt_check_backtestability` | `unknown` (warning `EXCHANGE_UNRESOLVED`) | low | `data_coverage`, `coverage_window` | n/a |
+| 2021-10-11 to 2026-10-01 (60 months), with instrument id | `tt_check_backtestability` | `backtestable` | high | none | credits 1, amount 20 |
+| 2015-01-01 to 2026-10-01 (about 141 months, probe for a data floor) | `tt_check_backtestability` | `backtestable` | high | none | not quoted |
+| 2026-04-01 to 2026-10-01 (post expiry change) | `tt_backtest_workbench` only | not pre-flighted; the check ignores the window on this template | n/a | n/a | credits 1, amount 20 |
+
+Measured results:
+
+- **Blockers and warnings: none** once the instrument id is present. `checks_run` includes `data_coverage`, `underlying_data_coverage` and `coverage_window`; `keyword_surface` found `Find Strike`,
+  `Delta`, `Current Month Expiry`, `Select Expiry` and `Days Difference` all in the BT engine. `run_type_recommendation` is `positional`, strong, evidence: Exit references days-difference and NRML
+  legs.
+- **A template without instrument ids silently skips the coverage checks.** The first call returned `unknown`, not an error. Pass the leg `instrument` field when pre-flighting a hand-built body; this
+  is a platform fact for the reference doc.
+- **The check does not say where NIFTY option data starts.** A window starting 2015-01-01 passed `coverage_window` with no warning, so either coverage reaches back that far or the gate does not test
+  NIFTY options. The output carries no `coverage_from` value. That the first call's `EXCHANGE_UNRESOLVED` text says per-exchange `coverage_from` gates exist is all we learn. Data start is therefore
+  **not established**; the funded run's first fill is what will show it.
+- **The check does not mention the April 2026 Thursday-to-Tuesday expiry change.** TDL-3's question cannot be answered from the check. The archived CC run already traded the 2026-09-29 and 2026-10-27
+  Tuesday monthlies, so the Tuesday regime resolves; whether pre-April Thursday monthlies resolve through `Current Month Expiry` is untested until the run.
+- **`max_months` is 60** in the workbench, yet the 141-month probe was not declined by the check; `decline_reason` was null on every workbench call. Treat 60 months as the cap a submit will enforce
+  (inference; the submit tool is the authority).
+- **Price is flat.** Every window quoted credits 1, amount ₹20; no per-month scaling appeared. The 2026-04-01 window is a subset of the 60-month window, so it needs no run of its own: the post-April
+  split in TDL-5 is a free slice of one 60-month run, by entry date.
+
+Caveats a long window will hit (inferences, none tested): NIFTY lot size changed over 2021 to 2026 (the template sizes by lots, so rupee P&L is not comparable across the window; read price ratios, not
+rupees); 1-minute candles over 60 months is a large run, runtime unknown; the Thursday-expiry era has 4 DTE and weekly structure the live rule set never saw; and the skipped-delta paths (0.55 delta,
+DTE <= 5, 2.5x) will fire or not on this data, which is the point of the run.
+
+**Decision (spend waits for TDL-4):** one run of template 999082574, window 2021-10-11 to 2026-10-01, `type=positional`, `trade_price=Open`, 1-minute candles. Quote ₹20 (Tradetron's `next_run.quote`,
+credits 1). Expected CC runs: 1, rising to 2 only if the first run fails on pre-April expiry resolution and a later start date is needed. Wallet ₹160 covers it.
