@@ -15,7 +15,7 @@ unchanged. Six sub-stories: `yearly-foundation/` (YF-1..6 audit, fixtures, `Over
 `yearly-pp/` (YP-1..2) → `yearly-collar/` (YL-1..2) → `yearly-ops-wiring/` (YW-1..3) → `yearly-validation/` (YV-1..5, independence + dry-run + live smoke + IC coexistence + paper-run runbook). No DB
 schema change expected (confirmed in YF-1). Requested by Animesh 2026-10-06.
 
-**`dhan-far-expiry-chain/`** · ⬜ Not started — Dhan live chain as the Greeks source for Dec 2027 (Upstox returns zero past ~100 DTE), daily forward capture, and a data-calibrated liquidity gate and
+**`dhan-far-expiry-chain/`** · 🔄 In progress — Dhan live chain as the Greeks source for Dec 2027 (Upstox returns zero past ~100 DTE), daily forward capture, and a data-calibrated liquidity gate and
 roll window. Three sub-stories: `dhan-chain-adapter/` (DA-0..3) → `far-expiry-capture/` (FC-1..5) → `far-expiry-liquidity-gate/` (FG-1..3, blocked on captured history). Deadline: Dhan data plan lapses
 2026-11-04 (DA-0 renewal decision). Feeds `yearly-overlays/`. Requested by Animesh 2026-10-06.
 

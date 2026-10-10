@@ -2,16 +2,16 @@
 
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit.
 
-**Open: FC-2..FC-5.**
+**Open: FC-4.**
 
 - [x] **FC-1** — Storage decision: audit `ChainWriter` Parquet versus a SQLite table against `DB_REGISTRY.md`; record the choice in `DECISIONS.md` (add `schema.md` only if SQLite) | Owner: Claude |
   Model: claude-sonnet-5-5 | Review: none | SHA: 5e09c40
-- [ ] **FC-2** — Writer/reader for far-expiry snapshots per FC-1, with a pure `chain_to_liquidity_rows` reducer | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: —
-- [ ] **FC-3** — `scripts/pipeline/capture_far_expiry_chain.py`: trading-day guard, expiries from `get_expiry_candidates`, 4 s spacing, heartbeat, `LOGGING.md` shape | Owner: Antigravity | Model:
-  claude-sonnet-5-5 | Review: code-reviewer | SHA: —
+- [x] **FC-2** — Writer/reader for far-expiry snapshots per FC-1, with a pure `chain_to_liquidity_rows` reducer | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: 51b0fce
+- [x] **FC-3** — `scripts/pipeline/capture_far_expiry_chain.py`: trading-day guard, expiries from `get_expiry_candidates`, 4 s spacing, heartbeat, `LOGGING.md` shape | Owner: Antigravity | Model:
+  claude-sonnet-5-5 | Review: code-reviewer | SHA: 857fe6b
 - [ ] **FC-4** — Add the daily cron on the Mac host and register the heartbeat with `healthcheck.py` | Owner: Animesh | Model: n/a | Review: none | SHA: —
-- [ ] **FC-5** — `scripts/dev/far_expiry_liquidity_report.py`: per expiry and day, target-delta strike quote status, spread %, OI, count of non-zero-delta rows | Owner: Antigravity | Model: n/a |
-  Review: code-reviewer | SHA: —
+- [x] **FC-5** — `scripts/dev/far_expiry_liquidity_report.py`: per expiry and day, target-delta strike quote status, spread %, OI, count of non-zero-delta rows | Owner: Antigravity | Model: n/a |
+  Review: code-reviewer | SHA: 2751a40
 
 ## Story done when
 

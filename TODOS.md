@@ -166,6 +166,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-10] far-expiry-capture FC-2/FC-3/FC-5 merged (`7f178c1`; feature `51b0fce` `857fe6b` `2751a40`, three review-fix rounds): `src/far_expiry/` SQLite store, `capture_far_expiry_chain.py`,
+  `far_expiry_liquidity_report.py`. FC-4 (cron + healthcheck heartbeat) is Animesh's and is what starts the 15-day clock; DA-0 renewal decision still due 2026-11-04.
 - [2026-10-10] far-expiry-capture FC-1 (`5e09c40`): capture storage = SQLite `far_expiry_chain_snapshots` (Parquet `ChainWriter` rejected: coerces missing Greeks to 0, no source key); `schema.md`
   added. FC-2..FC-5 next; Antigravity runs them sequentially on branch `antigravity/far-expiry-capture`, Claude reviews before merge.
 - [2026-10-08] BUG-075 closed and archived (docs only, fix `cf3e0d1`): sizing did not drive the 10-08 profit-lock/target closes (stale BUG-073 hedge did); cycle P&L exact, 1-unit rows net -2.40 /

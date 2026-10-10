@@ -181,6 +181,12 @@ src/
 │   ├── data/nse_2026.yaml    # NSE 2026 equity holiday list — version-controlled config (src/ not data/ because data/ is gitignored). Update each January.
 │   └── holidays.py           # NSE equity holiday detection. load_holidays(year) → frozenset[date] (cached, fail-open on missing YAML). is_trading_day(d) → bool (weekday AND not in holiday set).
 │                             #   prev_trading_day(d) → date (walks back to nearest prior trading day).
+├── far_expiry/
+│   ├── __init__.py           # Package marker
+│   └── store.py              # FarExpiryStore(db_path): SQLite store for far_expiry_chain_snapshots (schema: docs/plan/dhan-far-expiry-chain/far-expiry-capture/schema.md).
+│                             #   record_chain(snapshot_date, captured_at, underlying, source, chain) — idempotent on the unique key; read_chain_snapshots(...) → list[FarExpiryRow].
+│                             #   Missing Greeks round-trip as None (SQL NULL), never 0. Pure chain_to_liquidity_rows(chain) / stored_row_to_liquidity_row(row) → LiquidityRow.
+│                             #   Writer: scripts/pipeline/capture_far_expiry_chain.py (Dhan, source="dhan"); reader: scripts/dev/far_expiry_liquidity_report.py.
 ├── intraday/
 │   ├── __init__.py           # Package marker
 │   └── market_store.py       # IntradayMarketStore: broker-agnostic SQLite store for intraday_market_snapshots table.
