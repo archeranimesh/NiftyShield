@@ -272,6 +272,22 @@ baselines. Rows carry no P&L and no `report_url`. Row order was oldest-first in 
 - **Default cost model on the report:** slippage 0.05%, STT 0.15%, exchange 0.03503%, GST 18%, no brokerage; about 0.4% of gross on a 12-order short-call book. MAE and MFE are not produced.
 - **Fleet runs finished within a few minutes of submit** (not timed to the second); poll `tt_backtest_status`, then read fills with `tt_backtest_trades` and figures with `tt_backtest_result` for free.
 
+**2026-10-10, CC long-window run (`docs/plan/tradetron-delta-and-long-window/findings.md`), job `ttbt-999110942261010`, 2021-10-11 to 2026-10-01, `positional`, `Open`, 1-minute:**
+
+- **Pre-flight needs the leg `instrument` id.** `tt_check_backtestability` on a body without leg instrument ids returns `unknown` with `EXCHANGE_UNRESOLVED` and skips `data_coverage` and
+  `coverage_window`; with id 1855 present it returns `backtestable`, high confidence. The check gives no data-start date: a window from 2015-01-01 passed with no warning, so it is not a coverage
+  floor. Flat quote ₹20 for every window.
+- **A 60-month, 1-minute run is accepted and finishes, but slowly.** It took about 35 minutes and the status flipped between `queued` and `running` several times. Fleet runs of 7 weeks finish in
+  minutes. The submit can also fail once with `BT_FLEET_UNAVAILABLE` (retryable, nothing charged), which consumes the confirmation token; re-quote and confirm again.
+- **The submit response's `billing` block can say ₹0 when the wallet is charged.** The wallet went ₹160 to ₹140 for one run. Verify with `tt_wallet_balance`.
+- **Coverage gaps are reported, not fatal.** 4 sessions with no data and 5 skipped in 5 years; the report raises `COVERAGE_PARTIAL` (high) and says every total is over a shorter period.
+- **Pre-2025 NIFTY monthlies resolve through `Current Month Expiry`/`Find Strike` on delta 0.15** back to 2021-10 (first fill: 28-OCT-2021 contract). Tradetron's expiry calendar shows Tuesday
+  monthlies from 2025-09-30; `REFERENCES.md` says April 2026, and the two disagree.
+- **Every fill carries quantity 65**, including 2021, so rupee P&L across the window uses today's lot size, not the lot of the day.
+- **The per-trade index ages out after a few days** (the workbench says so); save the paired round trips to a file when a run matters. `tt_backtest_trades` has no column selector, so 392 fills are
+  about 150k tokens inline; pair them in a subagent or script and return aggregates.
+- **No exit-reason column, still.** Exit type had to be inferred from the exit-price ratio and DTE. `exit_attribution` shows only "Set exit" and "Window end".
+
 ## Open questions
 
 - Do any recent runs exist on the account? Page `tt_list_backtests` or call `tt_list_my_strategies` and then `tt_backtest_workbench`.

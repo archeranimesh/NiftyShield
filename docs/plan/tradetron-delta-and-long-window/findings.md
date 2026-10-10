@@ -166,3 +166,64 @@ Committed now: ₹20 (TDL-5 run 1). Everything else is conditional and needs its
 
 **Approval: given by Animesh on 2026-10-10** for the ceiling of ₹80 (4 runs at the ₹20 quote), "use what is required". The story's spend rule still applies: each run is reconfirmed in-session against
 its workbench quote and the wallet balance before submit, and a quote above ₹20 stops the run for a new approval.
+
+## CC long-window run (TDL-5)
+
+Run: template 999082574 (`NS CC Short Call POC v2`), window 2021-10-11 to 2026-10-01, `positional`, `Open` fill, 1-minute candles. Job `ttbt-999110942261010`, bt_id 999110942261010, report
+`https://tradetron.tech/bt/view/4417598c213766612670be9cc5dc7755`. Price paid ₹20 (wallet ₹160 to ₹140; the submit response's billing block said ₹0 and was wrong, so trust the wallet). The first
+confirm failed with `BT_FLEET_UNAVAILABLE` (nothing charged, token consumed, re-quoted at the same ₹20). The run then sat between queued and running for about 35 minutes before finishing. The
+per-trade index ages out after a few days, so the paired round trips are saved in `cc_long_window_cycles.md` in this folder (196 rows: entry and exit time, expiry, strike, credit, exit price, ratio,
+gross, set, inferred exit type). Gross P&L over the CSV is 52,877.50, equal to the report's gross.
+
+Headline, report figures, 1 lot, nominal capital ₹100,000: **196 round trips** (195 rule exits plus one window-end close), gross ₹52,877.50, costs ₹2,074.70, net ₹50,802.80, win rate 71.9%, average
+win ₹2,696, average loss ₹5,950 (win/loss 0.45), profit factor 1.16, maximum drawdown ₹43,375 net (43.4% of nominal capital, 1,069 days from 2023-04-19 to recovery on 2026-03-23). Worst single trip
+₹19,393. Report caveats: `COVERAGE_PARTIAL` high severity (4 sessions had no data, 5 were skipped, so totals cover a shorter period than asked); Sharpe, Sortino and Calmar withheld by the report; MAE
+and MFE not produced. Under the 30-round-trip flag this is not: 196 is well above it, but the coverage caveat and the lack of exit reasons mean this is a screen of rule viability and exit mix, not an
+edge.
+
+Exit mix by exit-price ratio, 195 rule exits (exit type is **inference** from ratio and DTE; the report has no exit-reason column):
+
+<!-- lint-ignore-length -->
+| Inferred exit | Rule | Trips | Share | Gross sum | Mean gross | Mean hold (days) |
+|---|---|---|---|---|---|---|
+| Target | ratio <= 0.30 | 139 | 71.3% | +375,622 | +2,702 | 9.6 |
+| Loss | ratio >= 2.5 | 51 | 26.2% | -314,324 | -6,163 | 7.3 |
+| DTE | exit within 5 days of expiry, ratio between | 4 | 2.1% | -3,416 | -854 | 19.2 |
+| Other (0.55-delta candidate) | ratio between, DTE > 5 | 1 | 0.5% | -7,290 | -7,290 | 21.2 |
+
+Untested paths that fired: **the 2.5x loss exit fired 51 times** (it never fired in the 6-trip archived run), the **DTE <= 5 exit 4 times**, and the **0.55-delta exit at most once** (the single Other
+trip; the delta trigger cannot be told from the other exits without a reason column). The minimum entry credit was 21.5, so the "entry price >= 15" guard on the target never blocked a trip. The five
+worst losses were 2026-04-02 (23900 CE, credit 105.35, exit 403.70, ratio 3.83, -19,393), 2026-01-28 (26250, -11,895), 2022-01-04 (-10,212), 2022-03-08 (-9,887) and 2026-06-09 (-9,035). Three of the
+five exited at round-number prices (250, 200, 200), which looks like gap fills past the 2.5x trigger (inference). 89 of the 196 exits share their minute with the next entry (immediate same-minute
+re-entry, the known flat-gate behaviour).
+
+Regime split. **Correction to the story premise: Tradetron's data shows Tuesday monthly expiries from 2025-09-30, not April 2026.** The monthly expiries in the run read Thu through 2025-08-28, then
+Tue on 2025-09-30, 10-28, 11-25, 12-30, 2026-01-27, 02-24, then Mon 2026-03-30 (a holiday shift), then Tue from 2026-04-28. `REFERENCES.md` says the change happened in April 2026; the two disagree and
+this story does not edit that file. Flagged for Animesh. Pre-April Thursday monthlies resolve fine (the first fill is a 2021-10-28 contract), which answers the TDL-3 open question. Holiday-shifted
+Mon, Wed and non-Thursday expiries occur throughout, so the split below is by expiry date.
+
+<!-- lint-ignore-length -->
+| Split | Trips | Gross | Win rate | Exit mix (target / loss / DTE / other) |
+|---|---|---|---|---|
+| Thursday era, expiry before 2025-09-01 | 155 | +7,829 | 68% | 106 / 45 / 3 / 1 |
+| Tuesday era, expiry from 2025-09-30 | 40 | +42,764 | 85% | 33 / 6 / 1 / 0 |
+| Entry before 2026-04-01 | 178 | +35,581 | 70% | 125 / 49 / 3 / 1 |
+| Entry on or after 2026-04-01 (the repo's stated boundary) | 17 | +15,012 | 88% | 14 / 2 / 1 / 0 |
+
+All gross figures above exclude the window-end trip (ex-FinalClose total +50,592.75). The Tuesday era carries 84% of the total gross on 40 trips, a single regime of about 13 months, so it is not
+independent evidence of anything. The Thursday era made +7,829 over 155 trips.
+
+Per set (set membership read from the fills' condition ids): **Set 1 (current month, entry DTE 14 to 31) made -20,368 gross over 112 trips**, win rate 70%, mix 77 target / 32 loss / 3 DTE. **Set 2
+(next month, entry DTE 28 to 48) made +70,961 gross over 83 trips**, win rate 75%, mix 62 / 19 / 1 DTE / 1 other (+73,245 with the window-end trip). The report's own set arithmetic agrees in sign (Set
+1 -21,474, Set 2 +72,277, net basis; the report says without Set 1 the arithmetic net would be 72,277 and max drawdown 24,015 instead of 43,394, and flags that this is arithmetic, not a re-run). So
+the "nearest monthly with at least 14 DTE" rule sells the short-dated current-month calls in Set 1, and those lose over this window despite a 70% win rate.
+
+Entry context, 196 trips: median credit 55.7 (range 21.5 to 125.7), median strike distance above spot +889 points (range +416 to +1,963), median entry DTE 27.
+
+Overlap with paper (2026-08-11 onward, n = 6 Tradetron trips, 5 rule exits and 1 window-end close): the long run's six entries are the same six as archived run 2 and TDL-1 (08-12 25600, 08-19 25100,
+09-02 24700, 09-09 24250, 09-16 24400, 09-25 23950), all five rule exits at the 30% target (ratios 0.289 to 0.299), so the template reproduces run 2 exactly and the strike comparison with paper is the
+TDL-1 table (paper strikes 25400, 24200, 24200, 23900 on four dates, Upstox delta 0.160 to 0.199). Nothing new is claimed about paper here, and this overlap is 6 trips.
+
+Limits: the 4 missing and 5 skipped sessions; one lot at Tradetron's flat 0.05% slippage and default costs, no fill-quality, bid-ask or margin view; rupee P&L across 2021 to 2026 mixes lot-size
+regimes (every fill is quantity 65, so earlier rupee figures are on today's lot, not the lot of the day); exit types inferred. No profitability claim: this says the rule set produces many cycles, a
+72% win rate with larger average losses than wins, and a drawdown close to the whole net gain.
