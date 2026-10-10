@@ -166,6 +166,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-10] far-expiry-capture FC-1 (`5e09c40`): capture storage = SQLite `far_expiry_chain_snapshots` (Parquet `ChainWriter` rejected: coerces missing Greeks to 0, no source key); `schema.md`
+  added. FC-2..FC-5 next; Antigravity runs them sequentially on branch `antigravity/far-expiry-capture`, Claude reviews before merge.
 - [2026-10-08] BUG-075 closed and archived (docs only, fix `cf3e0d1`): sizing did not drive the 10-08 profit-lock/target closes (stale BUG-073 hedge did); cycle P&L exact, 1-unit rows net -2.40 /
   -0.15, annotate not backfill. Residual: `PaperExecutor` manual-approval roll path still writes 1 unit.
 - [2026-10-08] BUG-074 B074.1-B074.3 (`5cd3aca`): IC v1/v2 close notifier looks up positions by `instrument_key` instead of `leg_role`; overlapped legs now carry their own entry and P&L. B074.4 (live

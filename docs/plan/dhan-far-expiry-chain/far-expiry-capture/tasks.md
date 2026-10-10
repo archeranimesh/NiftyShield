@@ -2,10 +2,10 @@
 
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit.
 
-**Open: FC-1..FC-5.**
+**Open: FC-2..FC-5.**
 
-- [ ] **FC-1** — Storage decision: audit `ChainWriter` Parquet versus a SQLite table against `DB_REGISTRY.md`; record the choice in `DECISIONS.md` (add `schema.md` only if SQLite) | Owner: Claude |
-  Model: claude-sonnet-5-5 | Review: none | SHA: —
+- [x] **FC-1** — Storage decision: audit `ChainWriter` Parquet versus a SQLite table against `DB_REGISTRY.md`; record the choice in `DECISIONS.md` (add `schema.md` only if SQLite) | Owner: Claude |
+  Model: claude-sonnet-5-5 | Review: none | SHA: 5e09c40
 - [ ] **FC-2** — Writer/reader for far-expiry snapshots per FC-1, with a pure `chain_to_liquidity_rows` reducer | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: —
 - [ ] **FC-3** — `scripts/pipeline/capture_far_expiry_chain.py`: trading-day guard, expiries from `get_expiry_candidates`, 4 s spacing, heartbeat, `LOGGING.md` shape | Owner: Claude | Model:
   claude-sonnet-5-5 | Review: code-reviewer | SHA: —

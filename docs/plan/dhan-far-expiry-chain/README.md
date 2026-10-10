@@ -41,7 +41,7 @@ Decided with Animesh on 2026-10-06:
 | Story | Purpose | Status | Depends on | Closing SHA |
 |---|---|---|---|---|
 | `dhan-chain-adapter/` | Renewal decision, fixtures, `DhanMarketClient`, chain-source selection | 🔄 In progress | — | — |
-| `far-expiry-capture/` | Storage decision, daily capture entrypoint, cron, liquidity report | ⬜ Not started | `dhan-chain-adapter` | — |
+| `far-expiry-capture/` | Storage decision, daily capture entrypoint, cron, liquidity report | 🔄 In progress | `dhan-chain-adapter` | — |
 | `far-expiry-liquidity-gate/` | Calibrated gate with fallback ladder, roll-window decision | ⬜ Not started | `far-expiry-capture` (data) | — |
 
 Status: ⬜ Not started · 🔄 In progress · ✅ Done. This column is the epic's progress view — per-task checkboxes live only in each sub-story's `tasks.md`.
@@ -66,8 +66,8 @@ Status: ⬜ Not started · 🔄 In progress · ✅ Done. This column is the epic
 - FG-3 writes the yearly `roll_dte` into the policy registry created by `yearly-overlays/yearly-foundation/` YF-3.
 - The POC story `dhan-data-poc` is closed and archived; this epic builds on its findings and does not reopen it.
 - `data-source-routing/` (2026-10-07) takes over the seam work this epic's DA-4 handed off: contract identity, `ChainSnapshot` and capability routing. `far-expiry-capture/` keeps calling
-  `DhanMarketClient` directly and must not wait on it. The capture store is the candidate last-known-delta cache for the stale-Greeks policy, and Dhan token freshness (`ds-chain-monitoring` DSN-1)
-  is a precondition for the capture cron staying healthy.
+  `DhanMarketClient` directly and must not wait on it. The capture store is the candidate last-known-delta cache for the stale-Greeks policy, and Dhan token freshness (`ds-chain-monitoring` DSN-1) is
+  a precondition for the capture cron staying healthy.
 
 ## Epic done when
 
