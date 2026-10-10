@@ -9,7 +9,7 @@ Decided in FC-1 (`DECISIONS.md`, "Far-expiry chain capture storage: SQLite, not 
 |---|---|---|
 | `snapshot_date` | `TEXT NOT NULL` | IST trading date, `YYYY-MM-DD` |
 | `captured_at` | `TEXT NOT NULL` | UTC ISO timestamp of the fetch; this is the `delta_asof` source for the last-known-delta policy |
-| `underlying` | `TEXT NOT NULL` | e.g. `NIFTY` |
+| `underlying` | `TEXT NOT NULL` | e.g. `NIFTY_50` |
 | `expiry` | `TEXT NOT NULL` | `YYYY-MM-DD` |
 | `strike` | `TEXT NOT NULL` | `Decimal` |
 | `option_type` | `TEXT NOT NULL` | `CE` or `PE` |
