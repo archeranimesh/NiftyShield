@@ -16,10 +16,9 @@ import aiohttp
 import structlog
 from dotenv import load_dotenv
 
-from src.client.chain_source import CompositeChainSource, DhanChainSource, UpstoxChainSource
+from src.client.chain_source import DhanChainSource
 from src.client.dhan_market import DhanMarketClient, SpacingRateLimiter
 from src.client.exceptions import DataFetchError
-from src.client.upstox_market import UpstoxMarketClient
 from src.config import settings
 from src.far_expiry.store import FarExpiryStore
 from src.instruments.lookup import InstrumentLookup
@@ -70,7 +69,7 @@ async def main() -> int:
         return 1
 
     db_path = Path(settings.db_path)
-    far_store = FarExpiryStore(db_path.parent / "far_expiry.sqlite")
+    far_store = FarExpiryStore(db_path)
     portfolio_store = await PortfolioStore.create(db_path)
 
     dhan_token = settings.dhan_access_token or ""
@@ -85,9 +84,7 @@ async def main() -> int:
             access_token=dhan_token,
             client_id=dhan_client_id,
         )
-        upstox = UpstoxChainSource(UpstoxMarketClient())
-        dhan = DhanChainSource(dhan_client)
-        chain_source = CompositeChainSource(upstox, dhan)
+        chain_source = DhanChainSource(dhan_client)
 
         for i, expiry_str in enumerate(expiries_to_fetch):
             if i > 0:
@@ -101,7 +98,7 @@ async def main() -> int:
                     snapshot_date=today,
                     captured_at=captured_at,
                     underlying="NIFTY_50",
-                    source="composite",
+                    source="dhan",
                     chain=chain,
                 )
                 logger.info("far_expiry.captured", expiry=expiry_str)

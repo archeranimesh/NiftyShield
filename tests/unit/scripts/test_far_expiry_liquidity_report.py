@@ -19,14 +19,12 @@ def mock_store():
 
 @pytest.fixture
 def mock_settings():
-    with patch("scripts.dev.far_expiry_liquidity_report.Settings") as mock_cls:
-        settings = MagicMock()
-        settings.db_path = "mock.db"
-        mock_cls.return_value = settings
-        yield settings
+    with patch("scripts.dev.far_expiry_liquidity_report.settings") as mock_settings:
+        mock_settings.db_path = "mock.db"
+        yield mock_settings
 
 
-def test_liquidity_report_no_data(mock_store, mock_settings, capsys):
+def test_report_empty_range_prints_message(mock_store, mock_settings, capsys):
     mock_store.read_chain_snapshots.return_value = []
 
     test_args = [
@@ -45,11 +43,12 @@ def test_liquidity_report_no_data(mock_store, mock_settings, capsys):
     assert "No data found." in captured.out
 
 
-def test_liquidity_report_with_data(mock_store, mock_settings, capsys):
+def test_report_from_stored_rows_no_network(mock_store, mock_settings, capsys):
+    dt_now = datetime.datetime(2026, 10, 1, 15, 30, tzinfo=datetime.timezone.utc)
     row1 = FarExpiryRow(
         snapshot_date=datetime.date(2026, 10, 1),
-        captured_at=datetime.datetime(2026, 10, 1, 15, 30),
-        underlying="NIFTY",
+        captured_at=dt_now,
+        underlying="NIFTY_50",
         expiry=datetime.date(2026, 12, 31),
         strike=Decimal("24000"),
         option_type="CE",
@@ -66,18 +65,19 @@ def test_liquidity_report_with_data(mock_store, mock_settings, capsys):
         theta=None,
         vega=None,
     )
+    # Crossed book PE
     row2 = FarExpiryRow(
         snapshot_date=datetime.date(2026, 10, 1),
-        captured_at=datetime.datetime(2026, 10, 1, 15, 30),
-        underlying="NIFTY",
+        captured_at=dt_now,
+        underlying="NIFTY_50",
         expiry=datetime.date(2026, 12, 31),
         strike=Decimal("22000"),
         option_type="PE",
         source="upstox",
         underlying_spot=Decimal("23000"),
         ltp=Decimal("120"),
-        bid=Decimal("118"),
-        ask=Decimal("122"),
+        bid=Decimal("122"),  # bid > ask => crossed book
+        ask=Decimal("118"),
         oi=120000,
         volume=2000,
         iv=Decimal("16"),
@@ -88,8 +88,8 @@ def test_liquidity_report_with_data(mock_store, mock_settings, capsys):
     )
     row3 = FarExpiryRow(
         snapshot_date=datetime.date(2026, 10, 1),
-        captured_at=datetime.datetime(2026, 10, 1, 15, 30),
-        underlying="NIFTY",
+        captured_at=dt_now,
+        underlying="NIFTY_50",
         expiry=datetime.date(2026, 12, 31),
         strike=Decimal("25000"),
         option_type="CE",
@@ -129,6 +129,26 @@ def test_liquidity_report_with_data(mock_store, mock_settings, capsys):
     assert "2026-10-01" in captured.out
     assert "24000" in captured.out
     assert "22000" in captured.out
-    assert "2.00%" in captured.out
-    assert "3.33%" in captured.out
+    assert "2.00%" in captured.out  # CE spread
+    assert "XBOOK" in captured.out  # PE crossed book spread
     assert " 3      " in captured.out  # 3 rows with non-zero delta
+
+
+def test_negative_target_pe_delta_raises_error(mock_settings, capsys):
+    test_args = [
+        "script",
+        "--start-date",
+        "2026-10-01",
+        "--end-date",
+        "2026-10-02",
+        "--expiry",
+        "2026-12-31",
+        "--target-pe-delta",
+        "-0.15",
+    ]
+    with patch.object(sys, "argv", test_args):
+        with pytest.raises(SystemExit):
+            main()
+
+    captured = capsys.readouterr()
+    assert "--target-pe-delta should be positive (or zero)" in captured.err

@@ -5,15 +5,15 @@ from pathlib import Path
 
 import structlog
 
-from src.config import Settings
-from src.far_expiry.store import FarExpiryStore, chain_to_liquidity_rows
-from src.models.options import OptionChain, OptionChainStrike, OptionLeg
+from src.config import settings
+from src.far_expiry.store import FarExpiryStore, stored_row_to_liquidity_row
+from src.utils.logging import setup_logging
 
 _SCRIPT_NAME = "scripts.dev.far_expiry_liquidity_report"
 logger = structlog.get_logger(_SCRIPT_NAME)
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Far expiry liquidity report.")
     parser.add_argument("--start-date", type=datetime.date.fromisoformat, required=True)
     parser.add_argument("--end-date", type=datetime.date.fromisoformat, required=True)
@@ -24,7 +24,9 @@ def main():
 
     args = parser.parse_args()
 
-    settings = Settings()
+    if args.target_pe_delta < 0:
+        parser.error("--target-pe-delta should be positive (or zero)")
+
     store = FarExpiryStore(Path(settings.db_path))
 
     rows = store.read_chain_snapshots(args.start_date, args.end_date, args.expiry, args.source)
@@ -42,9 +44,7 @@ def main():
     print("-" * 115)
 
     for d, day_rows in sorted(by_date.items()):
-        underlying_spot = None
         non_zero_delta = 0
-        strikes_map = {}
 
         best_ce = None
         best_ce_diff = None
@@ -52,9 +52,6 @@ def main():
         best_pe_diff = None
 
         for r in day_rows:
-            if r.underlying_spot is not None:
-                underlying_spot = r.underlying_spot
-
             if r.delta is not None and r.delta != Decimal("0"):
                 non_zero_delta += 1
 
@@ -69,52 +66,22 @@ def main():
                         best_pe_diff = diff
                         best_pe = r
 
-            if r.strike not in strikes_map:
-                strikes_map[r.strike] = OptionChainStrike()
-
-            leg = OptionLeg(
-                ltp=r.ltp,
-                bid=r.bid,
-                ask=r.ask,
-                oi=r.oi,
-                volume=r.volume,
-                delta=r.delta,
-                gamma=r.gamma,
-                theta=r.theta,
-                vega=r.vega,
-                iv=r.iv,
-                strike=r.strike,
-            )
-
-            current = strikes_map[r.strike]
-            if r.option_type == "CE":
-                strikes_map[r.strike] = OptionChainStrike(ce=leg, pe=current.pe)
-            elif r.option_type == "PE":
-                strikes_map[r.strike] = OptionChainStrike(ce=current.ce, pe=leg)
-
-        if underlying_spot is None:
-            underlying_spot = Decimal("0")
-
-        chain = OptionChain(
-            underlying_spot=underlying_spot, expiry=args.expiry, strikes=strikes_map
-        )
-
-        liq_rows = chain_to_liquidity_rows(chain)
-        liq_map = {(lr.strike, lr.option_type): lr for lr in liq_rows}
-
         ce_str = "-"
         ce_quoted = "-"
         ce_sprd = "-"
         ce_oi = "-"
         if best_ce is not None:
             ce_str = str(best_ce.strike)
-            lr = liq_map.get((best_ce.strike, "CE"))
-            if lr:
+            lr = stored_row_to_liquidity_row(best_ce)
+            if lr.is_crossed_book:
+                ce_quoted = "N"
+                ce_sprd = "XBOOK"
+            else:
                 ce_quoted = "Y" if lr.is_quoted else "N"
                 ce_sprd = (
                     f"{lr.spread_pct_mid * 100:.2f}%" if lr.spread_pct_mid is not None else "-"
                 )
-                ce_oi = str(best_ce.oi)
+            ce_oi = str(best_ce.oi)
 
         pe_str = "-"
         pe_quoted = "-"
@@ -122,13 +89,16 @@ def main():
         pe_oi = "-"
         if best_pe is not None:
             pe_str = str(best_pe.strike)
-            lr = liq_map.get((best_pe.strike, "PE"))
-            if lr:
+            lr = stored_row_to_liquidity_row(best_pe)
+            if lr.is_crossed_book:
+                pe_quoted = "N"
+                pe_sprd = "XBOOK"
+            else:
                 pe_quoted = "Y" if lr.is_quoted else "N"
                 pe_sprd = (
                     f"{lr.spread_pct_mid * 100:.2f}%" if lr.spread_pct_mid is not None else "-"
                 )
-                pe_oi = str(best_pe.oi)
+            pe_oi = str(best_pe.oi)
 
         print(
             f"{d.isoformat():<12} | {non_zero_delta:<12} | {ce_str:<9} | {ce_quoted:<9} | {ce_sprd:<8} | {ce_oi:<7} | {pe_str:<9} | {pe_quoted:<9} | {pe_sprd:<8} | {pe_oi:<7}"
@@ -136,4 +106,5 @@ def main():
 
 
 if __name__ == "__main__":
+    setup_logging()
     main()

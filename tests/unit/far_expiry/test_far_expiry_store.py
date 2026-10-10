@@ -157,6 +157,35 @@ def test_none_greek_stays_null(store):
         assert db_row["iv"] is None
 
 
+def test_dhan_all_zero_greeks_end_to_end(store):
+    dt = datetime.date(2026, 10, 10)
+    cap = datetime.datetime(2026, 10, 10, 10, 0, tzinfo=datetime.timezone.utc)
+    expiry = datetime.date(2026, 12, 31)
+
+    # simulate Dhan normalizing 0.0 to None
+    chain = OptionChain(
+        underlying_spot=Decimal("10000"),
+        expiry=expiry,
+        strikes={
+            Decimal("10000"): OptionChainStrike(
+                ce=_make_leg(delta=None, gamma=None, theta=None, vega=None, iv=None)
+            )
+        },
+    )
+
+    store.record_chain(dt, cap, "NIFTY_50", "dhan", chain)
+
+    rows = store.read_chain_snapshots(dt, dt, expiry, "dhan")
+    assert len(rows) == 1
+    assert rows[0].delta is None
+
+    # ensure is_zero_delta is False when delta is None
+    from src.far_expiry.store import stored_row_to_liquidity_row
+
+    liq = stored_row_to_liquidity_row(rows[0])
+    assert liq.is_zero_delta is False
+
+
 def test_zero_mid_handled(store):
     chain = OptionChain(
         underlying_spot=Decimal("10000"),
@@ -183,3 +212,37 @@ def test_crossed_book_flagged(store):
     assert liq.is_crossed_book is True
     assert liq.mid == Decimal("1.5")
     assert liq.spread_pct_mid == Decimal("-0.6666666666666666666666666667")  # roughly -2/3
+
+
+def test_stored_row_to_liquidity_row():
+    from src.far_expiry.store import FarExpiryRow, stored_row_to_liquidity_row
+
+    row = FarExpiryRow(
+        snapshot_date=datetime.date(2026, 1, 1),
+        captured_at=datetime.datetime(2026, 1, 1, 12, 0, tzinfo=datetime.timezone.utc),
+        underlying="NIFTY_50",
+        expiry=datetime.date(2026, 12, 31),
+        strike=Decimal("20000"),
+        option_type="CE",
+        source="dhan",
+        underlying_spot=Decimal("19000"),
+        ltp=Decimal("150"),
+        bid=Decimal("148"),
+        ask=Decimal("152"),
+        oi=1000,
+        volume=500,
+        iv=Decimal("18.5"),
+        delta=Decimal("0.45"),
+        gamma=None,
+        theta=None,
+        vega=None,
+    )
+
+    liq = stored_row_to_liquidity_row(row)
+    assert liq.strike == Decimal("20000")
+    assert liq.option_type == "CE"
+    assert liq.is_quoted is True
+    assert liq.is_crossed_book is False
+    assert liq.mid == Decimal("150")
+    assert liq.has_oi is True
+    assert liq.is_zero_delta is False

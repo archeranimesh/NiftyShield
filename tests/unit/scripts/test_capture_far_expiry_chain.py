@@ -7,39 +7,41 @@ from src.client.exceptions import DataFetchError
 
 
 @pytest.fixture
-def mock_env(mocker):
-    mocker.patch("scripts.pipeline.capture_far_expiry_chain.guard_trading_day", return_value=False)
+def mock_env(monkeypatch):
+    monkeypatch.setattr(
+        "scripts.pipeline.capture_far_expiry_chain.guard_trading_day", lambda *a, **kw: False
+    )
 
     mock_lookup = MagicMock()
     mock_lookup.get_expiry_candidates.side_effect = lambda u, t, preference, min_expiry=None: (
         [("yearly", "2026-12-31")] if min_expiry is None else [("yearly", "2027-12-30")]
     )
-    mocker.patch(
+    monkeypatch.setattr(
         "scripts.pipeline.capture_far_expiry_chain.InstrumentLookup.from_file",
-        return_value=mock_lookup,
+        lambda *a, **kw: mock_lookup,
     )
 
     mock_chain_source = MagicMock()
     mock_chain_source.get_chain = AsyncMock(return_value=MagicMock())
-    mocker.patch(
-        "scripts.pipeline.capture_far_expiry_chain.CompositeChainSource",
-        return_value=mock_chain_source,
+    monkeypatch.setattr(
+        "scripts.pipeline.capture_far_expiry_chain.DhanChainSource",
+        lambda *a, **kw: mock_chain_source,
     )
 
     mock_far_store = MagicMock()
-    mocker.patch(
-        "scripts.pipeline.capture_far_expiry_chain.FarExpiryStore", return_value=mock_far_store
+    monkeypatch.setattr(
+        "scripts.pipeline.capture_far_expiry_chain.FarExpiryStore", lambda *a, **kw: mock_far_store
     )
 
     mock_portfolio_store = MagicMock()
-    mocker.patch(
+    monkeypatch.setattr(
         "scripts.pipeline.capture_far_expiry_chain.PortfolioStore.create",
-        new_callable=AsyncMock,
-        return_value=mock_portfolio_store,
+        AsyncMock(return_value=mock_portfolio_store),
     )
 
-    mocker.patch(
-        "scripts.pipeline.capture_far_expiry_chain.aiohttp.ClientSession", return_value=AsyncMock()
+    monkeypatch.setattr(
+        "scripts.pipeline.capture_far_expiry_chain.aiohttp.ClientSession",
+        MagicMock(return_value=AsyncMock()),
     )
 
     return {
@@ -51,17 +53,25 @@ def mock_env(mocker):
 
 
 @pytest.mark.asyncio
-async def test_holiday_exit(mocker):
-    mocker.patch("scripts.pipeline.capture_far_expiry_chain.guard_trading_day", return_value=True)
+async def test_holiday_exit(monkeypatch):
+    monkeypatch.setattr(
+        "scripts.pipeline.capture_far_expiry_chain.guard_trading_day", lambda *a, **kw: True
+    )
     assert await main() == 0
 
 
 @pytest.mark.asyncio
-async def test_no_bod_file(mocker):
-    mocker.patch("scripts.pipeline.capture_far_expiry_chain.guard_trading_day", return_value=False)
-    mocker.patch(
+async def test_no_bod_file(monkeypatch):
+    monkeypatch.setattr(
+        "scripts.pipeline.capture_far_expiry_chain.guard_trading_day", lambda *a, **kw: False
+    )
+
+    def raise_file_not_found(*a, **kw):
+        raise FileNotFoundError()
+
+    monkeypatch.setattr(
         "scripts.pipeline.capture_far_expiry_chain.InstrumentLookup.from_file",
-        side_effect=FileNotFoundError,
+        raise_file_not_found,
     )
     assert await main() == 1
 
@@ -75,10 +85,9 @@ async def test_no_expiries_found(mock_env):
 
 
 @pytest.mark.asyncio
-async def test_success_two_expiries_and_spacing(mock_env, mocker):
-    mock_sleep = mocker.patch(
-        "scripts.pipeline.capture_far_expiry_chain.asyncio.sleep", new_callable=AsyncMock
-    )
+async def test_success_two_expiries_and_spacing(mock_env, monkeypatch):
+    mock_sleep = AsyncMock()
+    monkeypatch.setattr("scripts.pipeline.capture_far_expiry_chain.asyncio.sleep", mock_sleep)
     assert await main() == 0
 
     assert mock_env["chain_source"].get_chain.call_count == 2
@@ -90,10 +99,9 @@ async def test_success_two_expiries_and_spacing(mock_env, mocker):
 
 
 @pytest.mark.asyncio
-async def test_partial_failure(mock_env, mocker):
-    mock_sleep = mocker.patch(
-        "scripts.pipeline.capture_far_expiry_chain.asyncio.sleep", new_callable=AsyncMock
-    )
+async def test_partial_failure(mock_env, monkeypatch):
+    mock_sleep = AsyncMock()
+    monkeypatch.setattr("scripts.pipeline.capture_far_expiry_chain.asyncio.sleep", mock_sleep)
 
     # First succeeds, second fails
     mock_env["chain_source"].get_chain.side_effect = [MagicMock(), DataFetchError("some error")]
@@ -108,8 +116,9 @@ async def test_partial_failure(mock_env, mocker):
 
 
 @pytest.mark.asyncio
-async def test_total_failure(mock_env, mocker):
-    mocker.patch("scripts.pipeline.capture_far_expiry_chain.asyncio.sleep", new_callable=AsyncMock)
+async def test_total_failure(mock_env, monkeypatch):
+    mock_sleep = AsyncMock()
+    monkeypatch.setattr("scripts.pipeline.capture_far_expiry_chain.asyncio.sleep", mock_sleep)
     mock_env["chain_source"].get_chain.side_effect = DataFetchError("network down")
 
     assert await main() == 1
@@ -120,8 +129,9 @@ async def test_total_failure(mock_env, mocker):
 
 
 @pytest.mark.asyncio
-async def test_805_response_logged(mock_env, mocker):
-    mocker.patch("scripts.pipeline.capture_far_expiry_chain.asyncio.sleep", new_callable=AsyncMock)
+async def test_805_response_logged(mock_env, monkeypatch):
+    mock_sleep = AsyncMock()
+    monkeypatch.setattr("scripts.pipeline.capture_far_expiry_chain.asyncio.sleep", mock_sleep)
 
     # Test that 805 is handled as a warning, though behavior is same as partial failure
     mock_env["chain_source"].get_chain.side_effect = [
@@ -135,3 +145,9 @@ async def test_805_response_logged(mock_env, mocker):
     mock_env["portfolio_store"].record_heartbeat.assert_called_once_with(
         "capture_far_expiry", "SUCCESS"
     )
+
+
+def test_no_get_logger_dunder_name():
+    with open("scripts/pipeline/capture_far_expiry_chain.py") as f:
+        content = f.read()
+    assert "structlog.get_logger(__name__)" not in content
