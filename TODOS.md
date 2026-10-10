@@ -166,6 +166,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-10] payoff chart polish CP-1..5 (Antigravity teamwork run `antigravity/chart-polish-a`) reviewed and merged to main (`e004a10`; tasks `4f36e5b` `5711b82` `2dae9ee` `e6ccec0` `d6e2bac`,
+  review fixes `7ef011f` `548d2b4`). Next: Run 2 = CP-6..9 on a fresh `antigravity/chart-polish-b`; CP-10 sign-off and CP-11 docs close stay with Animesh/Claude.
 - [2026-10-10] far-expiry-capture FC-4 closed on Animesh's instruction (`12e7ccb`): cron line recorded in the new `findings.md`; story ✅ Done. First scheduled run is 2026-10-12; its `SUCCESS`
   heartbeat is still to be observed (needs a fresh Dhan token). `far-expiry-liquidity-gate/` stays blocked on about 15 captured days.
 - [2026-10-10] healthcheck far-expiry capture heartbeat check (`12e7ccb`): `_check_far_expiry_capture` requires the prior trading day's `capture_far_expiry` SUCCESS heartbeat (capture 16:10 runs after
