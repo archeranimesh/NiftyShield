@@ -11,7 +11,7 @@ spec.
 - [x] **CP-2** — `payoff_chart_theme.py`: frozen `ChartTheme` + `DARK`, bundled Roboto assets, guarded `chart_font_family` with DejaVu fallback | Owner: Antigravity | Model: claude-sonnet-5-5 |
   Review: code-reviewer | SHA: —
 - [x] **CP-3** — `payoff_chart_axes.py` pure helpers: `x_range`, `sample_xs`, `strike_ticks` with crowding stagger | Owner: Antigravity | Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: —
-- [ ] **CP-4** — `payoff_chart_header.py`: `HeaderCell` / `Tone` + pure `build_header_cells` (seven cells, sub-lines) | Owner: Antigravity | Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: —
+- [x] **CP-4** — `payoff_chart_header.py`: `HeaderCell` / `Tone` + pure `build_header_cells` (seven cells, sub-lines) | Owner: Antigravity | Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: —
 - [ ] **CP-5** — `payoff_chart_header.py`: pure `pack_header` + measured, centred `draw_header` with two-row fallback | Owner: Antigravity | Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: —
 - [ ] **CP-6** — `payoff_chart_axes.py` drawing helpers: chrome, strike ticks, breakeven dots, spot line, "Now" marker | Owner: Claude | Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: —
 - [ ] **CP-7** — Rewire `render_payoff_png` onto the three modules; delete orphaned helpers; migrate tests; import-boundary test | Owner: Claude | Model: claude-sonnet-5-5 | Review: code-reviewer |
