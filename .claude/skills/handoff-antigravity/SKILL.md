@@ -10,6 +10,18 @@
 
 ---
 
+## Step 0 — Pick the variant
+
+Two handoff shapes exist. Pick one before gathering anything:
+
+- **Standard handoff** (Steps 1–3 below): one Antigravity agent, phase-by-phase, stops at each financial-logic commit for Claude's `code-reviewer`. Use for a single task or a tight sequence.
+- **Teamwork-preview handoff** (§Teamwork-preview variant, end of file): `/teamwork-preview` orchestrates several worker agents; the orchestrator alone commits and pushes; Claude reviews the pushed
+  branch afterwards. Use when the user says "teamwork-preview", or a story has 3+ tasks where some can run in parallel.
+
+If the user asks for "the teamwork-preview prompt" for a story, emit the teamwork variant only. If they ask for "the antigravity handoff", emit the standard one. If unclear, ask once.
+
+---
+
 ## Step 1 — Gather the five content blocks
 
 Read and extract (do not paste in full — extract only what's relevant to the task):
@@ -178,3 +190,45 @@ If over budget, trim in this order:
 3. REVIEW_RULES — keep only if the task touches non-trivial Python logic; drop for pure doc or config tasks
 
 Never trim BOUNDARIES or DOD — these are the correctness gates.
+
+---
+
+## Teamwork-preview variant
+
+### How `/teamwork-preview` works (Antigravity's own description)
+
+Two phases. **Phase 1, prompt crafting:** Antigravity walks a 9-step interview and maintains a live `prompt_draft.md` artifact: (1) core idea, 1–2 sentences; (2) scope and scale, which picks the
+agent-team size; (3) integrity mode, i.e. may agents reuse libraries or copy code; (4) requirements, strictly *what* and not *how*; (5) verification, objective checks so agents cannot stop early; (6)
+acceptance criteria as a checklist; (7) infrastructure constraints such as file and network limits; (8) working directory; (9) final review, where it names the team shape it expects. **Phase 2,
+delegation:** on the user's approval it hands the prompt to the `teamwork_preview` multi-agent system, which self-verifies against the acceptance criteria.
+
+Therefore the prompt Claude supplies is outcome-and-check oriented. Do not write function bodies or step-by-step recipes; pin constraints, tests and the delivery mechanics.
+
+### Established delivery pattern (proven on `dhan-chain-adapter`, 2026-10)
+
+Same repo, no worktree. The orchestrator creates `antigravity/<story>` from `origin/main`, workers edit files but never touch git, the orchestrator makes one commit per task (specific files, never
+`git add .`) and pushes once (retry 4×, backoff 2/4/8/16 s; never force-push, no PR). Claude reviews the pushed branch in a separate session (`git diff origin/main..<branch>` with the real
+`code-reviewer`, plus `greeks-analyst` / `roll-validator` when triggered). Fixes are new commits. A final docs-close commit runs only after a clean verdict.
+
+**Pre-flight, Claude's side:** the branch is cut from `origin/main`, so every commit the story depends on (earlier tasks, `schema.md`, `DECISIONS.md`) must already be pushed to `origin/main`. Check
+`git log origin/main..main` first, and ask the user before pushing. Add a stop condition telling Antigravity to halt if a named dependency file is missing on `origin/main`.
+
+### Template
+
+Emit one paste-ready block, first line `/teamwork-preview Implement <TASK-IDS> of <story folder> per the handoff below.`, then these sections in order:
+
+- Orchestrator rule: spawns workers, is the ONLY agent that stages, commits and pushes, once, at the end. "Read CONTEXT.md and ANTIGRAVITY.md. State CONTEXT.md ✓ first."
+- **OBJECTIVE** (one sentence) · **AUTHORIZATION** (Owner reassignments made in the first commit; tasks that stay with Animesh and are out of scope; "one task per session" waived, one-commit-per-task
+  not; read-first file list including `schema.md`/`DECISIONS.md` entries).
+- **BRANCH AND DELIVERY** (branch name, three-commits-in-task-order, push, retry, never force-push).
+- **PLANNING_GATE** (per task: one sentence, files, expected test count, owning worker; name public signatures later workers code against; end "Awaiting go-ahead to begin <first task>."; stop).
+- **PHASES AND TEAM SHAPE** (per task: files, commit message; ordering and what may run in parallel; workers run only their own test files, orchestrator runs the full suite once; workers NEVER run
+  index- or stash-touching git commands and count lines with awk/grep — per `CLAUDE.md` Step 3c).
+- **GRAPH_POINTERS** (with the `project=` reminder) · **BOUNDARIES** (do-not-touch list plus the non-negotiable invariants from Step 1D) · **STOP_CONDITIONS** (ambiguity, missing symbol, rejected
+  push, missing dependency on `origin/main`, roll-logic contact) · **REVIEW_RULES** (Step 1E, one line) · **DOD** (tests green once, story tests by name, commits pushed with SHAs confirmed, graph
+  re-index).
+- **QUALITY_GATES**: financial logic is reviewed AFTER commit and push. Orchestrator stops and says: "<tasks> are committed and pushed to <branch> at <shas>. Please ask Claude to run the real
+  @code-reviewer and greeks-analyst against git diff origin/main..<branch>." Docs close is a separate final commit after the verdict; leave human-owned tasks unchecked; do not archive the story.
+- **PHASE_COMPLETION_OUTPUT** (task, files_changed, tests_added, tests_passing, commit_sha, pushed, ambiguities_noted).
+
+Budget: the reference prompt ran about 2,500 tokens; keep it there. Trim CONTEXT_EXTRACT before BOUNDARIES or DOD.
