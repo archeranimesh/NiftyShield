@@ -58,7 +58,7 @@ def test_record_then_read_round_trip(store):
         strikes={strike: OptionChainStrike(ce=ce_leg, pe=pe_leg)},
     )
 
-    store.record_chain(dt, cap, "NIFTY", "dhan", chain)
+    store.record_chain(dt, cap, "NIFTY_50", "dhan", chain)
 
     rows = store.read_chain_snapshots(dt, dt, expiry, "dhan")
     assert len(rows) == 2
@@ -66,7 +66,7 @@ def test_record_then_read_round_trip(store):
 
     assert ce_row.snapshot_date == dt
     assert ce_row.captured_at == cap
-    assert ce_row.underlying == "NIFTY"
+    assert ce_row.underlying == "NIFTY_50"
     assert ce_row.expiry == expiry
     assert ce_row.strike == strike
     assert ce_row.source == "dhan"
@@ -90,14 +90,14 @@ def test_record_twice_is_idempotent(store):
         strikes={Decimal("10000"): OptionChainStrike(ce=_make_leg())},
     )
 
-    store.record_chain(dt, cap, "NIFTY", "dhan", chain)
-    store.record_chain(dt, cap, "NIFTY", "dhan", chain)
+    store.record_chain(dt, cap, "NIFTY_50", "dhan", chain)
+    store.record_chain(dt, cap, "NIFTY_50", "dhan", chain)
 
     rows = store.read_chain_snapshots(dt, dt, expiry, "dhan")
     assert len(rows) == 1
 
 
-def test_zero_delta_rows_flagged(store):
+def test_zero_delta_rows_flagged():
     chain = OptionChain(
         underlying_spot=Decimal("10000"),
         expiry=datetime.date(2026, 12, 31),
@@ -108,7 +108,7 @@ def test_zero_delta_rows_flagged(store):
     assert liq.is_zero_delta is True
 
 
-def test_one_sided_quote_flagged_not_quoted(store):
+def test_one_sided_quote_flagged_not_quoted():
     chain = OptionChain(
         underlying_spot=Decimal("10000"),
         expiry=datetime.date(2026, 12, 31),
@@ -137,7 +137,7 @@ def test_none_greek_stays_null(store):
         },
     )
 
-    store.record_chain(dt, cap, "NIFTY", "dhan", chain)
+    store.record_chain(dt, cap, "NIFTY_50", "dhan", chain)
 
     rows = store.read_chain_snapshots(dt, dt, expiry, "dhan")
     assert len(rows) == 1
@@ -186,7 +186,7 @@ def test_dhan_all_zero_greeks_end_to_end(store):
     assert liq.is_zero_delta is False
 
 
-def test_zero_mid_handled(store):
+def test_zero_mid_handled():
     chain = OptionChain(
         underlying_spot=Decimal("10000"),
         expiry=datetime.date(2026, 12, 31),
@@ -200,7 +200,7 @@ def test_zero_mid_handled(store):
     assert liq.spread_pct_mid is None
 
 
-def test_crossed_book_flagged(store):
+def test_crossed_book_flagged():
     chain = OptionChain(
         underlying_spot=Decimal("10000"),
         expiry=datetime.date(2026, 12, 31),

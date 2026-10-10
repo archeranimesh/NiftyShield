@@ -192,6 +192,7 @@ async def test_live_read():
     token = settings.dhan_access_token or ""
     client_id = settings.dhan_client_id or ""
 
+    print(f"TOKEN: {token!r}, CLIENT_ID: {client_id!r}")
     if not token or not client_id:
         pytest.skip("Dhan credentials not configured in environment")
 

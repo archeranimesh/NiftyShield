@@ -148,6 +148,60 @@ async def test_805_response_logged(mock_env, monkeypatch):
 
 
 def test_no_get_logger_dunder_name():
-    with open("scripts/pipeline/capture_far_expiry_chain.py") as f:
+    from pathlib import Path
+
+    script_path = (
+        Path(__file__).resolve().parents[3] / "scripts" / "pipeline" / "capture_far_expiry_chain.py"
+    )
+    with open(script_path) as f:
         content = f.read()
     assert "structlog.get_logger(__name__)" not in content
+
+
+@pytest.mark.asyncio
+async def test_real_client_wiring_with_rate_limiter(monkeypatch):
+    monkeypatch.setattr(
+        "scripts.pipeline.capture_far_expiry_chain.guard_trading_day", lambda *a, **kw: False
+    )
+
+    mock_lookup = MagicMock()
+    mock_lookup.get_expiry_candidates.side_effect = lambda u, t, preference, min_expiry=None: (
+        [("yearly", "2026-12-31")] if min_expiry is None else [("yearly", "2027-12-30")]
+    )
+    monkeypatch.setattr(
+        "scripts.pipeline.capture_far_expiry_chain.InstrumentLookup.from_file",
+        lambda *a, **kw: mock_lookup,
+    )
+
+    mock_far_store = MagicMock()
+    monkeypatch.setattr(
+        "scripts.pipeline.capture_far_expiry_chain.FarExpiryStore", lambda *a, **kw: mock_far_store
+    )
+
+    mock_portfolio_store = MagicMock()
+    monkeypatch.setattr(
+        "scripts.pipeline.capture_far_expiry_chain.PortfolioStore.create",
+        AsyncMock(return_value=mock_portfolio_store),
+    )
+
+    mock_main_sleep = AsyncMock()
+    monkeypatch.setattr("scripts.pipeline.capture_far_expiry_chain.asyncio.sleep", mock_main_sleep)
+
+    mock_clock_sleep = AsyncMock()
+    monkeypatch.setattr(
+        "scripts.pipeline.capture_far_expiry_chain.RealClock.sleep", mock_clock_sleep
+    )
+
+    mock_post = MagicMock()
+    mock_response = MagicMock()
+    mock_response.status = 200
+    mock_response.json = AsyncMock(return_value={"data": {"Otc": [], "ce": [], "pe": [], "oc": {}}})
+    mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+    mock_response.__aexit__ = AsyncMock(return_value=None)
+    mock_post.return_value = mock_response
+    monkeypatch.setattr("aiohttp.ClientSession.post", mock_post)
+
+    assert await main() == 0
+
+    assert mock_post.call_count == 2
+    mock_main_sleep.assert_called_once_with(4.0)

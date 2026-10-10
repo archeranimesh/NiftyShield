@@ -34,12 +34,11 @@ class RealClock:
     async def sleep(self, seconds: float) -> None:
         await asyncio.sleep(seconds)
 
-    def now(self) -> float:
+    def time(self) -> float:
         return asyncio.get_running_loop().time()
 
 
 async def main() -> int:
-    load_dotenv()
     today = date.today()
     if guard_trading_day(logger, _SCRIPT_NAME, today):
         return 0
@@ -125,5 +124,6 @@ async def main() -> int:
 
 
 if __name__ == "__main__":
+    load_dotenv()
     setup_logging()
     sys.exit(asyncio.run(main()))
