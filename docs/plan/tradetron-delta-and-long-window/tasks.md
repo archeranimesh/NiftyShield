@@ -4,12 +4,12 @@
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
 spec.
 
-**Open: TDL-10.**
+**Open: TDL-4.**
 - [x] **TDL-1** — Free own-data delta check: read the stored Upstox delta for the six strikes Tradetron chose in run 2 | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: b20ec40
 - [x] **TDL-2** — Live Offline Greeks probe, Tradetron versus Upstox at one timestamp, near-dated and far-dated; reference table for `greeks-bs-fallback` | Owner: Claude | Model: claude-sonnet-5-5 |
   Review: none | SHA: 39938a3
-- [ ] **TDL-3** — Long-window pre-flight on CC template v2 (free): data coverage, Greeks, the April 2026 expiry boundary; pick the window | Owner: Claude | Model: claude-sonnet-5-5 | Review: none |
-  SHA: —
+- [x] **TDL-3** — Long-window pre-flight on CC template v2 (free): data coverage, Greeks, the April 2026 expiry boundary; pick the window | Owner: Claude | Model: claude-sonnet-5-5 | Review: none |
+  SHA: 8c79dcd
 - [ ] **TDL-4** — Own-side comparator audit (read-only) and the go or no-go on funded runs with a budget Animesh approves | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: —
 - [ ] **TDL-5** — CC long-window funded run on template v2; cycles, exit mix, regime split, sample size | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: —
 - [ ] **TDL-6** — PP and Collar: live rules from code and the paper ground-truth table from the DB | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: —
