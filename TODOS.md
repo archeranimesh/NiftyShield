@@ -166,6 +166,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-10] healthcheck far-expiry capture heartbeat check (`12e7ccb`): `_check_far_expiry_capture` requires the prior trading day's `capture_far_expiry` SUCCESS heartbeat (capture 16:10 runs after
+  the 15:55 healthcheck); NO RUN = warn, STALE/FAILED = critical. FC-4's healthcheck half is done; only the cron install remains (Animesh).
 - [2026-10-10] far-expiry-capture FC-2/FC-3/FC-5 merged (`7f178c1`; feature `51b0fce` `857fe6b` `2751a40`, three review-fix rounds): `src/far_expiry/` SQLite store, `capture_far_expiry_chain.py`,
   `far_expiry_liquidity_report.py`. FC-4 (cron + healthcheck heartbeat) is Animesh's and is what starts the 15-day clock; DA-0 renewal decision still due 2026-11-04.
 - [2026-10-10] far-expiry-capture FC-1 (`5e09c40`): capture storage = SQLite `far_expiry_chain_snapshots` (Parquet `ChainWriter` rejected: coerces missing Greeks to 0, no source key); `schema.md`
