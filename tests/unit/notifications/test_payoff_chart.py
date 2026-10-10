@@ -134,6 +134,14 @@ def test_payoff_chart_modules_import_boundary():
 # --- send_payoff_chart ---
 
 
+class _AdapterWithoutSubtitle:
+    def legs(self, ctx):
+        return list(_ic().legs)
+
+    def title(self, ctx):
+        return "T"
+
+
 class _Adapter:
     def __init__(self, legs=None, exc=None):
         self._legs, self._exc = legs, exc
@@ -145,6 +153,9 @@ class _Adapter:
 
     def title(self, ctx):
         return "T"
+
+    def subtitle(self, ctx):
+        return "S"
 
 
 class _Sender:
@@ -174,6 +185,32 @@ async def test_send_happy_path():
     await _send(_Adapter(), sender)
     assert len(sender.calls) == 1 and _is_png(sender.calls[0][0])
     assert sender.calls[0][1] == "cap"
+
+
+async def test_build_and_send_passes_subtitle(monkeypatch):
+    seen_subtitle = None
+
+    def fake_render(*args, **kwargs):
+        nonlocal seen_subtitle
+        seen_subtitle = kwargs.get("subtitle")
+        return b"\x89PNG"
+
+    monkeypatch.setattr(payoff_chart, "render_payoff_png", fake_render)
+    await _send(_Adapter(), _Sender())
+    assert seen_subtitle == "S"
+
+
+async def test_build_and_send_adapter_without_subtitle(monkeypatch):
+    seen_subtitle = None
+
+    def fake_render(*args, **kwargs):
+        nonlocal seen_subtitle
+        seen_subtitle = kwargs.get("subtitle")
+        return b"\x89PNG"
+
+    monkeypatch.setattr(payoff_chart, "render_payoff_png", fake_render)
+    await _send(_AdapterWithoutSubtitle(), _Sender())
+    assert seen_subtitle == ""
 
 
 async def test_send_unregistered_warns_and_noops(monkeypatch):

@@ -10,6 +10,7 @@ from src.payoff.errors import DuplicateRegistrationError, InvalidLegsError
 from src.payoff.registry import (
     DEFAULT_REGISTRY,
     DefaultPositionAdapter,
+    HasSubtitle,
     HasTitle,
     PayoffContext,
     PayoffRegistry,
@@ -44,6 +45,11 @@ class _Adapter:
 class _TitledAdapter(_Adapter):
     def title(self, ctx: PayoffContext) -> str:
         return "t"
+
+
+class _SubtitledAdapter(_Adapter):
+    def subtitle(self, ctx: PayoffContext) -> str:
+        return "s"
 
 
 def _ctx(positions) -> PayoffContext:
@@ -127,6 +133,11 @@ def test_default_adapter_unknown_type_raises():
 def test_title_capability_detected():
     assert isinstance(_TitledAdapter(), HasTitle)
     assert not isinstance(_Adapter(), HasTitle)
+
+
+def test_subtitle_capability_detected():
+    assert isinstance(_SubtitledAdapter(), HasSubtitle)
+    assert not isinstance(_Adapter(), HasSubtitle)
 
 
 def test_decorator_registers_class():

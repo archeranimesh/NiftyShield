@@ -43,10 +43,11 @@ class BodStrikeResolver:
 
 
 class IronCondorPayoffAdapter:
-    """Default four-leg position adapter plus a ``<strategy> · <expiry> · <dte>DTE`` title."""
+    """Default four-leg position adapter plus title and subtitle."""
 
-    def __init__(self, expiry_type: str, resolver: StrikeResolver) -> None:
+    def __init__(self, expiry_type: str, resolver: StrikeResolver, label: str) -> None:
         self._expiry_type = expiry_type
+        self._label = label
         self._default = DefaultPositionAdapter(resolver)
 
     def legs(self, ctx: PayoffContext) -> list[PayoffLeg]:
@@ -54,26 +55,30 @@ class IronCondorPayoffAdapter:
         return self._default.legs(ctx)
 
     def title(self, ctx: PayoffContext) -> str:
-        """Return the chart title; the DTE part is omitted when ``extras['dte']`` is absent."""
-        parts = [ctx.strategy_name, self._expiry_type]
-        dte = ctx.extras.get("dte")
-        if dte is not None:
-            parts.append(f"{dte}DTE")
-        return " · ".join(parts)
+        """Return the chart title."""
+        return self._label
+
+    def subtitle(self, ctx: PayoffContext) -> str:
+        """Return the chart subtitle."""
+        return f"{self._expiry_type.capitalize()} expiry"
 
 
-def _ic_strategy_names() -> list[tuple[str, str]]:
-    """Return ``(strategy_name, expiry_type)`` for every V1 and V2 IC preset."""
-    v1: list[tuple[str, str]] = [(c.strategy_name, c.expiry_type) for c in CONFIGS.values()]
-    v2: list[tuple[str, str]] = [(c.strategy_name, c.expiry_type) for c in CONFIGS_V2.values()]
+def _ic_strategy_names() -> list[tuple[str, str, str]]:
+    """Return ``(strategy_name, expiry_type, label)`` for every V1 and V2 IC preset."""
+    v1: list[tuple[str, str, str]] = [
+        (c.strategy_name, c.expiry_type, "Iron Condor v1") for c in CONFIGS.values()
+    ]
+    v2: list[tuple[str, str, str]] = [
+        (c.strategy_name, c.expiry_type, "Iron Condor v2") for c in CONFIGS_V2.values()
+    ]
     return v1 + v2
 
 
 def ensure_registered(registry: PayoffRegistry = DEFAULT_REGISTRY) -> None:
     """Register every payoff-charted strategy in ``registry``; safe to call repeatedly."""
     resolver = BodStrikeResolver()
-    for name, expiry_type in _ic_strategy_names():
+    for name, expiry_type, label in _ic_strategy_names():
         try:
-            registry.register(name, IronCondorPayoffAdapter(expiry_type, resolver))
+            registry.register(name, IronCondorPayoffAdapter(expiry_type, resolver, label))
         except DuplicateRegistrationError:
             continue

@@ -28,7 +28,13 @@ from src.notifications.payoff_chart_header import build_header_cells, draw_heade
 from src.notifications.payoff_chart_theme import DARK, chart_font_family
 from src.payoff.core import StrategyPayoff, compute_payoff, expiry_pnl_at
 from src.payoff.errors import PayoffError, RenderError, SendError
-from src.payoff.registry import DEFAULT_REGISTRY, HasTitle, PayoffContext, PayoffRegistry
+from src.payoff.registry import (
+    DEFAULT_REGISTRY,
+    HasSubtitle,
+    HasTitle,
+    PayoffContext,
+    PayoffRegistry,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -168,6 +174,7 @@ async def _build_and_send(
         return
     payoff = compute_payoff(legs)
     title = adapter.title(ctx) if isinstance(adapter, HasTitle) else ""
+    subtitle = adapter.subtitle(ctx) if isinstance(adapter, HasSubtitle) else ""
     # CPU-bound render runs in a worker thread (Figure API is thread-safe;
     # to_thread copies contextvars). If GIL contention is ever measured to
     # matter, move to a ProcessPoolExecutor per the CLAUDE.md async rules.
@@ -180,6 +187,7 @@ async def _build_and_send(
             dte=dte,
             margin=margin,
             title=title,
+            subtitle=subtitle,
         ),
         timeout=_RENDER_TIMEOUT_S,
     )

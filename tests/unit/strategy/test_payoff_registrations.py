@@ -76,7 +76,7 @@ def test_ensure_registered_resolves_ic_v1_and_v2() -> None:
 
 
 def test_ic_adapter_legs_match_entry_strikes() -> None:
-    adapter = pr.IronCondorPayoffAdapter("monthly", _FakeResolver())
+    adapter = pr.IronCondorPayoffAdapter("monthly", _FakeResolver(), "Iron Condor v1")
     ctx = PayoffContext(_ic_positions(), Decimal("24500"), 65, "paper_ic_nifty_v1_monthly")
     legs = adapter.legs(ctx)
     by_role = {leg.role: leg for leg in legs}
@@ -88,7 +88,7 @@ def test_ic_adapter_legs_match_entry_strikes() -> None:
 
 
 def test_ic_adapter_aborts_on_unresolved_strike() -> None:
-    adapter = pr.IronCondorPayoffAdapter("monthly", _FakeResolver())
+    adapter = pr.IronCondorPayoffAdapter("monthly", _FakeResolver(), "Iron Condor v1")
     pos = _ic_positions()
     pos[0] = _pos("short_put", "UNKNOWN", -65, "100", "0", "PE")
     ctx = PayoffContext(pos, None, 65, "paper_ic_nifty_v1_monthly")
@@ -96,11 +96,21 @@ def test_ic_adapter_aborts_on_unresolved_strike() -> None:
         adapter.legs(ctx)
 
 
-def test_ic_adapter_title_with_and_without_dte() -> None:
-    adapter = pr.IronCondorPayoffAdapter("monthly", _FakeResolver())
-    with_dte = PayoffContext([], None, 65, "paper_ic_nifty_v1_monthly", {"dte": 12})
-    assert adapter.title(with_dte) == "paper_ic_nifty_v1_monthly · monthly · 12DTE"
-    assert adapter.title(PayoffContext([], None, 65, "x")) == "x · monthly"
+def test_ic_adapter_title_and_subtitle() -> None:
+    adapter = pr.IronCondorPayoffAdapter("monthly", _FakeResolver(), "Iron Condor v1")
+    ctx = PayoffContext([], None, 65, "x")
+    assert adapter.title(ctx) == "Iron Condor v1"
+    assert adapter.subtitle(ctx) == "Monthly expiry"
+
+
+def test_ensure_registered_labels_v1_and_v2() -> None:
+    registry = PayoffRegistry()
+    ensure_registered(registry)
+    v1 = registry.get("paper_ic_nifty_v1_monthly")
+    v2 = registry.get("paper_ic_nifty_v2_monthly")
+    ctx = PayoffContext([], None, 65, "x")
+    assert v1.title(ctx) == "Iron Condor v1"
+    assert v2.title(ctx) == "Iron Condor v2"
 
 
 def test_bod_strike_resolver_is_lazy_and_resolves(monkeypatch: pytest.MonkeyPatch) -> None:
