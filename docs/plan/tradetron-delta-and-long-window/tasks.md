@@ -4,7 +4,7 @@
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
 spec.
 
-**Open: TDL-8.**
+**Open: TDL-9.**
 - [x] **TDL-1** — Free own-data delta check: read the stored Upstox delta for the six strikes Tradetron chose in run 2 | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: b20ec40
 - [x] **TDL-2** — Live Offline Greeks probe, Tradetron versus Upstox at one timestamp, near-dated and far-dated; reference table for `greeks-bs-fallback` | Owner: Claude | Model: claude-sonnet-5-5 |
   Review: none | SHA: 39938a3
@@ -14,7 +14,8 @@ spec.
 - [x] **TDL-5** — CC long-window funded run on template v2; cycles, exit mix, regime split, sample size | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: fbadfab
 - [x] **TDL-6** — PP and Collar: live rules from code and the paper ground-truth table from the DB | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: 213e9bd
 - [x] **TDL-7** — PP and Collar templates: validate, pre-flight, create | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: a1476a0
-- [ ] **TDL-8** — PP and Collar funded runs and reconciliation, plus a NiftyBees baseline run and NiftyBees-plus-overlay comparison | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: —
+- [x] **TDL-8** — PP and Collar funded runs and reconciliation, plus a NiftyBees baseline run and NiftyBees-plus-overlay comparison | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA:
+  7e2a7af
 - [ ] **TDL-9** — IC v1 and v2 buildability audit (free); GO, PARTIAL or STOP; no template unless GO | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: —
 - [ ] **TDL-10** — Verdict on the data-purchase question, save learnings, close and archive the story | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: —
 
