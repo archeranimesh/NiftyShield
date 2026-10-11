@@ -193,6 +193,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 - [2026-10-07] DSM-3 done (`<pending>`): council ruling for `data-source-routing/` absorbed into `DECISIONS.md` (Option A resolver, per-capability routing, source-flip seam, Q4 by action class per
   Animesh); council file archived to `docs/archive/council/data_architecture/`; `ds-chain-seam/` (DSC-1..5) and `ds-chain-monitoring/` (DSN-1..5 + `schema.md`) specced; broader capability matrix
   re-homed as `ds-router-migration/` DSR-0. Next: DSM-1 (Upstox BOD Dec 2027 coverage, Dhan 806 shapes). Open for Animesh: cadence, backstop thresholds, Kite.
+- [2026-10-11] tradetron-delta-and-long-window TDL-6 closed (`213e9bd`): live PP and Collar rules from code with MATCH/DIFFERS vs archived specs, and paper ground truth (PP 4 closed trips, 3 manual;
+  Collar put 1 settled leg, clean two-leg collar only from 2026-09-30); no delta or exit trigger in the DB; TDL-7 next.
 - [2026-10-10] tradetron-delta-and-long-window scope: Animesh added a NiftyBees baseline run and NiftyBees-plus-CC/PP/Collar comparison to TDL-8, ceiling raised to ₹100 (₹20 spent); TDL-6 next.
 - [2026-10-10] tradetron-delta-and-long-window TDL-5 closed (`fbadfab`): CC v2 over 2021-10 to 2026-10, 196 round trips, net ₹50,803 on 1 lot, 72% win, avg loss 2.2x avg win, drawdown ~ net gain; Set
   1 net negative; Tuesday monthlies in Tradetron data from 2025-09-30 vs REFERENCES.md April 2026 (flagged); ₹20 spent, wallet ₹140.
