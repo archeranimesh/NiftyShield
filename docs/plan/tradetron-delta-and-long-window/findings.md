@@ -319,3 +319,41 @@ about edge at these counts.
 What the DB does not hold: delta at entry or exit (`ivr_at_entry` is empty for all of these rows), the trigger behind each close (only the note "close via apply_action" or "manual close"), the chain
 spot at entry (so strike distance cannot be recomputed from the ledger alone), charges, and which collar put belongs to which `overlay_cc` call. Reconciling a Tradetron run against this in TDL-8
 therefore compares entry dates, strikes, expiry, fill prices and gross P&L only, on an overlap of about two months.
+
+## PP and Collar templates (TDL-7)
+
+Specs: `template_pp.md` and `template_collar.md` in this folder (CC v2 structure: two sets for the nearest-monthly-with-14-DTE rule, per-set exits, an open-position flat gate; one lot; Market Price;
+exit shorts first). Both were built from the TDL-6 rule tables and validated with `tt_validate_markdown` (mode create) with zero errors on the first pass. Created 2026-10-11, not deployed.
+
+<!-- lint-ignore-length -->
+| Template | Tradetron id | edit_url | Validate | Pre-flight (`tt_check_backtestability`, 2021-10-01 to 2026-10-09) | Verdict |
+|---|---|---|---|---|---|
+<!-- lint-ignore-length -->
+| NS PP Long Put POC v1 | 999135746 | https://tradetron.tech/strategies/999135746/edit | 0 errors, 2 warnings (UNBOUNDED_DAILY_REENTRY, one per set), 1 notice (blank Universal Exit) | `backtestable`, confidence high, no blockers, no warnings, no checks skipped; NFO / NIFTY 50 data and window coverage ran; recommended run type positional (strong) | GO |
+<!-- lint-ignore-length -->
+| NS Collar POC v1 | 999135750 | https://tradetron.tech/strategies/999135750/edit | 0 errors, 4 warnings (REPAIR_ONCE_PATTERN_LIKELY and UNBOUNDED_DAILY_REENTRY, one each per set), 1 notice | `backtestable`, confidence high, no blockers, no warnings, no checks skipped; same coverage result; positional (strong) | GO |
+
+Read-back with `tt_get_strategy`: PP has 3 sets (two working sets plus Tradetron's universal set), 9 conditions and 2 legs (one long PE per working set); Collar has 3 sets, 9 conditions and 4 legs
+(long PE and short CE per working set). Both match the specs. Price quote for a run on either template, from `tt_backtest_workbench`: 1 credit, amount 20, affordable, max 60 months, no run yet. No
+spend was made in this task.
+
+Warnings, accepted on purpose. UNBOUNDED_DAILY_REENTRY: the live code re-enters the same day after a close (the CC v2 template behaves the same), so no re-entry cap was added.
+REPAIR_ONCE_PATTERN_LIKELY on the Collar: the validator expects a per-leg "exit the survivor at cost" shape; the live Collar closes both legs together on any trigger, which is what a set-level Exit
+does.
+
+Deviations from live code that TDL-8 must carry into the reconciliation (all inferences about effect, not measured):
+
+- Strike selection uses only the first ladder rung (put delta -0.20, call delta 0.18) with `Find Strike(..., 'delta', ..., 'any')`, which takes the nearest strike with no distance cap and no +/- 0.02
+  band, no liquidity or spread gate, and no fallback rungs (0.25 then 0.15 for puts; 0.20 then 0.15 for calls). Expect strike differences against paper, as with CC.
+- No IVR gate on either template. Live PP has one (> 0.60) but it is log-only in `auto_pp_bootstrap`, so effectively none; the live Collar blocks entry when IVR < 0.25, which the template does not, so
+  it will enter in low-vol stretches where paper stayed flat. Whether Tradetron exposes an IVR input was not looked up.
+- The Collar's pair search (min abs net premium across call x put candidates) is replaced by two fixed delta targets.
+- Put delta sign: `Find Strike` takes a negative target for a PE (`Number(-0.20)`) and the crash exit tests `Delta(put) <= -0.80`, per the keyword documentation; it is not yet seen in a fill.
+- Exit on the Collar is one OR group per set over the call-side rules (30% of credit with credit >= 15, 2.5x, delta >= 0.55, DTE <= 5) and the put-side crash rule (5x debit, delta <= -0.80). The live
+  `_REENTRY_ACTION_PRIORITY` ordering is irrelevant here because every trigger has the same result (close both, reopen).
+- PP rolls by closing at DTE <= 5 and letting the next set reopen once the nearest monthly has >= 14 DTE; live code reopens the same day through `auto_pp_bootstrap`. Same-day reopen is expected from
+  the flat gate, not observed.
+- Not modelled on either: the NiftyBees stock leg, margin, and the paper ledger's manual closes (BUG-031).
+
+One authoring lesson for this platform (kept here, not in the reference doc yet): `tt_check_backtestability` returned verdict `unknown` (confidence low, `data_coverage` and `coverage_window` skipped)
+when legs carried no numeric instrument id, and `backtestable` (high) once `instrument: 1855` from the read-back was on each leg. Pass the id, or pre-flight the read-back body.
