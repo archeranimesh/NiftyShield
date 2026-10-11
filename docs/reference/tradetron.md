@@ -175,6 +175,11 @@ Table notes.
 Net: the template is the right skeleton (margin-safe legs, one-shot guard, OR-joined Universal Exit). Entry sizing by delta, the %-of-credit and delta stops, DTE gates and limit-mid execution are the
 unresolved items, and each maps to a specific authoring topic above. Do not port IC v1 until those are settled, since a fixed-offset condor would be a different strategy from the one in the spec.
 
+**Superseded in part, 2026-10-11 (TDL-9 audit, `docs/archive/plan/tradetron-delta-and-long-window/findings.md` "IC buildability").** The table above was written from the archived spec and is wrong on
+three rows: the code time stop is DTE <= 7 (14 is an INFO warning only), the entry DTE bands (v1 30 to 45, v2 20 to 32) warn and do not block, and the "improve 0.25 after 5 minutes" limit step is not
+in the code read. Verdict PARTIAL: the v1 monthly core is expressible, with delta-chosen strikes, a combined-credit target and stop, the delta stop and the DTE close proven in CC, PP and Collar runs;
+ROLL_WING, one-sided spread closes, the profit lock, the v2 wing floors and limit-mid execution are gaps, and the IVR gate is unknown. No IC template was built.
+
 ## Backtesting
 
 Source: tool schemas and descriptions read 2026-10-04. Since 2026-08-25 every backtest, web or chat, runs on Tradetron's own backtest fleet (FastBT, job ids `ttbt-<bt_id>`). Sweeps and

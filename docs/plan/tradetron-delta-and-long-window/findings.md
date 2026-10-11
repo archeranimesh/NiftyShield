@@ -539,3 +539,39 @@ No template was built and no run was made. **Not recommended as a follow-up unle
 arithmetic in the Strike cell, a four-leg credit sum in an Exit, the VIX series for IVR, the hedge-first cross-set gate) and its own funded-run approval.
 
 Perspective not covered: the paper IC tracks themselves. Tradetron cannot reproduce their entry quality or roll decisions, so even a GO would not have validated the strategy that is actually running.
+
+## Verdict (TDL-10)
+
+Round-trip counts sit beside every figure; nothing below is an edge claim, and the report's own flag applies under 30 trips.
+
+### Does a long Tradetron screen change the data-purchase decision?
+
+It answered the question it could answer and none of the ones that justify the purchase. For the three overlays, the screen shows the rule sets are expressible and produce cycles over 2021-10 to
+2026-10: CC 196 round trips, net 50,803 on one lot, 72% win rate, average loss 2.2 times average win, drawdown about the size of the net gain; PP 69 round trips, 19% win rate, net -49,027, carried
+only by eight 5x events; Collar 391 trips (196 cycles), net +35,996, drawdown above the nominal capital, set split uneven, and the template lacks the live IVR gate. Those are 196, 69 and 391 trips,
+all above the 30-trip flag, but exit types are inferred from price ratios, rupee figures mix lot-size regimes, and the NiftyBees leg and margin were not modelled. What the screen cannot tell: fill
+quality, bid-ask, liquidity, margin, or anything strike-level before 2026 (no own-side comparator exists outside 2026-08-11 onward, TDL-4). IC cannot be screened at all beyond a plain-condor core
+(TDL-9, PARTIAL).
+
+My recommendation, for you to overrule: the screen is **not a reason to buy** paid data for CC, PP or Collar. It gave no sign that any of the three is clearly worth the spend, and PP in particular
+looks like a net cost over five years. It is **not a reason to skip** the purchase for IC either, because IC is the strategy Tradetron could not test and paid chain data is the only route to a
+historical IC study. If the purchase is made, scope it to the strategies you still intend to run, IC first.
+
+### Delta result and the 2026-10-05 rule
+
+Tradetron's delta agrees with Upstox's at strike level: 0.145 average Upstox delta at Tradetron's 0.15 picks (TDL-1, n = 6) and within 0.004 on monthly and Dec near-ATM contracts (TDL-2, n = 8, one
+timestamp); the weekly pair differed by 0.03 and looks like an Upstox quirk (inference). The delta explanation for the 2026-10-05 strike gap is therefore withdrawn; paper sold nearer the money than
+0.15. Consequence for the rule: Tradetron may be trusted for **delta-based strike selection** on monthly and far-dated near-ATM contracts. It still must not reconcile **P&L**, since it has no fill
+quality, uses a flat 0.05% slippage, and has no pre-2026 comparator. `DECISIONS.md` carries this narrowing.
+
+### Greeks reference for `greeks-bs-fallback`
+
+Partly usable. Tradetron gave nonzero Greeks on Dec 2026 contracts that agree with Upstox to about 0.004, so it works as an independent cross-check for GF-5. It did not test the case GF exists for,
+because Upstox's yearly bucket showed real Greeks on the probe day and zeros only deep ITM (20 of 176 Dec rows). **One decision for you:** whether GF-5 treats Tradetron's delta as a secondary
+cross-check for the Black-Scholes fallback (cheap, no spend), and whether to repeat the probe on a day the yearly bucket is all-zero before GF-5 closes. Tradetron's methodology is unknown, so it is a
+reference and not ground truth.
+
+### Spend
+
+₹60 of the ₹100 ceiling spent (wallet ₹160 at the story start to ₹100 per the TODOS record; the wallet trail in the TDL-5 and TDL-8 sections is the evidence, and the per-run itemisation is not
+repeated here). ₹40 of the ceiling is unspent, no further runs are planned, and the live balance comes from `tt_wallet_balance`, not from this file.

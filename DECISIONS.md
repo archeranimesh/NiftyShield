@@ -15,7 +15,10 @@ figures against NiftyShield's own backtest or paper records, and build the templ
 loss, delta and DTE exits were not exercised. Update (2026-10-05, TDL-1, `tradetron-delta-and-long-window`): the assumed cause of the strike gap, Tradetron's delta differing from Upstox's, is not
 supported. Tradetron's 0.15 picks had an Upstox delta of 0.139-0.152 in the stored chain snapshots (n = 6), while paper's strikes sat at 0.160-0.199 (n = 4); the gap looks like paper selecting nearer
 the money, cause still open. The rule above stays until that is resolved (TDL-6 reads the paper entry code). Detail: `docs/archive/plan/tradetron-cc-backtest-poc/findings.md` and
-`docs/plan/tradetron-delta-and-long-window/findings.md`.
+`docs/plan/tradetron-delta-and-long-window/findings.md`. Update (2026-10-11, TDL-10, `tradetron-delta-and-long-window`, now `docs/archive/plan/tradetron-delta-and-long-window/`): Tradetron's delta
+matches Upstox's to about 0.004 on monthly and Dec near-ATM contracts (n = 8, one timestamp), so the rule narrows: Tradetron may be trusted for delta-based strike selection on those contracts, and
+still must not reconcile P&L (flat 0.05% slippage, no fill quality, no pre-2026 comparator). Long CC, PP and Collar runs (196, 69 and 391 round trips) are viability screens only and are not a reason
+to buy paid data for those three; IC could only be screened as a plain-condor core (PARTIAL), so the purchase question for IC is unchanged and is yours to decide.
 
 **`doc_update_gate.sh` stays tuned-advisory, not blocking (2026-09-22, RDO-11):** measured over the full observation window (2026-08-27 → 2026-09-22, 116 non-tests-only commits touching `src/` or
 `scripts/` `*.py`), 84 of those commits (72%) would have tripped the gate — staged code with no `TODOS.md` / `CONTEXT.md` / `DECISIONS.md` / `docs/plan/README.md` in the same commit — and the
