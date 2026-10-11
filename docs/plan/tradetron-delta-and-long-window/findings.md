@@ -230,3 +230,92 @@ TDL-1 table (paper strikes 25400, 24200, 24200, 23900 on four dates, Upstox delt
 Limits: the 4 missing and 5 skipped sessions; one lot at Tradetron's flat 0.05% slippage and default costs, no fill-quality, bid-ask or margin view; rupee P&L across 2021 to 2026 mixes lot-size
 regimes (every fill is quantity 65, so earlier rupee figures are on today's lot, not the lot of the day); exit types inferred. No profitability claim: this says the rule set produces many cycles, a
 72% win rate with larger average losses than wins, and a drawdown close to the whole net gain.
+
+## Live PP and Collar rule set (TDL-6)
+
+Source of truth, read from code on 2026-10-11: `src/strategy/exit_signals.py` (`evaluate_pp` line 448 onward, `evaluate_crash_monetize`, `evaluate_cc`), `src/strategy/pp_overlay_v1.py`,
+`src/strategy/collar_overlay_v1.py`, `src/strategy/collar_entry.py`, `src/strategy/reentry_mixin.py`, `scripts/strategies/three_track/paper_3track_overlay_entry.py` (`auto_pp_bootstrap`, line 714) and
+`scripts/lookup/find_strike_by_delta.py`. Archived specs compared: `docs/archive/plan/paper_3track_overlay.md` (PP) and `docs/archive/plan/council-refactor/stories_collar.md` (Collar). The code is the
+authority. Both strategies run under `strategy_name = paper_nifty_overlay`, with leg roles `overlay_pp`, `overlay_collar_put` and `overlay_collar_call`.
+
+### PP (`overlay_pp`, long put)
+
+<!-- lint-ignore-length -->
+| Rule | Live value (source) | Archived spec | Status |
+|---|---|---|---|
+<!-- lint-ignore-length -->
+| Put strike | Delta ladder 0.20, then 0.25, then 0.15; each rung filters |delta| to target +/- 0.02, ranks, applies the liquidity gate, first rung with a survivor wins (`paper_3track_overlay_entry.py:823-842`; `find_strike_by_delta.py:87`) | 8-10% OTM band, 9% target (`PP_OTM_*`) | DIFFERS. `PP_OTM_*` still sit in `constants.py:46-48` and `paper_3track_overlay.py`; the auto path does not use them (inference: the manual path may) |
+| Expiry | Nearest monthly with DTE >= 14, no upper bound (`paper_3track_overlay_entry.py:766`; `lookup.get_expiry_candidates`) | quarterly, DTE 50 | DIFFERS |
+<!-- lint-ignore-length -->
+| IVR gate | Block when trailing 252-day IVR > 0.60 (`pp_overlay_v1.py:59,113`; `paper_3track_overlay_entry.py:133`). In `auto_pp_bootstrap` the gate is log-only by default (`log_only_gates=True`), so the routine roll proceeds regardless | not in spec | NEW. Effective entry gate is none |
+| CRASH_MONETIZE | Put delta <= -0.80 OR mark >= 5.0 x entry debit; ACTION, closes the put (`exit_signals.py:422-423`) | not in spec | NEW |
+<!-- lint-ignore-length -->
+| ROLL_ELIGIBLE | DTE <= 5; ACTION; the same-day reopen is `auto_pp_bootstrap`, gated on `_PP_ROLL_DTE_THRESHOLD = 5` (`exit_signals.py:484`; `paper_3track_overlay_entry.py:138`) | `OVERLAY_ROLL_DTE = 5` | MATCH |
+<!-- lint-ignore-length -->
+| Re-entry after MONETIZE_PP | Mixin gate: DTE >= 14, then IVR <= 0.60 (PP override) (`pp_overlay_v1.py:290-296`; `reentry_mixin.py:179-182`). ROLL_PP deliberately skips the mixin (`pp_overlay_v1.py:278-288`) | not in spec | NEW |
+| Profit target, loss stop, delta stop | None. A long put has no premium stop and no time stop | not in spec | n/a |
+| Lot size | 65 (`constants.py`, `LOT_SIZE`) | n/a | MATCH |
+
+### Collar (`overlay_collar_call` short, `overlay_collar_put` long)
+
+<!-- lint-ignore-length -->
+| Rule | Live value (source) | Archived spec | Status |
+|---|---|---|---|
+| Call strike | Ladder 0.18, 0.20, 0.15, band +/- 0.02 (`collar_entry.py:57`, `_find_candidates_for_ladder` line 82) | not in spec | NEW |
+| Put strike | Ladder 0.20, 0.25, 0.15, band +/- 0.02 (`collar_entry.py:58`) | not in spec | NEW |
+| Pair choice | Cross-product of call and put candidates, pick min abs(net premium) = call mid minus put mid (`collar_entry.py:116`, `_select_best_combo`) | not in spec | NEW |
+| Expiry | Nearest monthly, DTE >= 14. If the position being closed had DTE <= 5, force the next month (`collar_entry.py:148`) | not in spec | NEW |
+| Entry gates | DTE >= 14 and IVR >= 0.25, both hard; failure raises `CollarEntrySelectionError` and the collar stays flat (`collar_entry.py:60-61,185,298`) | not in spec | NEW |
+| Profit target | Call mark <= 30% of call credit and credit >= 15 (via `evaluate_cc`, `exit_signals.py:310`); closes BOTH legs | 30% (stories_collar line 24) | MATCH |
+| Loss stop | Call mark >= 2.5 x credit (`exit_signals.py:290-291,323`); closes both legs | 2.5x | MATCH |
+| Delta stop | Call delta >= 0.55 (`exit_signals.py:338`); closes both. Delta warn at 0.45 is WARN only | 0.55 / 0.45 | MATCH |
+| DTE | Call DTE <= 5 is an ACTION auto-close (`exit_signals.py:374`) | WARN only (stories_collar line 40) | DIFFERS (EC-5, 2026-08-02) |
+| Time stop (21 days) | Removed from the collar action list (`collar_overlay_v1.py:35-42`) | `TIME_STOP` at 21 days (line 38) | DIFFERS |
+| Put leg exit | Only CRASH_MONETIZE: delta <= -0.80 or mark >= 5 x debit (`collar_overlay_v1.py:249`). No other put-side exit | `[]` for the put (line 347) | DIFFERS |
+<!-- lint-ignore-length -->
+| Terminal action | Any winning ACTION closes both legs atomically, then reselects and opens a fresh pair (`CLOSE_AND_REENTER_COLLAR`). Priority: CRASH_MONETIZE, LOSS_STOP, PROFIT_TARGET, DTE_REVIEW, DELTA_STOP (`collar_overlay_v1.py:43-49`) | CLOSE_COLLAR, re-entry only after PROFIT_TARGET and TIME_STOP | DIFFERS |
+| Liquidity gate | `_apply_liquidity_gate` on every candidate (`strike_selector.py:151`); `SPREAD_PCT_MAX = 3.0` (`constants.py:86`) | max(put, call spread) <= 3.0 | MATCH |
+
+### Expressible on Tradetron, and gaps
+
+Nothing below was tested on the platform; "expressible" is from the CC v2 template and `docs/reference/tradetron.md`, and TDL-7's `tt_validate_markdown` is what confirms it.
+
+- **Expressible, reuse from CC v2:** nearest monthly with at least 14 DTE (two sets, flat gate); the DTE <= 5 close; the call-side exits for the Collar (30% target with credit floor 15, 2.5x loss,
+  0.55 delta) via per-leg Entry anchors; one-lot sizing.
+- **Expressible with care:** the PP CRASH_MONETIZE exit (mark >= 5x entry price through the Entry price keywords, as the 2.5x loss stop does for CC) and a put delta <= -0.80 read through `Delta(Traded
+  Instrument Name('Entry', ...))`. Confirm the put's delta sign and units first (reference doc table note 3).
+- **GAP, approximate:** the delta ladder (0.20 then 0.25 then 0.15 for puts, 0.18 then 0.20 then 0.15 for calls) has no if/else keyword. Use the first rung only (put 0.20, call 0.18) with `Find
+  Strike(..., 'Delta', ...)`, which picks the nearest strike, so the +/- 0.02 band is not enforced. This is the likely source of strike differences against paper, as it was for CC.
+- **GAP:** the Collar's min abs(net premium) pair search across a call by put cross-product; the liquidity gate (3% spread, OI ranking), because the BT engine has no bid-ask (inference, not looked
+  up); the IVR gates (PP > 0.60 effectively unenforced, Collar >= 0.25), which need a trailing 252-day IVR of VIX that Tradetron may not provide (UNKNOWN, check in TDL-7). Omitting the Collar's IVR
+  gate makes the template enter in low-vol periods where paper would stay flat; state this in TDL-8.
+- **GAP, structural for the Collar:** closing both legs when either leg's rule fires, then reopening a fresh pair the same minute. A Universal Exit over both legs followed by the flat gate should do
+  it (inference); the pair must also respect the margin-safe leg order (long put first).
+- **Not modelled by Tradetron at all:** the NiftyBees stock leg, margin, the manual-close entries in the paper ledger.
+
+## Paper PP and Collar ground truth (TDL-6)
+
+Source: `paper_trades`, `strategy_name = paper_nifty_overlay`, roles `overlay_pp`, `overlay_collar_put`, `overlay_collar_call`, queried 2026-10-11 and aggregated in SQL. All quantities 65. Gross =
+sell minus buy per unit times quantity; the ledger holds no charges. Window 2026-08-11 to 2026-10-11.
+
+<!-- lint-ignore-length -->
+| Leg | Instrument | Entry | Exit | Entry px | Exit px | Ratio | Gross | Exit type (inference) |
+|---|---|---|---|---|---|---|---|---|
+| PP | NSE_FO\|61604 (24000 PE, exp 2026-08-25) | 2026-08-11 | 2026-08-24 | 58.85 | 4.85 | 0.08 | -3,510 | manual close, BUG-031 B031.4 |
+| PP | NSE_FO\|74009 (23700 PE, exp 2026-09-29) | 2026-08-20, 08-21 (2 lots) | 2026-08-24 | 93.00 avg | 83.85 | 0.90 | -1,190 | manual close, BUG-031 B031.4 |
+| PP | NSE_FO\|74046 (23800 PE, exp 2026-09-29) | 2026-08-24 | 2026-08-24 | 97.375 | 99.85 | 1.03 | +161 | manual close, same day |
+| PP | NSE_FO\|74004 (23600 PE, exp 2026-09-29) | 2026-08-25 | 2026-09-16 | 88.625 | 448.70 | 5.06 | +23,405 | `apply_action`, ratio above 5x so CRASH_MONETIZE |
+| PP | NSE_FO\|51331 (22500 PE, exp 2026-10-27) | 2026-09-16 | open | 123.975 | n/a | n/a | open | n/a |
+| Collar put | NSE_FO\|73994 (23500 PE, exp 2026-09-29) | 2026-08-12 | 2026-09-29 | 91.825 | 783.80 | 8.54 | +44,978 | expiry settlement at intrinsic, NIFTY close 22,716.20 |
+| Collar put | NSE_FO\|51299 (21800 PE, exp 2026-10-27) | 2026-09-30 | open | 73.575 | n/a | n/a | open | n/a |
+| Collar call | NSE_FO\|51368 (23400 CE, exp 2026-10-27) | 2026-09-30 | open | 69.20 (sell) | n/a | n/a | open | n/a |
+
+Sample sizes. PP: 4 completed round trips, 1 open; 3 of the 4 closes are manual (BUG-031) and one is a rule exit. Collar put: 1 completed leg (settlement), 1 open. **Collar call: one row.** Before
+2026-09-30 the ledger has no `overlay_collar_call`; the call half of the collar rode the `overlay_cc` role (for example 2026-08-12 25400 CE, id 177, same date as the first collar put). That is an
+inference from the dates, and it means a clean two-leg collar cycle exists only from 2026-09-30 (0 completed cycles). The four PP and one collar-put closes are all long puts that gained in the same
+2026-09 NIFTY fall (close 22,716.20 on 2026-09-29), so they are one regime and are not independent. Gross PP closed: +18,866 on 4 trips; collar put closed: +44,978 on 1 leg. Neither says anything
+about edge at these counts.
+
+What the DB does not hold: delta at entry or exit (`ivr_at_entry` is empty for all of these rows), the trigger behind each close (only the note "close via apply_action" or "manual close"), the chain
+spot at entry (so strike distance cannot be recomputed from the ledger alone), charges, and which collar put belongs to which `overlay_cc` call. Reconciling a Tradetron run against this in TDL-8
+therefore compares entry dates, strikes, expiry, fill prices and gross P&L only, on an overlap of about two months.
