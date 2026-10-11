@@ -38,7 +38,6 @@ state. Arrows: `A → B` means B cannot start until A is done. `‖` means the t
 | 1 | DSN-5 source-flip seam | 25 | after DSN-4 | DSN-2 provenance columns | not needed before about 2027-09; may follow the roll |
 | 2 | `greeks-bs-fallback/` | 7 | GF-1 | Animesh's 3 modeling decisions before GF-2 | `strategy-payoff-charts` MO-1; `chain-decay-analysis` |
 | 2 | `gamma-near-expiry/` Phase B | 4 | GS-1 | 5+ days of snapshots | none |
-| 2 | `tradetron-delta-and-long-window/` | 22 | TDL-10 (Animesh) | none; funded runs need per-run approval | may give `greeks-bs-fallback` a far-dated reference |
 | 2 | `portfolio-snapshot-slimdown/` FD-1..7 → DHR-1..4 | 9 | FD-1 | never interleave the two sub-stories | `phase2-integrations/` |
 | 2 | `design-discipline/design-gate/` DG-1..9 | 26 | DG-1 | none | `design-baseline` (DG-4); soft-first for `logging-consistency` |
 | 2 | `strategy-payoff-charts/chart-polish/` CP-1..11 | 6 | CP-1 | none (`chart-core` done); CP-10 is an Animesh on-device gate | `chart-model-overlay` MO-4..6 |
@@ -118,8 +117,6 @@ rot them. (Items 3, 5 and 8 closed — numbers kept stable because item text cro
     not started, needs a story folder.
 21. **Variance gate — start the observation clock** — `docs/plan/variance-gate/` — next **VG0** (spec reconciliation, Animesh). Cheap, but VG2.A needs ≥9 calendar months of observation, so it is the
     longest wall-clock pole. Do VG0/VG1 now; the Gate A–D tasks are human checkpoints that accrue passively while the items below are built.
-22. **Tradetron delta check and long-window validation** — `docs/plan/tradetron-delta-and-long-window/` — next **TDL-10** (data-purchase verdict, learnings, archive; ₹40 of the ₹100 ceiling left,
-    wallet ₹100). Animesh's screen of the paper strategies before any paid-data purchase; TDL-2 may give `greeks-bs-fallback` a far-dated reference. Funded runs need Animesh's per-run approval.
 - strategy-payoff-charts follow-up: `spot=None` in `_send_close_notification` missing the "where we closed" marker. Needs `apply_action` to receive the chain or `underlying_price` plumbed through.
 - strategy-payoff-charts follow-up (2026-10-06): `src/notifications/payoff_chart.py` imports matplotlib at module top level, and the entry, snapshot, monitor and IC strategy modules import it at
   module level, so a venv without matplotlib crashes them at import (found when the cron venv lacked it). Import matplotlib lazily inside the render function so a missing dependency costs only the
@@ -166,6 +163,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-11] tradetron-delta-and-long-window TDL-10 closed (`fa63166`) and story archived to `docs/archive/plan/tradetron-delta-and-long-window/`: screen is no reason to buy paid data for
+  CC/PP/Collar (196/69/391 trips), IC unscreenable (PARTIAL), Tradetron delta matches Upstox (~0.004) so DECISIONS rule narrows to P&L only; open decision for Animesh on GF-5 cross-check.
 - [2026-10-11] tradetron-delta-and-long-window TDL-9 closed (`f4c1c91`): IC buildability audit, verdict PARTIAL; v1 monthly core expressible (delta shorts, 50%/2x combined-credit exits, 0.35 delta
   stop, DTE 7 close), v2 rolls, wing floors and profit lock are GAPs; no template, no spend; reference doc was stale on time stop (7 not 14) and limit-mid (not in code). TDL-10 next.
 - [2026-10-11] tradetron-delta-and-long-window TDL-8 closed (`7e2a7af`): PP and Collar long-window runs (69 and 391 round trips) reconciled vs paper; NiftyBees hold baseline via custom template

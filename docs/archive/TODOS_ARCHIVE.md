@@ -2119,3 +2119,9 @@ baseline row). `morning_signal.run()`'s pipeline body was extracted into `src/si
 SEC-6 also caught and fixed a live gap: the Mac host crontab still ran the two scripts SEC-3 retired, which no longer existed — Animesh applied the corrected single 16:00 `scripts.signal_eod` line,
 verified via `crontab -l`. SHAs: SEC-1 `1ef2974`, SEC-2 `0202291`/`819306b`, SEC-3 `928cb22`/`b297734`/`6b6177b`, SEC-4 `85b4744`, SEC-5 `290ba3a`. Folder:
 `docs/archive/plan/signals-entrypoint-consolidation/`.
+
+### ✅ tradetron-delta-and-long-window — DONE 2026-10-11 (TDL-1..10)
+
+Tradetron delta matches Upstox to about 0.004 on monthly and Dec near-ATM contracts, narrowing the 2026-10-05 rule to P&L reconciliation only. Long CC, PP and Collar screens (196, 69 and 391 round
+trips) are viability screens and no reason to buy paid data for those three; IC is only PARTIAL on Tradetron. SHAs: TDL-1 `b20ec40`, TDL-2 `39938a3`, TDL-3 `8c79dcd`, TDL-4 `4900b3e`, TDL-5 `fbadfab`,
+TDL-6 `213e9bd`, TDL-7 `a1476a0`, TDL-8 `7e2a7af`, TDL-9 `f4c1c91`, TDL-10 `fa63166`. Folder: `docs/archive/plan/tradetron-delta-and-long-window/`.

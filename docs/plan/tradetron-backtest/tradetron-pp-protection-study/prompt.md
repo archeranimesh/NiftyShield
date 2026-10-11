@@ -42,8 +42,8 @@ No new module, class or seam. A reusable cycle-table calculator, if one emerges,
 
 ## Session-start load hints
 
-Always: `CONTEXT.md`, `tasks.md`, the current task in `stories.md`, `docs/reference/tradetron.md` (Backtesting, long-window runs), `docs/plan/tradetron-delta-and-long-window/findings.md` (PP and
-Collar runs, TDL-6 rules), `docs/plan/tradetron-delta-and-long-window/template_pp.md` (PP template spec). The Tradetron MCP tools are deferred: load schemas with `ToolSearch`; call
+Always: `CONTEXT.md`, `tasks.md`, the current task in `stories.md`, `docs/reference/tradetron.md` (Backtesting, long-window runs), `docs/archive/plan/tradetron-delta-and-long-window/findings.md` (PP
+and Collar runs, TDL-6 rules), `docs/archive/plan/tradetron-delta-and-long-window/template_pp.md` (PP template spec). The Tradetron MCP tools are deferred: load schemas with `ToolSearch`; call
 `tt_get_tradetron_quickstart` once before authoring. PPS-1 first, because the per-trade index of the PP run ages out within days of 2026-10-11 (save the cycle data to this folder at once).
 
 ## Task overview

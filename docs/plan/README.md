@@ -71,8 +71,8 @@ comparison snapshot; automated base-leg rolling; full unattended automation.
 **`tradetron-backtest/`** · 🟡 Epic scaffolded 2026-10-11 · next: **PPS-1** in `tradetron-pp-protection-study/` Cheap Tradetron backtests (₹20 a run) for protection and income studies on the NIFTY
 overlays: put depth, cost and deductible; CC rental net of losses. Funded runs need Animesh's approval.
 
-**`tradetron-delta-and-long-window/`** · 🟡 In progress · next: **TDL-10** (TDL-1..9 done) Check whether Tradetron's delta matches Upstox's, then use Tradetron as a long-window screen of the paper
-strategies (CC, PP, Collar; IC audited) before any paid-data purchase, and see whether its Greeks give `greeks-bs-fallback` a far-dated reference. Funded runs at ₹20 each need Animesh's approval.
+**`tradetron-delta-and-long-window/`** · ✅ Archived 2026-10-11 → `docs/archive/plan/tradetron-delta-and-long-window/` Verdict: no reason to buy paid data for CC, PP or Collar on this screen; IC only
+PARTIAL; delta agrees with Upstox.
 
 **`dhan-data-poc/`** · ✅ Archived → `docs/archive/plan/dhan-data-poc/` Verdict: no for Dhan history (ATM±10, no delta, nothing past about 90 DTE); yes for its live far-dated Greeks.
 
