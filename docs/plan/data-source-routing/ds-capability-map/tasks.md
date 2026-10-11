@@ -3,10 +3,10 @@
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
 spec.
 
-**Open: DSM-1.** DSM-2 (council run) and DSM-3 (absorb) are done; the broader capability matrix moved to `ds-router-migration/` DSR-0 because the council ruled it post-roll.
+**Open: none.** DSM-2 (council run) and DSM-3 (absorb) are done; the broader capability matrix moved to `ds-router-migration/` DSR-0 because the council ruled it post-roll.
 
-- [ ] **DSM-1** — Roll-critical verification: Upstox BOD lists Dec 2027 contracts; Dhan 806 / stale-token response shapes; Upstox Greeks flip on a second expiry; record in `roll_checks.md` | Owner:
-  Claude | Model: claude-sonnet-5-5 | Review: none | SHA: <—>
+- [x] **DSM-1** — Roll-critical verification: Upstox BOD lists Dec 2027 contracts; Dhan 806 / stale-token response shapes; Upstox Greeks flip on a second expiry; record in `roll_checks.md` | Owner:
+  Claude | Model: claude-sonnet-5-5 | Review: none | SHA: <pending>
 - [x] **DSM-2** — Run the council: `bash docs/plan/data-source-routing/council/submit.sh` (server up first) | Owner: Animesh | Model: n/a | Review: none | SHA: 1cc4c30
 - [x] **DSM-3** — Absorb the council ruling: `DECISIONS.md` row, `docs/council/README.md` topic row, spec `ds-chain-seam` and `ds-chain-monitoring`, re-scope DSM-1 | Owner: Claude | Model:
   claude-sonnet-5-5 | Review: none | SHA: <pending>

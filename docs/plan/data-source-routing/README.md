@@ -62,7 +62,7 @@ SOLID triggers run against the plan (`docs/refactor/design-principles.md`):
 
 | Story | Purpose | Status | Depends on | Closing SHA |
 |---|---|---|---|---|
-| `ds-capability-map/` | Council run and absorb (done), roll-critical checks (BOD Dec 2027 coverage, Dhan failure shapes) | 🔄 In progress — next DSM-1 | — | — |
+| `ds-capability-map/` | Council run and absorb (done), roll-critical checks (BOD Dec 2027 coverage, Dhan failure shapes) | ✅ Done | — | <pending> |
 | `ds-chain-seam/` | `ContractRef` / `ChainSnapshot`, resolver, per-expiry fallback and health, chain routing config, shared Dhan throttle | ⬜ Not started | `ds-capability-map` | — |
 | `ds-chain-monitoring/` | Token alert, yearly read path with provenance, stale-Greeks policy, cadence, source flip | ⬜ Not started | `ds-chain-seam`; `yearly-foundation` YF-3 | — |
 | `ds-router-migration/` | Capability matrix, quote / candle router, importer migration, token renewal, generalised health | ⬜ Not started | `ds-chain-monitoring` (and Dec 2026 roll done) | — |
@@ -74,12 +74,12 @@ Status: ⬜ Not started · 🔄 In progress · ✅ Done. This column is the epic
 Resolved by the council on 2026-10-07: contract identity (Option A) and token renewal (alert pre-roll, renewal post-roll).
 
 1. **Kite / Zerodha.** The council deferred it post-roll; BA-6..BA-9 stay deferred (no credentials, no consumer). Confirm or restore.
-2. **Dhan yearly plan.** Rs 4,788 / year against Rs 5,988 monthly. Tracked as DA-0 in `dhan-far-expiry-chain/`; the design holds if the plan lapses (806 degrades to Upstox).
+2. **Dhan yearly plan.** Resolved 2026-10-11: Animesh renews for one year (Rs 4,788). DA-0 in `dhan-far-expiry-chain/`; 806 gets only a generic fall-back-to-Upstox branch.
 3. **Yearly monitor cadence.** Proposal: 300 s or slower (the council's 60 s is "initial"). Set in DSN-4.
 4. **Backstop thresholds.** Premium multiple or spot distance to strike for the delta-independent alert (DSN-3); depends on the yearly tenor policy values (`yearly-overlays/README.md` open decision
    1).
 5. **Schema acceptance.** Four additive `TEXT NULL` columns (`ds-chain-monitoring/schema.md`). `yearly-overlays/` YF-1 must not conclude "no schema change".
-6. **Dec 2027 not in the Upstox BOD.** If DSM-1 finds it absent, the council requires a separate architectural decision before the roll; do not fall back to serialised `ContractRef` identity.
+6. **Dec 2027 not in the Upstox BOD.** Resolved by DSM-1 (2026-10-11): Dec 2027 is listed (35 contracts, thin, 500+ strike steps), so no separate decision is needed; Option A stands.
 
 ## Cross-cutting constraints
 

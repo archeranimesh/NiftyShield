@@ -54,12 +54,13 @@ Both endpoints again identical. So missing token gives code 809 ("Access token i
 covers a wrong client id, so an expired token cannot be told apart from a bad client id by the response alone; the token's own `exp` claim can. DSN-1's staleness alert should read `exp` from the JWT
 rather than wait for a 401. Both cases return HTTP 401, which `DhanMarketClient` already maps to `AuthenticationError`. No probe call consumed data-API quota.
 
-## 3. Dhan error 806 ("Data APIs not subscribed") — unverified, owner Animesh
+## 3. Dhan error 806 ("Data APIs not subscribed") — not verified, no longer needed (plan renewed)
 
-Only the POC's secondhand note exists (`findings.md` line 100: error 806 "Data APIs not subscribed", status U). It cannot be provoked while the data plan is active. It becomes observable if the plan
-lapses on 2026-11-04 (DA-0); record the exact HTTP status and body then. Until verified, DSC-3 must parse by the nested `Data` code key and also tolerate a top-level `errorCode`.
+Animesh decided on 2026-10-11 to renew the Dhan data plan for a year (DA-0), so 806 should not occur during the roll window. The only evidence is the POC's secondhand note (`findings.md` line 100,
+status U). Handle it as one generic "capability unhealthy, fall back to Upstox" branch with no 806-specific work. If a real 806 is ever seen, record the body here. The parser should still read the
+nested `data` / `Data` code key and tolerate a top-level `errorCode`.
 
-## 4. Upstox zero-to-non-zero Greeks flip on a second expiry — unverified, owner Animesh
+## 4. Upstox zero-to-non-zero Greeks flip on a second expiry — deferred, not a roll gate
 
 Evidence today is one contract: Dec 2026 flipped between 2026-09-29 15:55 (DTE 91, all zero, 22 strikes) and 2026-09-30 09:51 (DTE 90, 90 rows with 0 < |delta| < 1, 88 strikes). The chain widening and
 the DTE crossing coincide, so the cause cannot be separated. The second expiry in the stored data (2026-09-29) starts only at DTE 85 and cannot test the cutoff from above.
@@ -77,5 +78,5 @@ cutoff being exactly 90 DTE (`ds-chain-monitoring` DSN-5 already requires two co
 | Dec 2027 in Upstox BOD | Verified (2026-10-04 file) — listed, thin | Animesh (optional refresh) |
 | Missing-token response | Verified — 401, `Data.809` | — |
 | Expired-token response | Verified — 401, `data.808`, key case differs | — |
-| 806 response | Unverified | Animesh (only observable if plan lapses) |
-| Greeks flip, second expiry | Unverified; earliest 2027-03-31 | Claude (read capture store then) |
+| 806 response | Not verified, not needed (plan renewed 1 year) | — |
+| Greeks flip, second expiry | Deferred; revisit about 2027-03-31 | Claude (read capture store then) |

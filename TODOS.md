@@ -28,9 +28,8 @@ state. Arrows: `A → B` means B cannot start until A is done. `‖` means the t
 |---|---|---|---|---|---|
 | 0 | `dhan-far-expiry-chain/` (DA-0 → FC-1..5 → FG-1..3) | 24 | DA-0 (Animesh) | DA-0 before 2026-11-04; FG-1 needs 15+ captured trading days | YV-5, YF-3 registry (FG-3 writes `roll_dte`) |
 | 0 | `variance-gate/` | 21 | VG0 (Animesh) | none | gates A-D; `options_income/`; `entry-event-filter/` |
-| 0 | `data-source-routing/ds-capability-map/` (DSM-1) | 25 | DSM-1 | council done | `ds-chain-seam` |
 | 1 ROLL | `yearly-overlays/yearly-foundation/` YF-1..5 | 23 | YF-1 | none | all other yearly stories; `ds-chain-monitoring` (needs YF-3) |
-| 1 ROLL | `data-source-routing/ds-chain-seam/` DSC-1..5 | 25 | after DSM-1 | DSM-1 (BOD Dec 2027 result) | YF-6; `ds-chain-monitoring` |
+| 1 ROLL | `data-source-routing/ds-chain-seam/` DSC-1..5 | 25 | DSC-1 | none (DSM-1 done) | YF-6; `ds-chain-monitoring` |
 | 1 ROLL | YF-6 (chain wiring into the 3 bootstraps) | 23 | after YF-4 and DSC-3 | YF-4, DSC-2, DSC-3 | yearly-cc / pp / collar run on the routed chain; YV-5 |
 | 1 ROLL | `yearly-cc/` ‖ `yearly-pp/` → `yearly-collar/` | 23 | after YF-5 | `yearly-foundation` complete (collar: cc and pp) | `yearly-ops-wiring` |
 | 1 ROLL | `data-source-routing/ds-chain-monitoring/` DSN-1..4 | 25 | DSN-1 after DSC-3 | DSC-3; DSN-2..4 also need YF-3 | YV-5 |
@@ -81,9 +80,9 @@ rot them. (Items 3, 5 and 8 closed — numbers kept stable because item text cro
     `dhan-far-expiry-chain` FG-3 and `ds-chain-monitoring` DSN-1..4. Requested by Animesh 2026-10-06.
 24. **Dhan far-expiry chain (epic)** — `docs/plan/dhan-far-expiry-chain/` — next **DA-0** (Animesh: renewal decision **before 2026-11-04**), then `far-expiry-capture/` FC-1. DA-1..3 done. Forward-only
     daily capture has no slack; `far-expiry-liquidity-gate/` FG-1 needs 15+ captured trading days. Feeds `yearly-overlays` (FG-3 → YF-3 registry; YV-5).
-25. **Data source routing (epic)** — `docs/plan/data-source-routing/` — next **DSM-1** (Upstox BOD lists Dec 2027? Dhan 806 shapes; needs the BOD file from Animesh's machine). Council ruled 2026-10-07
-    (`DECISIONS.md`). Order: `ds-capability-map` → `ds-chain-seam` → `ds-chain-monitoring` (needs `yearly-foundation` YF-3) → `ds-router-migration` (after the Dec 2026 roll). Supersedes most of
-    `broker-abstraction`. Open for Animesh: monitor cadence, backstop thresholds, Kite.
+25. **Data source routing (epic)** — `docs/plan/data-source-routing/` — `ds-capability-map` ✅ done; next **DSC-1**. Council ruled 2026-10-07 (`DECISIONS.md`). Order: `ds-capability-map` →
+    `ds-chain-seam` → `ds-chain-monitoring` (needs `yearly-foundation` YF-3) → `ds-router-migration` (after the Dec 2026 roll). Supersedes most of `broker-abstraction`. Open for Animesh: monitor
+    cadence, backstop thresholds, Kite.
 4. **Gamma near-expiry buy (epic)** — `docs/plan/gamma-near-expiry/` — Phase A `risk-gamma-phase-a/` ✅ done; next Phase B `gamma-scan-phase-b/` GS-1 (GS-1..6), blocked until ≥ 5 days of snapshots
    exist. In progress, independent of everything else; finish before starting new stories.
 6. **Strategy payoff charts on Telegram (IC first, any strategy via opt-in registry)** — `docs/plan/strategy-payoff-charts/` — `chart-core/` ✅ done (`6ef2a5f`); next **CP-1** (`chart-polish/`, dark
@@ -165,6 +164,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ## Session Log
 - [2026-10-11] tradetron-delta-and-long-window TDL-10 closed (`fa63166`) and story archived to `docs/archive/plan/tradetron-delta-and-long-window/`: screen is no reason to buy paid data for
   CC/PP/Collar (196/69/391 trips), IC unscreenable (PARTIAL), Tradetron delta matches Upstox (~0.004) so DECISIONS rule narrows to P&L only; open decision for Animesh on GF-5 cross-check.
+- [2026-10-11] data-source-routing DSM-1 closed, `ds-capability-map` done: Dec 2027 listed in BOD, Dhan missing/expired token shapes captured, 806 and Greeks-flip dropped as gates (Dhan plan renewed 1
+  year). Next: DSC-1.
 - [2026-10-11] DSM-1 update: expired Dhan token probe verified, 401 `data.808` (missing token was `Data.809`, key case differs). Only 806 and the second-expiry Greeks flip stay unverified; DSM-1 still
   open.
 - [2026-10-11] data-source-routing DSM-1 partial: `ds-capability-map/roll_checks.md` written. Dec 2027 IS in the Upstox BOD (2026-10-04 file; thin, 35 contracts, 500+ strike steps); Dhan missing-token
