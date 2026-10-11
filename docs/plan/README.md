@@ -68,6 +68,9 @@ comparison snapshot; automated base-leg rolling; full unattended automation.
 
 ## Active Stories
 
+**`tradetron-backtest/`** · 🟡 Epic scaffolded 2026-10-11 · next: **PPS-1** in `tradetron-pp-protection-study/` Cheap Tradetron backtests (₹20 a run) for protection and income studies on the NIFTY
+overlays: put depth, cost and deductible; CC rental net of losses. Funded runs need Animesh's approval.
+
 **`tradetron-delta-and-long-window/`** · 🟡 In progress · next: **TDL-9** (TDL-1..8 done) Check whether Tradetron's delta matches Upstox's, then use Tradetron as a long-window screen of the paper
 strategies (CC, PP, Collar; IC audited) before any paid-data purchase, and see whether its Greeks give `greeks-bs-fallback` a far-dated reference. Funded runs at ₹20 each need Animesh's approval.
 
