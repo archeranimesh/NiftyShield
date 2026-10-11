@@ -357,3 +357,123 @@ Deviations from live code that TDL-8 must carry into the reconciliation (all inf
 
 One authoring lesson for this platform (kept here, not in the reference doc yet): `tt_check_backtestability` returned verdict `unknown` (confidence low, `data_coverage` and `coverage_window` skipped)
 when legs carried no numeric instrument id, and `backtestable` (high) once `instrument: 1855` from the read-back was on each leg. Pass the id, or pre-flight the read-back body.
+
+## PP and Collar runs (TDL-8)
+
+Both runs: window 2021-10-11 to 2026-10-01, `positional`, `Open` fill, 1-minute candles, price ₹20 each (quote re-read from `tt_backtest_workbench` the same session; Animesh approved ₹40 in-session).
+Wallet read ₹160 before and ₹120 after both runs; the earlier "₹140 after TDL-5" note was not seen again in this session, so the TDL-5 charge is unreconciled (inference: the balance display lagged).
+Both reports carry the same high-severity `COVERAGE_PARTIAL` caveat as CC (4 sessions absent, 5 skipped), no Sharpe, Sortino or Calmar, no MAE or MFE.
+
+<!-- lint-ignore-length -->
+| Run | Template | Job id / bt_id | Report |
+|---|---|---|---|
+| PP | 999135746 | `ttbt-999113502261011` | https://tradetron.tech/bt/view/6c45f17a74c12a9e5cde13d9e0e18584 |
+| Collar | 999135750 | `ttbt-999113506261011` | https://tradetron.tech/bt/view/58d20899e50cd70eb268eb00e54b8d3b |
+
+Headline (report figures, 1 lot, nominal capital ₹100,000, round-trip count beside each):
+
+<!-- lint-ignore-length -->
+| Figure | PP (69 round trips) | Collar (391 round trips, 196 cycles of two legs) |
+|---|---|---|
+| Gross P&L | -47,528 | +42,516.50 |
+| Costs | 1,499 | 6,521 |
+| Net P&L | -49,027 | +35,996 |
+| Win rate (trips) | 18.8% | 55.2% |
+| Avg win / avg loss | 26,402 / -6,978 | 4,572 / -5,400 |
+| Profit factor | 0.88 | 1.04 |
+| Max drawdown (net, of nominal capital) | 136,382 (136%), not recovered | 134,736 (135%), not recovered |
+| Worst rolling 6 months | n/a in report | -103,269, ending 2025-08-18 |
+| Median hold | 28 days | 8 days |
+
+Collar trips are leg-level (one put plus one call per cycle). Per leg: PE 194 trips, gross +15,021, win rate 39%; CE 197 trips, gross +27,495, win rate 71%. Per set: Set 1 lost 33,092 over 221 round
+trips, Set 2 made 69,088 (report arithmetic, not a re-run). PP per set: Set 2 lost 31,189 over 60 trips; Set 1 has 9 trips, too thin to read. The drawdown exceeds the nominal capital on both runs, so
+₹100,000 is not a workable base for either; read the shape, not the percentage.
+
+PP exit mix, 69 trips (exit type is **inference** from the exit-price ratio; the report labels every exit "Take-profit", which is a generic tag, not a reason): 8 trips with ratio at or above 5.0 (the
+`CRASH_MONETIZE` mark rule), gross +263,921; 56 with ratio below 1 (DTE <= 5 rolls that expire the premium); 5 between 1 and 5. The other 61 trips sum to -311,451. So the whole PP result is eight
+events carrying a 61-trip bleed: win rate 19%, and the 8 crash exits are the only reason the run is not worse than -311k. The 8 events are in 5 regimes at most (Nov 2021, May 2022, Mar 2023, Jun 2024,
+Apr 2025, Mar 2026, Sep 2026 by month), not independent samples. Median hold 27 days; PP trips are at one lot of 65. PP round trips saved in `pp_long_window_cycles.md` in this folder (69 rows; gross
+sums to -47,530 against the report's -47,528 by rounding). The Collar's 391 paired round trips were not saved (about 100k tokens to page); the aggregates above are the report's, and the post-2026-08
+fills below were read from the fill list.
+
+### Reconciliation against paper (overlap 2026-08-11 onward)
+
+Overlap sample sizes: PP 4 Tradetron trips (3 rule exits and the window-end close), against 5 paper PP rows (4 closed, 3 of them manual closes, BUG-031). Collar 7 Tradetron cycles, against 1 completed
+paper collar put (settlement) and 1 open pair. Neither is a sample that supports a claim.
+
+<!-- lint-ignore-length -->
+| Date | Tradetron PP | Paper PP | Match |
+|---|---|---|---|
+| 2026-08-20 | buy 23700 PE exp 2026-09-29 at 97.40 | buy 23700 PE exp 2026-09-29 on 08-20 and 08-21, avg 93.00 (2 lots) | strike and expiry match, entry 4.40 higher, 1 lot against 2 |
+| 2026-09-11 | exit at 487.30, ratio 5.00, gross +25,343 | none; paper held 23600 PE (bought 08-25 at 88.625) | different strike, different date |
+<!-- lint-ignore-length -->
+| 2026-09-16 | none; Tradetron already flat after 09-11 and reopened 22750 PE the same day | paper `apply_action` closed 23600 PE at 448.70, ratio 5.06, gross +23,405 (CRASH_MONETIZE) | exit rule the same (5x mark), dates five days apart, strike 100 points apart |
+<!-- lint-ignore-length -->
+| 2026-09-16 / 09-24 | 22750 PE exp 09-29 bought 09-11, rolled at DTE <= 5 on 09-24 (ratio 0.12, -4,192); next 22650 PE exp 2026-10-27 at 99.65 | 22500 PE exp 2026-10-27 at 123.975, still open | same expiry on the open leg, strike 150 lower on paper |
+| 2026-10-01 | 22650 PE exits at 499.00, ratio 5.01, +25,958; opens 21550 PE at 107.75 and force-closes it at window end, -2,278 | open | Tradetron's 5x exit fires on a day paper had not closed |
+
+The PP template reproduces paper's **mechanics** (the same nearest-monthly, DTE >= 14 expiry and a CRASH_MONETIZE 5x close that fires on the same fall) and the 08-20 strike and expiry exactly. It does
+not reproduce entry strikes in general, as expected from the first-rung-only delta target (no +/- 0.02 band, no fallback rungs). Strike differences of 100 to 150 points on two of three comparable
+entries.
+
+<!-- lint-ignore-length -->
+| Date | Tradetron Collar cycle (put long, call short) | Paper |
+|---|---|---|
+<!-- lint-ignore-length -->
+| 2026-08-12 | 23750 PE at 118.00 and 25500 CE at 79.15, exp 09-29; closed 08-19, gross +6,009 | 23500 PE exp 09-29 at 91.825 (held to settlement, +44,978 gross); call half sat in role `overlay_cc` (25400 CE) |
+| 2026-08-19 to 09-22 | five further cycles, each closed by a trigger within 4 to 14 days, gross +1,710, +10,946, +8,151, -1,518, +16,409 | paper held the 08-12 put unchanged to 09-29 |
+| 2026-09-29 | 22050 PE at 109.95 and 23550 CE at 72.00 exp 10-27, closed at window end 10-01, +4,973 | 09-30: 21800 PE at 73.575 and 23400 CE at 69.20 exp 10-27, open |
+
+Seven Tradetron cycles over seven weeks produce gross +46,680 on overlap fills (computed from the fill list, ties to the report's window-end 4,972.50); paper made +44,978 on one long put leg in the
+same weeks with the call half booked elsewhere, so the two are not like for like. Tradetron re-cuts the pair about weekly because any one of the OR-ed triggers closes both legs and the flat gate
+reopens it; paper holds until its own rule fires. That difference (a template-structure effect, inference) is what drives the 391-trip count against paper's near-absent cycles. Strike deltas on the
+first Tradetron collar cycle (PE 23750 at 24,374.7 spot, 1.7% OTM; CE 25500, 4.6% OTM) differ from paper's chosen pair by 250 and 100 points. The 09-29 and 09-30 entries are one trading day apart,
+22050 against 21800 for the put and 23550 against 23400 for the call.
+
+### Verdicts, TDL-8 part 1
+
+- **PP: reproduces partially.** Expiry rule, DTE roll and CRASH_MONETIZE exit are reproduced; strikes match once of three comparable entries. Over five years the run shows a 19% win rate and a net
+  loss (-49,027 net on 69 trips) carried only by eight 5x events; paper's 4 closed trips cannot show this. Not an edge claim.
+- **Collar: reproduces partially at best.** The pair, expiry and call-side exit set are expressed, but the template re-cuts weekly and enters in low-vol periods without the IVR gate, which live code
+  would refuse (not measured per cycle). 391 trips (196 cycles) is above the 30-trip flag; the result is +35,996 net with a drawdown over the nominal capital and an uneven set split. A screen of
+  viability, not an edge.
+- Tradetron's `Delta` sign convention for puts was seen working: the PP 5x exit fired and the Collar crash rule is untested in isolation (the Collar report has no exit-reason column, `has_exit_reason`
+  false), so whether the delta <= -0.80 branch fired cannot be told. Platform fact for the reference doc: PP's report names an exit, the Collar's does not.
+
+### NiftyBees baseline and the combined table
+
+The `tt_backtest_idea` Playground cannot hold for the window (`hold_days` is capped at 1 to 365, and its entry needs a crossing that never fired), so the baseline is a hand-built template: NS
+NiftyBees Hold POC v1, id 999136810, one buy of 65 NIFTYBEES shares at 10:00 with a flat gate and a never-true exit. It validated with 0 errors (warnings accepted on purpose: UE placement on a single
+set, unbounded re-entry that cannot fire because the position never closes) and pre-flighted `backtestable`, confidence high, no checks skipped. Run: job `ttbt-999113798261011`, same window and
+settings, ₹20 (Animesh chose this route in-session; wallet ₹120 before, then the charge). Report: https://tradetron.tech/bt/view/684b2fe9c20efc5bbc52d0f424faa860.
+
+Measured: **the first fill is 2022-01-03, not 2021-10-11.** The NiftyBees store has a 368-day hole from 2020-12-31 to 2022-01-03 (shown by the Playground preview), so the buy waited 12 weeks. One buy
+at 189.19 per share (turnover 12,297.35) and one window-end close at 257.25 (16,721.25): gross +4,423.90, net +4,369.81 (costs 54.09), price return +35.97%. The report's own `COVERAGE_PARTIAL` (4
+sessions absent, 5 skipped) applies too, and the Playground preview showed eight further holes from 2022-12 to 2024-06 (15 to 180 days each) that this run's single position is blind to. One round
+trip: no statistic below it means anything. The report holds only the two end marks (series length 2), so a NiftyBees max drawdown, worst rolling 6 months and CAGR are **not obtainable** from the run;
+the overlay series are also realized-basis (round trips booked on exit day), so a daily combined equity curve cannot be built from them either. The table below therefore uses end-to-end figures only.
+
+**Sizing mismatch, stated plainly.** The spec asked for the NiftyBees position sized to the overlay lot count. The run holds 65 shares (about ₹12,300), which is about 1% of the notional of the one
+NIFTY lot (65 units at the 2021-10-11 fill level of 17,966.2, about ₹1,167,800) every overlay run trades. So the rupee figures are not on a matching base; compare the percent column, which is a
+fixed-notional approximation (overlay gross divided by ₹1,167,800, one notional for all five years, while NIFTY itself rose to about 22,400).
+
+<!-- lint-ignore-length -->
+| Book (2021-10-11 to 2026-10-01 unless noted) | Round trips | Gross P&L (Rs) | Net P&L (Rs) | Gross as % of one-lot notional | Max drawdown (report, net, Rs) | Worst rolling 6M |
+|---|---|---|---|---|---|---|
+| NiftyBees buy-and-hold, 65 shares, from 2022-01-03 | 1 | +4,424 | +4,370 | +35.97% (price return) | not obtainable | not obtainable |
+| CC, 1 lot (TDL-5, `ttbt-999110942261010`) | 196 | +52,878 | +50,803 | +4.53% | 43,375 | not read |
+| PP, 1 lot (`ttbt-999113502261011`) | 69 | -47,528 | -49,027 | -4.07% | 136,382 | not read |
+| Collar, 1 lot (`ttbt-999113506261011`) | 391 | +42,517 | +35,996 | +3.64% | 134,736 | -103,269 (to 2025-08-18) |
+
+Hold plus overlay, percent basis only (inference arithmetic, not runs): NiftyBees +35.97% plus CC +4.53% is about +40.5%; plus PP -4.07% is about +31.9%; plus Collar +3.64% is about +39.6%. Overlay
+P&L counts only while a call or put is open, the overlays were run on different dates in the window than the baseline's 2022-01-03 start, and no row is an edge claim: the baseline has 1 round trip and
+the PP, Collar and CC rows rest on 69, 391 and 196 round trips of which a few events carry the PP and the Collar's set 2. What the table does show: against a five-year hold of the underlying ETF, each
+overlay's gross over the same window is a single-digit percent of one lot's notional, and PP is a net cost. The Collar's drawdown (over the whole nominal capital) is on the options legs alone, with no
+stock leg modelled to offset it.
+
+### Verdicts, TDL-8 part 2
+
+- **NiftyBees baseline: obtained, with a late start and no drawdown series.** The engine's data hole starts the position 12 weeks late, and the report keeps no marks between entry and exit. Useful as
+  a price-return anchor (+35.97%), not as a drawdown comparator.
+- **TDL-8 done condition:** a finished run per template (PP, Collar, NiftyBees) is logged, PP and Collar are reconciled against paper on the overlap with sample sizes (4 PP trips, 7 Collar cycles),
+  and the combined table is above, with its limits.

@@ -215,6 +215,15 @@ runtime-variable underlyings are flagged as error-prone. A blocker means the run
 **Other.** The sweep's baseline is comparable with a single run only because both default `trade_price` to `Open`. `tt_backtest_compare` withholds metrics in `not_compared`; do not subtract them.
 `tt_indicator_snapshot` (1m–1h, no daily) returns summary / moving-average / oscillator verdicts plus forward-move history from the same bar store the engine uses; quote sample size.
 
+**Long-window runs, measured 2026-10-11** (`tradetron-delta-and-long-window/findings.md`, TDL-5 and TDL-8; each run ₹20 flat, 60-month cap, 1-minute candles, runtime 1 to about 35 minutes for option
+books). `tt_check_backtestability` returns `unknown` (checks skipped) when a hand-built body has no numeric leg `instrument` id; pass the id read back from `tt_get_strategy`. The fleet submit
+response's billing block can read ₹0 when a charge is made, so trust `tt_wallet_balance`. A buy-and-hold ETF cannot be run through `tt_backtest_idea` over a long window (`hold_days` is capped at 365,
+entries must cross), so build a one-leg equity template instead. The NiftyBees bar store has holes (368 days to 2022-01-03, then eight of 15 to 180 days to 2024-06), so a position's first fill can be
+months after the window start. `tt_backtest_result` `series` is realized-basis on positional books (two points for a single hold), so a daily drawdown or combined curve across runs cannot be built;
+drawdown comes from each report. Report exit labels are generic on some books (PP labelled every exit "Take-profit"; the Collar report has no exit reason): infer exit type from the exit-price ratio
+and say so. `tt_backtest_trades` and `tt_backtest_result` `trades` overflow into a file when large (about 60 KB for 48 fills or 69 pairs); process that file with Python rather than reading it into
+context. The per-trade index ages out after a few days, so save paired round trips to the story folder at once.
+
 ## Account state
 
 Captured 2026-10-04 (read-only calls). Never record credentials or tokens here.
