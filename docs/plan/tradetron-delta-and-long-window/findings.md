@@ -477,3 +477,65 @@ stock leg modelled to offset it.
   a price-return anchor (+35.97%), not as a drawdown comparator.
 - **TDL-8 done condition:** a finished run per template (PP, Collar, NiftyBees) is logged, PP and Collar are reconciled against paper on the overlap with sample sizes (4 PP trips, 7 Collar cycles),
   and the combined table is above, with its limits.
+
+## IC buildability (TDL-9)
+
+Free audit, no template, no run, no spend (₹40 of the ₹100 ceiling still unspent). Rules read from code on 2026-10-11: `src/strategy/ic_expiry_config.py` (v1 `CONFIGS["monthly"]`),
+`src/strategy/ic_expiry_config_v2.py` (`IronCondorV2ExpiryConfig`, `ProfitLockConfig`), `src/strategy/ic_nifty_v1.py`, `src/strategy/ic_nifty_v2.py`, `scripts/strategies/ic/paper_ic_entry_v2.py`.
+Keyword shapes from `tt_lookup_keyword` (Find Strike, Days Difference, EntryPrice) and `tt_find_keyword` (price execution). The archived-spec table in `docs/reference/tradetron.md` ("IC v1 vs
+Tradetron templates", 2026-10-04) is stale on three rows; the code values below replace it.
+
+**Spec versus code (the reference doc is wrong on these).** Time stop is DTE <= 7 (`time_stop_dte=7`), not 14; 14 is `dte_warn`, an INFO only. The v1 entry DTE band 30 to 45 and the v2 band 20 to 32
+are warn-only in code (`dte_warn_lo/hi`), not blocks. "Limit at combined mid, improve 0.25 after 5 min" is not in `ic_nifty_v1.py`; the paper entry script only records the fill at the bid/ask mid
+(`paper_ic_entry_v2.py:188`), so the improve-after-5-minutes step is spec text with no code behind it, and I did not read v2's order path beyond that.
+
+Status key: EXPRESSIBLE = a catalog keyword shape exists; PROVEN = already ran in a funded BT run of this story (CC, PP, Collar) so the BT engine accepts it; INFERENCE = the parts are proven but this
+exact combination was never built. BT = backtest engine.
+
+- **Short put / call delta: v1 monthly 0.15 / 0.10, band 0.06; v2 0.25 / 0.22, band 0.03** — `Find Strike(.., 'delta', Number(-0.15), 'PE', 'any')`, calls positive; leg-drop hazard, unbounded `any`.
+  Status: EXPRESSIBLE, PROVEN (CC, PP, Collar). BT: runs.
+- **v2 long wing at 0.10 delta** — same keyword, `Number(-0.10)` and `Number(0.10)`. Status: EXPRESSIBLE, PROVEN shape. BT: runs.
+- **v1 wing width 500 pts from the short strike (weekly 200)** — strike = Find Strike result minus or plus a number in the Strike cell, or `ATM SPOT` offsets. Status: UNKNOWN: arithmetic inside a
+  Strike cell not verified; ATM offsets give fixed distance from spot, not from the short. BT: unknown.
+- **v2 wing floors: delta >= 0.05, mid premium >= 15, bid/ask spread <= 5% of mid** — Find Strike `'greater'` / `'lesser'` can bound delta; no premium-of-chosen-strike gate in a condition (Find Strike
+  cannot nest in a condition); no bid/ask keyword found. Status: GAP (premium, spread); delta floor partly. BT: spread not modelled.
+- **Gates: IVR >= 0.25 (v1 monthly, v2 script const), VIX >= 11 and IVR >= 0.20 for the lock** — needs a 252-day India VIX percentile; `Percentile` and `Symbol` exist but the VIX series on daily
+  candles was not probed. Status: UNKNOWN (leaning GAP). BT: unknown.
+- **Entry timing: first Wednesday after the last-Tuesday expiry, DTE 20 to 32 (v2), 10:00 onward** — `Week Day`, `Time`, `Days Difference(Today, Current Month Expiry)`. Status: EXPRESSIBLE, PROVEN
+  pieces; Tradetron would make the DTE band a block, code only warns. BT: runs.
+- **One open IC, no overlap** — `Open Positions Detail('All','All','NIFTY 50','count') == 0`. Status: PROVEN (PP, Collar). BT: runs.
+- **Profit target: v1 combined mark <= 50% of entry credit; v2 mark <= 30%** — sum of four `LTP` with signs against sum of four `Traded Instrument('Entry','price',..)` via nested `Math Operation`.
+  Status: EXPRESSIBLE; INFERENCE (single-leg 30% form PROVEN, four-leg sum unbuilt). BT: runs, per leg.
+- **Loss stop: combined mark >= 2.0x entry credit (v1)** — same four-leg sum. Status: EXPRESSIBLE; INFERENCE. BT: runs, per leg.
+- **Delta stop: short |delta| >= 0.35 (v1 DELTA_STOP, v2 roll trigger); v2 forced close >= 0.45** — `Delta(Traded Instrument Name('Entry','instrument',..))`. Status: EXPRESSIBLE, PROVEN (0.55 form in
+  CC, Collar); fill check needed. BT: runs.
+- **DTE close: v1 time stop <= 7, v2 `monthly_close_full_dte=7`** — `Days Difference(Today, Traded Instrument Name('Entry','expiry',..)) <= 7`. Status: EXPRESSIBLE, PROVEN (<= 5 form). BT: runs.
+- **v2 ROLL_WING (replace a long wing, debit <= 50% of original credit, one per side per cycle) and v1 ROLL_WING / narrower-wing search** — needs mid-trade strike search, a debit cap against stored
+  original credit, a per-side counter. Status: GAP (Repair is one-shot, no per-side roll state found). BT: unknown.
+- **v2 CLOSE_CALL_SPREAD / CLOSE_PUT_SPREAD (close one side only)** — per-leg exits inside one set. Status: UNKNOWN: not probed. BT: unknown.
+- **v2 PROFIT_LOCK_ZONE2 (restructure under debit <= 25% of C0, width >= 100)** — computed restructure with gates. Status: GAP. BT: unknown.
+- **Limit at combined mid, improve after 5 min** — strategy-level Advance Price Execution (Average of Bid/Ask exists); no improve step; per-leg Limit Price FX disables it. Status: GAP in BT (fills at
+  Open or Close only); live partly. BT: gap.
+- **Margin-safe order, shorts exit first** — wings first, `Exit shorts first = Yes`. Status: EXPRESSIBLE (platform rule); the Find Strike hedge-first, gate-on-fill pattern is documented but unbuilt
+  across sets. BT: unknown.
+- **`Leg SL trail`, `PCR`, `Total OI`** — not used by any IC rule. Status: not needed. BT: absent, harmless.
+
+**Two risks specific to a four-leg short-premium body.** Find Strike returns None on an empty chain and drops only that leg while its siblings fill, so a missing wing leaves a naked short in a live
+deployment; the documented fix is a hedge in its own set entered first with the shorts gated on its fill, and that cross-set gate has not been built here. In BT the chain has about 55 to 70 strikes
+per expiry (about 50 either side), which holds a 500-point wing at 50-point steps, but a far wing at 0.10 delta in a high-VIX stretch could fall outside it; I did not test this.
+
+**`tt_check_backtestability` skipped on purpose.** Earlier in this story it returned `unknown` for hand-built bodies without numeric leg instrument ids, so a skeleton would add nothing the keyword
+table does not already say. It would be worth running only on a real candidate body.
+
+### Verdict, TDL-9: PARTIAL
+
+The IC v1 monthly core is expressible: delta-chosen shorts, wings, a combined-credit 50% target and 2x stop, a 0.35 delta stop, a DTE <= 7 close, Wednesday entry and the flat-position guard, with
+every piece except the four-leg credit sum and the wing arithmetic already proven in this story's CC, PP and Collar runs. It would not be the live strategy. Everything that makes v2 what it is
+(10-delta wing floors and liquidity gates, ROLL_WING with a debit cap, one-sided spread closes, profit-lock restructuring) is a GAP or UNKNOWN, and v1's IVR gate and limit-mid execution are not
+modelled either. A run of the core would screen how a plain 4-leg condor with delta and credit exits behaves over 2021-10 to 2026-10, not whether the paper IC tracks are sound. That is a weak proxy
+for the data-purchase question, because the rolls and gates are where IC's live behaviour is decided.
+
+No template was built and no run was made. **Not recommended as a follow-up unless you want the plain-condor screen**; if you do, it is a new story with the open items above as its first task (wing
+arithmetic in the Strike cell, a four-leg credit sum in an Exit, the VIX series for IVR, the hedge-first cross-set gate) and its own funded-run approval.
+
+Perspective not covered: the paper IC tracks themselves. Tradetron cannot reproduce their entry quality or roll decisions, so even a GO would not have validated the strategy that is actually running.
