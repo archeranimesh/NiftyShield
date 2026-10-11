@@ -4,7 +4,7 @@
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
 spec.
 
-**Open: TDL-9.**
+**Open: TDL-10.**
 - [x] **TDL-1** — Free own-data delta check: read the stored Upstox delta for the six strikes Tradetron chose in run 2 | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: b20ec40
 - [x] **TDL-2** — Live Offline Greeks probe, Tradetron versus Upstox at one timestamp, near-dated and far-dated; reference table for `greeks-bs-fallback` | Owner: Claude | Model: claude-sonnet-5-5 |
   Review: none | SHA: 39938a3
@@ -16,7 +16,7 @@ spec.
 - [x] **TDL-7** — PP and Collar templates: validate, pre-flight, create | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: a1476a0
 - [x] **TDL-8** — PP and Collar funded runs and reconciliation, plus a NiftyBees baseline run and NiftyBees-plus-overlay comparison | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA:
   7e2a7af
-- [ ] **TDL-9** — IC v1 and v2 buildability audit (free); GO, PARTIAL or STOP; no template unless GO | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: —
+- [x] **TDL-9** — IC v1 and v2 buildability audit (free); GO, PARTIAL or STOP; no template unless GO | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: f4c1c91
 - [ ] **TDL-10** — Verdict on the data-purchase question, save learnings, close and archive the story | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: —
 
 ## Story done when
