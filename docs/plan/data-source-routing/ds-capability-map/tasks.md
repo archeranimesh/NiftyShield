@@ -6,10 +6,10 @@ spec.
 **Open: none.** DSM-2 (council run) and DSM-3 (absorb) are done; the broader capability matrix moved to `ds-router-migration/` DSR-0 because the council ruled it post-roll.
 
 - [x] **DSM-1** — Roll-critical verification: Upstox BOD lists Dec 2027 contracts; Dhan 806 / stale-token response shapes; Upstox Greeks flip on a second expiry; record in `roll_checks.md` | Owner:
-  Claude | Model: claude-sonnet-5-5 | Review: none | SHA: <pending>
+  Claude | Model: claude-sonnet-5-5 | Review: none | SHA: a4a4b14
 - [x] **DSM-2** — Run the council: `bash docs/plan/data-source-routing/council/submit.sh` (server up first) | Owner: Animesh | Model: n/a | Review: none | SHA: 1cc4c30
 - [x] **DSM-3** — Absorb the council ruling: `DECISIONS.md` row, `docs/council/README.md` topic row, spec `ds-chain-seam` and `ds-chain-monitoring`, re-scope DSM-1 | Owner: Claude | Model:
-  claude-sonnet-5-5 | Review: none | SHA: <pending>
+  claude-sonnet-5-5 | Review: none | SHA: 14010a3
 
 ## Story done when
 

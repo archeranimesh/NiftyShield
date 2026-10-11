@@ -62,7 +62,7 @@ SOLID triggers run against the plan (`docs/refactor/design-principles.md`):
 
 | Story | Purpose | Status | Depends on | Closing SHA |
 |---|---|---|---|---|
-| `ds-capability-map/` | Council run and absorb (done), roll-critical checks (BOD Dec 2027 coverage, Dhan failure shapes) | ✅ Done | — | <pending> |
+| `ds-capability-map/` | Council run and absorb (done), roll-critical checks (BOD Dec 2027 coverage, Dhan failure shapes) | ✅ Done | — | a4a4b14 |
 | `ds-chain-seam/` | `ContractRef` / `ChainSnapshot`, resolver, per-expiry fallback and health, chain routing config, shared Dhan throttle | ⬜ Not started | `ds-capability-map` | — |
 | `ds-chain-monitoring/` | Token alert, yearly read path with provenance, stale-Greeks policy, cadence, source flip | ⬜ Not started | `ds-chain-seam`; `yearly-foundation` YF-3 | — |
 | `ds-router-migration/` | Capability matrix, quote / candle router, importer migration, token renewal, generalised health | ⬜ Not started | `ds-chain-monitoring` (and Dec 2026 roll done) | — |
