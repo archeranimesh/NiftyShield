@@ -25,7 +25,7 @@ Coverage is thin, and this is a finding for the yearly book, not a failure of th
 
 Still open on this check: refresh the BOD and diff against the 2026-10-04 copy (owner Animesh, optional; keep the old copy before it is overwritten).
 
-## 2. Dhan response for a missing / stale token — partly verified (probe), 2026-10-11
+## 2. Dhan response for a missing / expired token — verified (probe), 2026-10-11
 
 Probe: two sequential POSTs 4 s apart to `https://api.dhan.co/v2/optionchain` (NIFTY, `UnderlyingScrip` 13, `IDX_I`, expiry 2026-12-29) and `/v2/optionchain/expirylist`. In the probe environment
 `settings.dhan_access_token` was **empty**, so what was tested is a missing token; the client id was present.
@@ -41,8 +41,18 @@ Both endpoints returned the identical body. Findings:
 - `DhanMarketClient._fetch_with_backoff` (`src/client/dhan_market.py:159`) raises `AuthenticationError` on HTTP 401 / 403 before it parses the body, so this case is handled correctly today.
 - Its 805 / 806 branch (`dhan_market.py:166-171`) reads `errorCode`. Its unit test mocks `{"errorCode": "806"}`. If real 805 / 806 bodies use the nested `Data` shape seen here, those branches never
   match. This must be settled before `ds-chain-seam` DSC-3 builds the 805 / 806 / empty / transport taxonomy on it.
-- **Unverified — owner Animesh:** the response for an *expired* token (as against missing). Code 809 may be specific to missing / malformed tokens. Probe with a previously issued, expired token.
-- The probe made two calls with no token, so it consumed no data-API quota.
+- Dhan's JSON key case is **not stable**: the missing-token reply used `Data`, the expired-token reply (below) uses lowercase `data`. Parse case-insensitively.
+
+Second probe, same two calls, with an *expired* token (JWT `exp` 2026-10-10 11:03 IST, about 32 h old; `iat` 24 h earlier) saved in `.env`:
+
+```
+HTTP 401, content-type application/json
+{"data":{"808":"Authentication Failed - Client ID or Token invalid"},"status":"failed"}
+```
+
+Both endpoints again identical. So missing token gives code 809 ("Access token is invalid") and an expired token gives 808 ("Authentication Failed - Client ID or Token invalid"). The 808 message also
+covers a wrong client id, so an expired token cannot be told apart from a bad client id by the response alone; the token's own `exp` claim can. DSN-1's staleness alert should read `exp` from the JWT
+rather than wait for a 401. Both cases return HTTP 401, which `DhanMarketClient` already maps to `AuthenticationError`. No probe call consumed data-API quota.
 
 ## 3. Dhan error 806 ("Data APIs not subscribed") — unverified, owner Animesh
 
@@ -66,6 +76,6 @@ cutoff being exactly 90 DTE (`ds-chain-monitoring` DSN-5 already requires two co
 |---|---|---|
 | Dec 2027 in Upstox BOD | Verified (2026-10-04 file) — listed, thin | Animesh (optional refresh) |
 | Missing-token response | Verified — 401, `Data.809` | — |
-| Expired-token response | Unverified | Animesh (old token) |
+| Expired-token response | Verified — 401, `data.808`, key case differs | — |
 | 806 response | Unverified | Animesh (only observable if plan lapses) |
 | Greeks flip, second expiry | Unverified; earliest 2027-03-31 | Claude (read capture store then) |
