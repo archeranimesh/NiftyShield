@@ -10,10 +10,10 @@ The **status** and **next** markers below are a *summary* of each story's `tasks
 
 ## Active Epics
 
-**`yearly-overlays/`** · ⬜ Not started — December-only (`--expiry-type yearly`) CC / PP / Collar as an independent book beside the monthly overlays; IC `leaps` (quarterly) and `yearly` (December)
-unchanged. Six sub-stories: `yearly-foundation/` (YF-1..6 audit, fixtures, `OverlayTenorPolicy`, clock-injectable resolver, namespace read-paths, chain-source wiring) → `yearly-cc/` (YC-1..2) and
-`yearly-pp/` (YP-1..2) → `yearly-collar/` (YL-1..2) → `yearly-ops-wiring/` (YW-1..3) → `yearly-validation/` (YV-1..5, independence + dry-run + live smoke + IC coexistence + paper-run runbook). No DB
-schema change expected (confirmed in YF-1). Requested by Animesh 2026-10-06.
+**`yearly-overlays/`** · 🔄 In progress (YF-1 audit done) · next: **YF-2** — December-only (`--expiry-type yearly`) CC / PP / Collar as an independent book beside the monthly overlays; IC `leaps`
+(quarterly) and `yearly` (December) unchanged. Six sub-stories: `yearly-foundation/` (YF-1..6 audit, fixtures, `OverlayTenorPolicy`, clock-injectable resolver, namespace read-paths, chain-source
+wiring) → `yearly-cc/` (YC-1..2) and `yearly-pp/` (YP-1..2) → `yearly-collar/` (YL-1..2) → `yearly-ops-wiring/` (YW-1..3) → `yearly-validation/` (YV-1..5, independence + dry-run + live smoke + IC
+coexistence + paper-run runbook). No DB namespace schema change (confirmed in YF-1; provenance columns come from `ds-chain-monitoring`). Requested by Animesh 2026-10-06.
 
 **`dhan-far-expiry-chain/`** · 🔄 In progress — Dhan live chain as the Greeks source for Dec 2027 (Upstox returns zero past ~100 DTE), daily forward capture, and a data-calibrated liquidity gate and
 roll window. Three sub-stories: `dhan-chain-adapter/` (DA-0..3) → `far-expiry-capture/` (FC-1..5) → `far-expiry-liquidity-gate/` (FG-1..3, blocked on captured history). Deadline: Dhan data plan lapses

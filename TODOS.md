@@ -28,7 +28,7 @@ state. Arrows: `A → B` means B cannot start until A is done. `‖` means the t
 |---|---|---|---|---|---|
 | 0 | `dhan-far-expiry-chain/` (DA-0 → FC-1..5 → FG-1..3) | 24 | DA-0 (Animesh) | DA-0 before 2026-11-04; FG-1 needs 15+ captured trading days | YV-5, YF-3 registry (FG-3 writes `roll_dte`) |
 | 0 | `variance-gate/` | 21 | VG0 (Animesh) | none | gates A-D; `options_income/`; `entry-event-filter/` |
-| 1 ROLL | `yearly-overlays/yearly-foundation/` YF-1..5 | 23 | YF-1 | none | all other yearly stories; `ds-chain-monitoring` (needs YF-3) |
+| 1 ROLL | `yearly-overlays/yearly-foundation/` YF-2..5 | 23 | YF-2 | none | all other yearly stories; `ds-chain-monitoring` (needs YF-3) |
 | 1 ROLL | `data-source-routing/ds-chain-seam/` DSC-1..5 | 25 | DSC-1 | none (DSM-1 done) | YF-6; `ds-chain-monitoring` |
 | 1 ROLL | YF-6 (chain wiring into the 3 bootstraps) | 23 | after YF-4 and DSC-3 | YF-4, DSC-2, DSC-3 | yearly-cc / pp / collar run on the routed chain; YV-5 |
 | 1 ROLL | `yearly-cc/` ‖ `yearly-pp/` → `yearly-collar/` | 23 | after YF-5 | `yearly-foundation` complete (collar: cc and pp) | `yearly-ops-wiring` |
@@ -75,9 +75,9 @@ Forward spec work only — one `docs/plan/` story per line, pointer-only (title 
 starting the next story here; this list only decides *which story is next*. Bugs are **not** here — see `## Open Bugs`. Cross-references use folder names, never list positions, so renumbering can't
 rot them. (Items 3, 5 and 8 closed — numbers kept stable because item text cross-references them.)
 
-23. **Yearly overlays (epic)** — `docs/plan/yearly-overlays/` — next **YF-1** (hardcode audit). December-only CC / PP / Collar book beside the monthly overlays; fixed order `yearly-foundation` →
-    `yearly-cc` ‖ `yearly-pp` → `yearly-collar` → `yearly-ops-wiring` → `yearly-validation`. **Deadline: Dec 2026 roll.** YF-6 needs `data-source-routing` DSC-2 / DSC-3; YV-5 needs
-    `dhan-far-expiry-chain` FG-3 and `ds-chain-monitoring` DSN-1..4. Requested by Animesh 2026-10-06.
+23. **Yearly overlays (epic)** — `docs/plan/yearly-overlays/` — next **YF-2** (fixtures; YF-1 audit done). December-only CC / PP / Collar book beside the monthly overlays; fixed order
+    `yearly-foundation` → `yearly-cc` ‖ `yearly-pp` → `yearly-collar` → `yearly-ops-wiring` → `yearly-validation`. **Deadline: Dec 2026 roll.** YF-6 needs `data-source-routing` DSC-2 / DSC-3; YV-5
+    needs `dhan-far-expiry-chain` FG-3 and `ds-chain-monitoring` DSN-1..4. Requested by Animesh 2026-10-06.
 24. **Dhan far-expiry chain (epic)** — `docs/plan/dhan-far-expiry-chain/` — next **DA-0** (Animesh: renewal decision **before 2026-11-04**), then `far-expiry-capture/` FC-1. DA-1..3 done. Forward-only
     daily capture has no slack; `far-expiry-liquidity-gate/` FG-1 needs 15+ captured trading days. Feeds `yearly-overlays` (FG-3 → YF-3 registry; YV-5).
 25. **Data source routing (epic)** — `docs/plan/data-source-routing/` — `ds-capability-map` ✅ done; next **DSC-1**. Council ruled 2026-10-07 (`DECISIONS.md`). Order: `ds-capability-map` →
@@ -164,6 +164,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ## Session Log
 - [2026-10-11] tradetron-delta-and-long-window TDL-10 closed (`fa63166`) and story archived to `docs/archive/plan/tradetron-delta-and-long-window/`: screen is no reason to buy paid data for
   CC/PP/Collar (196/69/391 trips), IC unscreenable (PARTIAL), Tradetron delta matches Upstox (~0.004) so DECISIONS rule narrows to P&L only; open decision for Animesh on GF-5 cross-check.
+- [2026-10-11] yearly-overlays YF-1 closed: `yearly-foundation/audit.md`. No namespace schema change; strategy classes already use IST-aware `market_today()`, bootstraps use naive `date.today()`; Dec
+  2026 dead zone (DTE<=14) needs YF-3 values; YF-5 undercounts consumers. Next: YF-2.
 - [2026-10-11] data-source-routing DSM-1 closed, `ds-capability-map` done: Dec 2027 listed in BOD, Dhan missing/expired token shapes captured, 806 and Greeks-flip dropped as gates (Dhan plan renewed 1
   year). Next: DSC-1.
 - [2026-10-11] DSM-1 update: expired Dhan token probe verified, 401 `data.808` (missing token was `Data.809`, key case differs). Only 806 and the second-expiry Greeks flip stay unverified; DSM-1 still

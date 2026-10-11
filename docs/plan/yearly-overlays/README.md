@@ -29,7 +29,8 @@ Decided with Animesh on 2026-10-06:
 - Hardcoded monthly-tenor gates: DTE >= 14 at entry and re-entry, `DTE_REVIEW` / EC-5 exit at DTE <= 5, PP routine roll at DTE <= 5 (`_PP_ROLL_DTE_THRESHOLD`). These are tenor policy, not constants.
 - Namespace consumers known so far: `reentry_mixin`, `collateral_gate` (`_COLLATERAL_DRAWING_STRATEGIES`), `auto_close`, `overlay_coverage`, `eod_pt_summary`, `track_snapshot`,
   `_has_open_overlay_leg`. `yearly-foundation/` YF-1 turns this into an exhaustive audit.
-- `paper_overlay_pnl_snapshots` is keyed `(strategy_name, overlay_type, snapshot_date)`, so a distinct yearly name should need no schema change (to be confirmed in YF-1).
+- `paper_overlay_pnl_snapshots` is keyed `(strategy_name, overlay_type, snapshot_date)`, so a distinct yearly name needs no schema change (confirmed in `yearly-foundation/audit.md` §C; the provenance
+  columns come from `ds-chain-monitoring`).
 
 ## Architecture and design review
 
@@ -45,7 +46,7 @@ SOLID triggers run against the plan (`docs/refactor/design-principles.md`):
 
 | Story | Purpose | Status | Depends on | Closing SHA |
 |---|---|---|---|---|
-| `yearly-foundation/` | Audit, fixtures, `OverlayTenorPolicy`, resolver with injectable clock, namespace read-paths | ⬜ Not started | — | — |
+| `yearly-foundation/` | Audit, fixtures, `OverlayTenorPolicy`, resolver with injectable clock, namespace read-paths | 🔄 In progress — next YF-2 | — | — |
 | `yearly-cc/` | `--auto-cc --expiry-type yearly` + yearly CC behaviour | ⬜ Not started | `yearly-foundation` | — |
 | `yearly-pp/` | `--auto-pp --expiry-type yearly` + yearly PP roll/re-entry | ⬜ Not started | `yearly-foundation` | — |
 | `yearly-collar/` | `--auto-collar --expiry-type yearly` + same-expiry pair validation | ⬜ Not started | `yearly-cc`, `yearly-pp` | — |
