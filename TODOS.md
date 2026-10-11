@@ -165,6 +165,9 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ## Session Log
 - [2026-10-11] tradetron-delta-and-long-window TDL-10 closed (`fa63166`) and story archived to `docs/archive/plan/tradetron-delta-and-long-window/`: screen is no reason to buy paid data for
   CC/PP/Collar (196/69/391 trips), IC unscreenable (PARTIAL), Tradetron delta matches Upstox (~0.004) so DECISIONS rule narrows to P&L only; open decision for Animesh on GF-5 cross-check.
+- [2026-10-11] data-source-routing DSM-1 partial: `ds-capability-map/roll_checks.md` written. Dec 2027 IS in the Upstox BOD (2026-10-04 file; thin, 35 contracts, 500+ strike steps); Dhan missing-token
+  reply is 401 `{"Data":{"809":...}}` (no top-level `errorCode`, so the 805/806 branch in `dhan_market.py` may never match). Expired-token, 806 and second-expiry Greeks flip unverified, owner Animesh.
+  DSM-1 stays open.
 - [2026-10-11] tradetron-delta-and-long-window TDL-9 closed (`f4c1c91`): IC buildability audit, verdict PARTIAL; v1 monthly core expressible (delta shorts, 50%/2x combined-credit exits, 0.35 delta
   stop, DTE 7 close), v2 rolls, wing floors and profit lock are GAPs; no template, no spend; reference doc was stale on time stop (7 not 14) and limit-mid (not in code). TDL-10 next.
 - [2026-10-11] tradetron-delta-and-long-window TDL-8 closed (`7e2a7af`): PP and Collar long-window runs (69 and 391 round trips) reconciled vs paper; NiftyBees hold baseline via custom template
