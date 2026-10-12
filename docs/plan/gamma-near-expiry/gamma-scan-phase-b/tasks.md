@@ -5,7 +5,7 @@ spec.
 
 **Blocked until** `../risk-gamma-phase-a/` is complete and ≥ 5 trading days of `gamma_chain_snapshots` exist.
 
-**Open: GS-1, GS-2, GS-3, GS-4, GS-5, GS-6.**
+**Open: GS-2, GS-4, GS-5, GS-6.**
 
 - [x] **GS-1** — `gamma_signal_log` model, DDL (`DB_REGISTRY.md` entry) and `GammaStore` insert/update methods | Owner: Antigravity | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 7dfd971
 - [ ] **GS-2** — `src/gamma/signals.py`: Layers 0–4 as predicates returning reason codes in an ordered `SignalStack` | Owner: Claude | Model: claude-sonnet-5 | Review: greeks-analyst | SHA: —
