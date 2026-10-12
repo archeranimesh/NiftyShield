@@ -126,10 +126,16 @@ class GeminiSignalProvider:
             raise DataFetchError(f"{_PROVIDER}: non-JSON response body: {body_text[:500]}") from e
 
         try:
-            content = envelope["choices"][0]["message"]["content"]
+            choice = envelope["choices"][0]
+            content = choice["message"]["content"]
         except (KeyError, IndexError, TypeError) as e:
             raise DataFetchError(f"{_PROVIDER}: unexpected response envelope: {e}") from e
-        return _build_signal(snapshot, content, usage=_usage_from_envelope(envelope))
+        return _build_signal(
+            snapshot,
+            content,
+            usage=_usage_from_envelope(envelope),
+            finish_reason=choice.get("finish_reason"),
+        )
 
     async def _call_google_sdk(self, messages: list[dict[str, str]]) -> str:
         """Run the Google AI SDK call (with search grounding) off the event loop."""
@@ -149,9 +155,16 @@ class GeminiSignalProvider:
 
 
 def _build_signal(
-    snapshot: MarketSnapshot, content: Any, usage: SignalUsage | None = None
+    snapshot: MarketSnapshot,
+    content: Any,
+    usage: SignalUsage | None = None,
+    finish_reason: str | None = None,
 ) -> SignalResponse:
-    """Parse an LLM ``message.content`` body into a :class:`SignalResponse`."""
+    """Parse an LLM ``message.content`` body into a :class:`SignalResponse`.
+
+    On a parse failure the error carries ``finish_reason`` and the last 200
+    characters of the content, so a truncated reply is diagnosable from the log.
+    """
     try:
         parsed = json.loads(content)
         return SignalResponse(
@@ -168,4 +181,8 @@ def _build_signal(
             usage=usage,
         )
     except (json.JSONDecodeError, KeyError, ValueError, TypeError, InvalidOperation) as e:
-        raise DataFetchError(f"{_PROVIDER}: could not parse signal JSON: {e}") from e
+        tail = str(content)[-200:]
+        raise DataFetchError(
+            f"{_PROVIDER}: could not parse signal JSON: {e} "
+            f"(finish_reason={finish_reason!r}, content_tail={tail!r})"
+        ) from e

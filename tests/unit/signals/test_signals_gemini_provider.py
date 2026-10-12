@@ -206,6 +206,29 @@ async def test_non_json_body_raises_datafetcherror(snapshot: MarketSnapshot) -> 
             await GeminiSignalProvider(api_key="k").get_signal(snapshot)
 
 
+async def test_truncated_body_error_carries_finish_reason_and_tail(
+    snapshot: MarketSnapshot,
+) -> None:
+    truncated = '{\n  "direction": "BULLISH",\n  "key_reason": "Gift Nifty gap'
+    body = json.dumps({"choices": [{"finish_reason": "length", "message": {"content": truncated}}]})
+    with _patch_session(_FakeSession(_FakeResponse(body=body))):
+        with pytest.raises(DataFetchError) as exc:
+            await GeminiSignalProvider(api_key="k").get_signal(snapshot)
+    assert "finish_reason='length'" in str(exc.value)
+    assert "Gift Nifty gap" in str(exc.value)
+
+
+async def test_parse_error_without_finish_reason_still_has_tail(
+    snapshot: MarketSnapshot,
+) -> None:
+    body = json.dumps({"choices": [{"message": {"content": "not json at all"}}]})
+    with _patch_session(_FakeSession(_FakeResponse(body=body))):
+        with pytest.raises(DataFetchError) as exc:
+            await GeminiSignalProvider(api_key="k").get_signal(snapshot)
+    assert "finish_reason=None" in str(exc.value)
+    assert "not json at all" in str(exc.value)
+
+
 async def test_timeout_raises_datafetcherror(snapshot: MarketSnapshot) -> None:
     with patch("aiohttp.ClientSession", side_effect=asyncio.TimeoutError):
         with pytest.raises(DataFetchError, match="timed out"):
