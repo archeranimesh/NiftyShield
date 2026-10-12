@@ -20,12 +20,13 @@ Spec source: `TradeResearch/findings/14ZZYoV4DBc_combined.md` (part 2 wins on co
 **What to answer (each with file and symbol evidence):**
 
 1. Does the mid/spread helper exist outside `ic_nifty_v2.py`? (`_price_utils.resolve_price` is the candidate; IC's `_mid_price` and `_spread_pct` are private IC methods.)
-2. How does IC populate `MarginSnapshot.final_margin` (broker margin API, formula, manual)? What is the margin for a winged calendar, and can the paper layer compute it? The video's ₹1.2L/lot is for
-   the classic calendar only.
-3. Can cycle state (entry date, entry short strike, planned exit date, hard exit date, frozen target) be derived from `paper_trades` and `cycle_pnl`, or does it need a table? Read `DB_REGISTRY.md`
-   first.
+2. **Pre-answered, see findings below.** Remaining for CM-0: call `broker.get_order_margin` with the real four legs (needs a live Upstox token) and record the winged calendar's `final_margin` per lot.
+   The video's ₹1.2L/lot is for the classic calendar only.
+3. **Pre-answered, see findings below.** Remaining for CM-0: confirm against `DB_REGISTRY.md` that no existing table is a better home, and that `PaperPosition.entry_date` resolves for a four-leg,
+   two-expiry position.
 4. Probe a live or recorded Upstox chain: for the current monthly pair, do all four legs carry delta, vega, IV, bid and ask? Which strikes (multiples of 100, far month) have a usable bid/ask?
-5. `EntryMessage` and `ExitMessage` fit: list every field that assumes one expiry. Does `cycle_pnl.reconstruct_cycles` group a four-leg structure with two expiries into one round trip?
+5. `EntryMessage` and `ExitMessage` fit: list every field that assumes one expiry. (`reconstruct_cycles` grouping is pre-answered, see findings below; `EntryMessage` is confirmed to carry a single
+   `expiry` / `dte`.)
 6. `DefaultPositionAdapter` / `StrikeResolver`: does it raise `InvalidLegsError` on a mixed-expiry position, and what does a correct near-expiry payoff require?
 7. How does `StrategyMonitor` register and schedule a strategy (cadence, `due_interval_s`, WARN dedup, auto-execute dispatch)? Name the exact registration lines in `scripts/monitor_daemon.py`.
 8. What does IC's entry script do for the duplicate-position guard and Telegram approval, and which parts are reusable without importing IC-specific modules?
@@ -33,6 +34,25 @@ Spec source: `TradeResearch/findings/14ZZYoV4DBc_combined.md` (part 2 wins on co
 **Tests:** none (research task). **Done:** each answer written with evidence; unresolved items listed as explicit decisions for Animesh.
 
 **Commit:** `docs(plan): record nifty-calendar CM-0 audit findings`
+
+### CM-0 findings recorded at planning time (2026-10-12, from reading the IC code)
+
+These were read from the code during epic planning. CM-0 re-verifies them against the code as it stands then, and appends its own live-probe results below this block.
+
+- **Margin (question 2).** IC does not compute margin. `capture_entry_margin` in `scripts/strategies/ic/ic_entry_gates.py` runs once in the entry script, after all legs are persisted. It sends
+  `(instrument_key, action, quantity)` tuples to `broker.get_order_margin(...)` (Upstox margin calculator, needs the live token) and stores `required_margin` and `final_margin` through
+  `PaperStore.record_margin_snapshot`, upserted on `(strategy_name, entry_date)`. It is non-fatal by design: on any failure it logs `capture_entry_margin.failed` and returns `None`, and the EOD report
+  then skips ROI-on-margin for that cycle. Consequences: NC's margin is a broker figure, unknown for the winged structure until CM-0 probes it; and the function sits in a module that imports pandas
+  and the backtest IVR code, so NC must not import it from there (extraction task in CM-7).
+- **Cycle state (question 3). No table needed, so no `schema.md`.** IC keeps only roll counters and the original credit in memory (`_rolls_executed`, `_original_ic_credit`; lost on restart) and
+  rebuilds everything else from `PaperPosition` (`avg_sell_price`, `avg_cost`). NC can do the same: entry date from the position, entry short strike from the instrument key, planned and hard exit
+  dates as pure functions of the entry date or near expiry via `CyclePolicy`, target as a config constant. The one in-memory item is the breach-confirmation spot history, which a daemon restart
+  resets; that can delay a re-centre by up to the confirmation window, which is the safe direction (see CM-4).
+- **Cycle P&L grouping (question 5).** `reconstruct_cycles` cuts a cycle when every seen `leg_role` is at net-zero quantity and is blind to instrument and expiry, so four distinct leg roles across two
+  expiries group into one round trip, and a re-centre (close all, then enter) produces two cycles as intended. Caveats: `short_decay_pct` counts short legs only, so the long wings are absent from it
+  (the net `decay_pct` and `realized_pnl` include them); `entry_credit_per_unit` assumes uniform lot quantity across legs, true at 1 lot.
+- **Ledger uniqueness.** `paper_trades` is `UNIQUE(strategy_name, leg_role, instrument_key, trade_date, action)` with `ON CONFLICT DO NOTHING`. A second trade with the same role, instrument, date and
+  action is silently dropped. This matters for any same-day close-and-re-enter on the same strike (see CB-3).
 
 ---
 
@@ -129,6 +149,8 @@ story) via `search_graph("black scholes")` — do not write a second one.
 3. `MonthlyExitRule` priority, fixed and documented: `DTE_GUARD` (near leg at or inside exit-by DTE) -> `TIME_EXIT` (past hard exit date) -> `TARGET` (executable P&L at or above target) -> breach:
    confirmed close beyond a breakeven for the config's minutes, then `RECENTRE` if within the first 7 days else `CLOSE_BREACH_LATE` -> `HOLD`.
 4. Target is evaluated on executable value only; raw LTP is never an input. A target reached within the first trading day logs a flag (spread-artefact suspicion) but still follows the rule.
+5. The breach-confirmation spot history is in-memory in the shell and resets on a daemon restart, delaying a breach decision by up to the confirmation window. Document this in the rule's docstring as
+   an accepted, fail-safe-direction limitation; do not persist it unless CM-0 finds a cheap existing store (e.g. `IntradayMarketStore`) that already holds spot ticks.
 
 **Tests:** one per decision plus `test_priority_order` (DTE guard beats target; target beats breach) · `test_breach_requires_full_confirmation_window` · `test_breach_day8_closes_not_recentres` ·
 `test_ltp_inflated_value_does_not_trigger_target`.
@@ -151,7 +173,9 @@ story) via `search_graph("black scholes")` — do not write a second one.
 2. `check_signals`: if flat and `CyclePolicy.entry_window(today)` is open, fetch both chains, run the selector, fail closed on `NoEntry` (log reason, one WARN per day via the monitor's dedup). If
    open, build the snapshot and call `ExitRule.evaluate`; map `TARGET`, `TIME_EXIT`, `DTE_GUARD` and `CLOSE_BREACH_LATE` to a close action and `RECENTRE` to close plus re-entry through `ReEntryMixin`.
 3. `apply_action`: fills via the simulator (mid plus VIX-regime slippage); records four trades with distinct `leg_role`s (`short_call`, `short_put`, `long_call_wing`, `long_put_wing`) via
-   `PaperStore.record_trade`; writes the margin snapshot (method per CM-0); writes exit events. Idempotent under `UNIQUE(strategy_name, leg_role, trade_date, action)`.
+   `PaperStore.record_trade`; writes exit events. Idempotent under the ledger's `UNIQUE(strategy_name, leg_role, instrument_key, trade_date, action)`, and it must detect a dropped duplicate (record
+   returned no new row) and log it, never assume the trade landed. State is rebuilt from `PaperPosition` on every tick; nothing about the cycle lives only in memory except the breach history (CM-4).
+   Margin is captured by the entry script (CM-7), not by the shell, as IC does.
 4. `describe_context` for the monitor. Strategy name comes from config; the file contains no `if variant` branch. Keep the class under roughly 400 lines; anything bigger belongs in a collaborator.
 
 **Tests (MockBrokerClient, in-memory store):** `test_enters_monthly_cycle_records_four_legs` · `test_no_entry_when_greeks_missing` · `test_target_closes_all_legs` · `test_breach_early_recentres` ·
@@ -175,7 +199,8 @@ story) via `search_graph("black scholes")` — do not write a second one.
 1. Entry message: headline label (`Cal M`), both expiries and DTEs, spot, net credit per lot, delta, vega, breakevens with % distance, risk-reward, four legs. Byte-identical output for existing
    callers (golden-test).
 2. Close message: reuse `ExitMessage` unchanged. Signal text is the `ExitDecision` reason; cycle fields come from `cycle_pnl` (confirm four-leg grouping per CM-0). Re-centre sends one message showing
-   close and the new entry, not two unrelated messages.
+   close and the new entry, not two unrelated messages. Pass `cycle_decay_pct` / `cycle_short_*` only if the message is meant to describe the short straddle alone; `short_decay_pct` excludes the long
+   wings, so for the calendar headline use the net `decay_pct` and `realized_pnl`, and say which one the message shows.
 3. Payoff chart: a calendar adapter that values far legs at the near expiry with BS (reusing CM-1 `payoff_at`), registered under both strategy names. If it cannot build the chart it fails closed
    (logged warning, no partial payoff), matching `InvalidLegsError` semantics.
 4. All strings escaped at the one boundary the standard defines; no raw `print`.
@@ -205,6 +230,10 @@ to IC classes — do not extend it.
    date), sends it and the payoff chart. Own script, same shared renderers.
 3. Register `paper_nifty_calendar_monthly` in `monitor_daemon.py` with the same pattern IC uses; confirm the EOD summaries list it in open positions and strategy P&L.
 4. Cron lines go in the CM-8 cutover note, not in the repo crontab.
+5. Margin: move `capture_entry_margin` out of `scripts/strategies/ic/ic_entry_gates.py` into a shared module (e.g. `scripts/strategies/_margin.py` or `src/paper/`, decided against the dedup doc's
+   module-map test), keep an import shim or update the IC callers so IC behaviour is unchanged, and have the NC entry script call it after the four legs are persisted. It stays non-fatal. The IC
+   change is mechanical and gets a golden test (same calls, same snapshot). If this is judged too invasive for this story, the fallback is a copy-free thin wrapper in the NC script that calls the same
+   broker method, recorded as a deferred-dedup item in `DECISIONS.md`.
 
 **Tests:** pure-helper tests only (leg-table rows, header builder); a dry-run mode against `MockBrokerClient` for both scripts, no network.
 

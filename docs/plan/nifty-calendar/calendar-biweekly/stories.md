@@ -49,7 +49,8 @@ Spec source: `TradeResearch/findings/14ZZYoV4DBc_combined.md`. Reuses everything
 4. Day 4-5 with no target and no breach: spot 200 or more points from the entry short strike returns `RECENTRE_OFF_CENTRE`; otherwise `HOLD` (carry to the planned exit).
 5. `HOLD`.
 
-The 200-point threshold and the day windows are config fields (defaults from the video), not literals.
+The 200-point threshold and the day windows are config fields (defaults from the video), not literals. Inputs come from rebuilt `PaperPosition` state, not memory, except the breach-confirmation spot
+history (resets on a daemon restart; accepted limitation documented in CM-4). Redeploy decisions only return `REDEPLOY_SAME_PAIR`; the same-day ledger collision is handled by the caller in CB-3.
 
 **Tests:** one per decision · `test_200_point_boundary_199_holds_200_recentres` · `test_target_with_room_redeploys_same_pair` · `test_target_late_closes_without_redeploy` ·
 `test_priority_dte_guard_beats_target` · `test_early_target_flagged_spread_artifact`.
@@ -74,8 +75,13 @@ The 200-point threshold and the day windows are config fields (defaults from the
 2. Handoff: the entry script asks `CycleCalendar.active_variant(today)` and exits quietly (logged) if its own variant is not the active one, so cron can run both unconditionally.
 3. Re-centre and same-pair redeploy send one combined Telegram message, as the monthly re-centre does.
 4. Registration in the daemon and the EOD summaries; confirm both strategies show in open positions and strategy P&L.
+5. Same-day redeploy guard. `paper_trades` is `UNIQUE(strategy_name, leg_role, instrument_key, trade_date, action)` with `ON CONFLICT DO NOTHING`, so a same-pair redeploy (or re-centre) that lands on
+   the entry date of the cycle it replaces, at the same ATM strike, would have its second SELL silently dropped and the ledger would be wrong. The redeploy path must detect a dropped insert (no new
+   row returned), log it and not proceed as if the leg was opened. Decide with Animesh whether to defer the redeploy to the next day in that case or to pick the adjacent strike; default is defer,
+   logged, with a Telegram WARN. Unlikely but cheap to test, and a silent drop here would corrupt cycle P&L.
 
-**Tests:** `test_registry_lookup_both_variants` · `test_entry_script_noops_when_other_variant_active` · `test_biweekly_label_renders` · `test_unknown_variant_rejected`.
+**Tests:** `test_registry_lookup_both_variants` · `test_entry_script_noops_when_other_variant_active` · `test_biweekly_label_renders` · `test_unknown_variant_rejected` ·
+`test_same_day_same_strike_redeploy_is_detected_not_dropped_silently`.
 
 **Commit:** `feat(scripts): wire bi-weekly nifty calendar variant`
 
