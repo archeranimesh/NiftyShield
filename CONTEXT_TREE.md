@@ -31,7 +31,9 @@ src/
 ├── gamma/
 │   ├── __init__.py           # Package marker
 │   ├── models.py             # GammaChainSnapshot + GammaWatchlistEntry frozen dataclasses — Near-Expiry Gamma Buy strategy scaffolding
-│   └── store.py              # GammaStore: SQLite persistence for gamma chain snapshots + watchlist entries
+│   ├── store.py              # GammaStore: SQLite persistence for gamma chain snapshots + watchlist + signal log entries
+│   ├── features.py           # Pure Phase B look-back features from prior gamma_signal_log scans (speed_5m, 15m return/OI velocity, distance_sigma) — GS-5
+│   └── (derive/watchlist/signals/ranking/exits/depth .py — see src/gamma/CLAUDE.md)
 ├── council/
 │   ├── __init__.py           # Package marker
 │   ├── models.py             # Council request/response Pydantic models (CouncilOutput etc.)
@@ -405,6 +407,7 @@ scripts/
 │   ├── paper_track_snapshot.py # Legacy snapshot script (preserved for compatibility).
 │   ├── verify_analytics.py     # Smoke-tests LTP, option chain, Greeks, historical candles via Analytics Token. Moved from src/analytics/ (SS1).
 │   └── sandbox_order_lifecycle.py # Place → Modify → Cancel via V3 Order API (sandbox=True). Moved from src/sandbox/ (SS1).
+├── gamma_scan.py          # Near-Expiry Gamma Buy Phase B 5-min scan (GS-5): signal stack -> gamma_signal_log -> atomic paper entry (flock + BEGIN IMMEDIATE) -> E1/E2/E3 exits. --dry-run.
 ├── healthcheck.py         # Dead man's switch for EOD cron validation (top-level, not under daemon/). Trading-day guard, DB/snapshot/VIX recency checks, disk space.
                            #   Silent on pass; Telegram alert + exit 1 on failure. Cron: 30 16 * * 1-5.
 ├── position_health_check.py # Standalone position/Greeks sanity-check cron — flags stale or missing Greeks/LTP on open paper positions.

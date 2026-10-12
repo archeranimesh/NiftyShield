@@ -68,7 +68,9 @@ Top-level `src/` packages, one line each (detail → `CONTEXT_TREE.md`):
 - `src/backtest/` — offline research: `compute_ivr` (trailing 252-day VIX IVR), `vix_ingest` (NSE CSV + Upstox), `ChainWriter`/`ChainReader` (Parquet + DuckDB), F&O bhavcopy ingest/loader,
   `equity_bhavcopy_ingest.py` (NSE CM equity daily-close ingest — `EquityBhavRecord`, download/parse/write-to-parquet, EQ-series only; index-level counterpart for NIFTY 50 via `IndexBhavRecord`; MVP
   M0 prerequisite, no CLI wiring yet).
-- `src/gamma/` — Near-Expiry Gamma Buy scaffolding: frozen models + `GammaStore` (incl. batched `get_prior_oi`) + pure `derive.py` (`derive_snapshots`).
+- `src/gamma/` — Near-Expiry Gamma Buy scaffolding: frozen models + `GammaStore` (incl. batched `get_prior_oi`) + pure `derive.py` (`derive_snapshots`). Phase B: pure `signals.py` (Layers 0-4),
+  `ranking.py`, `exits.py`, `depth.py`, `features.py` (look-back inputs), and `scripts/gamma_scan.py` (5-min paper-only scan: flock + `BEGIN IMMEDIATE` atomic entry, `gamma_signal_log` row per strike,
+  E1/E2/E3 exits, `--dry-run`; cron wiring is GS-6).
 - `src/mvp/` — Multi-bagger Value Picks Tracker: tipster/analyst pick tracking, independent of all other strategy modules. Frozen Pydantic models (`Pick`, `MVPSnapshot`, `CategoryStats`,
   `ClosePickResult`, …), `MVPStore` (own `mvp_*` tables in `portfolio.sqlite` — providers/categories/recommendations/tranches/snapshots), pure `tracker.py` (`check_prices`, hourly/EOD Telegram summary
   builders), `analytics.py` (`compute_category_returns` — blended realized + unrealized return per provider/category; `compute_category_volatility` — capital-weighted, inflow-corrected daily
