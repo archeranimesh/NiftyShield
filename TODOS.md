@@ -125,6 +125,8 @@ rot them. (Items 3, 5 and 8 closed — numbers kept stable because item text cro
     pre-proposal check, then a conformance baseline. Requested by Animesh 2026-10-08. Parked: payoff-chart inline-caption change until DG-5 lands.
 27. **Logging consistency (epic)** — `docs/plan/logging-consistency/` — next **LF-1** (audit; needs a redacted `crontab -l` from Animesh). `logging-foundation/` → `logging-migration/` →
     `logging-enforcement/`. New `job_runs` heartbeat table. Soft order after item 26's `design-gate/`. Requested by Animesh 2026-10-08.
+28. **Nifty positional calendar (epic)** — `docs/plan/nifty-calendar/` — next **CM-0** (audit + live-infra probe). `calendar-monthly/` (shared pure core, shell, IC-equivalent infra, monthly variant) →
+    `calendar-biweekly/`. Paper only; net-long-vega diversifier to the short-vol book. Requested by Animesh 2026-10-12.
 
 ## Open Bugs
 

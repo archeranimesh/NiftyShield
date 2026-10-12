@@ -96,6 +96,11 @@ reached since entry (existing `mfe_pct`/`mae_pct` in `paper_signal_marks`) in th
 (Intraday)` block from the snapshot; keep the Dhan login flow + `src/dhan/` client + DB tables wired). After both, the snapshot reports MF + Nuvama bonds + Nuvama options only. No `schema.md`.
 Requested by Animesh 2026-09-10.
 
+**`nifty-calendar/`** · ⬜ Not started — epic, next **CM-0** (`calendar-monthly/`, CM-0..8; then `calendar-biweekly/`, CB-1..4). Paper-trades the TM Trading Nifty positional structure (near-expiry ATM
+short straddle plus far-expiry OTM wings) as a monthly and a bi-weekly variant on the existing paper backbone, with IC-equivalent infra (monitor, fills, snapshots, Telegram, payoff chart). New leaf
+package `src/nifty_calendar/` (pure core) plus a thin `src/strategy/nifty_calendar_v1.py` shell; no change to `ic_nifty_v1/v2.py`, no DB schema change expected (CM-0 confirms). Requested by Animesh
+2026-10-12.
+
 **`strategy-refactor-blueprint/`** · ⬜ Not started · next: **BP-1** (`/md-organize` run) Planning-only, multi-session: how to safely decompose `ic_nifty_v1.py`/`ic_nifty_v2.py` (~30% of
 `src/strategy/`'s 14,255 LOC) without disturbing live paper-trading cycles — golden-test-gated extraction, council-ruled decomposition boundary, then a generalized Claude/Antigravity/council routing
 blueprint drawn from the case study. No `src/` code touched under this story. Requested by Animesh 2026-09-26.
