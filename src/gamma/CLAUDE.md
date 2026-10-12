@@ -67,6 +67,15 @@ registry. Add criteria (§5b) gate new entries only; an active entry that stops 
 `oi_change_1d` passes inclusion but blocks elevation. Elevation is recomputed every run, needs inclusion, and needs 3 prior snapshot dates (average excludes today). "Yesterday" is the most recent
 prior snapshot *date*; a strike missing from it never triggers removal. `expired` covers every active entry. Feed it current-week-expiry snapshots only. The script applies the decision.
 
+## Signal stack (`signals.py`)
+
+Pure `SignalStack(config).evaluate(Candidate) -> StackResult` over ordered `Layer`s of predicates `(Candidate, SignalConfig) -> ReasonCode | None`; first failing predicate stops the stack. Every
+threshold is a `SignalConfig` field (frozen); `min_ask_qty` is required with no default (the scan fills it from `DateAwareLotSizeResolver`; lot size is 65). `gearing_threshold` is injected (Stage 1
+default 5.0; Stage 2/3 selection is the caller's job). Live `gamma_gearing` is gamma × spot² / ask, ~5e3–5e4, so the Stage-1 floor of 5.0 is non-binding in practice. Fail closed: `india_vix` or quote
+age `None` fails with a distinct `*_UNAVAILABLE` code (Phase A stores `india_vix` NULL); only `ask_qty_l1 is None` (reduced mode) passes on `None`. Layer 3: `strike_iv_pctile_20d` is a 0–1 fraction
+(`iv_pctile_max=0.30`); with no history condition B is unavailable (`L3_B_UNAVAILABLE`), never a pass. `StackResult` carries tri-state `f0`–`f4` (None = not reached), `quality_method`, and
+`watchlist_hit` (never alters the outcome). The "no open position in same direction" check is NOT here; GS-5 owns it in the atomic entry transaction.
+
 ## Dependency rule
 
 `src/gamma/` never imports from `scripts/`. Scripts are thin orchestration; rules live here.

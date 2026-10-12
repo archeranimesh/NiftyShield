@@ -219,7 +219,7 @@ DTE ≤ 1
 Option type: CE for bullish setups, PE for bearish
 Premium (ask): ₹2–₹10  [COUNCIL PENDING — see §14 Q1]
 Bid-ask spread: ≤ 25% of mid
-Ask quantity: ≥ 1 lot (75 units) at ask price  (Dhan L2; NULL → assume pass)
+Ask quantity: ≥ 1 lot (65 units; resolve via DateAwareLotSizeResolver) at ask price  (Dhan L2; NULL → assume pass)
 India VIX: > 12
 Quote freshness: last_traded_time within 5 minutes
 No existing paper position in same direction  (checked against paper_trades DB)
