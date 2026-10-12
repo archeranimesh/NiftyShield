@@ -296,20 +296,47 @@ def _require_utc(dt: datetime.datetime, field_name: str) -> str:
     return dt.astimezone(datetime.timezone.utc).isoformat()
 
 
-def _row_to_signal_log_entry(row: sqlite3.Row) -> GammaSignalLogEntry:
-    def _parse_utc(val: str | None) -> datetime.datetime | None:
-        if val is None:
-            return None
-        dt = datetime.datetime.fromisoformat(val)
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=datetime.timezone.utc)
-        return dt.astimezone(datetime.timezone.utc)
+def _parse_utc(val: str | None) -> datetime.datetime | None:
+    """Parse an ISO datetime string into a timezone-aware UTC datetime."""
+    if val is None:
+        return None
+    dt = datetime.datetime.fromisoformat(val)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=datetime.timezone.utc)
+    return dt.astimezone(datetime.timezone.utc)
 
+
+_SIGNAL_LOG_COLUMNS = """
+    signal_id, signal_timestamp, expiry_date, strike, option_type,
+    dte_calendar, dte_trading, watchlist_hit, watchlist_elevated,
+    nifty_spot, nifty_futures_price, futures_basis,
+    underlying_return_1m, underlying_return_5m, underlying_return_15m,
+    underlying_rvol_15m, distance_pct, distance_sigma,
+    best_bid, best_ask, bid_ask_spread, spread_pct_of_mid,
+    bid_qty_l1, ask_qty_l1, total_bid_qty, total_ask_qty,
+    delta_val, gamma_val, vega_val, theta_val, iv_val,
+    gamma_gearing, speed_5m, speed_5m_unavailable,
+    theoretical_price, model_edge, strike_iv_pctile_20d,
+    gearing_threshold_used, volume_5m, volume_zscore_5m,
+    oi_now, oi_velocity_15m, option_price_rising,
+    india_vix, india_vix_pctile_252d, event_flag, event_type,
+    f0_hard_pass, f0_fail_reason, f1_directional_pass,
+    f2_convexity_pass, f3_quality_pass, f3_quality_method,
+    f4_flow_pass, signal_triggered, paper_trade_attempted,
+    paper_trade_filled, entry_fill_price, fill_timestamp,
+    unfilled_reason, exit_price, exit_timestamp, exit_reason,
+    mfe, mae, realised_r_multiple, created_at
+"""
+
+
+def _row_to_signal_log_entry(row: sqlite3.Row) -> GammaSignalLogEntry:
     sig_dt = _parse_utc(row["signal_timestamp"])
-    assert sig_dt is not None, "signal_timestamp cannot be None"
+    if sig_dt is None:
+        raise ValueError("signal_timestamp cannot be None")
 
     created_dt = _parse_utc(row["created_at"])
-    assert created_dt is not None, "created_at cannot be None"
+    if created_dt is None:
+        raise ValueError("created_at cannot be None")
 
     return GammaSignalLogEntry(
         signal_id=row["signal_id"],
@@ -1203,27 +1230,8 @@ class GammaStore:
         """
         if option_type is not None:
             cur = conn.execute(
-                """
-                SELECT
-                    signal_id, signal_timestamp, expiry_date, strike, option_type,
-                    dte_calendar, dte_trading, watchlist_hit, watchlist_elevated,
-                    nifty_spot, nifty_futures_price, futures_basis,
-                    underlying_return_1m, underlying_return_5m, underlying_return_15m,
-                    underlying_rvol_15m, distance_pct, distance_sigma,
-                    best_bid, best_ask, bid_ask_spread, spread_pct_of_mid,
-                    bid_qty_l1, ask_qty_l1, total_bid_qty, total_ask_qty,
-                    delta_val, gamma_val, vega_val, theta_val, iv_val,
-                    gamma_gearing, speed_5m, speed_5m_unavailable,
-                    theoretical_price, model_edge, strike_iv_pctile_20d,
-                    gearing_threshold_used, volume_5m, volume_zscore_5m,
-                    oi_now, oi_velocity_15m, option_price_rising,
-                    india_vix, india_vix_pctile_252d, event_flag, event_type,
-                    f0_hard_pass, f0_fail_reason, f1_directional_pass,
-                    f2_convexity_pass, f3_quality_pass, f3_quality_method,
-                    f4_flow_pass, signal_triggered, paper_trade_attempted,
-                    paper_trade_filled, entry_fill_price, fill_timestamp,
-                    unfilled_reason, exit_price, exit_timestamp, exit_reason,
-                    mfe, mae, realised_r_multiple, created_at
+                f"""
+                SELECT {_SIGNAL_LOG_COLUMNS}
                 FROM gamma_signal_log
                 WHERE paper_trade_filled = 1 AND exit_timestamp IS NULL AND option_type = ?
                 ORDER BY signal_timestamp ASC
@@ -1232,27 +1240,8 @@ class GammaStore:
             )
         else:
             cur = conn.execute(
-                """
-                SELECT
-                    signal_id, signal_timestamp, expiry_date, strike, option_type,
-                    dte_calendar, dte_trading, watchlist_hit, watchlist_elevated,
-                    nifty_spot, nifty_futures_price, futures_basis,
-                    underlying_return_1m, underlying_return_5m, underlying_return_15m,
-                    underlying_rvol_15m, distance_pct, distance_sigma,
-                    best_bid, best_ask, bid_ask_spread, spread_pct_of_mid,
-                    bid_qty_l1, ask_qty_l1, total_bid_qty, total_ask_qty,
-                    delta_val, gamma_val, vega_val, theta_val, iv_val,
-                    gamma_gearing, speed_5m, speed_5m_unavailable,
-                    theoretical_price, model_edge, strike_iv_pctile_20d,
-                    gearing_threshold_used, volume_5m, volume_zscore_5m,
-                    oi_now, oi_velocity_15m, option_price_rising,
-                    india_vix, india_vix_pctile_252d, event_flag, event_type,
-                    f0_hard_pass, f0_fail_reason, f1_directional_pass,
-                    f2_convexity_pass, f3_quality_pass, f3_quality_method,
-                    f4_flow_pass, signal_triggered, paper_trade_attempted,
-                    paper_trade_filled, entry_fill_price, fill_timestamp,
-                    unfilled_reason, exit_price, exit_timestamp, exit_reason,
-                    mfe, mae, realised_r_multiple, created_at
+                f"""
+                SELECT {_SIGNAL_LOG_COLUMNS}
                 FROM gamma_signal_log
                 WHERE paper_trade_filled = 1 AND exit_timestamp IS NULL
                 ORDER BY signal_timestamp ASC

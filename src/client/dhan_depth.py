@@ -135,6 +135,7 @@ class DhanDepthAdapter:
                         return None
 
                     data = await resp.json()
+                    # aiohttp ClientResponse.json returns Any; untyped JSON payload
                     return data  # type: ignore[no-any-return]
 
             except asyncio.TimeoutError as e:
@@ -157,6 +158,7 @@ class DhanDepthAdapter:
                     continue
                 raise DataFetchError(f"Request failed: {e}") from e
 
+        # Defensive: loop terminates via return or exception on retry exhaustion
         raise DataFetchError("Max retries exceeded")
 
     async def fetch(

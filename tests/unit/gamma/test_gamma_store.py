@@ -7,6 +7,7 @@ conflict resolution, and calibration queries.
 import datetime
 import decimal
 import sqlite3
+import typing
 
 import pytest
 
@@ -770,7 +771,7 @@ def test_gearing_before_and_distinct_day_count(store, db_conn):
 
 def _sample_signal_entry(
     signal_id: str = "SIG-20260601-25000-CE",
-    option_type: str = "CE",
+    option_type: typing.Literal["CE", "PE"] = "CE",
     paper_trade_filled: bool = False,
     exit_timestamp: datetime.datetime | None = None,
     f0_hard_pass: bool | None = None,
@@ -790,7 +791,7 @@ def _sample_signal_entry(
         signal_timestamp=sig_ts,
         expiry_date=datetime.date(2026, 6, 2),
         strike=25000,
-        option_type=option_type,  # type: ignore
+        option_type=option_type,
         dte_calendar=1,
         dte_trading=1,
         watchlist_hit=True,
