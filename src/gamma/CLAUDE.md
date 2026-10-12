@@ -14,6 +14,9 @@ Two frozen dataclasses — never mutate after construction:
 
 - **`GammaWatchlistEntry`** — one row per (expiry, strike, option_type) watchlist candidate. Tracks `added_date`, `last_seen_date`, `removed_date`, `removal_reason`, `elevated`, `elevation_reason`.
 
+- **`GammaSignalLogEntry`** — one row per evaluated strike in 5-minute intraday scans (Phase B). Tracks underlying context, L2 depth, Greeks, derived fields, tri-state filter passes (`f0`–`f4`),
+  signal trigger, paper-trade execution status, and exit tracking. Timestamps are timezone-aware UTC.
+
 ## Decimal invariant
 
 All monetary, Greek, and derived numeric values use `Decimal`, stored as TEXT in SQLite. Never use `float` for these fields. Read back with `Decimal(row["col"])`. Greeks from the Upstox chain parser
@@ -25,7 +28,19 @@ Table: **`gamma_chain_snapshots`** Primary key: `AUTOINCREMENT id` Uniqueness: `
 
 Table: **`gamma_watchlist`** Primary key: `(expiry_date, strike, option_type)` — natural composite key.
 
+Table: **`gamma_signal_log`** Primary key: `signal_id` — plain `INSERT` (no `OR REPLACE`), duplicates raise `IntegrityError`. Open positions defined as `paper_trade_filled = 1 AND exit_timestamp IS
+NULL`.
+
 Constructor: `GammaStore()` — stateless; every method takes an open `sqlite3.Connection`. Create tables explicitly via `create_tables(conn)` (idempotent `CREATE TABLE IF NOT EXISTS`).
+
+`insert_signal_log(conn, entry)` — plain INSERT of `GammaSignalLogEntry`. Does not commit (supports outer transactions). Rejects naive timestamps with `ValueError`. Tri-state boolean filters store
+`None` as `NULL`.
+
+`update_signal_exit(conn, signal_id, *, exit_price, exit_timestamp, exit_reason, mfe=None, mae=None, realised_r_multiple=None)` — updates unexited rows (`exit_timestamp IS NULL`). Returns `False` on
+unknown ID or already-exited row.
+
+`get_open_signal_positions(conn, option_type=None)` — returns list of `GammaSignalLogEntry` for all unexited filled trades (`paper_trade_filled = 1 AND exit_timestamp IS NULL`), optionally filtered by
+option type.
 
 `get_prior_oi(conn, expiry_date, today)` — one batched query returning the latest pre-today OI per `(strike, option_type)`; feeds `derive_snapshots` (never call `get_yesterday_snapshot` in a
 per-strike loop).
