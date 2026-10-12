@@ -12,7 +12,11 @@ import decimal
 import sqlite3
 import typing
 
-from src.gamma.models import GammaChainSnapshot, GammaWatchlistEntry
+from src.gamma.models import (
+    GammaChainSnapshot,
+    GammaSignalLogEntry,
+    GammaWatchlistEntry,
+)
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS gamma_chain_snapshots (
@@ -93,6 +97,102 @@ CREATE TABLE IF NOT EXISTS gamma_watchlist (
 
 CREATE INDEX IF NOT EXISTS idx_gwl_active
     ON gamma_watchlist (removed_date, expiry_date);
+
+CREATE TABLE IF NOT EXISTS gamma_signal_log (
+    signal_id              TEXT PRIMARY KEY,
+    signal_timestamp       TEXT NOT NULL,      -- UTC ISO-8601
+    expiry_date            TEXT NOT NULL,
+    strike                 INTEGER NOT NULL,
+    option_type            TEXT NOT NULL,      -- CE | PE
+    dte_calendar           INTEGER NOT NULL,
+    dte_trading            INTEGER NOT NULL,
+    watchlist_hit          INTEGER NOT NULL DEFAULT 0,  -- was strike on watchlist?
+    watchlist_elevated     INTEGER NOT NULL DEFAULT 0,  -- was it elevated priority?
+
+    -- Underlying context
+    nifty_spot             TEXT NOT NULL,
+    nifty_futures_price    TEXT,
+    futures_basis          TEXT,
+    underlying_return_1m   TEXT,
+    underlying_return_5m   TEXT,
+    underlying_return_15m  TEXT,
+    underlying_rvol_15m    TEXT,
+    distance_pct           TEXT NOT NULL,
+    distance_sigma         TEXT,
+
+    -- Option quote (Upstox)
+    best_bid               TEXT,
+    best_ask               TEXT NOT NULL,
+    bid_ask_spread         TEXT,
+    spread_pct_of_mid      TEXT,
+
+    -- L2 depth (Dhan; NULL if not subscribed)
+    bid_qty_l1             INTEGER,
+    ask_qty_l1             INTEGER,
+    total_bid_qty          INTEGER,
+    total_ask_qty          INTEGER,
+
+    -- Greeks
+    delta_val              TEXT,
+    gamma_val              TEXT NOT NULL,
+    vega_val               TEXT,
+    theta_val              TEXT,
+    iv_val                 TEXT,
+
+    -- Derived
+    gamma_gearing          TEXT NOT NULL,
+    speed_5m               TEXT,
+    speed_5m_unavailable   INTEGER DEFAULT 0,
+    theoretical_price      TEXT,
+    model_edge             TEXT,
+    strike_iv_pctile_20d   TEXT,
+    gearing_threshold_used TEXT,              -- bootstrap value or calibrated p75
+
+    -- Volume / OI
+    volume_5m              INTEGER,
+    volume_zscore_5m       TEXT,
+    oi_now                 INTEGER,
+    oi_velocity_15m        TEXT,
+    option_price_rising    INTEGER,
+
+    -- Market regime
+    india_vix              TEXT,
+    india_vix_pctile_252d  TEXT,
+    event_flag             INTEGER NOT NULL DEFAULT 0,
+    event_type             TEXT,
+
+    -- Filter results (1=pass, 0=fail, NULL=not evaluated)
+    f0_hard_pass           INTEGER,
+    f0_fail_reason         TEXT,
+    f1_directional_pass    INTEGER,
+    f2_convexity_pass      INTEGER,
+    f3_quality_pass        INTEGER,
+    f3_quality_method      TEXT,
+    f4_flow_pass           INTEGER,
+    signal_triggered       INTEGER NOT NULL DEFAULT 0,
+
+    -- Paper trade
+    paper_trade_attempted  INTEGER NOT NULL DEFAULT 0,
+    paper_trade_filled     INTEGER NOT NULL DEFAULT 0,
+    entry_fill_price       TEXT,
+    fill_timestamp         TEXT,
+    unfilled_reason        TEXT,
+
+    -- Exit
+    exit_price             TEXT,
+    exit_timestamp         TEXT,
+    exit_reason            TEXT,
+    mfe                    TEXT,
+    mae                    TEXT,
+    realised_r_multiple    TEXT,
+
+    created_at             TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_gsl_timestamp ON gamma_signal_log (signal_timestamp);
+CREATE INDEX IF NOT EXISTS idx_gsl_expiry    ON gamma_signal_log (expiry_date);
+CREATE INDEX IF NOT EXISTS idx_gsl_triggered ON gamma_signal_log (signal_triggered);
+CREATE INDEX IF NOT EXISTS idx_gsl_watchlist ON gamma_signal_log (watchlist_hit, signal_triggered);
 """
 
 
@@ -178,6 +278,202 @@ def _row_to_watchlist_entry(row: sqlite3.Row) -> GammaWatchlistEntry:
         days_on_watchlist=row["days_on_watchlist"],
         elevated=bool(row["elevated"]),
         elevation_reason=row["elevation_reason"],
+    )
+
+
+def _opt_bool(v: bool | None) -> int | None:
+    """Helper to convert optional bool to 1, 0, or None for tri-state DB columns."""
+    if v is None:
+        return None
+    return 1 if v else 0
+
+
+def _require_utc(dt: datetime.datetime, field_name: str) -> str:
+    """Validate timezone-aware datetime, convert to UTC and return ISO string."""
+    if dt.tzinfo is None or dt.tzinfo.utcoffset(dt) is None:
+        raise ValueError(f"{field_name} must be a timezone-aware UTC datetime, got naive: {dt}")
+    # Normalize to UTC
+    return dt.astimezone(datetime.timezone.utc).isoformat()
+
+
+def _parse_utc(val: str | None) -> datetime.datetime | None:
+    """Parse an ISO datetime string into a timezone-aware UTC datetime."""
+    if val is None:
+        return None
+    dt = datetime.datetime.fromisoformat(val)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=datetime.timezone.utc)
+    return dt.astimezone(datetime.timezone.utc)
+
+
+_SIGNAL_LOG_COLUMNS = """
+    signal_id, signal_timestamp, expiry_date, strike, option_type,
+    dte_calendar, dte_trading, watchlist_hit, watchlist_elevated,
+    nifty_spot, nifty_futures_price, futures_basis,
+    underlying_return_1m, underlying_return_5m, underlying_return_15m,
+    underlying_rvol_15m, distance_pct, distance_sigma,
+    best_bid, best_ask, bid_ask_spread, spread_pct_of_mid,
+    bid_qty_l1, ask_qty_l1, total_bid_qty, total_ask_qty,
+    delta_val, gamma_val, vega_val, theta_val, iv_val,
+    gamma_gearing, speed_5m, speed_5m_unavailable,
+    theoretical_price, model_edge, strike_iv_pctile_20d,
+    gearing_threshold_used, volume_5m, volume_zscore_5m,
+    oi_now, oi_velocity_15m, option_price_rising,
+    india_vix, india_vix_pctile_252d, event_flag, event_type,
+    f0_hard_pass, f0_fail_reason, f1_directional_pass,
+    f2_convexity_pass, f3_quality_pass, f3_quality_method,
+    f4_flow_pass, signal_triggered, paper_trade_attempted,
+    paper_trade_filled, entry_fill_price, fill_timestamp,
+    unfilled_reason, exit_price, exit_timestamp, exit_reason,
+    mfe, mae, realised_r_multiple, created_at
+"""
+
+
+def _row_to_signal_log_entry(row: sqlite3.Row) -> GammaSignalLogEntry:
+    sig_dt = _parse_utc(row["signal_timestamp"])
+    if sig_dt is None:
+        raise ValueError("signal_timestamp cannot be None")
+
+    created_dt = _parse_utc(row["created_at"])
+    if created_dt is None:
+        raise ValueError("created_at cannot be None")
+
+    return GammaSignalLogEntry(
+        signal_id=row["signal_id"],
+        signal_timestamp=sig_dt,
+        expiry_date=datetime.date.fromisoformat(row["expiry_date"]),
+        strike=row["strike"],
+        option_type=row["option_type"],
+        dte_calendar=row["dte_calendar"],
+        dte_trading=row["dte_trading"],
+        watchlist_hit=bool(row["watchlist_hit"]),
+        watchlist_elevated=bool(row["watchlist_elevated"]),
+        nifty_spot=decimal.Decimal(row["nifty_spot"]),
+        nifty_futures_price=(
+            decimal.Decimal(row["nifty_futures_price"])
+            if row["nifty_futures_price"] is not None
+            else None
+        ),
+        futures_basis=(
+            decimal.Decimal(row["futures_basis"]) if row["futures_basis"] is not None else None
+        ),
+        underlying_return_1m=(
+            decimal.Decimal(row["underlying_return_1m"])
+            if row["underlying_return_1m"] is not None
+            else None
+        ),
+        underlying_return_5m=(
+            decimal.Decimal(row["underlying_return_5m"])
+            if row["underlying_return_5m"] is not None
+            else None
+        ),
+        underlying_return_15m=(
+            decimal.Decimal(row["underlying_return_15m"])
+            if row["underlying_return_15m"] is not None
+            else None
+        ),
+        underlying_rvol_15m=(
+            decimal.Decimal(row["underlying_rvol_15m"])
+            if row["underlying_rvol_15m"] is not None
+            else None
+        ),
+        distance_pct=decimal.Decimal(row["distance_pct"]),
+        distance_sigma=(
+            decimal.Decimal(row["distance_sigma"]) if row["distance_sigma"] is not None else None
+        ),
+        best_bid=(decimal.Decimal(row["best_bid"]) if row["best_bid"] is not None else None),
+        best_ask=decimal.Decimal(row["best_ask"]),
+        bid_ask_spread=(
+            decimal.Decimal(row["bid_ask_spread"]) if row["bid_ask_spread"] is not None else None
+        ),
+        spread_pct_of_mid=(
+            decimal.Decimal(row["spread_pct_of_mid"])
+            if row["spread_pct_of_mid"] is not None
+            else None
+        ),
+        bid_qty_l1=row["bid_qty_l1"],
+        ask_qty_l1=row["ask_qty_l1"],
+        total_bid_qty=row["total_bid_qty"],
+        total_ask_qty=row["total_ask_qty"],
+        delta_val=(decimal.Decimal(row["delta_val"]) if row["delta_val"] is not None else None),
+        gamma_val=decimal.Decimal(row["gamma_val"]),
+        vega_val=(decimal.Decimal(row["vega_val"]) if row["vega_val"] is not None else None),
+        theta_val=(decimal.Decimal(row["theta_val"]) if row["theta_val"] is not None else None),
+        iv_val=(decimal.Decimal(row["iv_val"]) if row["iv_val"] is not None else None),
+        gamma_gearing=decimal.Decimal(row["gamma_gearing"]),
+        speed_5m=(decimal.Decimal(row["speed_5m"]) if row["speed_5m"] is not None else None),
+        speed_5m_unavailable=bool(row["speed_5m_unavailable"]),
+        theoretical_price=(
+            decimal.Decimal(row["theoretical_price"])
+            if row["theoretical_price"] is not None
+            else None
+        ),
+        model_edge=(decimal.Decimal(row["model_edge"]) if row["model_edge"] is not None else None),
+        strike_iv_pctile_20d=(
+            decimal.Decimal(row["strike_iv_pctile_20d"])
+            if row["strike_iv_pctile_20d"] is not None
+            else None
+        ),
+        gearing_threshold_used=(
+            decimal.Decimal(row["gearing_threshold_used"])
+            if row["gearing_threshold_used"] is not None
+            else None
+        ),
+        volume_5m=row["volume_5m"],
+        volume_zscore_5m=(
+            decimal.Decimal(row["volume_zscore_5m"])
+            if row["volume_zscore_5m"] is not None
+            else None
+        ),
+        oi_now=row["oi_now"],
+        oi_velocity_15m=(
+            decimal.Decimal(row["oi_velocity_15m"]) if row["oi_velocity_15m"] is not None else None
+        ),
+        option_price_rising=(
+            bool(row["option_price_rising"]) if row["option_price_rising"] is not None else None
+        ),
+        india_vix=(decimal.Decimal(row["india_vix"]) if row["india_vix"] is not None else None),
+        india_vix_pctile_252d=(
+            decimal.Decimal(row["india_vix_pctile_252d"])
+            if row["india_vix_pctile_252d"] is not None
+            else None
+        ),
+        event_flag=bool(row["event_flag"]),
+        event_type=row["event_type"],
+        f0_hard_pass=(bool(row["f0_hard_pass"]) if row["f0_hard_pass"] is not None else None),
+        f0_fail_reason=row["f0_fail_reason"],
+        f1_directional_pass=(
+            bool(row["f1_directional_pass"]) if row["f1_directional_pass"] is not None else None
+        ),
+        f2_convexity_pass=(
+            bool(row["f2_convexity_pass"]) if row["f2_convexity_pass"] is not None else None
+        ),
+        f3_quality_pass=(
+            bool(row["f3_quality_pass"]) if row["f3_quality_pass"] is not None else None
+        ),
+        f3_quality_method=row["f3_quality_method"],
+        f4_flow_pass=(bool(row["f4_flow_pass"]) if row["f4_flow_pass"] is not None else None),
+        signal_triggered=bool(row["signal_triggered"]),
+        paper_trade_attempted=bool(row["paper_trade_attempted"]),
+        paper_trade_filled=bool(row["paper_trade_filled"]),
+        entry_fill_price=(
+            decimal.Decimal(row["entry_fill_price"])
+            if row["entry_fill_price"] is not None
+            else None
+        ),
+        fill_timestamp=_parse_utc(row["fill_timestamp"]),
+        unfilled_reason=row["unfilled_reason"],
+        exit_price=(decimal.Decimal(row["exit_price"]) if row["exit_price"] is not None else None),
+        exit_timestamp=_parse_utc(row["exit_timestamp"]),
+        exit_reason=row["exit_reason"],
+        mfe=(decimal.Decimal(row["mfe"]) if row["mfe"] is not None else None),
+        mae=(decimal.Decimal(row["mae"]) if row["mae"] is not None else None),
+        realised_r_multiple=(
+            decimal.Decimal(row["realised_r_multiple"])
+            if row["realised_r_multiple"] is not None
+            else None
+        ),
+        created_at=created_dt,
     )
 
 
@@ -714,3 +1010,241 @@ class GammaStore:
             ),
         )
         return cur.rowcount > 0
+
+    def insert_signal_log(self, conn: sqlite3.Connection, entry: GammaSignalLogEntry) -> None:
+        """Insert a gamma signal log entry.
+
+        Uses plain INSERT (no OR REPLACE) so duplicates raise sqlite3.IntegrityError.
+        Does not commit, allowing callers to participate in outer transactions.
+        Requires timezone-aware UTC datetime fields.
+
+        Args:
+            conn: An open SQLite connection.
+            entry: The GammaSignalLogEntry to insert.
+
+        Raises:
+            ValueError: If signal_timestamp, fill_timestamp, exit_timestamp,
+                or created_at is naive.
+            sqlite3.IntegrityError: If signal_id already exists.
+        """
+        sig_ts_str = _require_utc(entry.signal_timestamp, "signal_timestamp")
+        created_at_str = _require_utc(entry.created_at, "created_at")
+        fill_ts_str = (
+            _require_utc(entry.fill_timestamp, "fill_timestamp")
+            if entry.fill_timestamp is not None
+            else None
+        )
+        exit_ts_str = (
+            _require_utc(entry.exit_timestamp, "exit_timestamp")
+            if entry.exit_timestamp is not None
+            else None
+        )
+
+        conn.execute(
+            """
+            INSERT INTO gamma_signal_log (
+                signal_id, signal_timestamp, expiry_date, strike, option_type,
+                dte_calendar, dte_trading, watchlist_hit, watchlist_elevated,
+                nifty_spot, nifty_futures_price, futures_basis,
+                underlying_return_1m, underlying_return_5m, underlying_return_15m,
+                underlying_rvol_15m, distance_pct, distance_sigma,
+                best_bid, best_ask, bid_ask_spread, spread_pct_of_mid,
+                bid_qty_l1, ask_qty_l1, total_bid_qty, total_ask_qty,
+                delta_val, gamma_val, vega_val, theta_val, iv_val,
+                gamma_gearing, speed_5m, speed_5m_unavailable,
+                theoretical_price, model_edge, strike_iv_pctile_20d,
+                gearing_threshold_used, volume_5m, volume_zscore_5m,
+                oi_now, oi_velocity_15m, option_price_rising,
+                india_vix, india_vix_pctile_252d, event_flag, event_type,
+                f0_hard_pass, f0_fail_reason, f1_directional_pass,
+                f2_convexity_pass, f3_quality_pass, f3_quality_method,
+                f4_flow_pass, signal_triggered, paper_trade_attempted,
+                paper_trade_filled, entry_fill_price, fill_timestamp,
+                unfilled_reason, exit_price, exit_timestamp, exit_reason,
+                mfe, mae, realised_r_multiple, created_at
+            ) VALUES (
+                ?, ?, ?, ?, ?,
+                ?, ?, ?, ?,
+                ?, ?, ?,
+                ?, ?, ?,
+                ?, ?, ?,
+                ?, ?, ?, ?,
+                ?, ?, ?, ?,
+                ?, ?, ?, ?, ?,
+                ?, ?, ?,
+                ?, ?, ?,
+                ?, ?, ?,
+                ?, ?, ?,
+                ?, ?, ?, ?,
+                ?, ?, ?,
+                ?, ?, ?,
+                ?, ?, ?,
+                ?, ?, ?,
+                ?, ?, ?, ?,
+                ?, ?, ?, ?
+            )
+            """,
+            (
+                entry.signal_id,
+                sig_ts_str,
+                entry.expiry_date.isoformat(),
+                entry.strike,
+                entry.option_type,
+                entry.dte_calendar,
+                entry.dte_trading,
+                1 if entry.watchlist_hit else 0,
+                1 if entry.watchlist_elevated else 0,
+                str(entry.nifty_spot),
+                _dec(entry.nifty_futures_price),
+                _dec(entry.futures_basis),
+                _dec(entry.underlying_return_1m),
+                _dec(entry.underlying_return_5m),
+                _dec(entry.underlying_return_15m),
+                _dec(entry.underlying_rvol_15m),
+                str(entry.distance_pct),
+                _dec(entry.distance_sigma),
+                _dec(entry.best_bid),
+                str(entry.best_ask),
+                _dec(entry.bid_ask_spread),
+                _dec(entry.spread_pct_of_mid),
+                entry.bid_qty_l1,
+                entry.ask_qty_l1,
+                entry.total_bid_qty,
+                entry.total_ask_qty,
+                _dec(entry.delta_val),
+                str(entry.gamma_val),
+                _dec(entry.vega_val),
+                _dec(entry.theta_val),
+                _dec(entry.iv_val),
+                str(entry.gamma_gearing),
+                _dec(entry.speed_5m),
+                1 if entry.speed_5m_unavailable else 0,
+                _dec(entry.theoretical_price),
+                _dec(entry.model_edge),
+                _dec(entry.strike_iv_pctile_20d),
+                _dec(entry.gearing_threshold_used),
+                entry.volume_5m,
+                _dec(entry.volume_zscore_5m),
+                entry.oi_now,
+                _dec(entry.oi_velocity_15m),
+                _opt_bool(entry.option_price_rising),
+                _dec(entry.india_vix),
+                _dec(entry.india_vix_pctile_252d),
+                1 if entry.event_flag else 0,
+                entry.event_type,
+                _opt_bool(entry.f0_hard_pass),
+                entry.f0_fail_reason,
+                _opt_bool(entry.f1_directional_pass),
+                _opt_bool(entry.f2_convexity_pass),
+                _opt_bool(entry.f3_quality_pass),
+                entry.f3_quality_method,
+                _opt_bool(entry.f4_flow_pass),
+                1 if entry.signal_triggered else 0,
+                1 if entry.paper_trade_attempted else 0,
+                1 if entry.paper_trade_filled else 0,
+                _dec(entry.entry_fill_price),
+                fill_ts_str,
+                entry.unfilled_reason,
+                _dec(entry.exit_price),
+                exit_ts_str,
+                entry.exit_reason,
+                _dec(entry.mfe),
+                _dec(entry.mae),
+                _dec(entry.realised_r_multiple),
+                created_at_str,
+            ),
+        )
+
+    def update_signal_exit(
+        self,
+        conn: sqlite3.Connection,
+        signal_id: str,
+        *,
+        exit_price: decimal.Decimal,
+        exit_timestamp: datetime.datetime,
+        exit_reason: str,
+        mfe: decimal.Decimal | None = None,
+        mae: decimal.Decimal | None = None,
+        realised_r_multiple: decimal.Decimal | None = None,
+    ) -> bool:
+        """Update exit fields on an open signal log entry.
+
+        Updates only unexited rows (``exit_timestamp IS NULL``).
+        Returns False if the signal_id was not found or was already exited.
+
+        Args:
+            conn: An open SQLite connection.
+            signal_id: The signal_id to update.
+            exit_price: Realised exit price.
+            exit_timestamp: Timezone-aware UTC timestamp of exit.
+            exit_reason: Reason for exit (e.g. 'E1', 'E2', 'E3').
+            mfe: Maximum favorable excursion (optional).
+            mae: Maximum adverse excursion (optional).
+            realised_r_multiple: Realised R-multiple (optional).
+
+        Returns:
+            True if an unexited row was updated, False otherwise.
+
+        Raises:
+            ValueError: If exit_timestamp is naive.
+        """
+        exit_ts_str = _require_utc(exit_timestamp, "exit_timestamp")
+        cur = conn.execute(
+            """
+            UPDATE gamma_signal_log
+            SET exit_price = ?,
+                exit_timestamp = ?,
+                exit_reason = ?,
+                mfe = ?,
+                mae = ?,
+                realised_r_multiple = ?
+            WHERE signal_id = ? AND exit_timestamp IS NULL
+            """,
+            (
+                str(exit_price),
+                exit_ts_str,
+                exit_reason,
+                _dec(mfe),
+                _dec(mae),
+                _dec(realised_r_multiple),
+                signal_id,
+            ),
+        )
+        return cur.rowcount > 0
+
+    def get_open_signal_positions(
+        self,
+        conn: sqlite3.Connection,
+        option_type: typing.Literal["CE", "PE"] | None = None,
+    ) -> list[GammaSignalLogEntry]:
+        """Fetch open signal positions.
+
+        Defined as ``paper_trade_filled = 1 AND exit_timestamp IS NULL``.
+
+        Args:
+            conn: An open SQLite connection with sqlite3.Row factory.
+            option_type: Optional filter ('CE' or 'PE').
+
+        Returns:
+            List of open GammaSignalLogEntry rows.
+        """
+        if option_type is not None:
+            cur = conn.execute(
+                f"""
+                SELECT {_SIGNAL_LOG_COLUMNS}
+                FROM gamma_signal_log
+                WHERE paper_trade_filled = 1 AND exit_timestamp IS NULL AND option_type = ?
+                ORDER BY signal_timestamp ASC
+                """,
+                (option_type,),
+            )
+        else:
+            cur = conn.execute(
+                f"""
+                SELECT {_SIGNAL_LOG_COLUMNS}
+                FROM gamma_signal_log
+                WHERE paper_trade_filled = 1 AND exit_timestamp IS NULL
+                ORDER BY signal_timestamp ASC
+                """
+            )
+        return [_row_to_signal_log_entry(row) for row in cur.fetchall()]

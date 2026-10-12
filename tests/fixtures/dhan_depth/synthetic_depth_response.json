@@ -1,0 +1,68 @@
+{
+  "_comment": "SYNTHETIC FIXTURE: Modelled on Dhan Market Quote API docs (https://dhanhq.co/docs/v2/market-quote/). Must be validated against live Dhan API during GS-6 dry-run.",
+  "status": "success",
+  "data": {
+    "NSE_FNO": {
+      "49081": {
+        "buy_quantity": 1500,
+        "sell_quantity": 2250,
+        "depth": {
+          "buy": [
+            {
+              "quantity": 150,
+              "orders": 2,
+              "price": 4.5
+            },
+            {
+              "quantity": 300,
+              "orders": 3,
+              "price": 4.45
+            },
+            {
+              "quantity": 0,
+              "orders": 0,
+              "price": 0.0
+            },
+            {
+              "quantity": 0,
+              "orders": 0,
+              "price": 0.0
+            },
+            {
+              "quantity": 0,
+              "orders": 0,
+              "price": 0.0
+            }
+          ],
+          "sell": [
+            {
+              "quantity": 300,
+              "orders": 4,
+              "price": 4.6
+            },
+            {
+              "quantity": 450,
+              "orders": 5,
+              "price": 4.65
+            },
+            {
+              "quantity": 0,
+              "orders": 0,
+              "price": 0.0
+            },
+            {
+              "quantity": 0,
+              "orders": 0,
+              "price": 0.0
+            },
+            {
+              "quantity": 0,
+              "orders": 0,
+              "price": 0.0
+            }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -29,6 +29,8 @@ Grain column lists the unique key; cardinality is 1 row per that key unless note
 <!-- lint-ignore-length -->
 | `far_expiry_chain_snapshots` | `FarExpiryStore.record_chain()` → `capture_far_expiry_chain.py` | daily (post-close) | `(snapshot_date, expiry, strike, option_type, source)` | Far-expiry chain history for liquidity tracking. |
 | `intraday_market_snapshots` | `src/intraday/market_store.py` → `intraday_tracker` | `*/5 9-15 * * 1-5` | timestamp | Nifty spot + India VIX tick snapshots, market hours only. |
+<!-- lint-ignore-length -->
+| `gamma_signal_log` | `GammaStore.insert_signal_log()` → `gamma_scan.py` | intraday `*/5 9-15 * * 1,2` (DTE 0–1) | `signal_id` | Intraday 5-min signal evaluations (filter stack) for Near-Expiry Gamma Buy Phase B. |
 | `mf_nav_snapshots` | `MFStore.upsert_nav_snapshot()` / `upsert_nav_snapshots_bulk()` → AMFI NAV fetcher | daily (see `scripts/mf/`) | `(amfi_code, snapshot_date)` | MF NAV history, AMFI-sourced. |
 
 **Note A — `paper_nav_snapshots`:** writers are `PaperTracker.record_nav_snapshot()` → `scripts/portfolio/paper_snapshot.py` (all strategies) and

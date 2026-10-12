@@ -108,3 +108,103 @@ class GammaWatchlistEntry:
     days_on_watchlist: int
     elevated: bool
     elevation_reason: str | None
+
+
+@dataclasses.dataclass(frozen=True)
+class GammaSignalLogEntry:
+    """Represents a single row in the gamma_signal_log table.
+
+    Captures every 5-minute evaluation of candidate strikes during Near-Expiry
+    Gamma Buy Phase B scans (including passed and failed filter evaluations).
+    All monetary, Greek, and numeric/derived values use Decimal to preserve
+    precision. Timestamps must be timezone-aware in UTC.
+    """
+
+    signal_id: str
+    signal_timestamp: datetime.datetime
+    expiry_date: datetime.date
+    strike: int
+    option_type: typing.Literal["CE", "PE"]
+    dte_calendar: int
+    dte_trading: int
+    watchlist_hit: bool
+    watchlist_elevated: bool
+
+    # Underlying context
+    nifty_spot: decimal.Decimal
+    nifty_futures_price: decimal.Decimal | None
+    futures_basis: decimal.Decimal | None
+    underlying_return_1m: decimal.Decimal | None
+    underlying_return_5m: decimal.Decimal | None
+    underlying_return_15m: decimal.Decimal | None
+    underlying_rvol_15m: decimal.Decimal | None
+    distance_pct: decimal.Decimal
+    distance_sigma: decimal.Decimal | None
+
+    # Option quote
+    best_bid: decimal.Decimal | None
+    best_ask: decimal.Decimal
+    bid_ask_spread: decimal.Decimal | None
+    spread_pct_of_mid: decimal.Decimal | None
+
+    # L2 depth (Dhan; None if not subscribed or NullDepth)
+    bid_qty_l1: int | None
+    ask_qty_l1: int | None
+    total_bid_qty: int | None
+    total_ask_qty: int | None
+
+    # Greeks
+    delta_val: decimal.Decimal | None
+    gamma_val: decimal.Decimal
+    vega_val: decimal.Decimal | None
+    theta_val: decimal.Decimal | None
+    iv_val: decimal.Decimal | None
+
+    # Derived
+    gamma_gearing: decimal.Decimal
+    speed_5m: decimal.Decimal | None
+    speed_5m_unavailable: bool
+    theoretical_price: decimal.Decimal | None
+    model_edge: decimal.Decimal | None
+    strike_iv_pctile_20d: decimal.Decimal | None
+    gearing_threshold_used: decimal.Decimal | None
+
+    # Volume / OI
+    volume_5m: int | None
+    volume_zscore_5m: decimal.Decimal | None
+    oi_now: int | None
+    oi_velocity_15m: decimal.Decimal | None
+    option_price_rising: bool | None
+
+    # Market regime
+    india_vix: decimal.Decimal | None
+    india_vix_pctile_252d: decimal.Decimal | None
+    event_flag: bool
+    event_type: str | None
+
+    # Filter results (True=pass, False=fail, None=not evaluated)
+    f0_hard_pass: bool | None
+    f0_fail_reason: str | None
+    f1_directional_pass: bool | None
+    f2_convexity_pass: bool | None
+    f3_quality_pass: bool | None
+    f3_quality_method: str | None
+    f4_flow_pass: bool | None
+    signal_triggered: bool
+
+    # Paper trade
+    paper_trade_attempted: bool
+    paper_trade_filled: bool
+    entry_fill_price: decimal.Decimal | None
+    fill_timestamp: datetime.datetime | None
+    unfilled_reason: str | None
+
+    # Exit
+    exit_price: decimal.Decimal | None
+    exit_timestamp: datetime.datetime | None
+    exit_reason: str | None
+    mfe: decimal.Decimal | None
+    mae: decimal.Decimal | None
+    realised_r_multiple: decimal.Decimal | None
+
+    created_at: datetime.datetime

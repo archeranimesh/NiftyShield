@@ -7,10 +7,15 @@ conflict resolution, and calibration queries.
 import datetime
 import decimal
 import sqlite3
+import typing
 
 import pytest
 
-from src.gamma.models import GammaChainSnapshot, GammaWatchlistEntry
+from src.gamma.models import (
+    GammaChainSnapshot,
+    GammaSignalLogEntry,
+    GammaWatchlistEntry,
+)
 from src.gamma.store import GammaStore
 
 
@@ -762,3 +767,276 @@ def test_gearing_before_and_distinct_day_count(store, db_conn):
     assert store.count_prior_gearing_days(db_conn, 2, today) == 1  # rows != days
     assert store.count_prior_gearing_days(db_conn, 2, d1) == 0  # today excluded
     assert store.count_prior_gearing_days(db_conn, 7, today) == 0  # other DTE
+
+
+def _sample_signal_entry(
+    signal_id: str = "SIG-20260601-25000-CE",
+    option_type: typing.Literal["CE", "PE"] = "CE",
+    paper_trade_filled: bool = False,
+    exit_timestamp: datetime.datetime | None = None,
+    f0_hard_pass: bool | None = None,
+    option_price_rising: bool | None = None,
+    best_bid: decimal.Decimal | None = decimal.Decimal("4.50"),
+    naive_ts: bool = False,
+) -> GammaSignalLogEntry:
+    if naive_ts:
+        sig_ts = datetime.datetime(2026, 6, 1, 9, 35, 0)
+    else:
+        sig_ts = datetime.datetime(2026, 6, 1, 9, 35, 0, tzinfo=datetime.timezone.utc)
+
+    created_at = datetime.datetime(2026, 6, 1, 9, 35, 1, tzinfo=datetime.timezone.utc)
+
+    return GammaSignalLogEntry(
+        signal_id=signal_id,
+        signal_timestamp=sig_ts,
+        expiry_date=datetime.date(2026, 6, 2),
+        strike=25000,
+        option_type=option_type,
+        dte_calendar=1,
+        dte_trading=1,
+        watchlist_hit=True,
+        watchlist_elevated=False,
+        nifty_spot=decimal.Decimal("24950.25"),
+        nifty_futures_price=decimal.Decimal("24970.00"),
+        futures_basis=decimal.Decimal("19.75"),
+        underlying_return_1m=decimal.Decimal("0.0005"),
+        underlying_return_5m=decimal.Decimal("0.0015"),
+        underlying_return_15m=decimal.Decimal("0.0035"),
+        underlying_rvol_15m=decimal.Decimal("0.1250"),
+        distance_pct=decimal.Decimal("0.0020"),
+        distance_sigma=decimal.Decimal("0.85"),
+        best_bid=best_bid,
+        best_ask=decimal.Decimal("4.60"),
+        bid_ask_spread=decimal.Decimal("0.10"),
+        spread_pct_of_mid=decimal.Decimal("0.022"),
+        bid_qty_l1=150,
+        ask_qty_l1=300,
+        total_bid_qty=1500,
+        total_ask_qty=2250,
+        delta_val=decimal.Decimal("0.18"),
+        gamma_val=decimal.Decimal("0.0012"),
+        vega_val=decimal.Decimal("2.45"),
+        theta_val=decimal.Decimal("-8.20"),
+        iv_val=decimal.Decimal("0.1450"),
+        gamma_gearing=decimal.Decimal("162.39"),
+        speed_5m=decimal.Decimal("0.0002"),
+        speed_5m_unavailable=False,
+        theoretical_price=decimal.Decimal("5.10"),
+        model_edge=decimal.Decimal("0.50"),
+        strike_iv_pctile_20d=decimal.Decimal("0.25"),
+        gearing_threshold_used=decimal.Decimal("5.0"),
+        volume_5m=5000,
+        volume_zscore_5m=decimal.Decimal("2.45"),
+        oi_now=25000,
+        oi_velocity_15m=decimal.Decimal("0.18"),
+        option_price_rising=option_price_rising,
+        india_vix=decimal.Decimal("13.40"),
+        india_vix_pctile_252d=decimal.Decimal("0.45"),
+        event_flag=False,
+        event_type=None,
+        f0_hard_pass=f0_hard_pass,
+        f0_fail_reason=None,
+        f1_directional_pass=True,
+        f2_convexity_pass=True,
+        f3_quality_pass=True,
+        f3_quality_method="A",
+        f4_flow_pass=True,
+        signal_triggered=True,
+        paper_trade_attempted=True,
+        paper_trade_filled=paper_trade_filled,
+        entry_fill_price=decimal.Decimal("4.60") if paper_trade_filled else None,
+        fill_timestamp=(
+            datetime.datetime(2026, 6, 1, 9, 35, 5, tzinfo=datetime.timezone.utc)
+            if paper_trade_filled
+            else None
+        ),
+        unfilled_reason=None,
+        exit_price=decimal.Decimal("7.20") if exit_timestamp else None,
+        exit_timestamp=exit_timestamp,
+        exit_reason="E1" if exit_timestamp else None,
+        mfe=decimal.Decimal("3.00") if exit_timestamp else None,
+        mae=decimal.Decimal("-0.40") if exit_timestamp else None,
+        realised_r_multiple=decimal.Decimal("2.50") if exit_timestamp else None,
+        created_at=created_at,
+    )
+
+
+def test_signal_log_roundtrip_decimal_exactness(store, db_conn):
+    """Test full insert and read back verifying exact Decimal precision."""
+    entry = _sample_signal_entry("SIG-ROUNDTRIP-1")
+    store.insert_signal_log(db_conn, entry)
+
+    cur = db_conn.execute("SELECT * FROM gamma_signal_log WHERE signal_id = 'SIG-ROUNDTRIP-1'")
+    from src.gamma.store import _row_to_signal_log_entry
+
+    fetched = _row_to_signal_log_entry(cur.fetchone())
+
+    assert fetched.signal_id == "SIG-ROUNDTRIP-1"
+    assert fetched.nifty_spot == decimal.Decimal("24950.25")
+    assert fetched.gamma_val == decimal.Decimal("0.0012")
+    assert fetched.gamma_gearing == decimal.Decimal("162.39")
+    assert fetched.best_ask == decimal.Decimal("4.60")
+    assert fetched.watchlist_hit is True
+    assert fetched.watchlist_elevated is False
+    assert fetched.signal_timestamp == entry.signal_timestamp
+    assert fetched.created_at == entry.created_at
+
+
+def test_signal_log_create_tables_idempotent(db_conn):
+    """Test re-running create_tables is a no-op."""
+    store = GammaStore()
+    store.create_tables(db_conn)
+    entry = _sample_signal_entry("SIG-IDEMPOTENT-1")
+    store.insert_signal_log(db_conn, entry)
+
+    # Re-running create_tables should not wipe data or error
+    store.create_tables(db_conn)
+    cur = db_conn.execute("SELECT count(*) as c FROM gamma_signal_log")
+    assert cur.fetchone()["c"] == 1
+
+
+def test_signal_log_tristate_none_vs_false_roundtrip(store, db_conn):
+    """Test tri-state boolean columns preserve None vs False."""
+    entry_none = _sample_signal_entry("SIG-TRI-NONE", f0_hard_pass=None, option_price_rising=None)
+    entry_false = _sample_signal_entry(
+        "SIG-TRI-FALSE", f0_hard_pass=False, option_price_rising=False
+    )
+
+    store.insert_signal_log(db_conn, entry_none)
+    store.insert_signal_log(db_conn, entry_false)
+
+    from src.gamma.store import _row_to_signal_log_entry
+
+    r_none = _row_to_signal_log_entry(
+        db_conn.execute(
+            "SELECT * FROM gamma_signal_log WHERE signal_id = 'SIG-TRI-NONE'"
+        ).fetchone()
+    )
+    r_false = _row_to_signal_log_entry(
+        db_conn.execute(
+            "SELECT * FROM gamma_signal_log WHERE signal_id = 'SIG-TRI-FALSE'"
+        ).fetchone()
+    )
+
+    assert r_none.f0_hard_pass is None
+    assert r_none.option_price_rising is None
+
+    assert r_false.f0_hard_pass is False
+    assert r_false.option_price_rising is False
+
+
+def test_signal_log_nullable_decimal_roundtrip(store, db_conn):
+    """Test nullable Decimal fields remain None vs populated Decimal."""
+    entry_nulls = _sample_signal_entry("SIG-NULL-DEC", best_bid=None)
+    store.insert_signal_log(db_conn, entry_nulls)
+
+    from src.gamma.store import _row_to_signal_log_entry
+
+    r = _row_to_signal_log_entry(
+        db_conn.execute(
+            "SELECT * FROM gamma_signal_log WHERE signal_id = 'SIG-NULL-DEC'"
+        ).fetchone()
+    )
+    assert r.best_bid is None
+    assert r.best_ask == decimal.Decimal("4.60")
+
+
+def test_signal_log_duplicate_id_and_naive_ts_rejection(store, db_conn):
+    """Test duplicate signal_id raises IntegrityError and naive timestamps raise ValueError."""
+    entry = _sample_signal_entry("SIG-DUP-1")
+    store.insert_signal_log(db_conn, entry)
+
+    # Duplicate signal_id must raise sqlite3.IntegrityError
+    with pytest.raises(sqlite3.IntegrityError):
+        store.insert_signal_log(db_conn, entry)
+
+    # Naive timestamp must raise ValueError
+    entry_naive = _sample_signal_entry("SIG-NAIVE-1", naive_ts=True)
+    with pytest.raises(ValueError, match="must be a timezone-aware UTC datetime"):
+        store.insert_signal_log(db_conn, entry_naive)
+
+
+def test_update_signal_exit_unknown_or_already_exited(store, db_conn):
+    """Test update_signal_exit returns False for unknown id or already exited row."""
+    # Unknown ID returns False
+    exit_ts = datetime.datetime(2026, 6, 1, 10, 0, 0, tzinfo=datetime.timezone.utc)
+    ok = store.update_signal_exit(
+        db_conn,
+        "NON-EXISTENT",
+        exit_price=decimal.Decimal("5.0"),
+        exit_timestamp=exit_ts,
+        exit_reason="E1",
+    )
+    assert ok is False
+
+    # Insert open filled position
+    entry = _sample_signal_entry("SIG-EXIT-1", paper_trade_filled=True)
+    store.insert_signal_log(db_conn, entry)
+
+    # First exit succeeds
+    ok1 = store.update_signal_exit(
+        db_conn,
+        "SIG-EXIT-1",
+        exit_price=decimal.Decimal("6.50"),
+        exit_timestamp=exit_ts,
+        exit_reason="E1",
+        realised_r_multiple=decimal.Decimal("2.0"),
+    )
+    assert ok1 is True
+
+    # Double-exit on already exited row must return False
+    ok2 = store.update_signal_exit(
+        db_conn,
+        "SIG-EXIT-1",
+        exit_price=decimal.Decimal("7.00"),
+        exit_timestamp=exit_ts,
+        exit_reason="E2",
+    )
+    assert ok2 is False
+
+    # Naive exit timestamp rejected
+    naive_exit = datetime.datetime(2026, 6, 1, 10, 0, 0)
+    with pytest.raises(ValueError, match="must be a timezone-aware UTC datetime"):
+        store.update_signal_exit(
+            db_conn,
+            "SIG-EXIT-1",
+            exit_price=decimal.Decimal("6.50"),
+            exit_timestamp=naive_exit,
+            exit_reason="E1",
+        )
+
+
+def test_get_open_signal_positions_filtering(store, db_conn):
+    """Test get_open_signal_positions returns only paper_trade_filled=1 and exit_timestamp IS NULL."""
+    exit_ts = datetime.datetime(2026, 6, 1, 10, 0, 0, tzinfo=datetime.timezone.utc)
+
+    # 1. Open CE position
+    store.insert_signal_log(
+        db_conn, _sample_signal_entry("SIG-OPEN-CE", option_type="CE", paper_trade_filled=True)
+    )
+    # 2. Open PE position
+    store.insert_signal_log(
+        db_conn, _sample_signal_entry("SIG-OPEN-PE", option_type="PE", paper_trade_filled=True)
+    )
+    # 3. Unfilled attempt (paper_trade_filled=False)
+    store.insert_signal_log(
+        db_conn, _sample_signal_entry("SIG-UNFILLED", option_type="CE", paper_trade_filled=False)
+    )
+    # 4. Exited position (paper_trade_filled=True, exit_timestamp set)
+    store.insert_signal_log(
+        db_conn,
+        _sample_signal_entry(
+            "SIG-EXITED", option_type="CE", paper_trade_filled=True, exit_timestamp=exit_ts
+        ),
+    )
+
+    # All open positions
+    open_all = store.get_open_signal_positions(db_conn)
+    assert [p.signal_id for p in open_all] == ["SIG-OPEN-CE", "SIG-OPEN-PE"]
+
+    # Filtered by option_type
+    open_ce = store.get_open_signal_positions(db_conn, option_type="CE")
+    assert [p.signal_id for p in open_ce] == ["SIG-OPEN-CE"]
+
+    open_pe = store.get_open_signal_positions(db_conn, option_type="PE")
+    assert [p.signal_id for p in open_pe] == ["SIG-OPEN-PE"]
