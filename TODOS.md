@@ -37,7 +37,7 @@ state. Arrows: `A → B` means B cannot start until A is done. `‖` means the t
 | 1 ROLL | `yearly-ops-wiring/` → `yearly-validation/` | 23 | after collar | collar; YV-5 also needs YF-6, FG-3, capture history, DSN-1..4 | the Dec 2026 roll |
 | 1 | DSN-5 source-flip seam | 25 | after DSN-4 | DSN-2 provenance columns | not needed before about 2027-09; may follow the roll |
 | 2 | `greeks-bs-fallback/` | 7 | GF-1 | Animesh's 3 modeling decisions before GF-2 | `strategy-payoff-charts` MO-1; `chain-decay-analysis` |
-| 2 | `gamma-near-expiry/` Phase B | 4 | GS-1 | 5+ days of snapshots | none |
+| 2 | `gamma-near-expiry/` Phase B | 4 | GS-2 | 5+ days of snapshots | none |
 | 2 | `tradetron-delta-and-long-window/` | 22 | TDL-3 (Animesh) | none; funded runs need per-run approval | may give `greeks-bs-fallback` a far-dated reference |
 | 2 | `portfolio-snapshot-slimdown/` FD-1..7 → DHR-1..4 | 9 | FD-1 | never interleave the two sub-stories | `phase2-integrations/` |
 | 2 | `design-discipline/design-gate/` DG-1..9 | 26 | DG-1 | none | `design-baseline` (DG-4); soft-first for `logging-consistency` |
@@ -85,8 +85,8 @@ rot them. (Items 3, 5 and 8 closed — numbers kept stable because item text cro
 25. **Data source routing (epic)** — `docs/plan/data-source-routing/` — next **DSM-1** (Upstox BOD lists Dec 2027? Dhan 806 shapes; needs the BOD file from Animesh's machine). Council ruled 2026-10-07
     (`DECISIONS.md`). Order: `ds-capability-map` → `ds-chain-seam` → `ds-chain-monitoring` (needs `yearly-foundation` YF-3) → `ds-router-migration` (after the Dec 2026 roll). Supersedes most of
     `broker-abstraction`. Open for Animesh: monitor cadence, backstop thresholds, Kite.
-4. **Gamma near-expiry buy (epic)** — `docs/plan/gamma-near-expiry/` — Phase A `risk-gamma-phase-a/` ✅ done; next Phase B `gamma-scan-phase-b/` GS-1 (GS-1..6), blocked until ≥ 5 days of snapshots
-   exist. In progress, independent of everything else; finish before starting new stories.
+4. **Gamma near-expiry buy (epic)** — `docs/plan/gamma-near-expiry/` — Phase A `risk-gamma-phase-a/` ✅ done; next Phase B `gamma-scan-phase-b/` **GS-2** (GS-1 `7dfd971`, GS-3 `1486e1c` done). In
+   progress, independent of everything else; finish before starting new stories.
 6. **Strategy payoff charts on Telegram (IC first, any strategy via opt-in registry)** — `docs/plan/strategy-payoff-charts/` — `chart-core/` ✅ done (`6ef2a5f`); next **CP-1** (`chart-polish/`, dark
    Roboto redesign); `chart-model-overlay/` (MO-1..9) stays blocked, it waits on `greeks-bs-fallback` GF-2 + GF-3, i.e. item 7.
 7. **Greeks Black-Scholes fallback** — `docs/plan/greeks-bs-fallback/` — next **GF-1** (read-only audit scope). Needs Animesh's three modeling decisions (rate / DTE convention / delta tolerance)
@@ -166,6 +166,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-12] gamma-scan-phase-b GS-1 (`7dfd971`) and GS-3 (`1486e1c`), review fixes (`7a01a81`): `gamma_signal_log` model and store methods + `DepthSource` protocol, `NullDepth` and Dhan Market
+  Quote depth adapter; full suite 4251 passed; next GS-2 (Claude).
 - [2026-10-10] payoff chart polish CP-6..9 (Antigravity run `antigravity/chart-polish-b`: axis drawing helpers, dark Roboto `render_payoff_png` rewire, `HasSubtitle` + IC labels, sample CLI; tasks
   `a5e1efd` `d2c58bb` `0e156de` `ae1a6c0`) reviewed clean and merged to main (`0b22d48`). Scratch POC removed. Next: **CP-10** (Animesh on-device sign-off via `python -m
   scripts.dev.render_payoff_sample --out <path>`), then CP-11 docs close.
