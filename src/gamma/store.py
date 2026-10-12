@@ -1160,7 +1160,7 @@ class GammaStore:
         conn: sqlite3.Connection,
         signal_id: str,
         *,
-        exit_price: decimal.Decimal,
+        exit_price: decimal.Decimal | None,
         exit_timestamp: datetime.datetime,
         exit_reason: str,
         mfe: decimal.Decimal | None = None,
@@ -1175,7 +1175,7 @@ class GammaStore:
         Args:
             conn: An open SQLite connection.
             signal_id: The signal_id to update.
-            exit_price: Realised exit price.
+            exit_price: Realised exit price; None stores NULL (time stop with no bid).
             exit_timestamp: Timezone-aware UTC timestamp of exit.
             exit_reason: Reason for exit (e.g. 'E1', 'E2', 'E3').
             mfe: Maximum favorable excursion (optional).
@@ -1201,7 +1201,7 @@ class GammaStore:
             WHERE signal_id = ? AND exit_timestamp IS NULL
             """,
             (
-                str(exit_price),
+                _dec(exit_price),
                 exit_ts_str,
                 exit_reason,
                 _dec(mfe),

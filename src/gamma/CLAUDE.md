@@ -37,7 +37,7 @@ Constructor: `GammaStore()` — stateless; every method takes an open `sqlite3.C
 `None` as `NULL`.
 
 `update_signal_exit(conn, signal_id, *, exit_price, exit_timestamp, exit_reason, mfe=None, mae=None, realised_r_multiple=None)` — updates unexited rows (`exit_timestamp IS NULL`). Returns `False` on
-unknown ID or already-exited row.
+unknown ID or already-exited row. `exit_price=None` stores NULL (DTE-1 time stop with no bid).
 
 `get_open_signal_positions(conn, option_type=None)` — returns list of `GammaSignalLogEntry` for all unexited filled trades (`paper_trade_filled = 1 AND exit_timestamp IS NULL`), optionally filtered by
 option type.
@@ -96,6 +96,29 @@ Runs end to end: expiry resolution, chain fetch + `derive_snapshots`, snapshot p
 `update_percentiles`; the percentile maths is a script-local helper (no `calibration.py`). The Telegram send is non-fatal (`asyncio.wait_for` timeout, WARNING on failure, skipped when
 `build_notifier()` is None). Percentile columns are read-only for Phase B.
 
+## Scan features (`features.py`)
+
+Pure `derive_features(...)` turns earlier `gamma_signal_log` rows of one contract (`PriorScan`) into the Layer 1/2/4 inputs: `underlying_return_15m`, `distance_pct_15m_ago`, `speed_5m`,
+`oi_velocity_15m`, `option_price_rising`, `underlying_rvol_15m`, `distance_sigma`. Look-backs take the nearest prior scan within 150 s of now-5/15 min; a missing one gives `None` so the layer fails
+closed (first scan of the day => `speed_5m` unavailable). `speed_5m` is `d(gamma) / (d(spot) x direction)` (direction +1 CE, -1 PE) (`None` when spot did not move in the trade direction) so PEs can
+pass Layer 2; `distance_sigma` scales the scan-interval spot-return std by sqrt(bars to the 15:30 close) and needs 3 returns. `volume_zscore_5m` is NOT derived: the log has no cumulative day volume,
+so the scan passes `None` and Layer 4 fails closed with `L4_INPUT_UNAVAILABLE` until volume is persisted per scan.
+
+## Phase B scan (`scripts/gamma_scan.py`)
+
+`run_scan(ScanDeps, now, dry_run)` with every collaborator injected (`ChainSource`, `DepthSource`, `GammaStore`, `SignalStack`, `PaperEntryAdapter`, `VixSource`, `ContractResolver`, notifier).
+Sequence: gate (trading day, 09:25-15:00 IST, expiry DTE 0-1 from `resolve_expiries`) -> chain -> live India VIX (`NSE_INDEX|India VIX` via Upstox LTP; `None` fails Layer 0 closed) ->
+`derive_snapshots` -> per strike: Dhan depth (only past the premium gate, or for held strikes), `derive_features`, `SignalStack` -> one `gamma_signal_log` row per strike (first failing reason code
+lands in `unfilled_reason`; Layer 0 also in `f0_fail_reason`) -> entries -> exits. `theoretical_price` is `None` (no Black '76 module exists; Layer 3 runs on condition B) and `quote_age_seconds` is
+the time since the chain fetch (the chain carries no per-contract trade time).
+
+Double-fire protection: `main()` holds a non-blocking `fcntl.flock` for the whole run (second run logs `gamma_scan.lock_held`, exits 0), and each entry runs `BEGIN IMMEDIATE` -> "no open signal
+position and zero paper-ledger net qty in this direction" -> ledger BUY -> `insert_signal_log` -> `COMMIT` on ONE connection. `PaperStore.record_trade` opens its own connection and would deadlock
+against that lock, so `PaperLedgerAdapter` runs the same INSERT on the shared connection (rows still validated by `PaperTrade`). Per direction only the top-ranked passing candidate (input sorted by
+(option_type, strike)) enters; entry price is the ask at signal time, quantity one lot (`DateAwareLotSizeResolver`), no new entries after 14:30. Exits: ledger SELL + `update_signal_exit` in one
+transaction; the zero-ask streak and MFE/MAE are rebuilt from the held contract's earlier log rows (a non-zero ask qty resets the streak); a bid <= 0 counts as no bid. `--dry-run` writes log rows
+only. Telegram is non-fatal. The section 7 next-scan fill check (`signal_valid_unfilled`) is not implemented: entries fill at the ask immediately.
+
 ## What does NOT yet exist
 
-- Phase B orchestration (`scripts/gamma_scan.py`, GS-5) — sibling story `docs/plan/gamma-near-expiry/gamma-scan-phase-b/`.
+- The cron entry and first dry-run (GS-6) — sibling story `docs/plan/gamma-near-expiry/gamma-scan-phase-b/`.

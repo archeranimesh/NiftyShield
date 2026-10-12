@@ -1040,3 +1040,18 @@ def test_get_open_signal_positions_filtering(store, db_conn):
 
     open_pe = store.get_open_signal_positions(db_conn, option_type="PE")
     assert [p.signal_id for p in open_pe] == ["SIG-OPEN-PE"]
+
+
+def test_update_signal_exit_null_price_stores_null(store, db_conn):
+    """A time stop with no bid exits with a NULL exit_price (GS-4 contract)."""
+    store.insert_signal_log(db_conn, _sample_signal_entry("SIG-NULLPX", paper_trade_filled=True))
+    exit_ts = datetime.datetime(2026, 6, 1, 10, 0, 0, tzinfo=datetime.timezone.utc)
+    ok = store.update_signal_exit(
+        db_conn, "SIG-NULLPX", exit_price=None, exit_timestamp=exit_ts, exit_reason="E3_TIME_STOP"
+    )
+    assert ok is True
+    row = db_conn.execute(
+        "SELECT exit_price, exit_reason FROM gamma_signal_log WHERE signal_id = 'SIG-NULLPX'"
+    ).fetchone()
+    assert row["exit_price"] is None
+    assert row["exit_reason"] == "E3_TIME_STOP"
