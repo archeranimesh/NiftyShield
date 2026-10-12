@@ -5,11 +5,11 @@ spec.
 
 **Blocked until** `../risk-gamma-phase-a/` is complete and ≥ 5 trading days of `gamma_chain_snapshots` exist.
 
-**Open: GS-4, GS-5, GS-6.**
+**Open: GS-5, GS-6.**
 - [x] **GS-1** — `gamma_signal_log` model, DDL (`DB_REGISTRY.md` entry) and `GammaStore` insert/update methods | Owner: Antigravity | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 7dfd971
 - [x] **GS-2** — `src/gamma/signals.py`: Layers 0–4 as predicates returning reason codes in an ordered `SignalStack` | Owner: Claude | Model: claude-sonnet-5 | Review: greeks-analyst | SHA: 594fedf
 - [x] **GS-3** — `DepthSource` Protocol + Dhan L2 adapter + `NullDepth` (reduced mode) | Owner: Antigravity | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 1486e1c
-- [ ] **GS-4** — `ranking.py` (§6 formula) and `exits.py` (E1/E2/E3) as pure functions | Owner: Claude | Model: claude-sonnet-5 | Review: greeks-analyst | SHA: —
+- [x] **GS-4** — `ranking.py` (§6 formula) and `exits.py` (E1/E2/E3) as pure functions | Owner: Claude | Model: claude-sonnet-5 | Review: greeks-analyst | SHA: b1e9316
 - [ ] **GS-5** — `scripts/gamma_scan.py` thin orchestration: lock, atomic no-open-position check, paper-entry adapter around `record_paper_trade` | Owner: Claude | Model: claude-sonnet-5 | Review:
   code-reviewer | SHA: —
 - [ ] **GS-6** — Cron entry `*/5 9-15 * * 3,4` + `--dry-run` validation on the first qualifying Wednesday | Owner: Animesh | Model: n/a | Review: none | SHA: —

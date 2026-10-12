@@ -28,7 +28,7 @@ section.
 | Story | Purpose | Status | Depends on | Closing SHA |
 |---|---|---|---|---|
 | `risk-gamma-phase-a/` | Delta gate (done) + `gamma_daily_watch.py`: snapshots, watchlist, percentile calibration | ✅ Done (`3906c15`) | — | — |
-| `gamma-scan-phase-b/` | `gamma_scan.py`: 5-min signal stack, `gamma_signal_log`, paper entry, exits | 🔄 In progress (GS-1, GS-2, GS-3 done) | `risk-gamma-phase-a` + ≥ 5 days of data | — |
+| `gamma-scan-phase-b/` | `gamma_scan.py`: 5-min signal stack, `gamma_signal_log`, paper entry, exits | 🔄 In progress (GS-1, GS-2, GS-3, GS-4 done) | `risk-gamma-phase-a` + ≥ 5 days of data | — |
 
 Status: ⬜ Not started · 🔄 In progress · ✅ Done. This column is the epic's progress view — per-task checkboxes live only in each sub-story's `tasks.md`.
 

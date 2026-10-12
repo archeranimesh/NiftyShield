@@ -81,8 +81,9 @@ age `None` fails with a distinct `*_UNAVAILABLE` code (Phase A stores `india_vix
 Pure, zero-I/O. `rank_candidates(candidates) -> list[Candidate]` sorts best-first by the section 6 score `gearing * 0.7 + hit * 0.3 * gearing` (Decimal); ties break on watchlist hit, lower ask,
 smaller `distance_pct`, option type, then input order (`Candidate` has no strike, so GS-5 must pass candidates in a stable order). `evaluate_exit(position, tick, config) -> ExitDecision | None` walks
 an ordered rule tuple (`e1_profit_target`, `e2_stop_loss`, `e2_liquidity`, `e3_time_stop`); thresholds are `ExitConfig` fields. "Mark" is the tick **bid** (a `None` bid never fires price rules); E1 is
-`bid >= 5 x entry_ask`, E2 stop `bid <= 0.25`, E2 liquidity is `ask_qty == 0` for 2 consecutive scans (GS-5 keeps the streak in `ExitPosition.prior_zero_ask_scans`), E3 is keyed on the tick's calendar
-DTE and IST time (DTE 0 at 14:30; DTE 1 at 15:00 unless bid >= 1.5 x entry ask). `ExitDecision` carries `ExitReason`, the bid exit price and `realised_r`; `mfe`/`mae` tracking is GS-5's job.
+`bid >= 5 x entry_ask`, E2 stop `bid <= 0.25`, E2 liquidity is `ask_qty == 0` for 2 consecutive scans (GS-5 keeps the streak in `ExitPosition.prior_zero_ask_scans` and must reset it to 0 on any
+non-zero ask qty), E3 is keyed on the tick's calendar DTE and IST time (DTE 0 at 14:30; DTE 1 at 15:00 unless bid >= 1.5 x entry ask). `ExitDecision` carries `ExitReason`, the bid exit price and
+`realised_r`; `mfe`/`mae` tracking is GS-5's job. `exit_price`/`realised_r` can be None (no bid), so metrics must filter NULLs.
 
 ## Dependency rule
 
