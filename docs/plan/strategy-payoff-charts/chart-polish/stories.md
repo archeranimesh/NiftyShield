@@ -315,7 +315,7 @@
 3. Record in this file under **Outcome:** *accept* or a bullet list of tweaks. Tweaks become follow-up tasks `CP-10a…` appended to `tasks.md` (constants live in the modules from CP-2..CP-6, so most
    are one-line edits).
 
-**Outcome:** _pending_
+**Outcome:** accept (Animesh, 2026-10-13) — the real chart is good enough as shipped; no tweaks.
 
 ---
 

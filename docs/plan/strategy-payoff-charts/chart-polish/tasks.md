@@ -3,7 +3,7 @@
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
 spec.
 
-**Open: CP-10, CP-11.** (CP-1..5 via `antigravity/chart-polish-a`, merge `e004a10`, review fixes `7ef011f` `548d2b4`; CP-6..9 via `antigravity/chart-polish-b`, merge `0b22d48`.)
+**Open: CP-11.** (CP-1..5 via `antigravity/chart-polish-a`, merge `e004a10`, review fixes `7ef011f` `548d2b4`; CP-6..9 via `antigravity/chart-polish-b`, merge `0b22d48`.)
 
 - [x] **CP-1** — `format_money_whole` / `format_money_k` / `format_pct_signed` in `formatting.py` + `FORMATTING.md` §5 override rows | Owner: Antigravity | Model: claude-sonnet-5-5 | Review:
   code-reviewer
@@ -22,7 +22,7 @@ spec.
   | SHA: d2c58bb
 - [x] **CP-8** — `HasSubtitle` Protocol; IC adapter label / title / subtitle; `_build_and_send` passes subtitle | Owner: Antigravity | Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: 0e156de
 - [x] **CP-9** — `scripts/dev/render_payoff_sample.py` CLI; `git rm` the scratch POC | Owner: Antigravity | Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: ae1a6c0
-- [ ] **CP-10** — Animesh on-device sign-off of a real chart on Telegram; record the verdict and any follow-up tweaks | Owner: Animesh | Model: n/a | Review: none | SHA: —
+- [x] **CP-10** — Animesh on-device sign-off of a real chart on Telegram; record the verdict and any follow-up tweaks | Owner: Animesh | Model: n/a | Review: none | SHA: <pending>
 - [ ] **CP-11** — Docs close: `CONTEXT.md` / `CONTEXT_TREE.md` / `DECISIONS.md` / `src/notifications/CLAUDE.md`, epic README, `chart-model-overlay/` MO-4..6 spec re-point | Owner: Claude | Model:
   claude-sonnet-5-5 | Review: none | SHA: —
 
