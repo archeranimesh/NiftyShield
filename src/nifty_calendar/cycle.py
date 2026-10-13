@@ -205,6 +205,8 @@ class BiweeklyCyclePolicy:
             ValueError: If expiries is not sorted or contains duplicates.
         """
         expiries_list = list(expiries)
+        if not expiries_list:
+            raise ValueError("expiries must not be empty")
         if expiries_list != sorted(set(expiries_list)):
             raise ValueError("expiries must be sorted distinct dates")
 
@@ -215,11 +217,13 @@ class BiweeklyCyclePolicy:
 
         if monthly_expiries is not None:
             m_list = list(monthly_expiries)
+            if not m_list:
+                raise ValueError("monthly_expiries must not be empty")
             if m_list != sorted(set(m_list)):
                 raise ValueError("monthly_expiries must be sorted distinct dates")
             self._monthly_expiries: tuple[date, ...] = tuple(m_list)
         else:
-            earliest = expiries_list[0] if expiries_list else date.today()
+            earliest = expiries_list[0]
             self._monthly_expiries = tuple(
                 derive_monthly_expiries(expiries_list, earliest, is_trading_day_fn)
             )
@@ -251,17 +255,13 @@ class BiweeklyCyclePolicy:
         for i, prev_m in enumerate(self._monthly_expiries[:-1]):
             next_m = self._monthly_expiries[i + 1]
             m_entry = self._next_trading_day(prev_m)
-            m_exit_planned = self._add_trading_days(m_entry, self._monthly_config.planned_hold_days)
-            m_exit_hard = self._add_trading_days(m_entry, self._monthly_config.hard_hold_days)
-            next_m_entry = self._next_trading_day(next_m)
-
-            for m_exit in (m_exit_planned, m_exit_hard):
-                curr = m_exit
-                while curr < next_m:
-                    tentative_hard = self._add_trading_days(curr, self._config.hard_hold_days)
-                    if tentative_hard < next_m_entry:
-                        candidates.add(curr)
-                    curr = self._add_trading_days(curr, self._config.planned_hold_days)
+            earliest_bw_entry = self._add_trading_days(
+                m_entry, self._monthly_config.planned_hold_days
+            )
+            curr = earliest_bw_entry
+            while curr < next_m:
+                candidates.add(curr)
+                curr = self._next_trading_day(curr)
         return candidates
 
     def entry_window(self, today: date) -> EntryPlan | None:
@@ -313,10 +313,6 @@ class BiweeklyCyclePolicy:
 
         planned_exit = self._add_trading_days(today, self._config.planned_hold_days)
         tentative_hard_exit = self._add_trading_days(today, self._config.hard_hold_days)
-
-        # Chain end check: if hard hold extends past next monthly window start, no entry
-        if tentative_hard_exit >= next_monthly_entry_window_start:
-            return None
 
         latest_allowed = near_expiry - timedelta(days=self._config.exit_by_dte + 1)
         while not self._is_trading_day_fn(latest_allowed):

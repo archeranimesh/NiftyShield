@@ -278,3 +278,33 @@ def test_next_variant_after_exit(sample_expiries: tuple[list[date], list[date]])
     # Near next monthly expiry (27 Oct): bi-weekly chain has ended
     assert policy.next_variant_after_exit(date(2026, 10, 26)) == "monthly"
     assert policy.next_variant_after_exit(date(2026, 10, 27)) == "monthly"
+
+
+def test_biweekly_empty_expiries_raises() -> None:
+    """Assert empty expiries or monthly_expiries raises ValueError."""
+    with pytest.raises(ValueError, match="expiries must not be empty"):
+        BiweeklyCyclePolicy(expiries=[])
+
+    with pytest.raises(ValueError, match="monthly_expiries must not be empty"):
+        BiweeklyCyclePolicy(expiries=[date(2026, 9, 29)], monthly_expiries=[])
+
+
+def test_candidate_entry_window_continuous_from_day_7(
+    sample_expiries: tuple[list[date], list[date]],
+) -> None:
+    """Assert entry_window opens continuously on each trading day from monthly day 7."""
+    weekly, monthly = sample_expiries
+    policy = BiweeklyCyclePolicy(
+        expiries=weekly,
+        monthly_expiries=monthly,
+        is_trading_day_fn=_trading_days_calendar,
+    )
+    # Previous monthly expiry: 29 Sep 2026. Next monthly: 27 Oct 2026.
+    # Monthly entry: 30 Sep 2026 (Wed).
+    # Monthly planned exit (day 7): 9 Oct 2026 (Fri).
+    # Day 6 (8 Oct) is blocked; days 7-10 (9, 12, 13, 14 Oct) are active.
+    assert policy.entry_window(date(2026, 10, 8)) is None  # Day 6: blocked
+    for d in [date(2026, 10, 9), date(2026, 10, 12), date(2026, 10, 13), date(2026, 10, 14)]:
+        plan = policy.entry_window(d)
+        assert plan is not None, f"Expected entry_window active on {d}"
+        assert plan.entry_date == d
