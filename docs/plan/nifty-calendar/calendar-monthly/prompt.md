@@ -38,9 +38,9 @@ shell acts only on the near-expiry call, reads all its positions from the inject
 pure core cannot import `src.strategy._price_utils`, so it carries its own `mid` and `spread_points`. Findings and open decisions: `stories.md` §"CM-0 findings".
 
 **CM-5 outcome (2026-10-13).** SOLID triggers run: the shell takes eight injected collaborators plus `InstrumentLookup`, with no new `elif` on a decision method; rebuild logic sits in the
-leaf-adjacent `src/strategy/nifty_calendar_state.py`. Re-centre is close plus `ReEntryMixin._check_reentry` (writes the R5 event and sends the notice; the entry script re-enters), with `_ivr_passes`
-overridden to always pass because the structure is net long vega. Entry stays script-driven: a flat strategy is never ticked by the monitor, so the entry script (CM-7) calls
-`NiftyCalendarV1.plan_entry` and `apply_action`.
+leaf-adjacent `src/strategy/nifty_calendar_state.py`. Re-centre is close plus `ReEntryMixin._check_reentry` (writes the R5 event and sends the notice; the entry script re-enters). The IVR gate is
+log-only, as for IC/CC/PP: the standard `ReEntryMixin` path records it on the R5 event and the entry script does not act on it. Entry stays script-driven: a flat strategy is never ticked by the
+monitor, so the entry script (CM-7) calls `NiftyCalendarV1.plan_entry` and `apply_action`.
 
 ## Session-start load hints
 

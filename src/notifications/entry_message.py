@@ -39,6 +39,11 @@ class EntryMessage:
         mode: Optional ``"standalone"`` / ``"concurrent"`` (e.g. IC v1); no ``Mode:`` line when ``None``.
         expiry_type: Optional ``"weekly"`` / ``"monthly"`` — shown after em-dash if present.
         legs: 1..N legs in send order as ``LegRow`` rows.
+        far_expiry: Second (far) expiry for two-expiry structures such as the calendar;
+            when set, ``expiry`` is the near one and the kv row shows both.
+        far_dte: Days to ``far_expiry``; required alongside ``far_expiry``.
+        detail_lines: Extra plain-text lines (Greeks, breakevens, risk-reward) rendered
+            escaped after the credit line; empty for existing callers.
     """
 
     headline_label: str
@@ -50,6 +55,13 @@ class EntryMessage:
     mode: str | None = None
     expiry_type: str | None = None
     legs: list[LegRow] = field(default_factory=list)
+    far_expiry: date | None = None
+    far_dte: int | None = None
+    detail_lines: list[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        if (self.far_expiry is None) != (self.far_dte is None):
+            raise ValueError("far_expiry and far_dte must be set together")
 
 
 def _headline(msg: EntryMessage) -> str:
@@ -65,11 +77,14 @@ def _kv_row(msg: EntryMessage) -> str:
     parts = []
     if msg.ivr is not None:
         parts.append(f"*IVR:* {escape_markdown(f'{msg.ivr:.2f}')}")
+    dte, exp = str(msg.dte), format_expiry(msg.expiry)
+    if msg.far_expiry is not None:
+        dte, exp = f"{dte}/{msg.far_dte}", f"{exp}/{format_expiry(msg.far_expiry)}"
     parts.extend(
         [
-            f"*DTE:* {escape_markdown(str(msg.dte))}",
+            f"*DTE:* {escape_markdown(dte)}",
             f"*Nifty:* {escape_markdown(f'{msg.spot:,.0f}')}",
-            f"*Exp:* {escape_markdown(format_expiry(msg.expiry))}",
+            f"*Exp:* {escape_markdown(exp)}",
         ]
     )
     return "  ".join(parts)
@@ -108,4 +123,5 @@ def format_entry_message(msg: EntryMessage) -> str:
     head.append(_kv_row(msg))
 
     table = ["```", build_leg_table(msg.legs), "```"]
-    return "\n".join([*head, "", *table, "", _credit_line(msg)])
+    tail = [escape_markdown(line) for line in msg.detail_lines]
+    return "\n".join([*head, "", *table, "", _credit_line(msg), *tail])

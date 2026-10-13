@@ -5,8 +5,8 @@ extrema and breakevens fall out of evaluating at ``0`` and every strike plus the
 slope past the highest strike. No strategy is special-cased.
 """
 
-from collections.abc import Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass, replace
 from decimal import Decimal
 from typing import Literal
 
@@ -160,3 +160,50 @@ def expiry_pnl_series(
     step = (hi - lo) / (n - 1)
     spots = [lo + step * i for i in range(n - 1)] + [hi]
     return spots, [expiry_pnl_at(payoff, s) for s in spots]
+
+
+def summarise_curve(
+    payoff: StrategyPayoff,
+    curve: Callable[[Decimal], Decimal],
+    lo: Decimal,
+    hi: Decimal,
+    step: Decimal,
+) -> StrategyPayoff:
+    """Re-derive max profit / loss, breakevens and R:R from a sampled P&L curve.
+
+    For structures whose P&L is not piecewise linear at expiry (e.g. a calendar whose far
+    legs carry time value) the strike-kink maths in ``compute_payoff`` is wrong. The result
+    depends on the sampling window, so callers must pass a documented ``[lo, hi]``.
+
+    Args:
+        payoff: Structure whose legs, premium and key spots are kept as-is.
+        curve: Settlement spot to rupee P&L.
+        lo: First sampled spot.
+        hi: Last sampled spot (always included).
+        step: Sampling step, positive.
+
+    Returns:
+        A copy of ``payoff`` with ``max_profit``, ``max_loss``, ``breakevens`` and
+        ``rr_ratio`` taken from the sampled curve.
+
+    Raises:
+        ValueError: If ``step <= 0`` or ``hi <= lo``.
+    """
+    if step <= 0 or hi <= lo:
+        raise ValueError("need step > 0 and hi > lo")
+    spots: list[Decimal] = []
+    x = lo
+    while x < hi:
+        spots.append(x)
+        x += step
+    spots.append(hi)
+    values = [curve(x) for x in spots]
+    max_profit, max_loss = max(values), min(values)
+    rr = max_profit / abs(max_loss) if max_loss < 0 and max_profit > 0 else None
+    return replace(
+        payoff,
+        max_profit=max_profit,
+        max_loss=max_loss,
+        breakevens=_find_breakevens(spots, values, 0),
+        rr_ratio=rr,
+    )

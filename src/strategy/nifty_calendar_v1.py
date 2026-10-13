@@ -124,10 +124,6 @@ class NiftyCalendarV1(ReEntryMixin):
         self._vix_data_dir, self._vix_fn, self._clock = vix_data_dir, vix_fn, clock
         self._spot_history: deque[tuple[datetime, Decimal]] = deque()
 
-    def _ivr_passes(self, ivr: float) -> tuple[bool, str, str | None]:
-        """Never block re-centre on IVR: the structure is net long vega, not short premium."""
-        return True, "", None
-
     # ── Signals ──────────────────────────────────────────────────────────────
 
     async def check_signals(

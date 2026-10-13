@@ -218,9 +218,10 @@ async def test_other_exits_close_with_mapped_signal(
     ]
 
 
-@pytest.mark.asyncio
-async def test_breach_early_recentres(h: Harness, monkeypatch: pytest.MonkeyPatch) -> None:
-    series = pd.Series(np.linspace(10.0, 30.0, 252))
+async def _breach_recentre(
+    h: Harness, monkeypatch: pytest.MonkeyPatch, series: pd.Series
+) -> list[str]:
+    """Enter, breach the upper breakeven for 30 minutes, apply the recentre; return event signals."""
     monkeypatch.setattr("src.strategy.reentry_mixin.load_vix_series", lambda _d: series)
     await h.enter()
     breached = Decimal("23700")
@@ -233,9 +234,37 @@ async def test_breach_early_recentres(h: Harness, monkeypatch: pytest.MonkeyPatc
         events = await h.shell.check_signals(h.near, [])
     assert [e.event_type for e in events] == ["NC_RECENTRE"], events
     assert await h.shell.apply_action([], _to_action(events[0])) == []
-    signals = [e["exit_signal"] for e in h.store.get_open_exit_events(MONTHLY.strategy_name)]
+    return [e["exit_signal"] for e in h.store.get_open_exit_events(MONTHLY.strategy_name)]
+
+
+@pytest.mark.asyncio
+async def test_breach_early_recentres(h: Harness, monkeypatch: pytest.MonkeyPatch) -> None:
+    signals = await _breach_recentre(h, monkeypatch, pd.Series(np.linspace(10.0, 30.0, 252)))
     assert sorted(signals) == ["LOSS_STOP", "R5_REENTRY_ELIGIBLE"]
     h.notifier.send_plain_message.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_low_ivr_is_logged_but_does_not_block_recentre_or_entry(
+    h: Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """IVR is log-only (as IC/CC/PP): a low reading lands on the R5 event, nothing acts on it."""
+    low_ivr = pd.Series(np.linspace(30.0, 10.0, 252))  # today's VIX is the 1-year low
+    signals = await _breach_recentre(h, monkeypatch, low_ivr)
+    assert sorted(signals) == ["LOSS_STOP", "R5_REENTRY_BLOCKED"]
+    notes = [e["notes"] for e in h.store.get_open_exit_events(MONTHLY.strategy_name)]
+    assert any("IVR" in n for n in notes)
+    held = [p for p in h.store.get_positions(MONTHLY.strategy_name) if p.net_qty != 0]
+    assert held == []  # the recentre close was not blocked
+
+
+@pytest.mark.asyncio
+async def test_entry_is_not_gated_on_low_ivr(h: Harness, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "src.strategy.reentry_mixin.load_vix_series", lambda _d: pd.Series(np.linspace(30, 10, 252))
+    )
+    events = await h.shell.check_signals(h.near, [])
+    assert [e.event_type for e in events] == ["NC_ENTRY"]
 
 
 @pytest.mark.asyncio

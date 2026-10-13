@@ -7,7 +7,7 @@ from matplotlib.ticker import FuncFormatter
 
 from src.notifications.formatting import format_money_k, format_strike
 from src.notifications.payoff_chart_theme import ChartTheme
-from src.payoff.core import StrategyPayoff
+from src.payoff.core import PayoffLeg, StrategyPayoff
 
 
 def x_range(payoff: StrategyPayoff, spot: Decimal | None) -> tuple[float, float]:
@@ -50,20 +50,29 @@ class StrikeTick:
     short: bool
 
 
+def _merged_text(group: list[PayoffLeg]) -> str:
+    """Tick text for the legs at one strike: ``22700 CE/PE\nSELL`` (sides joined when mixed)."""
+    kinds = list(dict.fromkeys(leg.kind for leg in sorted(group, key=lambda g: g.kind)))
+    sides = list(dict.fromkeys("SELL" if leg.qty < 0 else "BUY" for leg in group))
+    return f"{format_strike(int(group[0].strike))} {'/'.join(kinds)}\n{'/'.join(sides)}"
+
+
 def strike_ticks(payoff: StrategyPayoff, span: float) -> list[StrikeTick]:
-    """One per option strike, ascending. Staggers close neighbours."""
-    legs = [leg for leg in payoff.legs if leg.strike is not None]
-    legs.sort(key=lambda leg: leg.strike)
+    """One per strike, ascending. Legs sharing a strike (CE and PE) merge into one tick;
+    staggers close neighbours."""
+    by_strike: dict[Decimal, list[PayoffLeg]] = {}
+    for leg in payoff.legs:
+        if leg.strike is not None:
+            by_strike.setdefault(leg.strike, []).append(leg)
 
     ticks = []
     last_x = None
     last_lowered = False
 
-    for leg in legs:
-        x_val = float(leg.strike)
-        strike_str = format_strike(leg.strike)
-        side = "SELL" if leg.qty < 0 else "BUY"
-        base_text = f"{strike_str} {leg.kind}\n{side}"
+    for strike in sorted(by_strike):
+        group = by_strike[strike]
+        x_val = float(strike)
+        base_text = _merged_text(group)
 
         lowered = False
         if last_x is not None and (x_val - last_x) < 0.14 * span:
@@ -71,7 +80,7 @@ def strike_ticks(payoff: StrategyPayoff, span: float) -> list[StrikeTick]:
                 lowered = True
 
         text = "\n" + base_text if lowered else base_text
-        ticks.append(StrikeTick(x=x_val, text=text, short=leg.qty < 0))
+        ticks.append(StrikeTick(x=x_val, text=text, short=any(leg.qty < 0 for leg in group)))
 
         last_x = x_val
         last_lowered = lowered

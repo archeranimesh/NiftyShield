@@ -80,6 +80,19 @@ class HasSubtitle(Protocol):
         ...
 
 
+@runtime_checkable
+class HasCurve(Protocol):
+    """Optional adapter capability: a non-intrinsic P&L curve (e.g. far legs with time value).
+
+    ``curve`` returns ``None`` when it cannot be built (missing inputs); the chart is then
+    skipped rather than drawn with a wrong shape.
+    """
+
+    def curve(self, ctx: PayoffContext) -> Callable[[Decimal], Decimal] | None:
+        """Return settlement spot -> rupee P&L, or ``None`` to fail closed."""
+        ...
+
+
 class PayoffRegistry:
     """Name -> adapter map. Inject a fresh instance for test isolation."""
 

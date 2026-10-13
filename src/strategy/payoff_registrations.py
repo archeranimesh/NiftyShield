@@ -12,6 +12,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from src.instruments.lookup import InstrumentLookup
+from src.nifty_calendar.config import MONTHLY
 from src.paper.constants import DEFAULT_BOD_PATH
 from src.payoff.core import PayoffLeg
 from src.payoff.errors import DuplicateRegistrationError
@@ -24,6 +25,11 @@ from src.payoff.registry import (
 )
 from src.strategy.ic_expiry_config import CONFIGS
 from src.strategy.ic_expiry_config_v2 import CONFIGS_V2
+from src.strategy.nifty_calendar_payoff import CalendarPayoffAdapter
+
+# Calendar variants charted with the repriced-far-leg adapter; bi-weekly is added by
+# ``calendar-biweekly`` once its config exists.
+_CALENDAR_CONFIGS = (MONTHLY,)
 
 
 class BodStrikeResolver:
@@ -80,5 +86,12 @@ def ensure_registered(registry: PayoffRegistry = DEFAULT_REGISTRY) -> None:
     for name, expiry_type, label in _ic_strategy_names():
         try:
             registry.register(name, IronCondorPayoffAdapter(expiry_type, resolver, label))
+        except DuplicateRegistrationError:
+            continue
+    for cfg in _CALENDAR_CONFIGS:
+        try:
+            registry.register(
+                cfg.strategy_name, CalendarPayoffAdapter(f"Nifty Calendar ({cfg.name})")
+            )
         except DuplicateRegistrationError:
             continue

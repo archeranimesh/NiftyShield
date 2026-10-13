@@ -33,33 +33,33 @@ def _is_png(b: bytes) -> bool:
     return b.startswith(b"\x89PNG")
 
 
-def test_render_returns_png_bytes():
+def test_render_returns_png_bytes() -> None:
     out = render_payoff_png(_ic())
     assert _is_png(out) and len(out) > 1024
 
 
-def test_render_minimal():
+def test_render_minimal() -> None:
     assert _is_png(render_payoff_png(_ic()))
 
 
-def test_render_unbounded_structure():
+def test_render_unbounded_structure() -> None:
     assert _naked_call().max_loss is None
     assert _is_png(render_payoff_png(_naked_call(), spot=D(23500)))
 
 
-def test_render_full():
+def test_render_full() -> None:
     out = render_payoff_png(
         _ic(), spot=D("23250.5"), current_pnl=D(1500), dte=12, margin=D(100000), title="IC"
     )
     assert _is_png(out)
 
 
-def test_render_single_strike_pnl_without_max_profit():
+def test_render_single_strike_pnl_without_max_profit() -> None:
     out = render_payoff_png(_naked_call(), spot=D(23500), current_pnl=D(500))
     assert _is_png(out)
 
 
-def test_render_does_not_touch_pyplot():
+def test_render_does_not_touch_pyplot() -> None:
     render_payoff_png(_ic(), spot=D(23250))
     if "matplotlib.pyplot" in sys.modules:
         assert sys.modules["matplotlib.pyplot"].get_fignums() == []
@@ -73,7 +73,7 @@ def test_render_wraps_failures(monkeypatch):
         render_payoff_png(_ic())
 
 
-def test_render_full_inputs_returns_valid_png():
+def test_render_full_inputs_returns_valid_png() -> None:
     out = render_payoff_png(
         _ic(),
         spot=D("23250.5"),
@@ -94,7 +94,7 @@ def test_render_with_font_fallback(monkeypatch):
     assert _is_png(out)
 
 
-def test_render_two_row_header_on_huge_values():
+def test_render_two_row_header_on_huge_values() -> None:
     # Provide huge values to force two rows
     out = render_payoff_png(
         _ic(), spot=D("23250.5"), current_pnl=D(9999999999), margin=D(99999999999)
@@ -102,7 +102,7 @@ def test_render_two_row_header_on_huge_values():
     assert _is_png(out)
 
 
-def test_render_five_strike_structure():
+def test_render_five_strike_structure() -> None:
     legs = [
         PayoffLeg("PE", D(21000), 75, D(10), "x"),
         PayoffLeg("PE", D(22000), -75, D(20), "x"),
@@ -115,7 +115,7 @@ def test_render_five_strike_structure():
     assert _is_png(out)
 
 
-def test_payoff_chart_modules_import_boundary():
+def test_payoff_chart_modules_import_boundary() -> None:
     import ast
     from pathlib import Path
 
@@ -276,3 +276,16 @@ async def test_correlation_context_reaches_render_thread(monkeypatch):
     finally:
         structlog.contextvars.clear_contextvars()
     assert seen.get("corr_id") == "abc"
+
+
+def test_renderer_unchanged_without_curve() -> None:
+    """``curve=None`` is the default path; an intrinsic curve passed explicitly is identical."""
+    from src.payoff.core import expiry_pnl_at
+
+    payoff = _ic()
+    base = render_payoff_png(payoff, spot=D(23250), title="IC")
+    assert render_payoff_png(payoff, spot=D(23250), title="IC", curve=None) == base
+    explicit = render_payoff_png(
+        payoff, spot=D(23250), title="IC", curve=lambda x: expiry_pnl_at(payoff, x)
+    )
+    assert explicit == base

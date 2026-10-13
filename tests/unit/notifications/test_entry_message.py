@@ -148,3 +148,31 @@ def test_net_debit_line_when_net_credit_negative() -> None:
 def test_net_credit_line_unchanged_for_zero() -> None:
     out = format_entry_message(_msg(net_credit=Decimal("0"))).splitlines()
     assert out[-1] == "💰 *Net credit:* ₹0\\.00/lot  ×65 \\= ₹0\\.00"
+
+
+_GOLDEN_IC = (
+    "✅ *IC v1 Entry* — weekly\n*Mode:* standalone\n"
+    "*IVR:* 0\\.16  *DTE:* 4  *Nifty:* 23,980  *Exp:* 09 SEP 26\n\n```\n"
+    "Act Instrument     Δ  LTP Entry\n-------------------------------\n"
+    "[S] 23500 PE   -0.19 70.8 103.4\n[B] 23000 PE   -0.07 23.8  21.2\n```\n\n"
+    "💰 *Net credit:* ₹103\\.40/lot  ×65 \\= ₹6,721\\.00"
+)
+
+
+def test_entry_message_golden_existing_callers_unchanged() -> None:
+    """Byte-identical to the pre-CM-6 renderer for a single-expiry caller (captured at HEAD)."""
+    out = format_entry_message(_msg(legs=_LEGS[:2]))
+    assert out == _GOLDEN_IC
+
+
+def test_far_expiry_requires_far_dte() -> None:
+    with pytest.raises(ValueError, match="far_expiry and far_dte"):
+        _msg(far_expiry=date(2026, 10, 7))
+
+
+def test_two_expiry_kv_row_and_detail_lines_escaped() -> None:
+    out = format_entry_message(
+        _msg(far_expiry=date(2026, 10, 7), far_dte=32, detail_lines=["R:R 1.20 (x)"])
+    )
+    assert "*DTE:* 4/32" in out and "*Exp:* 09 SEP 26/07 OCT 26" in out.replace("\\", "")
+    assert out.splitlines()[-1] == "R:R 1\\.20 \\(x\\)"
