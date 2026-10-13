@@ -4,7 +4,7 @@
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
 spec.
 
-**Open: CM-6..CM-9.**
+**Open: CM-7..CM-9.**
 - [x] **CM-0** — Prior-art audit and live-infra readiness probe; amend Design review if the code differs | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: e74f1ee
 - [x] **CM-1** — `src/nifty_calendar/` models and payoff maths (Greeks aggregation, breakevens, risk-reward, loss at breakevens, Black-76 repricing of far legs via an interim local pricer) | Owner:
   Antigravity | Model: n/a | Review: code-reviewer, greeks-analyst | SHA: 401edd7
@@ -15,8 +15,8 @@ spec.
   code-reviewer | SHA: b3e548a
 - [x] **CM-5** — `NiftyCalendarV1` shell on `PaperStrategy`: entry gates, fills, persistence, margin snapshot, re-centre via `ReEntryMixin` | Owner: Claude | Model: claude-sonnet-5-5 | Review:
   code-reviewer, greeks-analyst | SHA: 755f0fb
-- [ ] **CM-6** — Telegram entry, close and re-centre messages; two-expiry `EntryMessage`; payoff chart via an optional renderer `curve` arg, calendar adapter and registration | Owner: Claude | Model:
-  claude-sonnet-5-5 | Review: code-reviewer | SHA: <—>
+- [x] **CM-6** — Telegram entry, close and re-centre messages; two-expiry `EntryMessage`; payoff chart via an optional renderer `curve` arg, calendar adapter and registration | Owner: Claude | Model:
+  claude-sonnet-5-5 | Review: code-reviewer | SHA: fd903c4
 - [ ] **CM-7** — Entry script, EOD snapshot script, `monitor_daemon` registration, EOD summary pick-up | Owner: Claude | Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: <—>
 - [ ] **CM-8** — Close-out: docs, module `CLAUDE.md`, graph re-index, parallel-run cutover note | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: <—>
 - [ ] **CM-9** — Swap the interim pricer for `src/pricing` (blocked: `greeks-bs-fallback` GF-2/GF-3 not done) | Owner: Claude | Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: <—>
