@@ -1325,3 +1325,7 @@ in DSN-4); backstop thresholds; Kite stays deferred pending confirmation.
 ## Payoff Charts
 - **strategy-payoff-charts**: Matplotlib is used for rendering off the event loop (`to_thread`). Charts are additive and non-fatal. `spot=None` was used for the IC close charts because `apply_action`
   doesn't currently receive the option chain, deviating from the initial spec to avoid widening the scope.
+- **chart-polish (2026-10-13, accepted on-device by Animesh):** the payoff PNG is dark-theme only (frozen `ChartTheme` `DARK`; no light variant) with bundled Roboto (`src/notifications/assets/fonts/`)
+  so rendering does not depend on host fonts. The font loader falls back to DejaVu Sans with a logged warning, never a raise. Money in the header uses two new whole-rupee formatters,
+  `format_money_whole` and `format_money_k`, rather than `format_money`'s decimals. `fmt_inr` (Indian grouping) was rejected because every other money value in the messages is comma-thousands;
+  `format_pct_signed` was added for signed percentages. The overrides are rows in `FORMATTING.md` §5. POP waits for `chart-model-overlay/` and will arrive as one more `HeaderCell`.

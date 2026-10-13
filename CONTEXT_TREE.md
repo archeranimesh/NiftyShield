@@ -223,7 +223,11 @@ src/
 │   ├── alerts.py             # Shared Telegram message builders (uses formatting.py + markdown.py).
 │   ├── entry_message.py      # Shared lean entry-confirmation renderer for paper strategies — IC v1/v2 + CSP + CC + Collar/PP + 3track bootstrap (UEM-1/2, OEM-1..4). Typed dataclass +
 │   │                         #   pure format_* function; every dynamic value escaped via escape_markdown(); fenced table emitted literally.
-│   └── exit_message.py       # Shared close-confirmation renderer — IC/CSP/CC/PP/Collar + this-exit / cycle / inception P&L + win-rate (UXM-1..7). Mirrors entry_message.py's design.
+│   ├── exit_message.py       # Shared close-confirmation renderer — IC/CSP/CC/PP/Collar + this-exit / cycle / inception P&L + win-rate (UXM-1..7). Mirrors entry_message.py's design.
+│   ├── payoff_chart_theme.py # Frozen `ChartTheme` + `DARK`; `chart_font_family()` returns bundled Roboto, falling back to DejaVu Sans with a logged warning (never raises).
+│   ├── payoff_chart_axes.py  # Pure axis helpers (`x_range`, `sample_xs`, `strike_ticks` with crowding stagger) + drawing helpers (chrome, strike ticks, breakevens, spot line, "Now" marker).
+│   ├── payoff_chart_header.py # `HeaderCell` / `Tone`, pure `build_header_cells`, `pack_header` (one row, two-row fallback) and `draw_header`.
+│   └── assets/fonts/         # Bundled Roboto Regular + Bold (OFL licence + README).
 ├── nuvama/
 │   ├── __init__.py           # Package marker
 │   ├── models.py             # Frozen dataclasses: NuvamaBondHolding (isin/qty/avg_price/ltp/chg_pct/hair_cut;
@@ -515,6 +519,7 @@ tests/
 | `Makefile` | `test` (parallel `-n auto`), `test-serial` (no `randomly`, for debugging), `coverage`, lint targets. |
 | `.pre-commit-config.yaml` | Hooks: `ruff`, `ruff-format`, `mypy`, `no-script-main-logger`, `no-bare-logging`, `md-line-length`, `check-story-structure`, `detect-secrets` (see note). |
 | `.github/workflows/ci.yml` | GitHub Actions CI — push/PR to `main`, matrix Python 3.10+. |
+| `scripts/dev/render_payoff_sample.py` | Renders the reference Iron Condor payoff chart to a PNG path (`--out`) for visual checks. |
 | `scripts/dev/install_hooks.sh` | Installs pre-commit + post-commit hook in one command. |
 | `scripts/dev/post_commit_hook.sh` | Post-commit: echoes graph re-index reminder when `src/` or `scripts/` changed. |
 | `docs/plan/dev-foundation/dx-foundation/mypy_baseline.md` | Per-module mypy error counts at the DX-3 baseline. |

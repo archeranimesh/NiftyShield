@@ -56,13 +56,13 @@ Top-level `src/` packages, one line each (detail → `CONTEXT_TREE.md`):
   `scripts/dev/far_expiry_liquidity_report.py` (`dhan-far-expiry-chain/far-expiry-capture/`).
 - `src/market_calendar/` — NSE holiday detection from version-controlled YAML: `is_trading_day`, `prev_trading_day` (fail-open).
 - `src/notifications/` — `NotifierProtocol`, `TelegramNotifier` (non-fatal, `parse_mode=MarkdownV2` — HTML `<pre>` migration complete + archived 2026-09-06, `telegram-markdown-migration/` epic; every
-  caller escapes via `markdown.py`), `TelegramGateway` (council-free approval dispatch + callback polling + chat-ID allowlist), `alerts.py` (shared Telegram message builders), `formatting.py`
-  (per-type value formatters + table builders), `entry_message.py` (shared lean entry-confirmation renderer — IC v1/v2 + CSP + CC + Collar/PP + 3track bootstrap, UEM-1/2 + OEM-1..4), `exit_message.py`
-  (shared close-confirmation renderer — IC/CSP/CC/PP/Collar + this-exit / cycle / inception P&L + win-rate, UXM-1..7). `src/paper/cycle_pnl.py`'s `Cycle` gained `short_decay_pct` (gross-short-premium
-  ratio) and the module gained `cycle_stats`, `LegGroup`, `resolve_target` (moved in from `scripts/dev/cycle_pnl_report.py`). `scripts/pre_market_brief.py` redesigned to MarkdownV2 fenced tables with
-  the overlay broken into CC/Collar/PP sub-rows (UXM-7). The S9 "NiftyBees vs overlays" recovery digest (`_build_recovery_digest`, `scripts/strategies/three_track/paper_3track_snapshot.py`) is
-  fenced-format MarkdownV2 too (ORD-3) and `_overlay_type_groups` no longer folds a standalone CC bootstrap into the collar total (BUG-044 fix, ORD-2) — `telegram-message-unification/` epic archived
-  2026-09-15.
+  caller escapes via `markdown.py`), `TelegramGateway` (council-free approval dispatch + callback polling + chat-ID allowlist), payoff chart PNGs (`payoff_chart*.py`: dark Roboto theme, axes and
+  stat-header modules; `send_photo`), `alerts.py` (shared Telegram message builders), `formatting.py` (per-type value formatters + table builders), `entry_message.py` (shared lean entry-confirmation
+  renderer — IC v1/v2 + CSP + CC + Collar/PP + 3track bootstrap, UEM-1/2 + OEM-1..4), `exit_message.py` (shared close-confirmation renderer — IC/CSP/CC/PP/Collar + this-exit / cycle / inception P&L +
+  win-rate, UXM-1..7). `src/paper/cycle_pnl.py`'s `Cycle` gained `short_decay_pct` (gross-short-premium ratio) and the module gained `cycle_stats`, `LegGroup`, `resolve_target` (moved in from
+  `scripts/dev/cycle_pnl_report.py`). `scripts/pre_market_brief.py` redesigned to MarkdownV2 fenced tables with the overlay broken into CC/Collar/PP sub-rows (UXM-7). The S9 "NiftyBees vs overlays"
+  recovery digest (`_build_recovery_digest`, `scripts/strategies/three_track/paper_3track_snapshot.py`) is fenced-format MarkdownV2 too (ORD-3) and `_overlay_type_groups` no longer folds a standalone
+  CC bootstrap into the collar total (BUG-044 fix, ORD-2) — `telegram-message-unification/` epic archived 2026-09-15.
 - `src/reporting/` — promoted EOD report builders. `eod_pt_summary.py`: cross-strategy paper-trade summary as 1-3 MarkdownV2 Telegram messages (open positions / closed-today / strategy P&L + Ann.% on
   margin), off live `PaperStore.get_positions()` + broker LTP. Runs alongside `scripts/eod_summary.py`, not a replacement (PT-2, `docs/archive/plan/eod-pt-summary/`).
 - `src/backtest/` — offline research: `compute_ivr` (trailing 252-day VIX IVR), `vix_ingest` (NSE CSV + Upstox), `ChainWriter`/`ChainReader` (Parquet + DuckDB), F&O bhavcopy ingest/loader,

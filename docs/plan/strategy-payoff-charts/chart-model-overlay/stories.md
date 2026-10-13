@@ -126,8 +126,9 @@ scan outward a few strikes, else `None`. Never raise.
 - `src/notifications/payoff_chart.py` — extend `render_payoff_png`.
 - `tests/unit/notifications/test_payoff_chart.py` — add a case.
 
-**What to implement:** a new optional arg `t0_series: tuple[list[float], list[float]] | None = None`. When given, plot it as a blue dashed line on the same axes. When `None`, unchanged. Keep the
-y-limits sane if the T+0 curve dips below `max_loss` (it can near a long strike pre-expiry) — clamp the view or expand it, decide visually.
+**What to implement:** a new optional arg `t0_series: tuple[list[float], list[float]] | None = None`. When given, plot it as a dashed line on the same axes, coloured from a `ChartTheme` field (no
+inline hex), using the `payoff_chart_axes.py` draw-helper conventions. When `None`, unchanged. Keep the y-limits sane if the T+0 curve dips below `max_loss` (it can near a long strike pre-expiry) —
+clamp the view or expand it, decide visually.
 
 **Tests:** `test_render_with_t0_curve` — pass a series → valid PNG; `test_render_without_t0` — `None` → identical behaviour to `chart-core/`.
 
@@ -141,8 +142,9 @@ y-limits sane if the T+0 curve dips below `max_loss` (it can near a long strike 
 - `src/notifications/payoff_chart.py` — extend the renderer.
 - test — add a case.
 
-**What to implement:** a new optional arg `sigma: float | None = None`. When given, draw dashed grey verticals at `spot ± sigma` and `spot ± 2*sigma`, label them `-1σ`, `+1σ`, `-2σ`, `+2σ`, and
-lightly shade the `±1σ`–`±2σ` corridors (matching the Stockmock look). Requires `spot`; no-op when `spot is None` or `sigma is None`.
+**What to implement:** a new optional arg `sigma: float | None = None`. When given, draw dashed verticals at `spot ± sigma` and `spot ± 2*sigma` (colours from `ChartTheme`, helper in
+`payoff_chart_axes.py`), label them `-1σ`, `+1σ`, `-2σ`, `+2σ`, and lightly shade the `±1σ`–`±2σ` corridors (matching the Stockmock look). Requires `spot`; no-op when `spot is None` or `sigma is
+None`.
 
 **Tests:** `test_render_with_sigma_bands` → valid PNG; `test_render_sigma_needs_spot` (`sigma` set, `spot=None`) → no crash, bands simply absent.
 
@@ -153,11 +155,11 @@ lightly shade the `±1σ`–`±2σ` corridors (matching the Stockmock look). Req
 ## MO-6 — POP in the stat strip
 
 **Files to change / create:**
-- `src/notifications/payoff_chart.py` — extend the stat strip.
+- `src/notifications/payoff_chart_header.py` — `build_header_cells(pop=...)`; `payoff_chart.py` passes it through.
 - test — add a case.
 
-**What to implement:** a new optional arg `pop: float | None = None`. When given (0–1), show `POP <xx.x%>` in the stat strip next to R:R. Omit the stat when `None`. Format via the `FORMATTING.md`
-percent helper.
+**What to implement:** a new optional arg `pop: float | None = None`. When given (0–1), append a POP `HeaderCell` (`POP <xx.x%>`) via `build_header_cells(pop=...)`; `pack_header` handles the width.
+Omit the cell when `None`. Format via the `FORMATTING.md` percent helper (`format_pct_signed` is for signed values only).
 
 **Tests:** `test_stat_strip_with_pop` / `test_stat_strip_without_pop`.
 

@@ -39,7 +39,6 @@ state. Arrows: `A → B` means B cannot start until A is done. `‖` means the t
 | 2 | `gamma-near-expiry/` Phase B | 5 | GS-1, GS-2, GS-3, GS-4, GS-5 | 5+ days of snapshots | none |
 | 2 | `portfolio-snapshot-slimdown/` FD-1..7 → DHR-1..4 | 9 | FD-1 | never interleave the two sub-stories | `phase2-integrations/` |
 | 2 | `design-discipline/design-gate/` DG-1..9 | 26 | DG-1 | none | `design-baseline` (DG-4); soft-first for `logging-consistency` |
-| 2 | `strategy-payoff-charts/chart-polish/` CP-1..11 | 6 | CP-1 | none (`chart-core` done); CP-10 is an Animesh on-device gate | `chart-model-overlay` MO-4..6 |
 | 2 | `logging-consistency/logging-foundation/` LF-1..8 | 27 | LF-1 | redacted `crontab -l` from Animesh; soft after `design-gate` | `logging-migration` (LF-5) |
 | 2 | `technical-debt/` | 20 | opportunistic | fires only when the named file is touched | none |
 | 3 | `strategy-payoff-charts/` `chart-model-overlay/` | 6 | MO-1 | `greeks-bs-fallback` GF-2 + GF-3, and `chart-polish` done | none |
@@ -85,8 +84,8 @@ rot them. (Items 3, 5 and 8 closed — numbers kept stable because item text cro
     cadence, backstop thresholds, Kite.
 4. **Gamma near-expiry buy (epic)** — `docs/plan/gamma-near-expiry/` — Phase A `risk-gamma-phase-a/` ✅ done; next Phase B `gamma-scan-phase-b/` GS-6 (human-owned; GS-1..6; GS-1..5 done), blocked until
    ≥ 5 days of snapshots exist. In progress, independent of everything else; finish before starting new stories.
-6. **Strategy payoff charts on Telegram (IC first, any strategy via opt-in registry)** — `docs/plan/strategy-payoff-charts/` — `chart-core/` ✅ done (`6ef2a5f`); next **CP-1** (`chart-polish/`, dark
-   Roboto redesign); `chart-model-overlay/` (MO-1..9) stays blocked, it waits on `greeks-bs-fallback` GF-2 + GF-3, i.e. item 7.
+6. **Strategy payoff charts on Telegram (IC first, any strategy via opt-in registry)** — `docs/plan/strategy-payoff-charts/` — `chart-core/` ✅ done (`6ef2a5f`); `chart-polish/` ✅ done (dark Roboto
+   redesign, accepted 2026-10-13); `chart-model-overlay/` (MO-1..9) stays blocked, it waits on `greeks-bs-fallback` GF-2 + GF-3, i.e. item 7.
 7. **Greeks Black-Scholes fallback** — `docs/plan/greeks-bs-fallback/` — next **GF-1** (read-only audit scope). Needs Animesh's three modeling decisions (rate / DTE convention / delta tolerance)
    before GF-2. Unblocks delta-based IC entry for the yearly bucket and `strategy-payoff-charts` `chart-model-overlay/`.
 9. **Portfolio snapshot slimdown** — `docs/plan/portfolio-snapshot-slimdown/` — next **FD-1** (pre-delete audit). Epic, fixed order: `finideas-decommission/` (FD-1..7) → `dhan-holdings-removal/`
@@ -1286,3 +1285,5 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
 - [2026-10-07] dhan-chain-adapter DA-4 relocated to `yearly-overlays/yearly-foundation/` YF-6 (bootstraps consume raw Upstox rows with `instrument_key`; needs an `OptionChain`->row adapter + key
   resolver, no consumer until a yearly tenor exists). Only DA-0 (Animesh renewal decision) remains open on the story.
 - [2026-10-13] dhan-chain-adapter DA-0 done: Animesh decided to renew the Dhan data plan. Story complete; FG-1 earliest start 2026-11-02 (15 captured trading days).
+- [2026-10-13] strategy-payoff-charts chart-polish CP-10 accepted (Animesh) and CP-11 docs close done: story complete; archives with the epic (MO-9). Next in the epic: `chart-model-overlay/` MO-1,
+  still blocked on GF-2 + GF-3.
