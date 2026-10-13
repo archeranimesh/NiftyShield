@@ -124,8 +124,9 @@ rot them. (Items 3, 5 and 8 closed — numbers kept stable because item text cro
     pre-proposal check, then a conformance baseline. Requested by Animesh 2026-10-08. Parked: payoff-chart inline-caption change until DG-5 lands.
 27. **Logging consistency (epic)** — `docs/plan/logging-consistency/` — next **LF-1** (audit; needs a redacted `crontab -l` from Animesh). `logging-foundation/` → `logging-migration/` →
     `logging-enforcement/`. New `job_runs` heartbeat table. Soft order after item 26's `design-gate/`. Requested by Animesh 2026-10-08.
-28. **Nifty positional calendar (epic)** — `docs/plan/nifty-calendar/` — next **CM-7** (CM-0..6 done: audit, pure core, strategy shell and Telegram messages/payoff chart). `calendar-monthly/` (shared
-    pure core, shell, IC-equivalent infra, monthly variant) → `calendar-biweekly/`. Paper only; net-long-vega diversifier to the short-vol book. Requested by Animesh 2026-10-12.
+28. **Nifty positional calendar (epic)** — `docs/plan/nifty-calendar/` — next **CM-8** (CM-0..7 done: audit, pure core, strategy shell and Telegram messages/payoff chart, scripts and EOD wiring).
+    `calendar-monthly/` (shared pure core, shell, IC-equivalent infra, monthly variant) → `calendar-biweekly/`. Paper only; net-long-vega diversifier to the short-vol book. Requested by Animesh
+    2026-10-12.
 29. **Telegram caption-fit audit** — `docs/plan/telegram-caption-audit/` — next **TCA-1** (inventory; TCA-1..3). Read-only: measure which Telegram messages fit a single photo-with-caption message
     (1024-char cap). No implementation until reviewed. Requested by Animesh 2026-10-13.
 
@@ -165,6 +166,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-13] calendar-monthly CM-7 closed (`9f47a68`): Nifty calendar entry and snapshot scripts, daemon registration, EOD pick-up, same-day re-entry after re-centre
 - [2026-10-13] calendar-monthly CM-6 closed (`fd903c4`): Calendar Telegram entry/close/re-centre messages, curve-aware payoff chart and adapter
 - [2026-10-13] calendar-monthly CM-5 closed (`755f0fb`): NiftyCalendarV1 shell and state helpers, 17 tests, reviews clean
 - [2026-10-12] gamma-scan-phase-b GS-5 closed (`28cec55`): gamma_scan.py: 5-min scan with flock + atomic BEGIN IMMEDIATE entry, signal log, E1/E2/E3 exits, dry-run
