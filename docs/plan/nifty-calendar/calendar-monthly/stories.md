@@ -31,8 +31,9 @@ Spec source: `TradeResearch/findings/14ZZYoV4DBc_combined.md` (part 2 wins on co
 7. How does `StrategyMonitor` register and schedule a strategy (cadence, `due_interval_s`, WARN dedup, auto-execute dispatch)? Name the exact registration lines in `scripts/monitor_daemon.py`.
 8. What does IC's entry script do for the duplicate-position guard and Telegram approval, and which parts are reusable without importing IC-specific modules?
 
-9. Reference-trade evidence in `docs/plan/nifty-calendar/reference/README.md`: does `compute_payoff` handle only expiry intrinsic value, and does a calendar's near-expiry curve need a Black-Scholes
-   step with an IV input for the far legs? Can our T+0 curve match the reference chart's projected P&L within about ₹900?
+9. Payoff implementation is out of scope here (Animesh, 2026-10-13); record only what the existing `compute_payoff` and adapter do with a calendar. The questions below move to chart-model-overlay.
+   Original wording: does `compute_payoff` handle only expiry intrinsic value, and does a calendar's near-expiry curve need a Black-Scholes step with an IV input for the far legs? Can our T+0 curve
+   match the reference chart's projected P&L within about ₹900?
 10. Same evidence: the reference trade was held at 0.4% from the upper breakeven without adjusting, and margin moved between roughly ₹2.25L and ₹2.57L for 3 lots. Record both as inputs to CM-4 and as
     decisions for Animesh, not as rules.
 
@@ -194,12 +195,12 @@ story) via `search_graph("black scholes")` — do not write a second one.
 
 ---
 
-## CM-6 — Telegram messages and payoff chart
+## CM-6 — Telegram messages
 
 **Files to change / create:**
 - `src/notifications/entry_message.py` — additive optional `far_expiry` / `far_dte` (or per-leg expiry) on `EntryMessage`; existing callers unchanged.
 - `src/notifications/` calendar label and recentre-alert builder, if `alerts.py` is the right home (decide per `src/notifications/CLAUDE.md`).
-- `src/strategy/payoff_registrations.py` and a calendar payoff adapter; tests under `tests/unit/notifications/` and `tests/unit/payoff/`.
+- Tests under `tests/unit/notifications/`. No payoff adapter, registration or chart change (deferred to `chart-model-overlay`).
 
 **Before any code:** `get_code_snippet("EntryMessage")`, `ExitMessage`, `CloseLegRow`, `LegRow`; read `src/notifications/CLAUDE.md` §"Instrument Label Formatting" and `FORMATTING.md`.
 
@@ -210,14 +211,13 @@ story) via `search_graph("black scholes")` — do not write a second one.
 2. Close message: reuse `ExitMessage` unchanged. Signal text is the `ExitDecision` reason; cycle fields come from `cycle_pnl` (confirm four-leg grouping per CM-0). Re-centre sends one message showing
    close and the new entry, not two unrelated messages. Pass `cycle_decay_pct` / `cycle_short_*` only if the message is meant to describe the short straddle alone; `short_decay_pct` excludes the long
    wings, so for the calendar headline use the net `decay_pct` and `realized_pnl`, and say which one the message shows.
-3. Payoff chart: a calendar adapter that values far legs at the near expiry with BS (reusing CM-1 `payoff_at`), registered under both strategy names. If it cannot build the chart it fails closed
-   (logged warning, no partial payoff), matching `InvalidLegsError` semantics.
+3. Payoff chart: out of scope. Do not add an adapter or registration; the existing chart path fails closed on a mixed-expiry position, so no chart is sent. Calendar charts are built in
+   `docs/plan/strategy-payoff-charts/chart-model-overlay/`.
 4. All strings escaped at the one boundary the standard defines; no raw `print`.
 
-**Tests:** `test_entry_message_golden_existing_callers_unchanged` · `test_calendar_entry_message_renders_two_expiries` · `test_markdownv2_escaping` · `test_payoff_adapter_values_far_legs` ·
-`test_payoff_adapter_fails_closed_on_partial_position`.
+**Tests:** `test_entry_message_golden_existing_callers_unchanged` · `test_calendar_entry_message_renders_two_expiries` · `test_markdownv2_escaping` .
 
-**Commit:** `feat(notifications): add calendar entry message and payoff`
+**Commit:** `feat(notifications): add calendar entry message`
 
 ---
 

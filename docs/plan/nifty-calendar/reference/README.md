@@ -106,3 +106,8 @@ prices are not in this view. LTP is not the fill price, so treat anything derive
 
 Still open: exact entry fills and IV for both reference trades (only needed for exact fixtures), and the CM-0 code and live-probe questions (payoff model, margin per lot, mixed-expiry messages and
 adapter, Greeks and spreads on the far wings, holiday-shifted expiry dates).
+
+## Scope note: payoff charts (Animesh, 2026-10-13)
+
+No payoff or chart implementation beyond what IC already has is done in the nifty-calendar epic. The chart evidence above (T+0 versus expiry curves, far-leg valuation, model tolerance of about ₹900,
+the stat strip, OI bars, per-leg P&L table) is input for `docs/plan/strategy-payoff-charts/chart-model-overlay/`, to be handled later.

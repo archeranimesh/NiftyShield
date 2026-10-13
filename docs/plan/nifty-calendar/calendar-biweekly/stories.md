@@ -64,7 +64,7 @@ history (resets on a daemon restart; accepted limitation documented in CM-4). Re
 **Files to change / create:**
 - `scripts/monitor_daemon.py` — register `paper_nifty_calendar_biweekly` beside the monthly one (additive).
 - `scripts/strategies/nifty_calendar/paper_calendar_entry.py`, `paper_calendar_snapshot.py` — a `--variant monthly|biweekly` flag selecting a registry entry (extend CM-7 scripts; no fork).
-- `src/notifications/` label `Cal BW`; `src/strategy/payoff_registrations.py` registration; tests.
+- `src/notifications/` label `Cal BW`; tests. No payoff registration (deferred to chart-model-overlay).
 
 **Before any code:** read the CM-7 scripts as shipped, `get_code_snippet` on the variant registry from CM-3, and `FORMATTING.md` for the label. The shell must need **no** change; if it does, stop
 (scope guard).

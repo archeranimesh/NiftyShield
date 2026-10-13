@@ -24,8 +24,8 @@ Decided with Animesh on 2026-10-12:
 - **Same infra as IC, different strategy.** Entry, exit, EOD snapshot, Telegram messages, payoff chart, margin snapshot and cross-strategy EOD summaries all reuse the existing paths. Nothing is copied
   from `ic_nifty_v2.py` and none of its private helpers are imported (see the design review).
 - **Greeks availability is not a risk.** Both variants only ever use this month, next month and weeklies, all inside the ~90 DTE window where Upstox returns Greeks (Dhan is a spare for bi-weekly). The
-  shell fails closed if any of the four legs lacks Greeks at entry. No BS fallback for *missing* Greeks. Black-Scholes repricing is still needed for the payoff and IV-shift maths (the far legs are
-  alive at the near expiry).
+  shell fails closed if any of the four legs lacks Greeks at entry. No BS fallback for *missing* Greeks. Black-Scholes repricing of the far legs belongs to the payoff chart, which is deferred (next
+  bullet).
 - **Fills follow IC:** `PaperFillSimulator` (mid plus VIX-regime slippage) with a spread gate. The gate here is an absolute points-per-leg tolerance (video: 1-2 points), not IC's 5% of mid, because
   far wings are cheap.
 - **Assumptions recorded, not trusted** (all config, all labelled): breach confirmation = 30-minute close beyond a breakeven; breakevens recomputed live from current IV, not frozen at entry; 1 lot;
@@ -50,6 +50,9 @@ Run against `docs/refactor/design-principles.md` and `code-deduplication-and-tax
   `_price_utils.resolve_price`, `src/market_calendar`, `entry_message` / `exit_message`, `payoff` registry, `StrategyMonitor` registration. **Not reusable as-is:** IC's `_mid_price` / `_spread_pct`
   are private methods on the IC class (the shared equivalent is `_price_utils.resolve_price` plus a new pure spread helper in the core); `ic_entry_gates.py` is IC-specific (IVR + a monthly DTE window)
   and `paper_ic_snapshot.process_variant` is coupled to IC classes, so NC gets its own thin entry and snapshot scripts that reuse the shared renderers (`build_leg_table`, `send_payoff_chart`).
+- **No new payoff or chart implementation (Animesh, 2026-10-13).** Nothing beyond what the IC version already has: no calendar payoff adapter, no T+0 or far-leg valuation in charts, no change to
+  `src/notifications/payoff_chart.py` or `payoff_registrations.py`. All of it is chart work deferred to `docs/plan/strategy-payoff-charts/chart-model-overlay/`. Until then a calendar position sends no
+  payoff chart (the existing adapter raises `InvalidLegsError` on mixed expiries and the chart fails closed).
 - **Known gaps in shared infra** (each is a named task, not a surprise): `EntryMessage` carries one `expiry` / `dte` and a calendar has two expiries; `DefaultPositionAdapter` charts one structure and
   a mixed-expiry payoff would mislead (it raises `InvalidLegsError` rather than plot a partial payoff).
 
@@ -77,7 +80,7 @@ Status: ⬜ Not started · 🔄 In progress · ✅ Done. This column is the epic
 
 ## Epic done when
 
-- **calendar-monthly** — the monthly variant runs end to end in paper on the monitor daemon: structure selected under the six filters, entry and close Telegram messages, payoff chart, EOD snapshot,
-  margin snapshot, cycle P&L and EOD summary pick-up, with unit tests green and docs closed.
+- **calendar-monthly** — the monthly variant runs end to end in paper on the monitor daemon: structure selected under the six filters, entry and close Telegram messages (no payoff chart; deferred),
+  EOD snapshot, margin snapshot, cycle P&L and EOD summary pick-up, with unit tests green and docs closed.
 - **calendar-biweekly** — the bi-weekly variant does the same with its own rules, and an offline fixture test walks a full month (monthly, back-to-back bi-weeklies, monthly again) with the correct
   variant active on each date.

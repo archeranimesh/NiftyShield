@@ -17,7 +17,8 @@ spot 200 points or more from the entry short strike means close and redeploy at 
 
 **In bounds:**
 - `BIWEEKLY` config, `BiweeklyCyclePolicy`, `BiweeklyExitRule` and a registry entry, in `src/nifty_calendar/`; tests.
-- Registration of `paper_nifty_calendar_biweekly` in the daemon, entry and snapshot scripts parameterised by variant (extend the CM-7 scripts; do not fork them), payoff registration.
+- Registration of `paper_nifty_calendar_biweekly` in the daemon, entry and snapshot scripts parameterised by variant (extend the CM-7 scripts; do not fork them). No payoff registration (deferred to
+  chart-model-overlay).
 - A full-month offline integration test across both variants.
 
 **Out of bounds:**

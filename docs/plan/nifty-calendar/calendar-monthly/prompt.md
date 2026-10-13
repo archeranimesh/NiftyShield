@@ -17,8 +17,7 @@ target, planned hold 7 days, hard close day 10.
 
 **In bounds:**
 - New leaf package `src/nifty_calendar/` (pure core), new `src/strategy/nifty_calendar_v1.py` (shell), tests under `tests/unit/nifty_calendar/` and `tests/unit/strategy/`.
-- Additive changes to shared infra only: `EntryMessage` two-expiry support, payoff adapter for a mixed-expiry structure, `payoff_registrations.py`, `monitor_daemon.py` registration, EOD summary
-  pick-up.
+- Additive changes to shared infra only: `EntryMessage` two-expiry support, `monitor_daemon.py` registration, EOD summary pick-up.
 - New entrypoints `scripts/strategies/nifty_calendar/` (entry, EOD snapshot).
 
 **Out of bounds:**
@@ -43,14 +42,14 @@ re-verifies the audit against the code before CM-1 starts and amends this sectio
 
 ## Task overview
 
-CM-0 audit and readiness probe · CM-1 models and payoff maths · CM-2 structure selector · CM-3 cycle calendar and variant config · CM-4 monthly exit rule · CM-5 strategy shell · CM-6 Telegram and
-payoff chart · CM-7 scripts, daemon and EOD wiring · CM-8 close-out docs and cutover note. CM-1 to CM-4 are pure and spec-complete, so they are routed to Antigravity; CM-0 and CM-5 to CM-8 involve
-judgment calls against live infra, so they are Claude's.
+CM-0 audit and readiness probe · CM-1 models and payoff maths · CM-2 structure selector · CM-3 cycle calendar and variant config · CM-4 monthly exit rule · CM-5 strategy shell · CM-6 Telegram messages
+· CM-7 scripts, daemon and EOD wiring · CM-8 close-out docs and cutover note. CM-1 to CM-4 are pure and spec-complete, so they are routed to Antigravity; CM-0 and CM-5 to CM-8 involve judgment calls
+against live infra, so they are Claude's.
 
 ## Definition of done
 
 All tasks ticked with SHAs; `python -m pytest tests/unit/ --tb=no -q` green; a paper monthly cycle can be entered and closed by the monitor daemon against `MockBrokerClient` fixtures, producing the
-trades, NAV and leg snapshots, margin snapshot, entry and close Telegram text and payoff chart that IC produces; docs updated per CLAUDE.md Step 5a.
+trades, NAV and leg snapshots, margin snapshot, entry and close Telegram text that IC produces (no payoff chart; deferred to chart-model-overlay); docs updated per CLAUDE.md Step 5a.
 
 ## Perspectives not covered
 

@@ -16,8 +16,7 @@ spec.
   code-reviewer | SHA: <—>
 - [ ] **CM-5** — `NiftyCalendarV1` shell on `PaperStrategy`: entry gates, fills, persistence, margin snapshot, re-centre via `ReEntryMixin` | Owner: Claude | Model: claude-sonnet-5-5 | Review:
   code-reviewer, greeks-analyst | SHA: <—>
-- [ ] **CM-6** — Telegram entry, close and re-centre messages; two-expiry `EntryMessage`; mixed-expiry payoff adapter and registration | Owner: Claude | Model: claude-sonnet-5-5 | Review:
-  code-reviewer | SHA: <—>
+- [ ] **CM-6** — Telegram entry, close and re-centre messages; two-expiry `EntryMessage`; no payoff chart (deferred) | Owner: Claude | Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: <—>
 - [ ] **CM-7** — Entry script, EOD snapshot script, `monitor_daemon` registration, EOD summary pick-up | Owner: Claude | Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: <—>
 - [ ] **CM-8** — Close-out: docs, module `CLAUDE.md`, graph re-index, parallel-run cutover note | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: <—>
 
@@ -29,7 +28,7 @@ spec.
 - **CM-3** — for every date in a fixture year the calendar returns exactly one active variant or none, across holidays and a Tuesday-expiry shift.
 - **CM-4** — each exit path (target, recentre, close on breach late, day-10, DTE guard) is hit by a test and priority order is fixed.
 - **CM-5** — the shell enters and closes a monthly cycle against fixtures, persisting trades, snapshots and margin, with no variant branch in its code.
-- **CM-6** — entry, close and re-centre messages render in MarkdownV2 per `FORMATTING.md`; the payoff chart renders the calendar or fails closed.
+- **CM-6** — entry, close and re-centre messages render in MarkdownV2 per `FORMATTING.md`; no payoff chart is added (deferred to chart-model-overlay).
 - **CM-7** — scripts run in dry mode against `MockBrokerClient`; the strategy appears in the EOD summaries; the daemon registers it.
 - **CM-8** — docs per CLAUDE.md Step 5a done; cutover procedure written.
 
