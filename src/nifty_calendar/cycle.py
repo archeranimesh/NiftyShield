@@ -9,10 +9,10 @@ from src.market_calendar.holidays import is_trading_day
 from src.nifty_calendar.config import MONTHLY, CalendarVariantConfig
 
 __all__ = [
-    "CycleCalendar",
     "CyclePolicy",
     "EntryPlan",
     "MonthlyCyclePolicy",
+    "active_variant",
 ]
 
 
@@ -171,26 +171,22 @@ class MonthlyCyclePolicy:
         return "biweekly"
 
 
-class CycleCalendar:
-    """Evaluates active calendar spread variants across policies."""
+def active_variant(
+    today: date,
+    policies: Sequence[CyclePolicy] | Mapping[str, CyclePolicy],
+) -> str | None:
+    """Return the variant name of the policy whose entry window is active.
 
-    @staticmethod
-    def active_variant(
-        today: date,
-        policies: Sequence[CyclePolicy] | Mapping[str, CyclePolicy],
-    ) -> str | None:
-        """Return the variant name of the policy whose entry window is active.
+    Args:
+        today: Date to check.
+        policies: Sequence or mapping of CyclePolicy instances.
 
-        Args:
-            today: Date to check.
-            policies: Sequence or mapping of CyclePolicy instances.
-
-        Returns:
-            The variant name if an entry window is active, otherwise None.
-        """
-        policy_list = policies.values() if isinstance(policies, Mapping) else policies
-        for policy in policy_list:
-            plan = policy.entry_window(today)
-            if plan is not None:
-                return plan.variant_name
-        return None
+    Returns:
+        The variant name if an entry window is active, otherwise None.
+    """
+    policy_list = policies.values() if isinstance(policies, Mapping) else policies
+    for policy in policy_list:
+        plan = policy.entry_window(today)
+        if plan is not None:
+            return plan.variant_name
+    return None

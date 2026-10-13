@@ -47,3 +47,25 @@ def test_monthly_defaults_match_decisions() -> None:
     assert MONTHLY.max_wing_search_steps == 3
     assert MONTHLY.entry_time_ist == time(10, 30)
     assert MONTHLY.hard_exit_time_ist == time(15, 15)
+
+
+def test_config_lot_size_is_required() -> None:
+    """Assert omitting lot_size raises TypeError upon instantiation."""
+    with pytest.raises(TypeError, match="lot_size"):
+        CalendarVariantConfig(  # type: ignore[call-arg]
+            name="test",
+            strategy_name="paper_test",
+            target_per_lot=Decimal("3000"),
+            planned_hold_days=7,
+            hard_hold_days=10,
+            exit_by_dte=7,
+            put_wing_start_points=600,
+            call_wing_start_points=600,
+            min_wing_points=300,
+            vega_cap=Decimal("20"),
+            delta_cap=Decimal("0.10"),
+            risk_reward_floor=Decimal("0.75"),
+            breakeven_symmetry_tolerance_pct=Decimal("0.50"),
+            breakeven_loss_symmetry_tolerance=Decimal("0.25"),
+            spread_tolerance=Decimal("3.0"),
+        )

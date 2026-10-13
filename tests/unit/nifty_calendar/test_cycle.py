@@ -4,10 +4,10 @@ from datetime import date, time, timedelta
 
 from src.market_calendar.holidays import is_trading_day
 from src.nifty_calendar.cycle import (
-    CycleCalendar,
     CyclePolicy,
     EntryPlan,
     MonthlyCyclePolicy,
+    active_variant,
 )
 
 
@@ -130,7 +130,7 @@ def test_hard_exit_never_inside_dte_7() -> None:
 
 
 def test_exactly_one_active_variant_per_date() -> None:
-    """Assert CycleCalendar returns 'monthly' on valid entry days and None on others."""
+    """Assert active_variant returns 'monthly' on valid entry days and None on others."""
     expiries = [
         date(2026, 8, 25),
         date(2026, 9, 29),
@@ -144,16 +144,16 @@ def test_exactly_one_active_variant_per_date() -> None:
     entry_day = date(2026, 9, 30)
 
     # Valid entry day
-    assert CycleCalendar.active_variant(entry_day, policies_seq) == "monthly"
-    assert CycleCalendar.active_variant(entry_day, policies_map) == "monthly"
+    assert active_variant(entry_day, policies_seq) == "monthly"
+    assert active_variant(entry_day, policies_map) == "monthly"
 
     # Non-entry days across the surrounding window
     for delta in range(-7, 14):
         test_day = entry_day + timedelta(days=delta)
         if test_day == entry_day:
             continue
-        assert CycleCalendar.active_variant(test_day, policies_seq) is None
-        assert CycleCalendar.active_variant(test_day, policies_map) is None
+        assert active_variant(test_day, policies_seq) is None
+        assert active_variant(test_day, policies_map) is None
 
 
 def test_next_variant_after_exit() -> None:

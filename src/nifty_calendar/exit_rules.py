@@ -14,7 +14,7 @@ import structlog
 from src.nifty_calendar.config import MONTHLY, CalendarVariantConfig
 from src.nifty_calendar.cycle import EntryPlan
 
-logger = structlog.get_logger(__name__)
+logger = structlog.stdlib.get_logger(__name__)
 
 _IST = ZoneInfo("Asia/Kolkata")
 

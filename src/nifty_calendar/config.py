@@ -7,7 +7,7 @@ from decimal import Decimal
 __all__ = ["CalendarVariantConfig", "MONTHLY"]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class CalendarVariantConfig:
     """Configuration parameters for a calendar spread strategy variant.
 
@@ -27,10 +27,10 @@ class CalendarVariantConfig:
         breakeven_symmetry_tolerance_pct: Symmetry tolerance percentage for breakeven points.
         breakeven_loss_symmetry_tolerance: Asymmetry tolerance for losses at breakeven.
         spread_tolerance: Maximum allowable bid-ask spread in INR or points.
+        lot_size: Contract lot size in quantity units (e.g. 65 for Nifty). Required.
         breach_confirm_minutes: Confirmation window in minutes for breakeven breach.
         breach_adjust_window_days: Days before expiry during which adjustments are allowed.
         lots: Number of lots to trade.
-        lot_size: Contract lot size in quantity units (e.g. 65 for Nifty).
         wing_step_points: Strike step size in points when searching for wings.
         max_wing_search_steps: Maximum search steps away from initial wing points.
         entry_time_ist: Standard entry time in IST.
@@ -52,10 +52,10 @@ class CalendarVariantConfig:
     breakeven_symmetry_tolerance_pct: Decimal
     breakeven_loss_symmetry_tolerance: Decimal
     spread_tolerance: Decimal
+    lot_size: int
     breach_confirm_minutes: int = 30
     breach_adjust_window_days: int = 7
     lots: int = 1
-    lot_size: int = 65
     wing_step_points: int = 100
     max_wing_search_steps: int = 3
     entry_time_ist: time = time(10, 30)

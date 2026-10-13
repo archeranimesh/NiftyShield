@@ -25,7 +25,7 @@ def _make_leg(
     """Helper to build OptionLeg with Decimal prices and Greeks."""
     return OptionLeg(
         strike=strike,
-        ltp=ltp or ((bid + ask) / Decimal("2")),
+        ltp=ltp if ltp is not None else ((bid + ask) / Decimal("2")),
         bid=bid,
         ask=ask,
         oi=100000,
@@ -144,7 +144,7 @@ def _build_chains(
     return chain_near, chain_far
 
 
-def test_quote_helpers_mid_and_spread():
+def test_quote_helpers_mid_and_spread() -> None:
     leg = _make_leg(
         Decimal("22600"),
         Decimal("100.0"),
@@ -171,7 +171,7 @@ def test_quote_helpers_mid_and_spread():
         spread_points(bad_leg_bid)
 
 
-def test_selects_video_structure():
+def test_selects_video_structure() -> None:
     """Video structure: 22,700 straddle, ~600/600 wings selected under MONTHLY."""
     spot = Decimal("22700.0")
     near_exp = date(2026, 10, 27)
@@ -223,7 +223,7 @@ def test_selects_video_structure():
     assert res.long_ce_wing.strike == Decimal("23300")
 
 
-def test_selects_reference_400_400_structure():
+def test_selects_reference_400_400_structure() -> None:
     """Reference trade (22,600 straddle, 22,200 PE / 23,000 CE wings, 400/400)."""
     spot = Decimal("22600.0")
     near_exp = date(2026, 10, 27)
@@ -259,7 +259,7 @@ def test_selects_reference_400_400_structure():
     assert res.long_ce_wing.strike == Decimal("23000")
 
 
-def test_no_entry_when_vega_cap_unreachable():
+def test_no_entry_when_vega_cap_unreachable() -> None:
     """When all far wings have vega > 40, net vega > 20 cap -> NoEntry(failed_filter='vega_cap')."""
     spot = Decimal("22600.0")
     near_exp = date(2026, 10, 27)
@@ -294,7 +294,7 @@ def test_no_entry_when_vega_cap_unreachable():
     assert res.failed_filter == "vega_cap"
 
 
-def test_wing_strikes_multiples_of_100():
+def test_wing_strikes_multiples_of_100() -> None:
     """Verify wing strikes returned are exact multiples of 100."""
     spot = Decimal("22600.0")
     near_exp = date(2026, 10, 27)
@@ -329,7 +329,7 @@ def test_wing_strikes_multiples_of_100():
     assert res.long_ce_wing.strike % Decimal("100") == Decimal("0")
 
 
-def test_wide_spread_leg_rejected():
+def test_wide_spread_leg_rejected() -> None:
     """Far wing spread > 3.0 points rejected."""
     spot = Decimal("22600.0")
     near_exp = date(2026, 10, 27)
@@ -364,7 +364,7 @@ def test_wide_spread_leg_rejected():
     assert res.failed_filter == "spread_tolerance"
 
 
-def test_near_leg_wide_spread_rejected():
+def test_near_leg_wide_spread_rejected() -> None:
     """Near ATM leg spread > 3.0 points rejected."""
     spot = Decimal("22600.0")
     near_exp = date(2026, 10, 27)
@@ -413,7 +413,7 @@ def test_near_leg_wide_spread_rejected():
     assert res.failed_filter == "spread_tolerance"
 
 
-def test_missing_greeks_is_no_entry_not_exception():
+def test_missing_greeks_is_no_entry_not_exception() -> None:
     """Far wing leg with None vega returns NoEntry(failed_filter='missing_greeks') without exception."""
     spot = Decimal("22600.0")
     near_exp = date(2026, 10, 27)
@@ -447,7 +447,7 @@ def test_missing_greeks_is_no_entry_not_exception():
     assert res.failed_filter == "missing_greeks"
 
 
-def test_missing_quote_is_no_entry_not_exception():
+def test_missing_quote_is_no_entry_not_exception() -> None:
     """Far wing leg with bid=0 returns NoEntry(failed_filter='missing_quote')."""
     spot = Decimal("22600.0")
     near_exp = date(2026, 10, 27)
@@ -481,7 +481,7 @@ def test_missing_quote_is_no_entry_not_exception():
     assert res.failed_filter == "missing_quote"
 
 
-def test_no_quotable_wings_returns_no_entry():
+def test_no_quotable_wings_returns_no_entry() -> None:
     """No far wing strikes available in far chain returns NoEntry(failed_filter='missing_quote')."""
     spot = Decimal("22600.0")
     near_exp = date(2026, 10, 27)
@@ -496,7 +496,7 @@ def test_no_quotable_wings_returns_no_entry():
     assert res.failed_filter == "missing_quote"
 
 
-def test_ranking_prefers_fewest_failed_filters():
+def test_ranking_prefers_fewest_failed_filters() -> None:
     """Candidate with 1 failed filter is ranked above candidate with 2 failed filters."""
     spot = Decimal("22600.0")
     near_exp = date(2026, 10, 27)
@@ -546,7 +546,7 @@ def test_ranking_prefers_fewest_failed_filters():
     assert res.failed_filter == "vega_cap"
 
 
-def test_tie_break_toward_start_wings():
+def test_tie_break_toward_start_wings() -> None:
     """When both 600/600 and 700/700 pass all filters, 600/600 is selected (closer to start)."""
     spot = Decimal("22600.0")
     near_exp = date(2026, 10, 27)
@@ -595,7 +595,7 @@ def test_tie_break_toward_start_wings():
     assert res.long_ce_wing.strike == Decimal("23200")
 
 
-def test_wings_move_inward_to_min_floor():
+def test_wings_move_inward_to_min_floor() -> None:
     """Asserts that selector explores down to min_wing_points=300 (e.g. 22300 PE / 22900 CE)."""
     spot = Decimal("22600.0")
     near_exp = date(2026, 10, 27)
@@ -645,7 +645,7 @@ def test_wings_move_inward_to_min_floor():
     assert res.long_ce_wing.strike == Decimal("22900")
 
 
-def test_net_vega_over_cap_is_no_entry():
+def test_net_vega_over_cap_is_no_entry() -> None:
     """Explicit test asserting signed net vega over cap returns NoEntry with failed_filter='vega_cap'."""
     spot = Decimal("22600.0")
     near_exp = date(2026, 10, 27)
@@ -680,7 +680,7 @@ def test_net_vega_over_cap_is_no_entry():
     assert res.failed_filter == "vega_cap"
 
 
-def test_net_credit_violation_normalisation_non_zero_denominator():
+def test_net_credit_violation_normalisation_non_zero_denominator() -> None:
     """Verify net debit structure computes violation without ZeroDivisionError."""
     spot = Decimal("22600.0")
     near_exp = date(2026, 10, 27)
