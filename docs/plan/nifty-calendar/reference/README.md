@@ -78,3 +78,17 @@ Oct 2026). Exit image is the same tool with booked P&L only: 0 lots, a flat payo
   `get_order_margin` should land near that; the video's ₹1.2L per lot is for the classic calendar.
 - **Caption length.** The longest observed caption is the exit post at about 630 characters, inside the 1024 cap. A calendar entry or exit message with legs table and Greeks would not fit as a
   caption, so the audit's split-message verdict stays relevant.
+
+### Sensibull Daily P&L view of the monthly exit (`2026-10-07-monthly-sensibull-daily-pnl.png`)
+
+"P&L verified by Sensibull", taken 7 Oct 2026 9:53 AM, NIFTY 22623.50 (the exit payoff chart was captured later, at 22689.30). Booked +5,421, unbooked 0. The four legs are confirmed as 27 Oct 22600 CE
+and PE and 23 Nov 22200 PE and 23000 CE, realised +18,860 / -2,987 / +3,819 / -14,271. LTPs shown at 9:53: 325.50, 248.15, 222.25, 313.55. The Qty and Avg columns are 0 after the close, so entry
+prices are not in this view. LTP is not the fill price, so treat anything derived from it as an approximation.
+
+- **Entry date bound.** The daily snapshots on the right are 1 Oct (Thu, 6:42 PM), 5 Oct (3:56 PM), 6 Oct (4:14 PM) and 7 Oct (9:53 AM), all with booked P&L 0 until the exit. The position was
+  therefore open on 1 Oct, so entry was on or before 1 Oct, within about two sessions of the 29 Sep monthly expiry, not on a "Tuesday following" (6 Oct). 2 Oct is a market holiday. The CM-3
+  `MonthlyCyclePolicy` entry rule needs rewording once Animesh gives the exact entry date.
+- **Exit time.** Closed by 9:53 AM, matching the "before 10 AM" caption; the exit was a morning decision, not an end-of-day check.
+- **Implied entry credit (rough).** Close cost at LTP is 325.50 + 248.15 - 222.25 - 313.55 = 37.85 points net debit. With realised P&L +5,421 on 2 lots at an assumed lot size of 65 (to be checked in
+  `REFERENCES.md`), that is about 41.7 points a unit, so the net credit at entry was about 79 points a unit (about ₹5.2k a lot). Use only as a plausibility check for the CM-2 filters until the real
+  entry prices arrive.
