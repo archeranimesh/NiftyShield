@@ -1,7 +1,7 @@
 # nifty-calendar — reference trade evidence
 
 Screenshots and Telegram captions of the TM Trading NIFTY Biweekly Double Calendar (3 lots), supplied by Animesh 2026-10-13. Strikes are masked in the screenshots, so these are shape and behaviour
-evidence, not exact fixtures. A completed trade with real strikes, entry prices and IV is to follow; replace this with exact fixtures when it arrives.
+evidence, not exact fixtures. The completed monthly trade below (supplied 2026-10-13) shows its real strikes in the exit screenshot; entry prices, entry date and IV are still missing.
 
 ## Structure (read from the legs table)
 
@@ -43,3 +43,38 @@ caption cap.
 - **Margin base moves.** Percentages imply roughly ₹2.25L on 9 Oct and ₹2.5–2.57L on 8 and 12 Oct. Margin changes with spot, so a fixed-margin assumption is wrong for this structure.
 - **Chart content our payoff chart lacks.** Per-leg P&L table, stat strip (max profit/loss, profit and loss left, breakevens at target and at expiry), T+0 and expiry curves together, OI bars with the
   max-OI strike, ±SD markers, and a projected-P&L pill at current spot.
+
+## Completed monthly trade: NIFTY October monthly double calendar, 2 lots (5 to 7 Oct 2026)
+
+Files: `2026-10-05-monthly-payoff.png`, `2026-10-06-monthly-payoff.png`, `2026-10-07-monthly-exit.png`. The entry date, entry prices and entry IV are not in the screenshots (the first one, 5 Oct,
+already shows open P&L); a 7-day planned hold would put entry around 30 Sep, to be confirmed by Animesh.
+
+**Structure, real strikes from the exit screenshot:** short 2 x 27 Oct 22600 CE and 22600 PE (ATM straddle), long 2 x 23 Nov 22200 PE and 23000 CE. Wings are 400 points either side of the straddle,
+symmetric, multiples of 100. Far expiry is 23 Nov, a Monday, so likely another holiday shift of the last-Tuesday monthly (verify in `REFERENCES.md`).
+
+| Date | Spot | Day move | Open P&L | Chart "projected" | Max profit / max loss | Expiry breakevens | Per-leg open P&L (S CE / S PE / B PE / B CE) |
+|---|---|---|---|---|---|---|---|
+| Mon 5 Oct | 22555.75 | +0.60% | +2,473 | +3,195 | +54,765 (32%) / -53,940 (-31%) | 22120 (-1.9%) / 23237 (+3.0%) | +19,133 / -8,505 / +6,828 / -14,983 |
+| Tue 6 Oct | 22776.10 | +0.98% | +4,781 | +4,319 | +51,781 (29%) / -49,203 (-28%) | 22133 (-2.8%) / 23163 (+1.7%) | +10,384 / +4,365 / -1,882 / -8,086 |
+| Wed 7 Oct exit | 22689.30 | -0.38% | +5,421 realised | n/a | n/a | n/a | +18,860 / -2,987 / +3,819 / -14,271 |
+
+Leg P&L sums check out to the totals shown (2,473, 4,781 and 5,421). Model tolerance again: projected minus live is 722 and 462 on the two open days.
+
+**Exit as posted, 7 Oct (about 630 characters with the header lines):** "Exited the NIFTY October Monthly Double Calendar at a profit of ₹5.4k with 2 lots. Didn't wait for the original target of ₹6k
+(₹3k per lot). Exited before 10 AM ahead of the RBI interest rate decision, as the position was near the center of the payoff graph. Expected volatility after the announcement and any wild move on
+either side could have reduced the existing profit. So, decided to book the gains instead of risking them for the remaining amount." The 5 and 6 Oct posts carry only the header and the expiry line (27
+Oct 2026). Exit image is the same tool with booked P&L only: 0 lots, a flat payoff, and realised +5,421.
+
+## Checks against the planned `calendar-monthly` design
+
+- **Target matches.** ₹3,000 per lot is already the planned monthly target. The trader exited at ₹2.7k per lot (about 90% of target) by discretion, so a literal `TARGET` rule would not have fired.
+- **Event-risk exit is missing from the plan.** The exit was driven by the RBI decision with the position near the centre of the payoff. `ExitDecision` has `DTE_GUARD`, `TIME_EXIT`, `TARGET` and the
+  breach outcomes, but no event-calendar exit. Needs an RBI/event date source and a rule (for example: if near centre and profitable, close before the event), as a decision for Animesh.
+- **Wing width differs from the plan.** The plan starts monthly wings at 600 put / 500 call and hill-climbs in 100-point steps. This trade used 400/400 on a 22600 straddle. Either the six filters
+  admit 400/400 in the live chart or the start points are wrong; the selector fixture should be built from this real structure, not only the video's 22,700 sample.
+- **Entry timing is unverified.** The plan enters on the first trading day on or after "the Tuesday following the previous monthly expiry". The previous monthly expiry was 29 Sep (a Tuesday); if this
+  trade entered right after it, the phrase may mean the expiry day itself or the day after, not the next Tuesday. Needs the actual entry date.
+- **Margin per lot.** The chart's percentages imply a base of about ₹85-90k per lot (₹171-181k for 2 lots monthly; about ₹82-85k per lot biweekly on 8 and 12 Oct). The planned CM-0 probe of
+  `get_order_margin` should land near that; the video's ₹1.2L per lot is for the classic calendar.
+- **Caption length.** The longest observed caption is the exit post at about 630 characters, inside the 1024 cap. A calendar entry or exit message with legs table and Greeks would not fit as a
+  caption, so the audit's split-message verdict stays relevant.

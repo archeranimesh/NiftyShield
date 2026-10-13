@@ -36,6 +36,9 @@ Spec source: `TradeResearch/findings/14ZZYoV4DBc_combined.md` (part 2 wins on co
 10. Same evidence: the reference trade was held at 0.4% from the upper breakeven without adjusting, and margin moved between roughly ₹2.25L and ₹2.57L for 3 lots. Record both as inputs to CM-4 and as
     decisions for Animesh, not as rules.
 
+11. Completed monthly trade in `docs/plan/nifty-calendar/reference/README.md` (strikes 22600 straddle, 22200 PE / 23000 CE wings, exit before the RBI decision at 90% of target): does the selector
+    admit 400/400 wings, does the entry-timing phrase match the real entry date, and is an event-calendar exit needed in `ExitDecision`? Record as decisions for Animesh.
+
 **Tests:** none (research task). **Done:** each answer written with evidence; unresolved items listed as explicit decisions for Animesh.
 
 **Commit:** `docs(plan): record nifty-calendar CM-0 audit findings`
