@@ -24,9 +24,10 @@ Near-expiry ATM short straddle plus far-expiry OTM long wings (net long vega, ne
 ## Files
 
 `models.py` frozen `CalendarLeg` / `CalendarStructure` / `StructureMetrics` · `payoff.py` `payoff_at`, `compute_metrics` (breakevens, risk-reward, net Greeks; far legs repriced at each leg's own IV) ·
-`config.py` `CalendarVariantConfig`, `MONTHLY` · `selector.py` `WingStructureSelector` (six entry filters plus absolute spread gate, inward search to `min_wing_points`, explicit `NoEntry`) ·
-`cycle.py` `MonthlyCyclePolicy`, `active_variant`, `EntryPlan` · `expiries.py` `monthly_expiries` (settled months from the expiry rule, unsettled months from the instrument list) · `exit_rules.py`
-`MonthlyExitRule` (priority: target, breach with time gate, hard day-10 close, DTE guard) · `errors.py` `CalendarError` hierarchy · `pricing.py` interim Black-76.
+`config.py` `CalendarVariantConfig`, `MONTHLY`, `BIWEEKLY` · `selector.py` `WingStructureSelector` (six entry filters plus absolute spread gate, inward search to `min_wing_points`, explicit `NoEntry`)
+· `cycle.py` `MonthlyCyclePolicy`, `BiweeklyCyclePolicy` (optional `redeploy_plan` hook), `active_variant`, `EntryPlan` · `expiries.py` `monthly_expiries` (settled months from the expiry rule,
+unsettled months from the instrument list) · `exit_rules.py` `MonthlyExitRule` (priority: target, breach with time gate, hard day-10 close, DTE guard), `BiweeklyExitRule` (DTE guard, time exit, target
+redeploys same pair, breach days 3-4, off-centre 200 pts days 4-5) · `errors.py` `CalendarError` hierarchy · `pricing.py` interim Black-76.
 
 ## Tunables worth knowing
 

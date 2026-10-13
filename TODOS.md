@@ -166,6 +166,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-13] calendar-biweekly CB-1, CB-2 closed (`6aca587`, `20817d1`): bi-weekly config, cycle policy, exit rule, shell redeploy/off-centre handling; CB-3 (collision guard) gates live use
 - [2026-10-13] calendar-monthly CM-8 closed (`64fee3f`): close-out docs, module CLAUDE.md, graph re-index, parallel-run cutover note
 - [2026-10-13] calendar-monthly CM-7 closed (`9f47a68`): Nifty calendar entry and snapshot scripts, daemon registration, EOD pick-up, same-day re-entry after re-centre
 - [2026-10-13] calendar-monthly CM-6 closed (`fd903c4`): Calendar Telegram entry/close/re-centre messages, curve-aware payoff chart and adapter
