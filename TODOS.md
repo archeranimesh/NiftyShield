@@ -16,7 +16,7 @@ state. Arrows: `A → B` means B cannot start until A is done. `‖` means the t
 
 **Calendar constraints (drive the order):**
 
-- **2026-11-04** — Dhan data plan lapses unless renewed. `dhan-far-expiry-chain` DA-0 (Animesh) must be decided before this.
+- **2026-11-04** — Dhan data plan auto-renews (renewal decided 2026-10-13, DA-0).
 - **2026-12-29** — Dec 2026 expiry; the yearly book must roll to Dec 2027 (Dhan Greeks needed). Everything marked **ROLL** below must land before it. About 12 weeks, one task per session.
 - **about 2027-09-30** — Upstox Greeks expected back for Dec 2027 (DDP-5: Dec 2026 flipped at 90 DTE, one expiry only). `ds-chain-monitoring` DSN-5 (source-flip seam) must land before about
   2027-09-01.
@@ -26,7 +26,7 @@ state. Arrows: `A → B` means B cannot start until A is done. `‖` means the t
 
 | Wave | Story (folder) | Backlog # | Next task | Needs (hard) | Blocks / feeds |
 |---|---|---|---|---|---|
-| 0 | `dhan-far-expiry-chain/` (DA-0 → FC-1..5 → FG-1..3) | 24 | DA-0 (Animesh) | DA-0 before 2026-11-04; FG-1 needs 15+ captured trading days | YV-5, YF-3 registry (FG-3 writes `roll_dte`) |
+| 0 | `dhan-far-expiry-chain/` (DA-0 → FC-1..5 → FG-1..3) | 24 | FG-1 (blocked on capture) | FG-1 needs 15+ captured trading days | YV-5, YF-3 registry (FG-3 writes `roll_dte`) |
 | 0 | `variance-gate/` | 21 | VG0 (Animesh) | none | gates A-D; `options_income/`; `entry-event-filter/` |
 | 1 ROLL | `yearly-overlays/yearly-foundation/` YF-2..5 | 23 | YF-2 | none | all other yearly stories; `ds-chain-monitoring` (needs YF-3) |
 | 1 ROLL | `data-source-routing/ds-chain-seam/` DSC-1..5 | 25 | DSC-1 | none (DSM-1 done) | YF-6; `ds-chain-monitoring` |
@@ -78,8 +78,8 @@ rot them. (Items 3, 5 and 8 closed — numbers kept stable because item text cro
 23. **Yearly overlays (epic)** — `docs/plan/yearly-overlays/` — next **YF-2** (fixtures; YF-1 audit done). December-only CC / PP / Collar book beside the monthly overlays; fixed order
     `yearly-foundation` → `yearly-cc` ‖ `yearly-pp` → `yearly-collar` → `yearly-ops-wiring` → `yearly-validation`. **Deadline: Dec 2026 roll.** YF-6 needs `data-source-routing` DSC-2 / DSC-3; YV-5
     needs `dhan-far-expiry-chain` FG-3 and `ds-chain-monitoring` DSN-1..4. Requested by Animesh 2026-10-06.
-24. **Dhan far-expiry chain (epic)** — `docs/plan/dhan-far-expiry-chain/` — next **DA-0** (Animesh: renewal decision **before 2026-11-04**), then `far-expiry-capture/` FC-1. DA-1..3 done. Forward-only
-    daily capture has no slack; `far-expiry-liquidity-gate/` FG-1 needs 15+ captured trading days. Feeds `yearly-overlays` (FG-3 → YF-3 registry; YV-5).
+24. **Dhan far-expiry chain (epic)** — `docs/plan/dhan-far-expiry-chain/` — `dhan-chain-adapter/` ✅ done (DA-0 renew decided 2026-10-13), `far-expiry-capture/` ✅ done; next **FG-1**, earliest
+    2026-11-02 (15 captured trading days). Feeds `yearly-overlays` (FG-3 → YF-3 registry; YV-5).
 25. **Data source routing (epic)** — `docs/plan/data-source-routing/` — `ds-capability-map` ✅ done; next **DSC-1**. Council ruled 2026-10-07 (`DECISIONS.md`). Order: `ds-capability-map` →
     `ds-chain-seam` → `ds-chain-monitoring` (needs `yearly-foundation` YF-3) → `ds-router-migration` (after the Dec 2026 roll). Supersedes most of `broker-abstraction`. Open for Animesh: monitor
     cadence, backstop thresholds, Kite.
@@ -1285,3 +1285,4 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
   caller (DA-4).
 - [2026-10-07] dhan-chain-adapter DA-4 relocated to `yearly-overlays/yearly-foundation/` YF-6 (bootstraps consume raw Upstox rows with `instrument_key`; needs an `OptionChain`->row adapter + key
   resolver, no consumer until a yearly tenor exists). Only DA-0 (Animesh renewal decision) remains open on the story.
+- [2026-10-13] dhan-chain-adapter DA-0 done: Animesh decided to renew the Dhan data plan. Story complete; FG-1 earliest start 2026-11-02 (15 captured trading days).

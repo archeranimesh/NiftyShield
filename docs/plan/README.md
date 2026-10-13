@@ -16,8 +16,8 @@ wiring) → `yearly-cc/` (YC-1..2) and `yearly-pp/` (YP-1..2) → `yearly-collar
 coexistence + paper-run runbook). No DB namespace schema change (confirmed in YF-1; provenance columns come from `ds-chain-monitoring`). Requested by Animesh 2026-10-06.
 
 **`dhan-far-expiry-chain/`** · 🔄 In progress — Dhan live chain as the Greeks source for Dec 2027 (Upstox returns zero past ~100 DTE), daily forward capture, and a data-calibrated liquidity gate and
-roll window. Three sub-stories: `dhan-chain-adapter/` (DA-0..3) → `far-expiry-capture/` (FC-1..5) → `far-expiry-liquidity-gate/` (FG-1..3, blocked on captured history). Deadline: Dhan data plan lapses
-2026-11-04 (DA-0 renewal decision). Feeds `yearly-overlays/`. Requested by Animesh 2026-10-06.
+roll window. Three sub-stories: `dhan-chain-adapter/` (DA-0..3, ✅) → `far-expiry-capture/` (FC-1..5, ✅) → `far-expiry-liquidity-gate/` (FG-1..3, blocked on captured history). Deadline: Dhan data plan
+lapses 2026-11-04 (DA-0: renew, decided 2026-10-13). Feeds `yearly-overlays/`. Requested by Animesh 2026-10-06.
 
 **`data-source-routing/`** · 🔄 In progress (council ruled 2026-10-07, absorbed) · next: **DSC-1** — capability-based routing of market data between Upstox and Dhan (per-capability config, health-aware
 fallback), because the yearly book needs Dhan Greeks daily from the Dec 2026 roll. Four sub-stories: `ds-capability-map/` (DSM-1..3; all done, `roll_checks.md` written) → `ds-chain-seam/` (DSC-1..5,

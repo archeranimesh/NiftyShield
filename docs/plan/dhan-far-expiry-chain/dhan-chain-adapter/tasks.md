@@ -2,17 +2,17 @@
 
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit.
 
-**Open: DA-0.** (DA-4 relocated to `yearly-overlays/yearly-foundation/` YF-6, 2026-10-07.)
+**Open: none — story complete.** (DA-4 relocated to `yearly-overlays/yearly-foundation/` YF-6, 2026-10-07.)
 
-- [ ] **DA-0** — Decide Dhan data-plan renewal before 2026-11-04 and record it in `findings.md` | Owner: Animesh | Model: n/a | Review: none | SHA: —
+- [x] **DA-0** — Decide Dhan data-plan renewal before 2026-11-04 and record it in `findings.md` | Owner: Animesh | Model: n/a | Review: none | SHA: <pending>
 - [x] **DA-1** — Record sanitised live fixtures (Dec 2026, Dec 2027) and check whether Upstox now returns Greeks for Dec 2026 | Owner: Antigravity | Model: claude-sonnet-5-5 | Review: none | SHA:
   e42263b
 - [x] **DA-2** — `DhanMarketClient.get_option_chain` + pure `parse_dhan_option_chain` + injectable 4 s rate limiter with 805 backoff and timeouts | Owner: Antigravity | Model: n/a | Review:
   greeks-analyst | SHA: 7abac89
 - [x] **DA-3** — Chain-source `Protocol` + composite that falls back to Dhan only on all-zero Upstox Greeks | Owner: Antigravity | Model: claude-sonnet-5-5 | Review: greeks-analyst | SHA: 7abac89
 
-- [~] **DA-4** — ~~Wire ChainSource composite into the overlay bootstrap callers~~ — **moved to `yearly-overlays/yearly-foundation/` YF-6** (no longer part of this story; see
-  `findings.md` §DA-4). | Owner: Claude | Model: n/a | Review: n/a | SHA: —
+- [~] **DA-4** — ~~Wire ChainSource composite into the overlay bootstrap callers~~ — **moved to `yearly-overlays/yearly-foundation/` YF-6** (no longer part of this story; see `findings.md` §DA-4). |
+  Owner: Claude | Model: n/a | Review: n/a | SHA: —
 
 ## Story done when
 

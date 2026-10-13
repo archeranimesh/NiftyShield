@@ -1,7 +1,9 @@
 # Dhan Far Expiry Chain Findings
 
 ## DA-0 Renewal Decision (Animesh)
-<!-- Empty section for DA-0 -->
+Date: 2026-10-13
+
+Decision: **renew.** Animesh keeps the Dhan data plan (auto-renews 2026-11-04) so the daily far-expiry capture continues through the Dec 2026 roll and the Dec 2027 liquidity history stays unbroken.
 
 ## DA-1 Discovery Results
 Date: 2026-10-06

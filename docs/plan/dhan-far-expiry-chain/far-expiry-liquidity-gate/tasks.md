@@ -2,7 +2,8 @@
 
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit.
 
-**Open: FG-1..FG-3. Blocked until the capture has enough days.**
+**Open: FG-1..FG-3. Blocked until the capture has enough days — earliest start 2026-11-02** (15th trading day of capture counting from the first capture on 2026-10-12, per the NSE holiday calendar).
+On that date or later, start FG-1 directly; first confirm the day count with `SELECT COUNT(DISTINCT snapshot_date) FROM far_expiry_chain_snapshots`.
 
 - [ ] **FG-1** — Calibration findings: read the liquidity report over the captured window and propose spread cap, OI floor and quote rule per expiry type | Owner: Claude | Model: claude-sonnet-5-5 |
   Review: none | SHA: —
