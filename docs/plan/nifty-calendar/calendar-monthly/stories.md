@@ -31,6 +31,11 @@ Spec source: `TradeResearch/findings/14ZZYoV4DBc_combined.md` (part 2 wins on co
 7. How does `StrategyMonitor` register and schedule a strategy (cadence, `due_interval_s`, WARN dedup, auto-execute dispatch)? Name the exact registration lines in `scripts/monitor_daemon.py`.
 8. What does IC's entry script do for the duplicate-position guard and Telegram approval, and which parts are reusable without importing IC-specific modules?
 
+9. Reference-trade evidence in `docs/plan/nifty-calendar/reference/README.md`: does `compute_payoff` handle only expiry intrinsic value, and does a calendar's near-expiry curve need a Black-Scholes
+   step with an IV input for the far legs? Can our T+0 curve match the reference chart's projected P&L within about ₹900?
+10. Same evidence: the reference trade was held at 0.4% from the upper breakeven without adjusting, and margin moved between roughly ₹2.25L and ₹2.57L for 3 lots. Record both as inputs to CM-4 and as
+    decisions for Animesh, not as rules.
+
 **Tests:** none (research task). **Done:** each answer written with evidence; unresolved items listed as explicit decisions for Animesh.
 
 **Commit:** `docs(plan): record nifty-calendar CM-0 audit findings`

@@ -21,6 +21,7 @@
 1. List every distinct message type (snapshot, entry, exit, roll, alert, error, daily summary, etc.), not every call site. Group call sites that share one formatter.
 2. Per type record: trigger, entry script or strategy, formatter function, parse mode, and whether `send_payoff_chart` fires alongside it today.
 3. Note any message that already goes through `send_photo` with a caption.
+4. Add the planned calendar live-position update as a prospective type; its reference captions (about 330 characters) are in `docs/plan/nifty-calendar/reference/README.md`.
 
 **Tests:** none. Read-only.
 
