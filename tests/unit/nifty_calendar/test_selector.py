@@ -734,3 +734,138 @@ def test_net_credit_violation_normalisation_non_zero_denominator() -> None:
 
     assert isinstance(res, NoEntry)
     assert res.failed_filter in ("net_credit", "risk_reward")
+
+
+def test_missing_far_atm_quote_returns_no_entry() -> None:
+    """Assert missing or non-positive far ATM quote returns NoEntry(failed_filter='missing_quote')."""
+    spot = Decimal("22600.0")
+    near_exp = date(2026, 10, 27)
+    far_exp = date(2026, 11, 23)
+    atm = Decimal("22600")
+
+    pe_quotes = {
+        Decimal("22000"): (
+            Decimal("160.0"),
+            Decimal("161.0"),
+            Decimal("-0.20"),
+            Decimal("24.0"),
+            Decimal("14.0"),
+        ),
+    }
+    ce_quotes = {
+        Decimal("23200"): (
+            Decimal("160.0"),
+            Decimal("161.0"),
+            Decimal("0.20"),
+            Decimal("24.0"),
+            Decimal("14.0"),
+        ),
+    }
+
+    # Case 1: Non-positive far ATM quote (bid=0)
+    chain_near, chain_far = _build_chains(
+        spot,
+        near_exp,
+        far_exp,
+        atm,
+        pe_quotes,
+        ce_quotes,
+        far_atm_quote=(
+            Decimal("0.0"),
+            Decimal("401.0"),
+            Decimal("0.50"),
+            Decimal("25.0"),
+            Decimal("14.0"),
+        ),
+    )
+    selector = WingStructureSelector()
+    res = selector.select(chain_near, chain_far, spot, MONTHLY)
+    assert isinstance(res, NoEntry)
+    assert res.failed_filter == "missing_quote"
+    assert "Far ATM quote" in res.reason
+
+    # Case 2: Far ATM strike missing completely
+    del chain_far.strikes[atm]
+    res2 = selector.select(chain_near, chain_far, spot, MONTHLY)
+    assert isinstance(res2, NoEntry)
+    assert res2.failed_filter == "missing_quote"
+    assert "Far ATM quote" in res2.reason
+
+
+def test_net_short_vega_rejected_by_vega_floor() -> None:
+    """Assert net vega < 0 is rejected with failed_filter='vega_floor', while vega >= 0 passes."""
+    spot = Decimal("22600.0")
+    near_exp = date(2026, 10, 27)
+    far_exp = date(2026, 11, 23)
+    atm = Decimal("22600")
+
+    # Near straddle vega: 20 + 20 = 40.
+    # Far wings vega: 5 + 5 = 10 -> net vega = 10 - 40 = -30 (< 0).
+    pe_quotes = {
+        Decimal("22000"): (
+            Decimal("160.0"),
+            Decimal("161.0"),
+            Decimal("-0.20"),
+            Decimal("5.0"),
+            Decimal("14.0"),
+        ),
+    }
+    ce_quotes = {
+        Decimal("23200"): (
+            Decimal("160.0"),
+            Decimal("161.0"),
+            Decimal("0.20"),
+            Decimal("5.0"),
+            Decimal("14.0"),
+        ),
+    }
+
+    chain_near, chain_far = _build_chains(spot, near_exp, far_exp, atm, pe_quotes, ce_quotes)
+    selector = WingStructureSelector()
+    res = selector.select(chain_near, chain_far, spot, MONTHLY)
+    assert isinstance(res, NoEntry)
+    assert res.failed_filter == "vega_floor"
+
+
+def test_candidate_without_breakeven_is_ranked_not_raised(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Assert candidate raising InvalidStructureError in compute_metrics is ranked not raised."""
+    from src.nifty_calendar.errors import InvalidStructureError
+
+    spot = Decimal("22600.0")
+    near_exp = date(2026, 10, 27)
+    far_exp = date(2026, 11, 23)
+    atm = Decimal("22600")
+
+    pe_quotes = {
+        Decimal("22000"): (
+            Decimal("160.0"),
+            Decimal("161.0"),
+            Decimal("-0.20"),
+            Decimal("24.0"),
+            Decimal("14.0"),
+        ),
+    }
+    ce_quotes = {
+        Decimal("23200"): (
+            Decimal("160.0"),
+            Decimal("161.0"),
+            Decimal("0.20"),
+            Decimal("24.0"),
+            Decimal("14.0"),
+        ),
+    }
+
+    chain_near, chain_far = _build_chains(spot, near_exp, far_exp, atm, pe_quotes, ce_quotes)
+
+    # Monkeypatch compute_metrics to raise InvalidStructureError
+    def mock_metrics(*args: object, **kwargs: object) -> object:
+        raise InvalidStructureError("No lower breakeven crossing found on grid")
+
+    monkeypatch.setattr("src.nifty_calendar.selector.compute_metrics", mock_metrics)
+
+    selector = WingStructureSelector()
+    res = selector.select(chain_near, chain_far, spot, MONTHLY)
+    assert isinstance(res, NoEntry)
+    assert res.failed_filter == "no_breakeven"

@@ -89,6 +89,13 @@ class CalendarStructure:
             or self.long_pe_wing.option_type != AssetType.PE
         ):
             raise InvalidStructureError("Put legs must have option_type=PE")
+        if (
+            self.long_ce_wing.strike <= self.short_ce.strike
+            or self.long_pe_wing.strike >= self.short_pe.strike
+        ):
+            raise InvalidStructureError(
+                "Wing strikes must be strictly OTM relative to short straddle"
+            )
 
     @property
     def legs(self) -> tuple[CalendarLeg, CalendarLeg, CalendarLeg, CalendarLeg]:

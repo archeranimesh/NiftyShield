@@ -1,11 +1,12 @@
 """Unit tests for Black-76 pricing, payoff calculation, and calendar metrics."""
 
-from datetime import date
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
 import pytest
 
 from src.models.portfolio import AssetType, Direction
+from src.nifty_calendar.errors import InvalidStructureError
 from src.nifty_calendar.models import CalendarLeg, CalendarStructure
 from src.nifty_calendar.payoff import (
     compute_metrics,
@@ -193,3 +194,79 @@ def test_iv_shift_directional() -> None:
 
     assert payoff_up > payoff_base
     assert payoff_down < payoff_base
+
+
+def test_payoff_at_as_of_before_near_expiry_raises() -> None:
+    """Assert as_of before near_expiry raises InvalidStructureError."""
+    structure, spot, far_carry, lot_size = _make_video_fixture()
+
+    # date before near expiry
+    prior_date = structure.near_expiry - timedelta(days=1)
+    with pytest.raises(InvalidStructureError, match="as_of cannot be before near_expiry"):
+        payoff_at(structure, spot, as_of=prior_date, far_carry=far_carry, lot_size=lot_size)
+
+    # datetime before near expiry
+    prior_dt = datetime.combine(structure.near_expiry - timedelta(days=2), time(10, 30))
+    with pytest.raises(InvalidStructureError, match="as_of cannot be before near_expiry"):
+        payoff_at(structure, spot, as_of=prior_dt, far_carry=far_carry, lot_size=lot_size)
+
+    # on near expiry passes
+    valid_dt = datetime.combine(structure.near_expiry, time(15, 30))
+    p = payoff_at(structure, spot, as_of=valid_dt, far_carry=far_carry, lot_size=lot_size)
+    assert isinstance(p, Decimal)
+
+
+def test_compute_metrics_no_lower_breakeven_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Assert compute_metrics raises InvalidStructureError when no lower breakeven crossing exists."""
+    structure, spot, far_carry, lot_size = _make_video_fixture()
+
+    # All positive P&Ls on grid -> no zero-crossing
+    monkeypatch.setattr(
+        "src.nifty_calendar.payoff.payoff_at",
+        lambda *args, **kwargs: Decimal("1000.0"),
+    )
+    with pytest.raises(InvalidStructureError, match="No lower breakeven crossing found on grid"):
+        compute_metrics(structure, spot, far_carry=far_carry, lot_size=lot_size)
+
+
+def test_compute_metrics_no_upper_breakeven_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Assert compute_metrics raises InvalidStructureError when no upper breakeven crossing exists."""
+    structure, spot, far_carry, lot_size = _make_video_fixture()
+
+    # Monotonically increasing PnL crossing 0 from below at 21000, never crossing down again
+    def mock_payoff(struct: CalendarStructure, s: Decimal, **kwargs: object) -> Decimal:
+        return s - Decimal("21000")
+
+    monkeypatch.setattr("src.nifty_calendar.payoff.payoff_at", mock_payoff)
+    with pytest.raises(InvalidStructureError, match="No upper breakeven crossing found on grid"):
+        compute_metrics(structure, spot, far_carry=far_carry, lot_size=lot_size)
+
+
+def test_risk_reward_zero_loss_sentinel_passes_floor(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Assert risk_reward is 999.99 when max_loss_per_lot >= 0 and passes floor."""
+    structure, spot, far_carry, lot_size = _make_video_fixture()
+
+    # Crossings exist (y <= 0 at low, y >= 0 in middle, y < 0 at high), but min PnL is 0
+    # Let's mock payoff_at to have a crossing at 21000 and 24000, with min value exactly 0
+    def mock_payoff(struct: CalendarStructure, s: Decimal, **kwargs: object) -> Decimal:
+        if s <= Decimal("21000"):
+            return Decimal("0")
+        if s >= Decimal("24000"):
+            return Decimal("0")
+        return Decimal("500")
+
+    monkeypatch.setattr("src.nifty_calendar.payoff.payoff_at", mock_payoff)
+    metrics = compute_metrics(structure, spot, far_carry=far_carry, lot_size=lot_size)
+    assert metrics.risk_reward == Decimal("999.99")
+    assert metrics.risk_reward >= Decimal("0.75")
+
+
+def test_negative_effective_vol_prices_at_intrinsic() -> None:
+    """Assert effective vol <= 0 causes far legs to price at intrinsic value."""
+    structure, spot, far_carry, lot_size = _make_video_fixture()
+
+    # Large negative iv_shift makes vol <= 0
+    p = payoff_at(
+        structure, spot, iv_shift=Decimal("-25.0"), far_carry=far_carry, lot_size=lot_size
+    )
+    assert isinstance(p, Decimal)

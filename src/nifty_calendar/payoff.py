@@ -6,6 +6,7 @@ from datetime import date, datetime, time
 from decimal import ROUND_HALF_UP, Decimal
 
 from src.models.portfolio import AssetType
+from src.nifty_calendar.errors import InvalidStructureError
 from src.nifty_calendar.models import CalendarStructure, StructureMetrics
 from src.nifty_calendar.pricing import b76_price, years_between
 
@@ -44,8 +45,10 @@ def payoff_at(
 ) -> Decimal:
     """Calculate per-lot structure P&L at spot and evaluation timestamp.
 
-    Near legs are valued at intrinsic value at spot. Far legs are repriced
-    using Black-76 with vol = (leg.iv + iv_shift) / 100.
+    Near legs are valued at intrinsic value at spot (pricing valid only on or
+    after near_expiry). Far legs are repriced using Black-76 with
+    vol = (leg.iv + iv_shift) / 100. If effective volatility (iv + iv_shift) is
+    negative or zero, far legs are valued at intrinsic value at the forward.
 
     Args:
         structure: Calendar structure to value.
@@ -57,7 +60,16 @@ def payoff_at(
 
     Returns:
         Per-lot P&L in rupees as Decimal.
+
+    Raises:
+        InvalidStructureError: If as_of date is before near_expiry.
     """
+    as_of_date = as_of.date() if isinstance(as_of, datetime) else (as_of or structure.near_expiry)
+    if as_of_date < structure.near_expiry:
+        raise InvalidStructureError(
+            "as_of cannot be before near_expiry; near legs priced strictly at intrinsic"
+        )
+
     if as_of is None:
         as_of_dt = datetime.combine(structure.near_expiry, time(15, 30))
     elif isinstance(as_of, datetime):
@@ -158,9 +170,7 @@ def compute_metrics(
     max_loss_per_lot = min(grid_pnls).quantize(Decimal("0.01"))
 
     # Breakeven search by linear interpolation across zero-crossings
-    breakeven_low = grid_spots[0]
-    breakeven_high = grid_spots[-1]
-
+    breakeven_low: Decimal | None = None
     for i in range(len(grid_spots) - 1):
         if grid_pnls[i] <= Decimal("0") and grid_pnls[i + 1] > Decimal("0"):
             s0, s1 = grid_spots[i], grid_spots[i + 1]
@@ -168,12 +178,19 @@ def compute_metrics(
             breakeven_low = (s0 + (-y0) * (s1 - s0) / (y1 - y0)).quantize(Decimal("0.01"))
             break
 
+    if breakeven_low is None:
+        raise InvalidStructureError("No lower breakeven crossing found on grid")
+
+    breakeven_high: Decimal | None = None
     for i in range(len(grid_spots) - 1):
-        if grid_pnls[i] >= Decimal("0") and grid_pnls[i + 1] < Decimal("0"):
+        if grid_pnls[i] > Decimal("0") and grid_pnls[i + 1] <= Decimal("0"):
             s0, s1 = grid_spots[i], grid_spots[i + 1]
             y0, y1 = grid_pnls[i], grid_pnls[i + 1]
             breakeven_high = (s0 + y0 * (s1 - s0) / (y0 - y1)).quantize(Decimal("0.01"))
             break
+
+    if breakeven_high is None:
+        raise InvalidStructureError("No upper breakeven crossing found on grid")
 
     breakeven_low_pct = (abs(spot - breakeven_low) / spot * Decimal("100")).quantize(
         Decimal("0.01")
@@ -182,10 +199,11 @@ def compute_metrics(
         Decimal("0.01")
     )
 
-    if max_loss_per_lot != Decimal("0"):
-        risk_reward = (max_profit_per_lot / abs(max_loss_per_lot)).quantize(Decimal("0.01"))
+    if max_loss_per_lot >= Decimal("0"):
+        # Zero loss sentinel: structure is in profit across grid; passes R:R floor
+        risk_reward = Decimal("999.99")
     else:
-        risk_reward = Decimal("0")
+        risk_reward = (max_profit_per_lot / abs(max_loss_per_lot)).quantize(Decimal("0.01"))
 
     shift_down = abs(breakeven_high - spot)
     loss_at_breakeven_low_per_lot = payoff_at(

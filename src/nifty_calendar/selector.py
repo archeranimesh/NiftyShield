@@ -9,6 +9,7 @@ from typing import Protocol, TypeAlias
 from src.models.options import OptionChain, OptionLeg
 from src.models.portfolio import AssetType, Direction
 from src.nifty_calendar.config import CalendarVariantConfig
+from src.nifty_calendar.errors import InvalidStructureError
 from src.nifty_calendar.models import CalendarLeg, CalendarStructure
 from src.nifty_calendar.payoff import compute_metrics, derive_far_carry_from_atm
 
@@ -112,7 +113,8 @@ class WingStructureSelector:
 
         Enumerates wing offsets in 100-point multiples from min_wing_points (300)
         up to start + max_steps * step (900), evaluating spreads, Greeks, and
-        the 6 strategy filters. Ranks candidates deterministically.
+        the strategy filters (delta cap, vega cap, vega floor >= 0, risk-reward floor,
+        symmetry, and net credit). Ranks candidates deterministically.
 
         Args:
             chain_near: Near-expiry OptionChain snapshot.
@@ -168,28 +170,31 @@ class WingStructureSelector:
         near_ce_mid = mid(near_ce)
         near_pe_mid = mid(near_pe)
 
-        # 2. Determine far carry (using far ATM if available, else parity from wings or near)
-        far_carry: Decimal
-        if atm_strike in chain_far.strikes:
-            far_atm = chain_far.strikes[atm_strike]
-            if (
-                far_atm.ce is not None
-                and far_atm.pe is not None
-                and far_atm.ce.bid > Decimal("0")
-                and far_atm.ce.ask > Decimal("0")
-                and far_atm.pe.bid > Decimal("0")
-                and far_atm.pe.ask > Decimal("0")
-            ):
-                far_carry = derive_far_carry_from_atm(
-                    far_atm_strike=atm_strike,
-                    far_atm_ce_mid=mid(far_atm.ce),
-                    far_atm_pe_mid=mid(far_atm.pe),
-                    spot=spot,
-                )
-            else:
-                far_carry = (atm_strike + near_ce_mid - near_pe_mid) - spot
-        else:
-            far_carry = (atm_strike + near_ce_mid - near_pe_mid) - spot
+        # 2. Determine far carry using far ATM quotes (no fallback to near parity)
+        if atm_strike not in chain_far.strikes:
+            return NoEntry(
+                reason="Far ATM quote missing or non-positive",
+                failed_filter="missing_quote",
+            )
+        far_atm = chain_far.strikes[atm_strike]
+        if (
+            far_atm.ce is None
+            or far_atm.pe is None
+            or far_atm.ce.bid <= Decimal("0")
+            or far_atm.ce.ask <= Decimal("0")
+            or far_atm.pe.bid <= Decimal("0")
+            or far_atm.pe.ask <= Decimal("0")
+        ):
+            return NoEntry(
+                reason="Far ATM quote missing or non-positive",
+                failed_filter="missing_quote",
+            )
+        far_carry = derive_far_carry_from_atm(
+            far_atm_strike=atm_strike,
+            far_atm_ce_mid=mid(far_atm.ce),
+            far_atm_pe_mid=mid(far_atm.pe),
+            spot=spot,
+        )
 
         # Build near CalendarLegs
         short_ce = CalendarLeg(
@@ -327,19 +332,29 @@ class WingStructureSelector:
                     vega=far_ce.vega,
                     iv=far_ce.iv,
                 )
-                structure = CalendarStructure(
-                    short_ce=short_ce,
-                    short_pe=short_pe,
-                    long_ce_wing=long_ce,
-                    long_pe_wing=long_pe,
-                )
 
-                metrics = compute_metrics(
-                    structure=structure,
-                    spot=spot,
-                    far_carry=far_carry,
-                    lot_size=config.lot_size,
-                )
+                try:
+                    structure = CalendarStructure(
+                        short_ce=short_ce,
+                        short_pe=short_pe,
+                        long_ce_wing=long_ce,
+                        long_pe_wing=long_pe,
+                    )
+                    metrics = compute_metrics(
+                        structure=structure,
+                        spot=spot,
+                        far_carry=far_carry,
+                        lot_size=config.lot_size,
+                    )
+                except InvalidStructureError:
+                    failed_filters.append("no_breakeven")
+                    total_violation += Decimal("10.0")
+                    evaluations.append(
+                        _CandidateEvaluation(
+                            p_off, c_off, None, failed_filters, total_violation, dist
+                        )
+                    )
+                    continue
 
                 # Filter 1: Net Delta
                 if abs(metrics.net_delta) > config.delta_cap:
@@ -348,10 +363,15 @@ class WingStructureSelector:
                         abs(metrics.net_delta) - config.delta_cap
                     ) / config.delta_cap
 
-                # Filter 2: Net Vega
+                # Filter 2: Net Vega Cap
                 if metrics.net_vega > config.vega_cap:
                     failed_filters.append("vega_cap")
                     total_violation += (metrics.net_vega - config.vega_cap) / config.vega_cap
+
+                # Filter 2b: Vega Floor (net vega must be >= 0; calendar should not be net short vega)
+                if metrics.net_vega < Decimal("0"):
+                    failed_filters.append("vega_floor")
+                    total_violation += (-metrics.net_vega) / Decimal("1.0")
 
                 # Filter 3: Risk-Reward
                 if metrics.risk_reward < config.risk_reward_floor:

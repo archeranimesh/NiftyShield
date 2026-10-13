@@ -278,3 +278,42 @@ def test_net_vega_per_unit_invariant_to_lots() -> None:
 
     assert m1.net_vega == m3.net_vega
     assert m1.net_delta == m3.net_delta
+
+
+def test_inverted_wings_raise_invalid_structure_error() -> None:
+    """Assert inverted or non-OTM wings raise InvalidStructureError."""
+    # CE wing strike <= short straddle strike
+    with pytest.raises(
+        InvalidStructureError, match="Wing strikes must be strictly OTM relative to short straddle"
+    ):
+        CalendarStructure(
+            short_ce=_make_leg(strike=Decimal("22700")),
+            short_pe=_make_leg(option_type=AssetType.PE, strike=Decimal("22700")),
+            long_ce_wing=_make_leg(
+                strike=Decimal("22700"), side=Direction.BUY, expiry=date(2026, 11, 24)
+            ),
+            long_pe_wing=_make_leg(
+                strike=Decimal("22100"),
+                side=Direction.BUY,
+                option_type=AssetType.PE,
+                expiry=date(2026, 11, 24),
+            ),
+        )
+
+    # PE wing strike >= short straddle strike
+    with pytest.raises(
+        InvalidStructureError, match="Wing strikes must be strictly OTM relative to short straddle"
+    ):
+        CalendarStructure(
+            short_ce=_make_leg(strike=Decimal("22700")),
+            short_pe=_make_leg(option_type=AssetType.PE, strike=Decimal("22700")),
+            long_ce_wing=_make_leg(
+                strike=Decimal("23200"), side=Direction.BUY, expiry=date(2026, 11, 24)
+            ),
+            long_pe_wing=_make_leg(
+                strike=Decimal("22700"),
+                side=Direction.BUY,
+                option_type=AssetType.PE,
+                expiry=date(2026, 11, 24),
+            ),
+        )
