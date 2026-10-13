@@ -33,6 +33,10 @@ Recorded in the epic `README.md` §Architecture and design review (SOLID trigger
 injected `Protocol` collaborators (`StructureSelector`, `ExitRule`, `CyclePolicy`), variants as frozen config plus implementers in a `dict` registry, no `if variant` branch in the shell. CM-0
 re-verifies the audit against the code before CM-1 starts and amends this section if anything differs.
 
+**CM-0 amendment (2026-10-13).** `StrategyMonitor` calls `check_signals` once per expiry group with only that expiry's chain and legs, so the shell never sees the whole structure in one call. The
+shell acts only on the near-expiry call, reads all its positions from the injected `PaperStore`, and fetches the far chain through the injected broker; `StrategyMonitor` and IC stay untouched. The
+pure core cannot import `src.strategy._price_utils`, so it carries its own `mid` and `spread_points`. Findings and open decisions: `stories.md` §"CM-0 findings".
+
 ## Session-start load hints
 
 - `docs/plan/nifty-calendar/README.md` and the combined findings file above.

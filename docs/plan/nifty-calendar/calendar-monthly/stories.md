@@ -287,3 +287,65 @@ to IC classes — do not extend it.
 the interim module. Re-run the CM-1 and CM-6 tests unchanged; breakevens must stay within the POC tolerance.
 
 **Commit:** `refactor(nifty-calendar): use shared Black-Scholes pricer`
+
+### CM-0 findings (2026-10-13, code audit + live Upstox probe)
+
+Probe: `scratch/data_probes/2026-10-13_nifty_calendar_cm0_probe.py` (read-only; the margin calculator places no order). Run at 11:30 IST with spot 22,505, near 2026-11-23, far 2026-12-29, ATM 22,500,
+lot 65 (confirmed in the BOD file for both expiries).
+
+1. **Mid and spread helper (Q1).** `_price_utils.resolve_price(leg)` (`src/strategy/_price_utils.py:211`) returns the mid when bid and ask are positive, else LTP, and raises `ValueError` on no price.
+   IC's `_mid_price` (`ic_nifty_v2.py:2841`) silently returns LTP (possibly 0) and `_spread_pct` returns a fraction of mid (1 when a side is missing); `PaperExecutor._resolve_mid_price`
+   (`executor.py:328`) is a third copy. No absolute-points spread helper exists. Because `nifty_calendar` is a leaf package and may not import `src.strategy`, CM-2 writes its own three-line pure `mid`
+   and `spread_points` over `OptionLeg`; the shell uses `resolve_price` for fills.
+2. **Margin (Q2).** Upstox calculator, product `D`, 1 lot (65) per leg: short straddle alone `final_margin` ₹142,484 (`required_margin` ₹197,087); winged with 600/600 wings `final_margin` **₹90,767**
+   (`required` ₹238,593); winged with 400/400 `final_margin` **₹88,954** (`required` ₹247,548). The far long legs cut `final_margin` by about ₹52k because the calculator recognises the cross-expiry
+   hedge; `required_margin` rises by the net buy premium (₹41.5k at 600). This agrees with the reference trade (₹2.25L to ₹2.57L for 3 lots is ₹75k to ₹86k per lot). `capture_entry_margin` stores both
+   figures; the EOD ROI should say which one it divides by (open decision below).
+3. **Cycle state and entry date (Q3).** `paper_trades` stays the source of truth and `DB_REGISTRY.md` lists no better home, so no `schema.md`. `PaperPosition.entry_date` is the date of the first SELL
+   for the leg (`src/paper/models.py:115`) and is `None` for a BUY-only leg, so the two long wings have no entry date. NC derives the cycle entry date from the **short legs** only. The margin
+   snapshot's `entry_date` must use that same value. `DB_REGISTRY.md` marks `paper_margin_snapshots` "IC-only", but `record_margin_snapshot` is keyed on `(strategy_name, entry_date)` and is
+   strategy-agnostic; CM-7 amends the registry note.
+4. **Live chain (Q4).** All four legs carry delta, vega, IV, bid and ask. Greeks at 600/600: near CE 0.585 / vega 29.7 / IV 13.5; near PE -0.416 / 29.7 / 13.7; far 23,100 CE 0.432 / 41.3 / 12.3; far
+   21,900 PE -0.253 / 33.6 / 14.5. Every far-month 100-multiple strike within ±1,500 of ATM has a two-sided quote. Spreads (points) are wide on the far CE side: 22,800 2.9, 22,900 3.25, **23,000
+   1.15**, 23,100 2.5, 23,200 2.5, 23,300 2.3, 23,400 2.5; puts are tighter: 21,600 1.6, 21,700 1.0, 21,800 1.65, 21,900 1.0, 22,000 1.0, 22,100 2.1, 22,200 1.05. Far-leg LTP lags the quote (23,100 CE
+   LTP 400 against 410.05/412.7), so entry and exit must use the mid. **The planned 2-point gate rejects most far CE strikes** (see decisions).
+5. **Message fit (Q5).** `EntryMessage` carries a single `expiry: date`, `dte: int` and `expiry_type` (`entry_message.py:45-51`, rendered at lines 70 and 72); this is the only change CM-6 needs there.
+   `ExitMessage` has no expiry field, only `dte` (`exit_message.py:80`), so exit needs only a convention: DTE means near-expiry DTE.
+6. **Payoff adapter (Q6).** Confirmed (`src/payoff/registry.py:138-165`): `DefaultPositionAdapter` raises `InvalidLegsError` only for an unknown type or unresolved strike, never checks expiry, and
+   prices every leg at intrinsic. A correct near-expiry payoff needs near legs at intrinsic and far legs repriced with Black-76 at each leg's own IV, with the forward from put-call parity. Live parity
+   forward from the near ATM pair is 22,500 + 517.5 - 323.1 = 22,694 against spot 22,505 (+189 points of carry over 41 days); the far forward comes from the far chain's own ATM pair.
+7. **Monitor registration and dispatch (Q7).** `scripts/monitor_daemon.py:349-402` builds each strategy as `Cls(broker=, store=, notifier=gateway, config=)` inside try/except and appends it to
+   `strategies`; `StrategyMonitor(strategies=strategies, ...)` is constructed at line 477 (`monitor.register` also exists, `monitor.py:121`). Cadence is the daemon `--poll-interval`; a strategy may
+   set a `due_interval_s` class attribute (`monitor.py:145`). WARN dedup keys on `(event_type, leg_role, expiry)` and `reconcile_warn_state`; auto-execute needs `strategy.auto_execute` and
+   `payload["auto_execute"]` (`monitor.py:458`). **Material finding:** the tick groups a strategy's positions by expiry and calls `check_signals(chain, positions)` **once per expiry group** with only
+   that expiry's chain and only that group's legs (`monitor.py:262-285`). A calendar therefore gets two calls per tick, each seeing two legs and one chain, never the whole structure. A flat strategy
+   is never evaluated, so entry stays script-driven as for IC.
+8. **IC entry script (Q8).** `paper_ic_entry.py` has **no Telegram approval step**; Telegram is notification only. Reusable ideas, none needing IC imports: the structural duplicate guard
+   (`store.get_positions(name)` with any `net_qty != 0` aborts with an alert, line ~282); persist the legs, re-read each from the store to verify, and on any miss run compensating closes
+   (`_compensate_legs`, line 91, which lives in the script and would have to be extracted); then `capture_entry_margin`, `EntryMessage` and `send_payoff_chart`. IC persists legs by shelling out to
+   `record_paper_trade`; NC should call `PaperStore` / `PaperExecutor` directly.
+9. **Chart IV and carry convention (Q9).** Decided as recommended by the POC: hold each leg's own IV constant and take the forward per expiry from put-call parity on that expiry's ATM pair. The POC's
+   up-to-₹1.5k T+0 error when IV is held at its exit-day level is a chart-accuracy limit and out of scope until the overlay story; the expiry curve and breakevens (within about 30 points of Sensibull)
+   are what the interim chart claims.
+10. **Reference-trade inputs for CM-4 (Q10).** Held 0.4% from the upper breakeven: the 30-minute-close breach rule did not fire, which is the rule working. Margin ranged ₹2.25L to ₹2.57L for 3 lots,
+    which the live ₹89k to ₹91k per lot `final_margin` brackets. Neither becomes a rule.
+11. **Do the filters admit 400/400? (Q11).** Not provable yet. CM-2's search starts at 600 and the spec says "one 100-point step on either wing" without saying inward steps are allowed; it must permit
+    moving inward down to a configured minimum so that 400/400 is reachable. Whether the filters pass depends on the vega-cap unit (below). Live net vega per unit is +15.4 at 600/600 and +18.5 at
+    400/400 (near short 59.5, far long 74.9 and 78.0).
+
+**Design review amendment (monitor dispatch).** The shell cannot rely on `check_signals` seeing the whole structure. Recommended for CM-5: the shell acts only on the call whose chain expiry equals the
+near expiry, reads **all** its positions from the injected `PaperStore`, and fetches the far chain itself through the injected broker. This leaves `StrategyMonitor` and IC untouched. The alternative,
+an opt-in whole-position dispatch in the monitor, edits shared infra on the IC tick path and is not recommended.
+
+**Other findings.** The November monthly expiry is **Monday 2026-11-23**, not Tuesday the 24th (holiday shift; `/v2/option/contract` lists 2026-10-27, 11-03, 11-09, 11-23, 12-29), so `CycleCalendar`
+must take expiries from the instrument list or holiday-aware rules, never "last Tuesday". The unit and sign of the "vega cap 13" are undefined in CM-1 and CM-2. The research findings file named in the
+`prompt.md` was not found at the path given, so the 13 could not be traced.
+
+**Decisions for Animesh (unresolved).**
+
+1. Spread gate: 2 points per leg rejects most far CE strikes today (spreads 2.3 to 3.25), so the selector would return `NoEntry` or force awkward strikes. Options: raise to 3 points, or gate on the
+   sum of the four spreads, or gate in basis points of mid.
+2. Vega cap 13: per unit or per lot, and is it a magnitude cap on net long vega? At 65 units, +15.4 per unit is about ₹1,000 per vol point per lot. If 13 is per unit, today's default structure fails
+   it; state the unit and sign, or supply the source.
+3. EOD return on margin: divide by `final_margin` (about ₹90k per lot) or `required_margin` (about ₹240k per lot). IC stores both.
+4. CM-2 inward search: allow wings to move inward from 600 to a configured floor (suggest 300)?
