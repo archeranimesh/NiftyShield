@@ -126,6 +126,8 @@ rot them. (Items 3, 5 and 8 closed — numbers kept stable because item text cro
     `logging-enforcement/`. New `job_runs` heartbeat table. Soft order after item 26's `design-gate/`. Requested by Animesh 2026-10-08.
 28. **Nifty positional calendar (epic)** — `docs/plan/nifty-calendar/` — next **CM-0** (audit + live-infra probe). `calendar-monthly/` (shared pure core, shell, IC-equivalent infra, monthly variant) →
     `calendar-biweekly/`. Paper only; net-long-vega diversifier to the short-vol book. Requested by Animesh 2026-10-12.
+29. **Telegram caption-fit audit** — `docs/plan/telegram-caption-audit/` — next **TCA-1** (inventory; TCA-1..3). Read-only: measure which Telegram messages fit a single photo-with-caption message
+    (1024-char cap). No implementation until reviewed. Requested by Animesh 2026-10-13.
 
 ## Open Bugs
 

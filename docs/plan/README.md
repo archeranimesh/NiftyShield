@@ -96,6 +96,9 @@ reached since entry (existing `mfe_pct`/`mae_pct` in `paper_signal_marks`) in th
 (Intraday)` block from the snapshot; keep the Dhan login flow + `src/dhan/` client + DB tables wired). After both, the snapshot reports MF + Nuvama bonds + Nuvama options only. No `schema.md`.
 Requested by Animesh 2026-09-10.
 
+**`telegram-caption-audit/`** · ⬜ Not started — next **TCA-1** (TCA-1..3). Read-only audit of every Telegram message type: how many fit a single photo-with-caption message (1024-char caption cap)
+versus needing a photo plus follow-up text. Findings only; the implementation story follows Animesh's review. Requested by Animesh 2026-10-13.
+
 **`nifty-calendar/`** · ⬜ Not started — epic, next **CM-0** (`calendar-monthly/`, CM-0..8; then `calendar-biweekly/`, CB-1..4). Paper-trades the TM Trading Nifty positional structure (near-expiry ATM
 short straddle plus far-expiry OTM wings) as a monthly and a bi-weekly variant on the existing paper backbone, with IC-equivalent infra (monitor, fills, snapshots, Telegram, payoff chart). New leaf
 package `src/nifty_calendar/` (pure core) plus a thin `src/strategy/nifty_calendar_v1.py` shell; no change to `ic_nifty_v1/v2.py`, no DB schema change expected (CM-0 confirms). Requested by Animesh
