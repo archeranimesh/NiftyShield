@@ -4,14 +4,13 @@
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
 spec.
 
-**Open: CB-1..CB-4.** CB-1 and CB-2 are unblocked (they need only the CM-3 shell, already shipped). CB-3 and CB-4 wait on `calendar-monthly/` CM-9 (pricer swap, blocked on `greeks-bs-fallback`
-GF-2/GF-3), so new payoff wiring does not widen the swap.
+**Open: CB-1..CB-4.** CB-3/CB-4 reassigned to Antigravity; CM-9 (interim pricer swap) remains open and is out of scope.
 
 - [ ] **CB-1** — `BIWEEKLY` config and `BiweeklyCyclePolicy` (skip-current-weekly pair, back-to-back chain, handoff to monthly) | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: <—>
 - [ ] **CB-2** — `BiweeklyExitRule` (₹1,600 target, day 3-4 breach window, 200-point rule, same-pair redeploy, time exit) | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: <—>
-- [ ] **CB-3** — Register `paper_nifty_calendar_biweekly`: daemon, entry and snapshot scripts by variant, payoff registration, `Cal BW` label | Owner: Claude | Model: claude-sonnet-5-5 | Review:
-  code-reviewer | SHA: <—>
-- [ ] **CB-4** — Full-month two-variant integration test; close-out docs and cutover note update | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: <—>
+- [ ] **CB-3** — Register `paper_nifty_calendar_biweekly`: daemon, entry and snapshot scripts by variant, payoff registration, `Cal BW` label | Owner: Antigravity | Model: n/a | Review: code-reviewer
+  | SHA: <—>
+- [ ] **CB-4** — Full-month two-variant integration test; close-out docs and cutover note update | Owner: Antigravity | Model: n/a | Review: none | SHA: <—>
 
 ## Story done when
 
