@@ -29,7 +29,7 @@ from src.instruments.lookup import InstrumentLookup
 from src.models.options import OptionChain
 from src.models.portfolio import TradeAction
 from src.nifty_calendar.config import CalendarVariantConfig
-from src.nifty_calendar.cycle import CyclePolicy
+from src.nifty_calendar.cycle import CyclePolicy, EntryPlan
 from src.nifty_calendar.errors import CalendarError
 from src.nifty_calendar.exit_rules import (
     CycleExitState,
@@ -43,14 +43,17 @@ from src.notifications.protocol import NotifierProtocol
 from src.paper.models import ExitSignal, PaperPosition, PaperTrade
 from src.paper.store import PaperStore
 from src.strategy.executor import PaperFillSimulator
+from src.strategy.nifty_calendar_notify import ClosedLeg, send_close_message
 from src.strategy.nifty_calendar_state import (
     LONG_CALL_WING,
     SHORT_CALL,
     build_structure,
     cycle_entry_date,
+    cycle_origin_date,
     entry_leg_specs,
     executable_pnl,
     far_carry,
+    is_recentre_close,
     leg_quotes,
     resolve_open_legs,
 )
@@ -116,13 +119,18 @@ class NiftyCalendarV1(ReEntryMixin):
         self.strategy_name = config.strategy_name
         self.reentry_leg_role = SHORT_CALL
         self.reentry_script_hint = (
-            f"python -m scripts.strategies.nifty_calendar.entry --variant {config.name}"
+            "python -m scripts.strategies.nifty_calendar.paper_calendar_entry"
         )
         self._broker, self._store, self._notifier = broker, store, notifier
         self._simulator, self._selector, self._exit_rule = simulator, selector, exit_rule
         self._policy, self._config, self._lookup = cycle_policy, config, lookup
         self._vix_data_dir, self._vix_fn, self._clock = vix_data_dir, vix_fn, clock
         self._spot_history: deque[tuple[datetime, Decimal]] = deque()
+
+    @property
+    def config(self) -> CalendarVariantConfig:
+        """The variant configuration this shell was wired with."""
+        return self._config
 
     # ── Signals ──────────────────────────────────────────────────────────────
 
@@ -159,13 +167,28 @@ class NiftyCalendarV1(ReEntryMixin):
         chain = parse_upstox_option_chain(raw if isinstance(raw, list) else [])
         return chain if chain.strikes else None
 
+    def cycle_plan(self, entry_date: date) -> EntryPlan | None:
+        """Plan of the original cycle that a (possibly re-centred) structure entered on ``entry_date``."""
+        origin = cycle_origin_date(
+            self._store.get_trades(self.strategy_name),
+            entry_date,
+            lambda d: self._policy.entry_window(d) is not None,
+        )
+        return None if origin is None else self._policy.entry_window(origin)
+
     async def plan_entry(self, market: OptionChain, now: datetime) -> list[SignalEvent]:
-        """Entry events for a flat strategy; also called directly by the entry script."""
-        today, plan = now.date(), self._policy.entry_window(now.date())
-        if plan is None or now.time() < plan.entry_time_ist:
-            return []
-        if any(t.trade_date == today for t in self._store.get_trades(self.strategy_name)):
+        """Entry events for a flat strategy; also called directly by the entry script.
+
+        Same-day re-entry after a RECENTRE close is allowed (Animesh, 2026-10-13) and uses the
+        original cycle's plan, so its hard exit date is kept; any other trade today blocks.
+        """
+        today = now.date()
+        todays = [t for t in self._store.get_trades(self.strategy_name) if t.trade_date == today]
+        if any(not is_recentre_close(t) for t in todays):
             return []  # already traded today (e.g. closed on the entry day): no churn
+        plan = self.cycle_plan(today) if todays else self._policy.entry_window(today)
+        if plan is None or now.time() < plan.entry_time_ist or today >= plan.hard_exit_date:
+            return []
         near = await self._chain(plan.near_expiry, market)
         far = await self._chain(plan.far_expiry, market)
         if near is None or far is None:
@@ -200,7 +223,7 @@ class NiftyCalendarV1(ReEntryMixin):
         far = await self._chain(far_expiry, market)
         if far is None:
             return [self._warn("NC_CHAIN_UNAVAILABLE", "far chain unavailable")]
-        plan = self._policy.entry_window(cycle_entry_date(legs))
+        plan = self.cycle_plan(cycle_entry_date(legs))
         if plan is None:
             return [self._warn("NC_PLAN_MISSING", "no entry plan for the cycle entry date")]
         spot, lot = market.underlying_spot, self._config.lot_size
@@ -327,6 +350,7 @@ class NiftyCalendarV1(ReEntryMixin):
             targets.append((lc, pos))  # validate every leg before writing any
         today = self._clock().date()
         decision = str(meta.get("exit_decision", action.action_type))
+        closed: list[ClosedLeg] = []
         for lc, pos in targets:
             side = TradeAction.BUY if pos.net_qty < 0 else TradeAction.SELL
             fill = self._simulator.simulate_fill(
@@ -348,17 +372,28 @@ class NiftyCalendarV1(ReEntryMixin):
             )
             if self._record(trade):
                 self._store.mark_trade_closed(self.strategy_name, lc.leg_role, pos.instrument_key)
+                entry = pos.avg_sell_price if pos.net_qty < 0 else pos.avg_cost
+                closed.append(
+                    ClosedLeg(
+                        lc.leg_role, pos.instrument_key, entry, fill.fill_price, fill.quantity
+                    )
+                )
         self._spot_history.clear()
         short = next((p for lc, p in targets if lc.leg_role == SHORT_CALL), None)
         if short is None:
             return
         self._write_exit_event(short, decision, meta)
-        if decision == ExitDecision.RECENTRE.value:
+        near = date.fromisoformat(meta["near_expiry"])
+        recentre = decision == ExitDecision.RECENTRE.value
+        held = (today - short.entry_date).days if short.entry_date else 0
+        await send_close_message(
+            self._notifier, self._store, self._lookup, strategy_name=self.strategy_name,
+            signal=decision, near_expiry=near, today=today, held_days=held, legs=closed,
+            recentre=recentre,
+        )  # fmt: skip
+        if recentre:
             await self._check_reentry(
-                expiry=date.fromisoformat(meta["near_expiry"]),
-                today=today,
-                instrument_key=short.instrument_key,
-                trade_id=0,
+                expiry=near, today=today, instrument_key=short.instrument_key, trade_id=0
             )
 
     def _write_exit_event(self, short: PaperPosition, decision: str, meta: dict[str, Any]) -> None:

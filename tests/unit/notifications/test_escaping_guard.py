@@ -197,7 +197,7 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "by whoever's testing, not a cron or strategy event path; deliberately excluded from "
         "MD-7.1/MD-7.2/MD-7.3"
     ),
-    ("scripts/eod_summary.py", 198): (
+    ("scripts/eod_summary.py", 199): (
         "heuristic limitation, not a real gap - ROLL-6 migrated this (SHA on the task "
         "line); the message is built and fully escaped inside build_eod_summary_message() "
         "(escape_markdown() on every out-of-fence line), but this guard only inspects the "

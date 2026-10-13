@@ -264,3 +264,64 @@ def test_build_summary_parts_empty_book_single_part(store: PaperStore) -> None:
     )
     assert len(parts) == 1
     assert "no open positions" in parts[0]
+
+
+# --- Nifty calendar (BUY-only wings carry no entry_date) -------------------------------
+
+_CAL = "paper_nifty_calendar_monthly"
+
+
+class _CalendarStore:
+    """Stub store: only the calendar strategy holds positions, wing listed first."""
+
+    def __init__(self, positions: list[PaperPosition]) -> None:
+        self._positions = positions
+
+    def get_positions(self, strategy_name: str) -> list[PaperPosition]:
+        return self._positions if strategy_name == _CAL else []
+
+
+def _cal_pos(role: str, key: str, qty: int, entry: date | None) -> PaperPosition:
+    return PaperPosition(
+        strategy_name=_CAL,
+        leg_role=role,
+        net_qty=qty,
+        avg_cost=Decimal("100") if qty > 0 else Decimal("0"),
+        avg_sell_price=Decimal("0") if qty > 0 else Decimal("200"),
+        instrument_key=key,
+        entry_date=entry,
+    )
+
+
+def test_calendar_label_and_entry_date_skips_undated_wing() -> None:
+    entry = date(2026, 9, 30)
+    store = _CalendarStore(
+        [
+            _cal_pos("long_call_wing", "NSE_FO|1", 65, None),
+            _cal_pos("short_call", "NSE_FO|2", -65, entry),
+        ]
+    )
+    broker = _FakeBroker({"NSE_FO|1": Decimal("90"), "NSE_FO|2": Decimal("180")})
+    lookup = _FakeLookup({})
+
+    _, _, _, meta = asyncio.run(mod._collect_rows(store, broker, lookup))  # type: ignore[arg-type]
+    assert set(meta) == {"Cal M"}
+    assert meta["Cal M"][2] == entry  # the wing's None did not win
+    assert meta["Cal M"][1] == _CAL
+
+
+def test_calendar_margin_and_roi_render_when_entry_date_found(store: PaperStore) -> None:
+    entry = date(2026, 9, 30)
+    store.record_margin_snapshot(
+        MarginSnapshot(
+            strategy_name=_CAL,
+            entry_date=entry,
+            required_margin=Decimal("238593"),
+            final_margin=Decimal("90767"),
+            captured_at=__import__("datetime").datetime(2026, 9, 30, 10, 31),
+        )
+    )
+    out = mod._render_summary(
+        store, {"Cal M": (Decimal("2000"), _CAL, entry, False)}, Decimal("2000"), date(2026, 10, 7)
+    )
+    assert "90,767.00" in out and "Cal M" in out

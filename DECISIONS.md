@@ -1315,6 +1315,26 @@ in DSN-4); backstop thresholds; Kite stays deferred pending confirmation.
 
 ---
 
+## Nifty calendar scripts: same-day re-entry after a re-centre, script-driven entry, shared margin capture (CM-7, 2026-10-13)
+
+`nifty-calendar/calendar-monthly/` CM-7. Decisions by Animesh, 2026-10-13.
+
+- **Entry is script-driven, never monitor-dispatched.** The monitor does not tick a flat strategy, and an entry event carries `legs_to_close: []`, which the monitor would turn into a default
+  `short_put` close. `paper_calendar_entry.py` calls `NiftyCalendarV1.plan_entry` and `apply_action` directly; the monitor only evaluates exits for an open structure.
+- **Option A: same-day re-entry after a RECENTRE close.** `plan_entry`'s no-churn guard ignores earlier trades today when they are RECENTRE closes (notes prefix `RECENTRE`); any other trade today,
+  including the entry trades of the same day, still blocks. A re-entered structure resolves to the **original** cycle's plan (`cycle_origin_date` walks the short-call SELL dates back to the first
+  entry window), so target, time exit, DTE guard and the original hard day-10 date still apply and `NC_PLAN_MISSING` cannot fire for it. Re-entry is refused on or after the hard-exit date. Cycle P&L
+  for the target test is the re-entered structure's own executable P&L, not the cycle's cumulative P&L.
+- **Close and re-centre cards are sent by the shell** (`nifty_calendar_notify.send_close_message`, ROLL headline for a re-centre). The re-entry happens in the entry script, a separate process, so the
+  single combined card CM-6 built (`format_recentre_message`) cannot be produced from the shell; the entry script sends the normal entry card, so a re-centre is currently two messages.
+- **`capture_entry_margin` moved unchanged** to `src/paper/margin_capture.py`; `scripts/strategies/ic/ic_entry_gates.py` re-exports it, so the IC callers and tests are untouched.
+- **Monthly expiries for the cycle policy** (`src/nifty_calendar/expiries.py`): settled months come from the expiry rule (last Tuesday, moved back over holidays) because the BOD file drops a contract
+  once it settles, while the entry window opens the session after it; unsettled months take the last listed expiry. The daemon builds the policy once at start-up.
+- **Deferred:** VIX-regime slippage is `None` in the daemon registration (default band, no blocking fetch on the event loop); the entry script supplies today's VIX. The entry script alerts but does
+  not auto-compensate a partial structure.
+
+---
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/` (except 0.6c), `src/streaming/` — all empty

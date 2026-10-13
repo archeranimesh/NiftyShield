@@ -7,18 +7,20 @@ can fail closed with one WARN instead of acting on a half-known structure.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
 from src.instruments.lookup import InstrumentLookup
 from src.models.options import OptionChain, OptionLeg
-from src.models.portfolio import AssetType, Direction
+from src.models.portfolio import AssetType, Direction, TradeAction
 from src.nifty_calendar.errors import InvalidStructureError
-from src.nifty_calendar.models import CalendarLeg, CalendarStructure
-from src.nifty_calendar.payoff import derive_far_carry_from_atm
+from src.nifty_calendar.exit_rules import ExitDecision
+from src.nifty_calendar.models import CalendarLeg, CalendarStructure, StructureMetrics
+from src.nifty_calendar.payoff import compute_metrics, derive_far_carry_from_atm
 from src.nifty_calendar.selector import mid
-from src.paper.models import PaperPosition
+from src.paper.models import PaperPosition, PaperTrade
 from src.strategy._price_utils import resolve_option_expiry
 from src.strategy.protocol import LegSpec
 
@@ -84,6 +86,37 @@ def cycle_entry_date(legs: dict[str, OpenLeg]) -> date:
     if not known:
         raise InvalidStructureError("short legs carry no entry_date")
     return min(known)
+
+
+def is_recentre_close(trade: PaperTrade) -> bool:
+    """True for a closing leg written by a RECENTRE decision (``_close_structure`` notes prefix)."""
+    return (trade.notes or "").startswith(ExitDecision.RECENTRE.value)
+
+
+def cycle_origin_date(
+    trades: Sequence[PaperTrade], entry_date: date, has_window: Callable[[date], bool]
+) -> date | None:
+    """Entry date of the original cycle that a (possibly re-centred) structure belongs to.
+
+    A re-centre re-enters the same day with new strikes, so its shorts carry the
+    re-centre date, which is no entry window. Walking the short-call SELL dates
+    backwards from ``entry_date``, the first one that is an entry window is the
+    cycle's original entry, so its plan (hard day-10, DTE guard) still applies.
+
+    Args:
+        trades: The strategy's ledger.
+        entry_date: Earliest short-leg SELL date of the structure, or today when flat.
+        has_window: True when a date is a policy entry window.
+
+    Returns:
+        The original entry date, or None when no ancestor date is an entry window.
+    """
+    sells = {
+        t.trade_date
+        for t in trades
+        if t.leg_role == SHORT_CALL and t.action == TradeAction.SELL and t.trade_date <= entry_date
+    }
+    return next((d for d in sorted(sells | {entry_date}, reverse=True) if has_window(d)), None)
 
 
 def leg_quotes(legs: dict[str, OpenLeg], chains: dict[date, OptionChain]) -> dict[str, OptionLeg]:
@@ -191,3 +224,49 @@ def entry_leg_specs(
             )
         )
     return specs
+
+
+@dataclass(frozen=True)
+class CalendarView:
+    """An open structure rebuilt at current quotes: legs, quotes, metrics and executable P&L."""
+
+    legs: dict[str, OpenLeg]
+    quotes: dict[str, OptionLeg]
+    structure: CalendarStructure
+    metrics: StructureMetrics
+    carry: Decimal
+    pnl: Decimal
+
+    @property
+    def near_expiry(self) -> date:
+        """Expiry of the short legs."""
+        return self.legs[SHORT_CALL].expiry
+
+    @property
+    def far_expiry(self) -> date:
+        """Expiry of the long wings."""
+        return self.legs[LONG_CALL_WING].expiry
+
+
+def build_view(
+    positions: list[PaperPosition],
+    lookup: InstrumentLookup,
+    chains: dict[date, OptionChain],
+    spot: Decimal,
+    lot_size: int,
+) -> CalendarView:
+    """Rebuild the open structure at the chains' quotes (the shell's exit-path steps, reusable).
+
+    Raises:
+        InvalidStructureError: A leg, quote or chain is missing.
+        ValueError: A Greek is missing from a quote.
+    """
+    legs = resolve_open_legs(positions, lookup)
+    far_chain = chains.get(legs[LONG_CALL_WING].expiry)
+    if far_chain is None:
+        raise InvalidStructureError("far chain unavailable")
+    quotes = leg_quotes(legs, chains)
+    carry = far_carry(far_chain, spot)
+    structure = build_structure(legs, quotes, lot_size)
+    metrics = compute_metrics(structure, spot, far_carry=carry, lot_size=lot_size)
+    return CalendarView(legs, quotes, structure, metrics, carry, executable_pnl(legs, quotes))

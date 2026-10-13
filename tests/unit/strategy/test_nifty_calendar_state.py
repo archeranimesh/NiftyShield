@@ -9,13 +9,16 @@ import pytest
 
 from src.instruments.lookup import InstrumentLookup
 from src.models.options import OptionChain, OptionChainStrike, OptionLeg
+from src.models.portfolio import TradeAction
 from src.nifty_calendar.errors import InvalidStructureError
-from src.paper.models import PaperPosition
+from src.paper.models import PaperPosition, PaperTrade
 from src.strategy.nifty_calendar_state import (
     ROLES,
     cycle_entry_date,
+    cycle_origin_date,
     executable_pnl,
     far_carry,
+    is_recentre_close,
     leg_quotes,
     resolve_open_legs,
 )
@@ -88,3 +91,32 @@ def test_far_carry_requires_both_sides() -> None:
     )  # fmt: skip
     with pytest.raises(InvalidStructureError):
         far_carry(chain, Decimal(1))
+
+
+def _trade(day: date, role: str, action: TradeAction, notes: str = "") -> PaperTrade:
+    return PaperTrade(
+        strategy_name="paper_x", leg_role=role, instrument_key="NSE_FO|1", trade_date=day,
+        action=action, quantity=65, price=Decimal("100"), notes=notes,
+    )  # fmt: skip
+
+
+def test_is_recentre_close_matches_notes_prefix() -> None:
+    assert is_recentre_close(_trade(date(2026, 10, 1), "short_call", TradeAction.BUY, "RECENTRE x"))
+    assert not is_recentre_close(_trade(date(2026, 10, 1), "short_call", TradeAction.BUY, "TARGET"))
+    assert not is_recentre_close(_trade(date(2026, 10, 1), "short_call", TradeAction.BUY, ""))
+
+
+def test_cycle_origin_date_walks_back_to_the_entry_window() -> None:
+    window = date(2026, 9, 30)
+    trades = [
+        _trade(window, "short_call", TradeAction.SELL),
+        _trade(date(2026, 10, 1), "short_call", TradeAction.SELL),  # first re-centre re-entry
+        _trade(date(2026, 10, 5), "short_call", TradeAction.SELL),  # second re-entry
+    ]
+    assert cycle_origin_date(trades, date(2026, 10, 5), lambda d: d == window) == window
+    assert cycle_origin_date(trades, window, lambda d: d == window) == window
+
+
+def test_cycle_origin_date_is_none_without_an_entry_window() -> None:
+    trades = [_trade(date(2026, 10, 1), "short_call", TradeAction.SELL)]
+    assert cycle_origin_date(trades, date(2026, 10, 1), lambda d: False) is None

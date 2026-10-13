@@ -42,6 +42,12 @@ leaf-adjacent `src/strategy/nifty_calendar_state.py`. Re-centre is close plus `R
 log-only, as for IC/CC/PP: the standard `ReEntryMixin` path records it on the R5 event and the entry script does not act on it. Entry stays script-driven: a flat strategy is never ticked by the
 monitor, so the entry script (CM-7) calls `NiftyCalendarV1.plan_entry` and `apply_action`.
 
+**CM-7 outcome (2026-10-13).** SOLID triggers run: no new `elif` on a decision method; the shell gained one public property and one public method (`config`, `cycle_plan`), and the wiring sits in
+leaf-adjacent collaborators (`nifty_calendar_factory`, `nifty_calendar_notify`, `nifty_calendar_report`, `nifty_calendar_state.build_view`). Animesh chose **same-day re-entry after a re-centre**
+(Option A): `plan_entry` ignores earlier RECENTRE closes today (any other trade today still blocks) and a re-entered structure resolves back to the original cycle's plan, so the original hard day-10
+date is kept. The shell now sends the close and ROLL cards; the combined re-centre card of CM-6 needs the close and the re-entry in one process, so a re-centre is two messages for now. Entry stays
+script-driven. Details: `DECISIONS.md` §"Nifty calendar scripts".
+
 ## Session-start load hints
 
 - `docs/plan/nifty-calendar/README.md` and the combined findings file above.

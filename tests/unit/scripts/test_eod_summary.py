@@ -148,8 +148,20 @@ def test_eod_summary_hashtag_survives_escaping():
     assert msg.endswith("\n\\#EOD\\_SUMMARY")
 
 
-def test_bucket_order_constant_is_the_four_buckets():
-    assert _BUCKET_ORDER == ["Track", "IC", "Overlay", "CSP"]
+def test_bucket_order_constant_is_the_five_buckets():
+    assert _BUCKET_ORDER == ["Track", "IC", "Overlay", "CSP", "Calendar"]
+
+
+def test_eod_summary_maps_calendar_into_its_own_bucket():
+    msg = build_eod_summary_message(
+        "07 Aug 2026",
+        0,
+        [("paper_nifty_calendar_monthly", Decimal("1200.40"), Decimal("-200.00"))],
+    )
+    table = _table_lines(msg)
+    assert any(_row_cells(ln)[0] == "> CALENDAR TOTAL" for ln in table)
+    member = next(ln for ln in table if _row_cells(ln)[0] == "Cal M")
+    assert _row_cells(member)[1] == "+1,200"
 
 
 @pytest.mark.asyncio

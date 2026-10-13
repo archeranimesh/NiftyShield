@@ -18,11 +18,12 @@ import structlog
 
 from src.instruments.lookup import InstrumentLookup
 from src.models.options import OptionChain, OptionChainStrike, OptionLeg
+from src.models.portfolio import TradeAction
 from src.nifty_calendar.config import MONTHLY
 from src.nifty_calendar.cycle import MonthlyCyclePolicy
 from src.nifty_calendar.exit_rules import ExitDecision, MonthlyExitRule
 from src.nifty_calendar.selector import WingStructureSelector
-from src.paper.models import PaperPosition
+from src.paper.models import PaperPosition, PaperTrade
 from src.paper.store import PaperStore
 from src.strategy import nifty_calendar_v1 as shell_module
 from src.strategy.executor import PaperFillSimulator
@@ -71,7 +72,7 @@ FAR_ROWS: dict[int, tuple[Quote | None, Quote | None]] = {
 def _lookup() -> InstrumentLookup:
     insts, n = [], 1000
     for exp in (NEAR, FAR):
-        for strike in (22100, 22200, 22700, 23200, 23300):
+        for strike in (22000, 22100, 22200, 22600, 22700, 23200, 23300):
             for typ in ("CE", "PE"):
                 n += 1
                 insts.append(
@@ -106,6 +107,7 @@ class Harness:
         monkeypatch.setattr(shell_module, "parse_upstox_option_chain", lambda raw: self.far)
         self.notifier = MagicMock()
         self.notifier.send_plain_message = AsyncMock(return_value=True)
+        self.notifier.send_notification = AsyncMock()
         config = overrides.pop("config", MONTHLY)
         policy = overrides.pop(
             "cycle_policy",
@@ -186,6 +188,21 @@ async def test_target_closes_all_legs(h: Harness) -> None:
     assert [e["exit_signal"] for e in h.store.get_open_exit_events(MONTHLY.strategy_name)] == [
         "PROFIT_TARGET"
     ]
+    h.notifier.send_plain_message.assert_not_awaited()  # no R5 notice
+    h.notifier.send_notification.assert_awaited_once()  # the close card
+    text = h.notifier.send_notification.await_args.args[0]
+    assert "Closed" in text and "TARGET" in text and "Cal M" in text
+
+
+@pytest.mark.asyncio
+async def test_close_message_failure_does_not_undo_close(h: Harness) -> None:
+    await h.enter()
+    h.notifier.send_notification = AsyncMock(side_effect=RuntimeError("telegram down"))
+    h.now = datetime(2026, 10, 1, 11, 0, tzinfo=_IST)
+    h.reprice_near(("100", "101"), ("90", "91"))
+    events = await h.shell.check_signals(h.near, [])
+    assert await h.shell.apply_action([], _to_action(events[0])) == []
+    assert len(h.store.get_trades(MONTHLY.strategy_name)) == 8
 
 
 @pytest.mark.asyncio
@@ -241,7 +258,10 @@ async def _breach_recentre(
 async def test_breach_early_recentres(h: Harness, monkeypatch: pytest.MonkeyPatch) -> None:
     signals = await _breach_recentre(h, monkeypatch, pd.Series(np.linspace(10.0, 30.0, 252)))
     assert sorted(signals) == ["LOSS_STOP", "R5_REENTRY_ELIGIBLE"]
-    h.notifier.send_plain_message.assert_awaited_once()
+    h.notifier.send_plain_message.assert_awaited_once()  # the R5 notice
+    h.notifier.send_notification.assert_awaited_once()  # the roll card
+    card = h.notifier.send_notification.await_args.args[0]
+    assert "Rolled" in card and "RECENTRE" in card
 
 
 @pytest.mark.asyncio
@@ -323,3 +343,109 @@ async def test_no_variant_branch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
         '"biweekly"',
     ):
         assert needle not in source
+
+
+class _SpyRule:
+    """Exit rule that records the cycle state it was given and always holds."""
+
+    def __init__(self) -> None:
+        self.states: list[Any] = []
+
+    def evaluate(self, state: Any, snapshot: Any, now: datetime) -> ExitDecision:
+        self.states.append(state)
+        return ExitDecision.HOLD
+
+
+async def _enter_then_recentre_close(h: Harness) -> None:
+    """Enter on the cycle's entry day, then close via a RECENTRE decision the next day."""
+    await h.enter()
+    h.shell._exit_rule = _Rule(ExitDecision.RECENTRE)
+    h.now = datetime(2026, 10, 1, 11, 30, tzinfo=_IST)
+    events = await h.shell.check_signals(h.near, [])
+    assert [e.event_type for e in events] == ["NC_RECENTRE"]
+    assert await h.shell.apply_action([], _to_action(events[0])) == []
+
+
+@pytest.mark.asyncio
+async def test_same_day_reentry_allowed_after_recentre_close(
+    h: Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "src.strategy.reentry_mixin.load_vix_series", lambda _d: pd.Series(np.linspace(10, 30, 252))
+    )
+    await _enter_then_recentre_close(h)
+    events = await h.shell.plan_entry(h.near, h.now)
+    assert [e.event_type for e in events] == ["NC_ENTRY"]
+    positions = await h.shell.apply_action([], _to_action(events[0]))
+    assert {p.leg_role: p.net_qty for p in positions} == {
+        "short_call": -65, "short_put": -65, "long_call_wing": 65, "long_put_wing": 65,
+    }  # fmt: skip
+
+
+@pytest.mark.asyncio
+async def test_other_trade_today_still_blocks_reentry(h: Harness) -> None:
+    await h.enter()
+    h.shell._exit_rule = _Rule(ExitDecision.TARGET)
+    h.now = datetime(2026, 10, 1, 11, 30, tzinfo=_IST)
+    events = await h.shell.check_signals(h.near, [])
+    await h.shell.apply_action([], _to_action(events[0]))
+    assert await h.shell.plan_entry(h.near, h.now) == []  # a TARGET close is not a re-centre
+
+
+@pytest.mark.asyncio
+async def test_recentre_day_entry_blocked_by_same_day_entry_trades(h: Harness) -> None:
+    await h.enter()
+    h.shell._exit_rule = _Rule(ExitDecision.RECENTRE)
+    events = await h.shell.check_signals(h.near, [])  # same day as the entry
+    await h.shell.apply_action([], _to_action(events[0]))
+    assert await h.shell.plan_entry(h.near, h.now) == []  # the day's entry trades still block
+
+
+@pytest.mark.asyncio
+async def test_no_reentry_on_or_after_hard_exit_date(h: Harness) -> None:
+    await _enter_then_recentre_close(h)
+    plan = h.shell._policy.entry_window(date(2026, 9, 30))
+    assert plan is not None
+    h.now = datetime.combine(plan.hard_exit_date, h.now.time(), tzinfo=_IST)
+    assert await h.shell.plan_entry(h.near, h.now) == []
+
+
+@pytest.mark.asyncio
+async def test_reentered_structure_resolves_to_original_cycle_plan(h: Harness) -> None:
+    """New strikes entered on the re-centre date still evaluate under the original plan."""
+    await _enter_then_recentre_close(h)
+    key = {  # instrument keys of the re-entered legs, looked up from the BOD fixture
+        (e, t, k): h.lookup.search_options(
+            "NIFTY", strike=float(k), option_type=t, expiry=e, max_results=1
+        )[0]["instrument_key"]
+        for e, t, k in [(NEAR, "CE", 22600), (NEAR, "PE", 22600), (FAR, "CE", 23200), (FAR, "PE", 22000)]
+    }  # fmt: skip
+    legs = [
+        ("short_call", key[(NEAR, "CE", 22600)], TradeAction.SELL),
+        ("short_put", key[(NEAR, "PE", 22600)], TradeAction.SELL),
+        ("long_call_wing", key[(FAR, "CE", 23200)], TradeAction.BUY),
+        ("long_put_wing", key[(FAR, "PE", 22000)], TradeAction.BUY),
+    ]
+    for role, k, action in legs:
+        h.store.record_trade(
+            PaperTrade(
+                strategy_name=MONTHLY.strategy_name, leg_role=role, instrument_key=k,
+                trade_date=h.now.date(), action=action, quantity=65, price=Decimal("100"),
+            )
+        )  # fmt: skip
+    spy = _SpyRule()
+    h.shell._exit_rule = spy
+    h.near = _chain(
+        Decimal("22600"), NEAR,
+        {22600: (("99", "101", "0.5", "20", "14"), ("99", "101", "-0.5", "20", "14"))},
+    )  # fmt: skip
+    h.far = _chain(
+        Decimal("22600"), FAR,
+        {22600: (("99", "101", "0.5", "20", "14"), ("99", "101", "-0.5", "20", "14")),
+         23200: (("99", "101", "0.3", "20", "14"), None), 22000: (None, ("99", "101", "-0.3", "20", "14"))},
+    )  # fmt: skip
+    h.now = datetime(2026, 10, 1, 11, 40, tzinfo=_IST)
+    events = await h.shell.check_signals(h.near, [])
+    assert events == []  # HOLD, not NC_PLAN_MISSING
+    assert spy.states[0].entry_date == date(2026, 9, 30)  # the original cycle's plan
+    assert spy.states[0].plan.hard_exit_date > h.now.date()

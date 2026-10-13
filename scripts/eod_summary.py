@@ -61,8 +61,9 @@ _STRATEGY_META: dict[str, tuple[str, str]] = {
     "paper_ic_nifty_v2_monthly": ("IC", "V2 Mth"),
     "paper_nifty_overlay": ("Overlay", "Overlay"),
     "paper_csp_nifty_v1": ("CSP", "V1"),
+    "paper_nifty_calendar_monthly": ("Calendar", "Cal M"),
 }
-_BUCKET_ORDER = ["Track", "IC", "Overlay", "CSP"]
+_BUCKET_ORDER = ["Track", "IC", "Overlay", "CSP", "Calendar"]
 
 # Whole-message tag — this message aggregates every strategy in one send, unlike
 # the per-variant IC EOD Audit. Sits on its own line AFTER the closing fence:

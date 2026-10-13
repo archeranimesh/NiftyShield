@@ -146,6 +146,7 @@ async def test_four_ic_strategies_registered() -> None:
         patch("scripts.monitor_daemon.CSPNiftyV1", None),
         patch("scripts.monitor_daemon.IronCondorV2", None),
         patch("scripts.monitor_daemon.NiftyTrackComparisonV1", None),
+        patch("scripts.monitor_daemon.build_calendar_shell", None),
         patch("scripts.monitor_daemon.MONITOR_OVERLAYS", False),
         patch("sys.argv", ["monitor_daemon.py"]),
         patch("asyncio.gather", side_effect=asyncio.CancelledError),
@@ -297,6 +298,7 @@ async def test_one_ic_failure_does_not_block_others() -> None:
         patch("scripts.monitor_daemon.CSPNiftyV1", None),
         patch("scripts.monitor_daemon.IronCondorV2", None),
         patch("scripts.monitor_daemon.NiftyTrackComparisonV1", None),
+        patch("scripts.monitor_daemon.build_calendar_shell", None),
         patch("scripts.monitor_daemon.MONITOR_OVERLAYS", False),
         patch("sys.argv", ["monitor_daemon.py"]),
         patch("asyncio.gather", side_effect=asyncio.CancelledError),
@@ -465,3 +467,59 @@ async def test_stale_flat_legs_check_failure_does_not_raise() -> None:
     store = MagicMock()
     store.find_stale_flat_legs.side_effect = RuntimeError("db locked")
     await daemon.warn_stale_flat_legs_at_startup(store)
+
+
+def _calendar_daemon_patches(shell_factory: MagicMock, lookup: object):
+    """Patches isolating the calendar registration: every other strategy is switched off."""
+    from src.config import settings
+
+    return (
+        patch("scripts.monitor_daemon.PaperStore", return_value=MagicMock()),
+        patch(
+            "scripts.monitor_daemon.TelegramGateway",
+            return_value=MagicMock(start_polling=AsyncMock()),
+        ),
+        patch("scripts.monitor_daemon.create_client", return_value=MagicMock()),
+        patch("scripts.monitor_daemon.StrategyMonitor", return_value=MagicMock(run=AsyncMock())),
+        patch("scripts.monitor_daemon.InstrumentLookup", MagicMock(from_file=lambda _p: lookup)),
+        patch("scripts.monitor_daemon.build_calendar_shell", shell_factory),
+        patch("scripts.monitor_daemon.IronCondorV1", None),
+        patch("scripts.monitor_daemon.IronCondorV2", None),
+        patch("scripts.monitor_daemon.CSPNiftyV1", None),
+        patch("scripts.monitor_daemon.NiftyTrackComparisonV1", None),
+        patch("scripts.monitor_daemon.SignalTrackV1", None),
+        patch("scripts.monitor_daemon.MONITOR_OVERLAYS", False),
+        patch("sys.argv", ["monitor_daemon.py"]),
+        patch("asyncio.gather", side_effect=asyncio.CancelledError),
+        patch.object(settings, "telegram_bot_token", "fake_token"),
+        patch.object(settings, "telegram_chat_id", "fake_chat_id"),
+        patch.object(settings, "bod_instruments_path", __file__),
+    )
+
+
+@pytest.mark.asyncio
+async def test_calendar_strategy_registered() -> None:
+    from contextlib import ExitStack
+
+    shell = MagicMock(strategy_name="paper_nifty_calendar_monthly")
+    factory = MagicMock(return_value=shell)
+    with ExitStack() as stack:
+        for p in _calendar_daemon_patches(factory, MagicMock()):
+            stack.enter_context(p)
+        await daemon.main()
+    factory.assert_called_once()
+    assert "paper_nifty_calendar_monthly" in daemon.strategies_ref
+
+
+@pytest.mark.asyncio
+async def test_calendar_init_failure_does_not_block_daemon() -> None:
+    from contextlib import ExitStack
+
+    factory = MagicMock(side_effect=RuntimeError("bad expiry set"))
+    with ExitStack() as stack:
+        for p in _calendar_daemon_patches(factory, MagicMock()):
+            stack.enter_context(p)
+        with patch("scripts.monitor_daemon.logger.error") as log_error:
+            await daemon.main()
+    log_error.assert_any_call("Failed to initialize NiftyCalendarV1", error="bad expiry set")
+    assert "paper_nifty_calendar_monthly" not in daemon.strategies_ref

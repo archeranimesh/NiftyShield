@@ -36,6 +36,7 @@ import structlog
 
 from src.instruments.lookup import InstrumentLookup, parse_expiry
 from src.models.portfolio import TradeAction
+from src.nifty_calendar.config import MONTHLY as NC_MONTHLY
 from src.notifications.formatting import build_position_table
 from src.notifications.markdown import escape_markdown
 from src.paper.constants import STRATEGY_OVERLAY
@@ -71,6 +72,7 @@ _STRATEGY_LABELS: dict[str, str] = {
 }
 _STRATEGY_LABELS.update({cfg.strategy_name: "IC V2" for cfg in IC_V2_CONFIGS.values()})
 _STRATEGY_LABELS[CSPNiftyV1.strategy_name] = "CSP"
+_STRATEGY_LABELS[NC_MONTHLY.strategy_name] = "Cal M"
 
 # 3-Track base legs persist under their own per-track strategy_name (not
 # NiftyTrackComparisonV1.strategy_name, which is only the signal-registration
@@ -315,7 +317,8 @@ async def _collect_rows(
         strategy_meta[strategy_label] = (
             prev_pnl + (pnl if pnl is not None else Decimal("0")),
             prev_name,
-            prev_entry_date,
+            # BUY-only legs (calendar wings) carry no entry_date: first dated leg wins.
+            prev_entry_date if prev_entry_date is not None else pos.entry_date,
             prev_missing or pnl is None,
         )
 
@@ -452,8 +455,8 @@ def _render_summary(
     """Render the per-strategy P&L / annualized-%-on-margin table.
 
     ``ann_pct = (pnl / final_margin) * (365 / days_held) * 100`` — simple
-    annualization. ``paper_margin_snapshots`` is populated for IC V1/V2 only, so
-    CSP, the overlays and 3-Track render ``N/A`` for Margin/Ann.% (never a
+    annualization. ``paper_margin_snapshots`` is populated for IC V1/V2 and the Nifty
+    calendar only, so CSP, the overlays and 3-Track render ``N/A`` for Margin/Ann.% (never a
     substituted estimate). Ann.% is also ``N/A`` when ``final_margin <= 0`` or
     ``days_held <= 0``. Returns ``""`` when there were no open legs.
     """

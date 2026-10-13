@@ -73,7 +73,7 @@ positions/holdings mirror. Third broker surface — do not conflate with `dhan_*
 | `warn_signal_state` | `PaperStore` | Dedup/state tracking so a WARN-severity signal doesn't re-fire every cron tick. |
 | `mvp_corporate_actions` | `MVPStore.add_corporate_action()` (manual CLI) | MVP split/bonus ledger, read-time adjustment (BUG-054). `UNIQUE(symbol, ex_date, action_type)`. |
 | `signal_responses` | `SignalStore` → `morning_signal.py` | One row per `(trade_date, provider)` — raw multi-LLM directional response via OpenRouter; also token counts + `cost_usd` (see note). |
-| `paper_margin_snapshots` | `PaperStore` → IC entry scripts, `capture_entry_margin()` | One row per `(strategy_name, entry_date)` — margin at entry. **IC-only** — see note below. |
+| `paper_margin_snapshots` | `PaperStore` → IC and calendar entry scripts, `capture_entry_margin()` | One row per `(strategy_name, entry_date)` — margin at entry. **IC + calendar**, see note. |
 | `paper_proxy_delta_log` | `PaperStore` → 3-track proxy monitoring | Daily log of Proxy deep-ITM-call delta breach state. |
 | `paper_strategies` | `PaperStore` | One row per strategy — mutable state (breach counts, profit-lock zone flags, active wing widths, `cycle_id`). Not snapshot history; current state only. |
 | `pending_approvals` / `council_outputs` | `PaperStore` | Council-gated action approval workflow (Telegram approve/reject) and the raw per-persona LLM responses behind each approval. |
@@ -96,7 +96,9 @@ usage accounting (`"usage": {"include": true}`). `NULL` on rows written by the `
 landed — no backfill (envelopes not retained). `get_signal_cost()` therefore under-counts any window including days before **2026-09-11**, the first trading morning whose 09:30 run followed the SCT-2
 deploy; cost aggregates are trustworthy from that date on. The sibling `signal_inputs` / `daily_signals` / `signal_outcomes` tables are not yet registered here.
 
-**Note — `paper_margin_snapshots`:** **IC-only** — 3-track futures notional is computed separately (`qty * 1.0`), never from this table.
+**Note — `paper_margin_snapshots`:** written for the IC strategies and, since `nifty-calendar/calendar-monthly/` CM-7, `paper_nifty_calendar_monthly`. The table is keyed on `(strategy_name,
+entry_date)` and is strategy-agnostic; `capture_entry_margin` moved from `scripts/strategies/ic/ic_entry_gates.py` to `src/paper/margin_capture.py` (the IC module re-exports it). The calendar's
+`entry_date` is the earliest short-leg SELL date, because its BUY-only wings carry no `PaperPosition.entry_date`. 3-track futures notional is computed separately (`qty * 1.0`), never from this table.
 
 **Note — `paper_signal_shadow_marks` (2026-10-01):** after the exit rules close the trade (target / stop / 15:00), `SignalTrackV1` keeps marking the same leg into this table until 15:00 IST, off the
 chain leg when present else an LTP quote. Rows are seeded from the live series' last row, so the last shadow row's `mfe_pct` / `mae_pct` are the whole-session extremes. It is a separate table so the
