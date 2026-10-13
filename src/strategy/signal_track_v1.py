@@ -71,6 +71,10 @@ logger = structlog.get_logger(__name__)
 _IST = ZoneInfo("Asia/Kolkata")
 # Post-exit shadow marking stops here (deliberately the 15:00 square-off, not market close).
 _SHADOW_END = time(15, 0)
+# Entry window: NSE open to the 15:00 square-off. A position opened outside it can never be
+# exited by the monitor that session (daemon is off after 15:30) and would carry overnight.
+_ENTRY_OPEN = time(9, 15)
+_ENTRY_CLOSE = _SHADOW_END
 _UNDERLYING = "NIFTY"
 _LEG_ROLE = "signal_long"
 _NIFTY_KEY = "NSE_INDEX|Nifty 50"
@@ -248,10 +252,14 @@ def build_signal_exit_message(
             table,
             "```",
             "",
-            _E(f"🕒 {time_str}  ·  Nifty close {_spot(underlying)}"),
+            _E(f"🕒 {time_str}  ·  Nifty spot {_spot(underlying)}"),
             _E(footer),
         ]
     )
+
+
+def _now_ist() -> datetime:
+    return datetime.now(tz=_IST)
 
 
 async def open_signal_paper_entry(
@@ -265,8 +273,9 @@ async def open_signal_paper_entry(
     """Open one signals-paper-track position from a firing ``DailySignal``.
 
     Idempotent by the SPT-2 one-open-position guard: a second call while a
-    position is open is a logged no-op. NO_TRADE and an unresolvable option are
-    also logged no-ops.
+    position is open is a logged no-op. NO_TRADE, an unresolvable option, and a
+    call outside the 09:15–15:00 IST session on the signal's own date are also
+    logged no-ops (an off-hours entry could never be exited that session).
 
     Args:
         signal: The consensus ``DailySignal`` for the session.
@@ -288,6 +297,15 @@ async def open_signal_paper_entry(
     if signal.recommended_strike is None:
         # A directional DailySignal always carries a strike; guard is defensive.
         logger.warning("signal_track.no_strike", signal_date=signal.trade_date.isoformat())
+        return None
+
+    now = _now_ist()
+    if signal.trade_date != now.date() or not _ENTRY_OPEN <= now.time() < _ENTRY_CLOSE:
+        logger.warning(
+            "signal_track.outside_session",
+            signal_date=signal.trade_date.isoformat(),
+            now=now.isoformat(),
+        )
         return None
 
     if await asyncio.to_thread(store.get_open_signal_entry) is not None:
@@ -365,7 +383,7 @@ async def open_signal_paper_entry(
         instrument_key=instrument_key,
         expiry=expiry,
         entry_dte=entry_dte,
-        entry_ts=datetime.now(tz=_IST),
+        entry_ts=now,
         entry_premium=premium,
         entry_bid=leg.bid,
         entry_ask=leg.ask,

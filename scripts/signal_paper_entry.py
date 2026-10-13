@@ -8,6 +8,11 @@ guarded tail-call at 09:30 — this script exists for the operator to re-run
 position, and a non-trading day are all logged no-ops (the SPT-2 one-open
 guard makes a re-run safe).
 
+Same-day, in-session only: `open_signal_paper_entry` refuses (logged
+`signal_track.outside_session`) unless `--date` is today (IST) and the time is
+within 09:15-15:00. A past-date or after-hours replay would open a live
+position at the current quote with no monitor left to exit it (2026-10-12).
+
 SEC-5 keep-or-delete review (2026-09-12): deferred. The tail-call (SPT-6)
 only landed at 19:13 on 2026-09-11, after that day's 09:30 cron had already
 run without it — zero live production runs to judge reliability against.
@@ -57,7 +62,7 @@ def _parse_args() -> argparse.Namespace:
         dest="trade_date",
         default=market_today().isoformat(),
         metavar="YYYY-MM-DD",
-        help="Trading day to (re-)open the paper entry for. Default: today (IST).",
+        help="Trading day to (re-)open the entry for. Must be today (IST), 09:15-15:00; else a no-op.",
     )
     return parser.parse_args()
 

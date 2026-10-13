@@ -80,6 +80,21 @@ def _snapshot() -> SimpleNamespace:
     )
 
 
+def _pin_now(monkeypatch: pytest.MonkeyPatch, hour: int, minute: int = 0, day: int = 10) -> None:
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    monkeypatch.setattr(
+        "src.strategy.signal_track_v1._now_ist",
+        lambda: datetime(2026, 9, day, hour, minute, tzinfo=ZoneInfo("Asia/Kolkata")),
+    )
+
+
+@pytest.fixture(autouse=True)
+def _in_session(monkeypatch: pytest.MonkeyPatch) -> None:
+    _pin_now(monkeypatch, 10)
+
+
 @pytest.fixture(autouse=True)
 def _patch_resolver(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
@@ -124,6 +139,32 @@ async def test_no_trade_is_logged_noop(store: PaperStore) -> None:
     )
     assert out is None
     assert store.get_trades(STRATEGY_SIGNAL_TRACK) == []
+
+
+@pytest.mark.parametrize(
+    ("hour", "minute", "day"),
+    [(19, 38, 10), (15, 0, 10), (9, 14, 10), (10, 0, 11)],
+    ids=["after_close", "at_square_off", "pre_open", "stale_signal_date"],
+)
+async def test_entry_outside_session_or_stale_date_is_noop(
+    store: PaperStore, monkeypatch: pytest.MonkeyPatch, hour: int, minute: int, day: int
+) -> None:
+    _pin_now(monkeypatch, hour, minute, day)
+    out = await open_signal_paper_entry(
+        _signal(TradeAction.BUY_CALL), _snapshot(), _FakeBroker(), store
+    )
+    assert out is None
+    assert store.get_trades(STRATEGY_SIGNAL_TRACK) == []
+
+
+async def test_entry_allowed_at_session_open(
+    store: PaperStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _pin_now(monkeypatch, 9, 15)
+    out = await open_signal_paper_entry(
+        _signal(TradeAction.BUY_CALL), _snapshot(), _FakeBroker(), store
+    )
+    assert out is not None
 
 
 async def test_already_open_is_noop(store: PaperStore) -> None:
@@ -456,6 +497,7 @@ def test_exit_message_renders_for_win_and_loss() -> None:
         (Decimal("1235.00"), 1, 1, 0),
     )
     assert "SIGNAL EXIT" in win_msg and "TARGET" in win_msg
+    assert "Nifty spot" in win_msg and "Nifty close" not in win_msg
     assert "1,235\\.00" in win_msg or "1,235.00" in win_msg
 
     loss_msg = build_signal_exit_message(

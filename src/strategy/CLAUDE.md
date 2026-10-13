@@ -47,6 +47,8 @@ Every monitor tick while a position is open writes one `paper_signal_marks` row 
 
 ### Invariants
 
+- `open_signal_paper_entry` only opens inside 09:15–15:00 IST on the signal's own `trade_date` (`signal_track.outside_session` no-op otherwise) — an off-hours entry would outlive the monitor and carry
+  overnight (2026-10-12 incident).
 - One `paper_signal_track_v1` position open at a time — a second `open_signal_paper_entry` call while one is open is a logged no-op, never a second row.
 - `sl_price` / `tgt_price` / `ruleset_version` are frozen at entry from `derive_levels` and never recalculated mid-trade — a recalibration ships as a new `ruleset_version` cohort (e.g. `'v2'`), never
   an in-place mutation of an open trade's levels.
@@ -59,7 +61,8 @@ The SPT-7 go-live gate (G1–G9) and the live pilot: the 6-month paper evaluatio
 
 ## Registering a new strategy for payoff charts
 
-Any new strategy that wants a payoff chart at entry, EOD snapshot, or close must explicitly register with `src/payoff/registry.py`. Unregistered strategies silently drop the chart send (logging a warning) without raising.
+Any new strategy that wants a payoff chart at entry, EOD snapshot, or close must explicitly register with `src/payoff/registry.py`. Unregistered strategies silently drop the chart send (logging a
+warning) without raising.
 
 1. Go to `src/strategy/payoff_registrations.py`.
 2. Find `ensure_registered()`.
