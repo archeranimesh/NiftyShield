@@ -1,0 +1,193 @@
+"""Rebuild helpers for NiftyCalendarV1: store positions to structure, quotes and P&L.
+
+Cycle state lives only in ``paper_trades``; every tick the shell rebuilds it
+through these functions. Failures raise ``InvalidStructureError`` so the shell
+can fail closed with one WARN instead of acting on a half-known structure.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import date
+from decimal import Decimal
+
+from src.instruments.lookup import InstrumentLookup
+from src.models.options import OptionChain, OptionLeg
+from src.models.portfolio import AssetType, Direction
+from src.nifty_calendar.errors import InvalidStructureError
+from src.nifty_calendar.models import CalendarLeg, CalendarStructure
+from src.nifty_calendar.payoff import derive_far_carry_from_atm
+from src.nifty_calendar.selector import mid
+from src.paper.models import PaperPosition
+from src.strategy._price_utils import resolve_option_expiry
+from src.strategy.protocol import LegSpec
+
+SHORT_CALL = "short_call"
+SHORT_PUT = "short_put"
+LONG_CALL_WING = "long_call_wing"
+LONG_PUT_WING = "long_put_wing"
+ROLES: tuple[str, ...] = (SHORT_CALL, SHORT_PUT, LONG_CALL_WING, LONG_PUT_WING)
+_SHORT_ROLES = (SHORT_CALL, SHORT_PUT)
+
+
+@dataclass(frozen=True)
+class OpenLeg:
+    """One open structure leg resolved to its strike, expiry and option type."""
+
+    position: PaperPosition
+    strike: Decimal
+    expiry: date
+    option_type: AssetType
+
+
+def resolve_open_legs(
+    positions: list[PaperPosition], lookup: InstrumentLookup
+) -> dict[str, OpenLeg]:
+    """Map the four structure roles to their open legs.
+
+    Args:
+        positions: Open (or flat) positions for the calendar strategy.
+        lookup: BOD instrument lookup used to resolve strike, type and expiry.
+
+    Returns:
+        Role to OpenLeg for all four roles.
+
+    Raises:
+        InvalidStructureError: A role is missing or a key does not resolve.
+    """
+    by_role = {p.leg_role: p for p in positions if p.net_qty != 0 and p.leg_role in ROLES}
+    missing = [r for r in ROLES if r not in by_role]
+    if missing:
+        raise InvalidStructureError(f"incomplete structure, missing roles: {missing}")
+    legs: dict[str, OpenLeg] = {}
+    for role, pos in by_role.items():
+        inst = lookup.get_by_key(pos.instrument_key)
+        expiry = resolve_option_expiry(pos.instrument_key, lookup)
+        if inst is None or expiry is None or inst.get("instrument_type") not in ("CE", "PE"):
+            raise InvalidStructureError(f"cannot resolve {role} key {pos.instrument_key}")
+        legs[role] = OpenLeg(
+            position=pos,
+            strike=Decimal(str(inst["strike_price"])),
+            expiry=expiry,
+            option_type=AssetType(inst["instrument_type"]),
+        )
+    return legs
+
+
+def cycle_entry_date(legs: dict[str, OpenLeg]) -> date:
+    """Entry date of the cycle: the earliest SELL date of the short legs.
+
+    Long wings carry no ``entry_date`` (BUY-only legs), so the shorts decide.
+    """
+    dates = [legs[r].position.entry_date for r in _SHORT_ROLES]
+    known = [d for d in dates if d is not None]
+    if not known:
+        raise InvalidStructureError("short legs carry no entry_date")
+    return min(known)
+
+
+def leg_quotes(legs: dict[str, OpenLeg], chains: dict[date, OptionChain]) -> dict[str, OptionLeg]:
+    """Current two-sided quote for every leg.
+
+    Raises:
+        InvalidStructureError: A chain or a strike side is missing, or a quote
+            is not two-sided.
+    """
+    quotes: dict[str, OptionLeg] = {}
+    for role, leg in legs.items():
+        chain = chains.get(leg.expiry)
+        row = chain.strikes.get(leg.strike) if chain else None
+        side = None if row is None else (row.ce if leg.option_type == AssetType.CE else row.pe)
+        if side is None or side.bid <= 0 or side.ask <= 0:
+            raise InvalidStructureError(f"no two-sided quote for {role} {leg.strike}")
+        quotes[role] = side
+    return quotes
+
+
+def executable_pnl(legs: dict[str, OpenLeg], quotes: dict[str, OptionLeg]) -> Decimal:
+    """Rupee P&L if every leg closed at the executable side (buy ask, sell bid)."""
+    total = Decimal("0")
+    for role, leg in legs.items():
+        qty = Decimal(abs(leg.position.net_qty))
+        if role in _SHORT_ROLES:
+            total += (leg.position.avg_sell_price - quotes[role].ask) * qty
+        else:
+            total += (quotes[role].bid - leg.position.avg_cost) * qty
+    return total
+
+
+def build_structure(
+    legs: dict[str, OpenLeg], quotes: dict[str, OptionLeg], lot_size: int
+) -> CalendarStructure:
+    """Rebuild a CalendarStructure at current Greeks and original entry prices."""
+
+    def _leg(role: str) -> CalendarLeg:
+        leg, pos = legs[role], legs[role].position
+        is_short = role in _SHORT_ROLES
+        return CalendarLeg(
+            instrument_key=pos.instrument_key,
+            strike=leg.strike,
+            option_type=leg.option_type,
+            expiry=leg.expiry,
+            side=Direction.SELL if is_short else Direction.BUY,
+            qty_lots=abs(pos.net_qty) // lot_size,
+            entry_price=pos.avg_sell_price if is_short else pos.avg_cost,
+            delta=quotes[role].delta,  # type: ignore[arg-type]  # None rejected by CalendarLeg
+            vega=quotes[role].vega,  # type: ignore[arg-type]
+            iv=quotes[role].iv,  # type: ignore[arg-type]
+        )
+
+    return CalendarStructure(
+        short_ce=_leg(SHORT_CALL),
+        short_pe=_leg(SHORT_PUT),
+        long_ce_wing=_leg(LONG_CALL_WING),
+        long_pe_wing=_leg(LONG_PUT_WING),
+    )
+
+
+def far_carry(far_chain: OptionChain, spot: Decimal) -> Decimal:
+    """Far-expiry forward carry from the far chain's own ATM put-call parity."""
+    if not far_chain.strikes:
+        raise InvalidStructureError("far chain has no strikes")
+    atm = min(far_chain.strikes, key=lambda k: abs(k - spot))
+    row = far_chain.strikes[atm]
+    if row.ce is None or row.pe is None:
+        raise InvalidStructureError("far ATM missing a side")
+    return derive_far_carry_from_atm(atm, mid(row.ce), mid(row.pe), spot)
+
+
+def entry_leg_specs(
+    structure: CalendarStructure, lookup: InstrumentLookup, lot_size: int
+) -> list[LegSpec]:
+    """Four opening LegSpecs with real Upstox keys; ``price`` carries the mid.
+
+    Raises:
+        InvalidStructureError: A leg has no contract in the instrument file.
+    """
+    roles = (
+        (SHORT_CALL, structure.short_ce),
+        (SHORT_PUT, structure.short_pe),
+        (LONG_CALL_WING, structure.long_ce_wing),
+        (LONG_PUT_WING, structure.long_pe_wing),
+    )
+    specs: list[LegSpec] = []
+    for role, leg in roles:
+        found = lookup.search_options(
+            "NIFTY",
+            strike=float(leg.strike),
+            option_type=leg.option_type.value,
+            expiry=leg.expiry,
+            max_results=1,
+        )
+        if not found:
+            raise InvalidStructureError(f"no contract for {role} {leg.expiry} {leg.strike}")
+        specs.append(
+            LegSpec(
+                instrument_key=found[0]["instrument_key"],
+                action=leg.side.value,
+                quantity=leg.qty_lots * lot_size,
+                leg_role=role,
+                price=leg.entry_price,
+            )
+        )
+    return specs
