@@ -1,4 +1,4 @@
-"""Unit tests for CyclePolicy, MonthlyCyclePolicy, and CycleCalendar."""
+"""Unit tests for CyclePolicy, MonthlyCyclePolicy, and active_variant."""
 
 from datetime import date, time, timedelta
 

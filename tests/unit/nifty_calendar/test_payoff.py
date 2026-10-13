@@ -269,4 +269,12 @@ def test_negative_effective_vol_prices_at_intrinsic() -> None:
     p = payoff_at(
         structure, spot, iv_shift=Decimal("-25.0"), far_carry=far_carry, lot_size=lot_size
     )
-    assert isinstance(p, Decimal)
+    forward = spot + far_carry
+    near_intrinsic = max(spot - structure.short_ce.strike, Decimal("0")) + max(
+        structure.short_pe.strike - spot, Decimal("0")
+    )
+    far_intrinsic = max(forward - structure.long_ce_wing.strike, Decimal("0")) + max(
+        structure.long_pe_wing.strike - forward, Decimal("0")
+    )
+    expected = (structure.net_credit_per_unit - near_intrinsic + far_intrinsic) * lot_size
+    assert p == pytest.approx(expected, abs=Decimal("0.01"))
