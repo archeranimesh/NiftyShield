@@ -4,9 +4,9 @@
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
 spec.
 
-**Open: CM-0..CM-9.**
+**Open: CM-1..CM-9.**
 
-- [ ] **CM-0** — Prior-art audit and live-infra readiness probe; amend Design review if the code differs | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: <—>
+- [x] **CM-0** — Prior-art audit and live-infra readiness probe; amend Design review if the code differs | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: e74f1ee
 - [ ] **CM-1** — `src/nifty_calendar/` models and payoff maths (Greeks aggregation, breakevens, risk-reward, loss at breakevens, Black-76 repricing of far legs via an interim local pricer) | Owner:
   Antigravity | Model: n/a | Review: code-reviewer, greeks-analyst | SHA: <—>
 - [ ] **CM-2** — `StructureSelector`: wing search under the six entry filters plus absolute spread gate | Owner: Antigravity | Model: n/a | Review: code-reviewer, greeks-analyst | SHA: <—>

@@ -1289,3 +1289,5 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
 - [2026-10-13] dhan-chain-adapter DA-0 done: Animesh decided to renew the Dhan data plan. Story complete; FG-1 earliest start 2026-11-02 (15 captured trading days).
 - [2026-10-13] strategy-payoff-charts chart-polish CP-10 accepted (Animesh) and CP-11 docs close done: story complete; archives with the epic (MO-9). Next in the epic: `chart-model-overlay/` MO-1,
   still blocked on GF-2 + GF-3.
+- [2026-10-13] nifty-calendar CM-0 audit done (e74f1ee): the monitor calls `check_signals` per expiry group, so the shell fetches the far chain itself; winged margin ₹89-91k per lot; the 2-point
+  spread gate rejects most far CE strikes; Nov monthly expiry is Mon 11-23. Four decisions open for Animesh in `calendar-monthly/stories.md` §CM-0 findings. Next: CM-1.
