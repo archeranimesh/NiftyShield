@@ -112,6 +112,16 @@ All 11 original codes were wrong — replaced by grepping the live AMFI flat fil
 |---|---|---|---|---|---|
 | NIFTY_DEC_PE | NIFTY DEC 23000 PE | `NSE_FO\|37810` | ₹962.15 | 0 (closed 2026-07-14 @ ₹269.95) | — |
 
+### Nifty positional calendar, monthly (`paper_nifty_calendar_monthly`, paper only)
+
+| Item | Value |
+|---|---|
+| Structure | Near-expiry ATM short straddle + far-expiry OTM long wings (600/600 default, inward to 300), 1 lot (65) |
+| Entry | First session after the previous monthly expiry, 10:30 IST; target Rs 3,000/lot, planned hold 7 days, hard close day 10 |
+| Filters | `spread_tolerance` 3.0 pts/leg, `vega_cap` 20 (signed net vega per unit, uncalibrated), `delta_cap`, risk-reward floor |
+| Margin | Upstox calculator `final_margin` about Rs 89-91k per lot winged; ROI divides by `final_margin` |
+| Expiry | Monthly expiry is Tuesday, moved back over holidays (Nov 2026: Monday 23rd); take expiries from the instrument list |
+
 ### FinRakshak Protected MF Portfolio
 
 | Scheme | AMFI Code | Inv. Amt. (₹) | Units |

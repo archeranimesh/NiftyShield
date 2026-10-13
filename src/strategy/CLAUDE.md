@@ -7,8 +7,8 @@
 ## Module Purpose
 
 The paper-backbone strategy layer: `PaperStrategy` protocol implementations run on the shared `StrategyMonitor` daemon, dispatch fills through `PaperExecutor`, and persist through `src/paper/`'s
-`PaperStore`. Seven strategies live here: `CSPNiftyV1`, `CCOverlayV1`, `PPOverlayV1`, `CollarOverlayV1`, `IronCondorV1`, `IronCondorV2`, `NiftyTrackComparisonV1`, plus `SignalTrackV1` (added by
-`signals-paper-track/`). Shared engines: `ExitSignalEngine`, `ProfitLockEngine`, `OverlayCloser`, `ic_close_executor`, `roll_utils`.
+`PaperStore`. Nine strategies live here: `CSPNiftyV1`, `CCOverlayV1`, `PPOverlayV1`, `CollarOverlayV1`, `IronCondorV1`, `IronCondorV2`, `NiftyTrackComparisonV1`, plus `SignalTrackV1` (added by
+`signals-paper-track/`) and `NiftyCalendarV1` (added by `nifty-calendar/calendar-monthly/`). Shared engines: `ExitSignalEngine`, `ProfitLockEngine`, `OverlayCloser`, `ic_close_executor`, `roll_utils`.
 
 ---
 
@@ -58,6 +58,23 @@ Every monitor tick while a position is open writes one `paper_signal_marks` row 
 ### Not yet exercised
 
 The SPT-7 go-live gate (G1–G9) and the live pilot: the 6-month paper evaluation window has not elapsed as of this note (2026-09-11).
+
+## `NiftyCalendarV1` — Nifty positional calendar shell
+
+Thin shell over the pure core in `src/nifty_calendar/` (read that package's `CLAUDE.md` for the maths invariants). Files: `nifty_calendar_v1.py` (shell, `ReEntryMixin`), `nifty_calendar_state.py`
+(rebuilds the structure and cycle from `paper_trades`; no new table), `nifty_calendar_factory.py` (`build_calendar_shell`, shared by the daemon and both scripts), `nifty_calendar_notify.py`
+(close/ROLL cards), `nifty_calendar_report.py` (EOD report), `nifty_calendar_payoff.py` (payoff adapter registered in `payoff_registrations.py`).
+
+- **Whole structure, not one expiry.** `StrategyMonitor` calls `check_signals` once per expiry group with that expiry's chain and legs only. The shell acts on the near-expiry call alone, reads all
+  four positions from the injected `PaperStore` and fetches the far chain through the injected broker. Do not change `monitor.py` for this.
+- **Entry is script-driven.** A flat strategy is never ticked, and an entry event with `legs_to_close: []` would be turned into a default `short_put` close by the monitor. The entry script calls
+  `plan_entry` and `apply_action` directly. The monitor only evaluates exits for an open structure.
+- **Cycle entry date comes from the short legs** (`PaperPosition.entry_date` is `None` for a BUY-only leg). The margin snapshot uses the same date.
+- **Re-centre** = close plus same-day re-entry under the original cycle's plan (original hard day-10 date kept). It is two Telegram messages: the shell's close/ROLL card, then the entry script's entry
+  card (`DECISIONS.md` §"Nifty calendar scripts").
+- **No `if variant`** in the shell; the variant is the injected config, policy, selector and exit rule. Payoff charts need the registration block in `payoff_registrations.py`.
+
+---
 
 ## Registering a new strategy for payoff charts
 

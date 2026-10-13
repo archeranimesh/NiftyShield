@@ -102,6 +102,7 @@ src/
 │   │                         #   (no cycle_id column). get_last_cycle_realized_pnl(), cycle_stats(), LegGroup, resolve_target(). Shared by scripts/dev/cycle_pnl_report.py + BUG-043.
 │   ├── chain_utils.py        # Shared option-chain lookup helpers used across paper entry/roll scripts
 │   ├── _display.py           # Legacy labels (BASE_LABELS, OVERLAY_LABELS) and hedge_verdict. Kept for backward compat with older snapshot scripts.
+│   ├── margin_capture.py     # capture_entry_margin(): non-fatal broker margin snapshot into paper_margin_snapshots (moved from ic_entry_gates, re-exported there; shared by IC and Nifty calendar).
 │   └── _utils.py             # Paper-local utilities: safe_float(val, default) — converts any value to float without raising.
 ├── strategy/
 │   ├── CLAUDE.md             # Module context: BrokerClient protocol, factory pattern, action dispatch
@@ -131,8 +132,14 @@ src/
 │   │                         #   Zone 1 log-only, Zone 2 wing contraction to ~19Δ, Zone 3 CLOSE_FULL; council ruling 2026-06-27
 │   ├── collar_entry.py       # Shared Collar two-leg strike selection + PaperTrade construction (Collar3b); used by both the 3-track CLI bootstrap and CollarOverlayV1's close+reenter action.
 │   ├── signal_exit.py        # Signals-paper-track exit policy: SL_PCT/TGT_PCT/RULESET_VERSION constants + pure evaluate() (SPT-3/SPT-3b) — the sole SL/target owner for paper_signal_track_v1.
-│   └── signal_track_v1.py    # SignalTrackV1 (SPT-3): turns the signals/ epic's daily consensus DailySignal into a simulated long-option paper position on paper_signal_track_v1
+│   ├── signal_track_v1.py    # SignalTrackV1 (SPT-3): turns the signals/ epic's daily consensus DailySignal into a simulated long-option paper position on paper_signal_track_v1
 │                             #   (paper_trades + paper_signal_entries namespace).
+│   ├── nifty_calendar_v1.py  # NiftyCalendarV1: calendar shell on PaperStrategy (acts on the near-expiry call, reads all legs from the store, fetches the far chain itself).
+│   ├── nifty_calendar_state.py   # Rebuilds structure/cycle view from paper_trades (cycle entry date from the short legs; no new table).
+│   ├── nifty_calendar_factory.py # build_calendar_shell(): one wiring point for the daemon, entry script and snapshot script.
+│   ├── nifty_calendar_notify.py  # Close and ROLL card senders.
+│   ├── nifty_calendar_report.py  # EOD report builder (ROI on final_margin).
+│   └── nifty_calendar_payoff.py  # Payoff adapter (near legs intrinsic, far legs Black-76); registered in payoff_registrations.py.
 ├── signals/                  # Multi-LLM daily directional signal pipeline (shipped 2026-09-09; docs/archive/plan/signals/). Self-contained: own SQLite tables, no src/backtest/ dependency.
 │   ├── __init__.py           # Package marker
 │   ├── models.py             # Frozen Pydantic: Direction/TradeAction enums; input OILevel/OptionChainSummary/FIIData/MarketSnapshot; output SignalResponse/DailySignal/SignalOutcome.
@@ -189,6 +196,17 @@ src/
 │                             #   record_chain(snapshot_date, captured_at, underlying, source, chain) — idempotent on the unique key; read_chain_snapshots(...) → list[FarExpiryRow].
 │                             #   Missing Greeks round-trip as None (SQL NULL), never 0. Pure chain_to_liquidity_rows(chain) / stored_row_to_liquidity_row(row) → LiquidityRow.
 │                             #   Writer: scripts/pipeline/capture_far_expiry_chain.py (Dhan, source="dhan"); reader: scripts/dev/far_expiry_liquidity_report.py.
+├── nifty_calendar/           # Pure leaf core of the Nifty positional calendar (imports only src.models + src.market_calendar). Module context: nifty_calendar/CLAUDE.md
+│   ├── __init__.py           # Package marker
+│   ├── models.py             # Frozen CalendarLeg / CalendarStructure / StructureMetrics.
+│   ├── payoff.py             # payoff_at, compute_metrics (breakevens, risk-reward, net Greeks); far legs repriced with the interim Black-76.
+│   ├── pricing.py            # Interim Black-76 price + IV solve (forward as argument). Deleted by CM-9 once src/pricing ships.
+│   ├── config.py             # CalendarVariantConfig (frozen) and MONTHLY (vega_cap 20, spread_tolerance 3.0, min_wing_points 300, target 3000/lot).
+│   ├── selector.py           # WingStructureSelector: six entry filters + absolute spread gate, inward search; NoEntry with reason; own mid / spread_points.
+│   ├── cycle.py              # MonthlyCyclePolicy, EntryPlan, active_variant (holiday-aware).
+│   ├── expiries.py           # monthly_expiries(listed, today): settled months from the expiry rule, unsettled from the instrument list.
+│   ├── exit_rules.py         # ExitRule protocol + MonthlyExitRule (target, breach with time gate, hard day-10, DTE guard) at executable prices.
+│   └── errors.py             # CalendarError hierarchy.
 ├── intraday/
 │   ├── __init__.py           # Package marker
 │   └── market_store.py       # IntradayMarketStore: broker-agnostic SQLite store for intraday_market_snapshots table.
@@ -224,6 +242,7 @@ src/
 │   ├── entry_message.py      # Shared lean entry-confirmation renderer for paper strategies — IC v1/v2 + CSP + CC + Collar/PP + 3track bootstrap (UEM-1/2, OEM-1..4). Typed dataclass +
 │   │                         #   pure format_* function; every dynamic value escaped via escape_markdown(); fenced table emitted literally.
 │   ├── exit_message.py       # Shared close-confirmation renderer — IC/CSP/CC/PP/Collar + this-exit / cycle / inception P&L + win-rate (UXM-1..7). Mirrors entry_message.py's design.
+│   ├── calendar_messages.py  # Nifty calendar Telegram text: two-expiry entry card, close/ROLL card, combined re-centre formatter (MarkdownV2 per FORMATTING.md).
 │   ├── payoff_chart_theme.py # Frozen `ChartTheme` + `DARK`; `chart_font_family()` returns bundled Roboto, falling back to DejaVu Sans with a logged warning (never raises).
 │   ├── payoff_chart_axes.py  # Pure axis helpers (`x_range`, `sample_xs`, `strike_ticks` with crowding stagger) + drawing helpers (chrome, strike ticks, breakevens, spot line, "Now" marker).
 │   ├── payoff_chart_header.py # `HeaderCell` / `Tone`, pure `build_header_cells`, `pack_header` (one row, two-row fallback) and `draw_header`.
@@ -330,6 +349,10 @@ scripts/
 │   │                            #   cron 45 15 * * 1-5.
 │   │   └── paper_ic_monthly_comparison.py # EOD V1 vs V2 monthly comparison cron; ICMonthlyStats dataclass;
 │   │                                      #   side-by-side Telegram report (entry credit / captured % / deltas / P&L / profit-lock zone / adjustments); cron 45 15 * * 1-5.
+│   ├── nifty_calendar/
+│   │   ├── __init__.py   # Package marker
+│   │   ├── paper_calendar_entry.py    # Nifty calendar (monthly) entry: plan_entry + apply_action, margin capture, entry card. --dry-run default; --no-dry-run to write.
+│   │   └── paper_calendar_snapshot.py # Nifty calendar EOD: nav + per-leg snapshots, audit report, payoff chart. --dry-run default. Cron lines: calendar-monthly/stories.md CM-8 cutover note.
 │   └── cc_calibration/   # NiftyBees lot-sizing probe (retire after 3 cycles)
 │       ├── __init__.py   # Package marker
 │       ├── paper_cc_entry.py

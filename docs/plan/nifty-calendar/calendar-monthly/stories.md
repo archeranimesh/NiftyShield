@@ -352,3 +352,44 @@ reasoning is garbled in the transcript. A classic calendar nets about 30 per uni
 3. EOD return on margin: divide by `final_margin`, as `eod_pt_summary` already does for IC (`src/reporting/eod_pt_summary.py:487`); it also matches the reference trade's ₹75k to ₹86k per lot.
    `required_margin` stays stored, not used for ROI.
 4. Inward search: wings may move inward to `min_wing_points`, monthly default **300**.
+
+### CM-8 cutover note (2026-10-13)
+
+**State at hand-over.** Code through CM-7 is merged on `main`. `scripts/monitor_daemon.py` already registers `NiftyCalendarV1` (`paper_nifty_calendar_monthly`), so the next daemon restart picks it up;
+a flat strategy is never ticked, so registration alone writes nothing. Both scripts default to `--dry-run`; **no cron line exists**. Crontab is not version-controlled, so the lines below are a
+procedure for Animesh, not a repo change.
+
+**Parallel-run-then-flip.**
+
+1. *Dry cycle (no cron, manual).* On each trading day inside the next monthly entry window (the session after the previous monthly expiry; expiries come from the instrument list, e.g. November 2026 is
+   Monday 23rd), run the entry script by hand at or after 10:30 IST in dry mode and read the proposal and the log outcome code (`DRY_RUN`, `NO_ENTRY`, `CHAIN_FAILED`, `NO_EXPIRY`). Run the snapshot
+   script in dry mode once at 15:45 to confirm it ends `NO_TRADES` or `FLAT` without writing. `python -m scripts.strategies.nifty_calendar.paper_calendar_entry` and `python -m
+   scripts.strategies.nifty_calendar.paper_calendar_snapshot` (dry-run is the default).
+2. *Exit criteria for the dry cycle.* At least one full monthly window observed with a sensible proposal (four legs, executable mids, winged `final_margin` near the CM-0 figure of about 90k per lot),
+   no unexpected ERROR lines in `logs/`, and the Telegram alert text for `NO_ENTRY` reasons reads correctly. Outside the window `plan_entry` returns nothing and the script is a silent no-op, so a
+   daily cron is safe once flipped.
+3. *Flip.* Add the two cron lines below (daily Mon-Fri; the scripts call `guard_trading_day` and self-gate on the cycle window), then restart the monitor daemon if it was not restarted after CM-7.
+   Keep the first live cycle under observation: check the entry card, `paper_margin_snapshots`, and the `paper_nav_snapshots` row after the first 15:45 run.
+
+```
+30 10 * * 1-5  cd /Users/abhadra/myWork/myCode/python/NiftyShield && python -m scripts.strategies.nifty_calendar.paper_calendar_entry --no-dry-run >> logs/nifty_calendar_entry.log 2>&1
+45 15 * * 1-5  cd /Users/abhadra/myWork/myCode/python/NiftyShield && python -m scripts.strategies.nifty_calendar.paper_calendar_snapshot --no-dry-run >> logs/nifty_calendar_snapshot.log 2>&1
+```
+
+The entry cron is a no-op while a structure is open (`ALREADY_OPEN`). A re-centre closes in the daemon (close/ROLL card) and re-enters on the next entry-cron run the same day; if that run has already
+passed, re-run the entry script by hand with `--no-dry-run`.
+
+**Known open items, not fixed in CM-8.**
+
+- (a) *Pre-commit mypy scope.* The hook matches `^src/(client|paper)/`; the new `src/paper/margin_capture.py` pulls mypy into six pre-existing errors in `src/payoff/core.py`,
+  `src/notifications/payoff_chart.py`, `payoff_chart_axes.py` and `ic_nifty_v1.py:929/941` (`PhotoSender` vs `TelegramGateway`). CM-7 was committed with `SKIP=mypy`, which was not authorized. Needs
+  its own cleanup task (fix the six errors) or a narrowed hook scope; decide before the next commit touching `src/paper/`.
+- (b) *Re-centre sends two Telegram messages* (shell close/ROLL card, then the entry script's entry card). Recorded in `DECISIONS.md` §"Nifty calendar scripts".
+- (c) *CM-9 is blocked* on `docs/plan/greeks-bs-fallback/tasks.md` GF-2/GF-3; the interim `src/nifty_calendar/pricing.py` stays until then. The story is therefore not archived.
+- (d) *Partial entry* is alerted, not auto-compensated (`INCOMPLETE`); VIX-regime slippage is `None` in the daemon registration (default band).
+
+**`vega_cap` recalibration note.** The monthly default of 20 (signed net vega per unit, net long positive) is uncalibrated: the source's "13" is on a scale that cannot be mapped to Upstox vega (a
+classic same-strike calendar nets about 30 per unit here, live 600/600 is +15.4, 400/400 is +18.5). After the first 3 to 5 paper entries, read `vega_cap`'s effect from the logged
+`nifty_calendar.no_entry` events (`failed_filter == "vega_cap"`) and the net vega of each structure actually entered (leg snapshots). If no entry was rejected on vega and entered vega clusters well
+below 20, tighten towards the observed maximum plus a margin; if vega rejected otherwise acceptable structures, loosen. Change only `MONTHLY.vega_cap` in `src/nifty_calendar/config.py` with a
+`DECISIONS.md` line; bi-weekly sets its own value in `calendar-biweekly`. Do not recalibrate from fewer than three entered cycles.

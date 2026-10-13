@@ -30,9 +30,9 @@ Top-level `src/` packages, one line each (detail → `CONTEXT_TREE.md`):
   (`compute_pnl`, `compute_pnl_by_leg_group`), fill simulator, selectors. `cycle_pnl.py` (`reconstruct_cycles` / `get_last_cycle_realized_pnl` — round-trip cycle boundaries from the `paper_trades`
   ledger; shared with `scripts/dev/cycle_pnl_report.py` and BUG-043).
 - `src/strategy/` — paper-backbone strategy layer. `PaperStrategy` protocol, `SignalEvent`/`ApprovedAction`/`LegSpec`/`LegClose`, `StrategyMonitor` daemon (tick loop, WARN dedup, auto-execute
-  dispatch), `PaperExecutor`, `ReEntryMixin`. 8 strategies: `CSPNiftyV1`, `CCOverlayV1`, `PPOverlayV1`, `CollarOverlayV1`, `IronCondorV1`, `IronCondorV2`, `NiftyTrackComparisonV1`, `SignalTrackV1`
-  (`paper_signal_track_v1` — the `signals-paper-track/` execution layer, 30 s cadence, entry/exit via `open_signal_paper_entry` + `signal_exit.evaluate`). Engines: `ExitSignalEngine`,
-  `ProfitLockEngine`, `OverlayCloser`, `ic_close_executor`, `roll_utils`.
+  dispatch), `PaperExecutor`, `ReEntryMixin`. 9 strategies: `CSPNiftyV1`, `CCOverlayV1`, `PPOverlayV1`, `CollarOverlayV1`, `IronCondorV1`, `IronCondorV2`, `NiftyTrackComparisonV1`, `SignalTrackV1`,
+  `NiftyCalendarV1` (`paper_signal_track_v1` — the `signals-paper-track/` execution layer, 30 s cadence, entry/exit via `open_signal_paper_entry` + `signal_exit.evaluate`). Engines:
+  `ExitSignalEngine`, `ProfitLockEngine`, `OverlayCloser`, `ic_close_executor`, `roll_utils`.
 - `src/signals/` — multi-LLM daily directional signal pipeline (shipped 2026-09-09; `docs/archive/plan/signals/`). Frozen Pydantic models
   (`MarketSnapshot`/`SignalResponse`/`DailySignal`/`SignalOutcome`, `Direction`/`TradeAction`), `SignalProvider` protocol, pure `build_prompt`, pure `SignalAggregator` consensus, `option_resolver.py`,
   `market_inputs.py` (gift_nifty / usd_inr / fii fetchers), `snapshot.py` `assemble_market_snapshot`, `SignalStore` (own SQLite tables
@@ -54,10 +54,14 @@ Top-level `src/` packages, one line each (detail → `CONTEXT_TREE.md`):
 - `src/far_expiry/` — daily Dhan far-expiry chain capture store: `FarExpiryStore(db_path)` (`far_expiry_chain_snapshots` in `portfolio.sqlite`, `Decimal` as `TEXT`, missing Greeks stored as `NULL`),
   `FarExpiryRow`/`LiquidityRow`, pure `chain_to_liquidity_rows` / `stored_row_to_liquidity_row`. Written by `scripts/pipeline/capture_far_expiry_chain.py`, read by
   `scripts/dev/far_expiry_liquidity_report.py` (`dhan-far-expiry-chain/far-expiry-capture/`).
-- `src/nifty_calendar/` — pure core of the Nifty positional calendar (near ATM short straddle + far OTM long wings; `nifty-calendar/calendar-monthly/` CM-1..4): frozen
-  `CalendarLeg`/`CalendarStructure`/ `StructureMetrics`, interim Black-76 `pricing.py`, `payoff_at`/`compute_metrics` (required `far_carry`, `lot_size`), `CalendarVariantConfig`/`MONTHLY`,
-  `MonthlyCyclePolicy`/`active_variant`, `WingStructureSelector` (full 300..900 wing grid, `NoEntry`), `MonthlyExitRule`. Leaf package: imports only `src.models` and `src.market_calendar`.
-  Shell/scripts are CM-5..7.
+- `src/nifty_calendar/` — Nifty positional calendar (near ATM short straddle + far OTM long wings; paper only; `nifty-calendar/calendar-monthly/` through CM-7, close-out CM-8). Pure leaf core (imports
+  only `src.models` and `src.market_calendar`): frozen `CalendarLeg`/`CalendarStructure`/`StructureMetrics`, interim Black-76 `pricing.py` (CM-9 swaps it for `src/pricing`),
+  `payoff_at`/`compute_metrics`, `CalendarVariantConfig`/`MONTHLY`, `MonthlyCyclePolicy`/`active_variant`, `monthly_expiries`, `WingStructureSelector` (`NoEntry`), `MonthlyExitRule`. Shell
+  `src/strategy/nifty_calendar_v1.py` (`NiftyCalendarV1`, strategy `paper_nifty_calendar_monthly`; helpers `nifty_calendar_state/_factory/_notify/_report/_payoff`), Telegram cards in
+  `src/notifications/calendar_messages.py` (two-expiry `EntryMessage`, close/re-centre), payoff via an optional `curve` arg on the renderer, `src/paper/margin_capture.py` (`capture_entry_margin`,
+  moved out of the IC gates, re-exported there), scripts `scripts/strategies/nifty_calendar/paper_calendar_entry.py` + `paper_calendar_snapshot.py` (dry-run by default), registered in
+  `monitor_daemon.py` and the EOD summaries. Entry is script-driven; a re-centre sends two Telegram messages. **Not live:** no cron lines yet — parallel-run-then-flip procedure in
+  `docs/plan/nifty-calendar/calendar-monthly/stories.md` §"CM-8 cutover note". CM-9 blocked on `greeks-bs-fallback` GF-2/GF-3. Details: `src/nifty_calendar/CLAUDE.md`.
 - `src/market_calendar/` — NSE holiday detection from version-controlled YAML: `is_trading_day`, `prev_trading_day` (fail-open).
 - `src/notifications/` — `NotifierProtocol`, `TelegramNotifier` (non-fatal, `parse_mode=MarkdownV2` — HTML `<pre>` migration complete + archived 2026-09-06, `telegram-markdown-migration/` epic; every
   caller escapes via `markdown.py`), `TelegramGateway` (council-free approval dispatch + callback polling + chat-ID allowlist), payoff chart PNGs (`payoff_chart*.py`: dark Roboto theme, axes and

@@ -1335,6 +1335,27 @@ in DSN-4); backstop thresholds; Kite stays deferred pending confirmation.
 
 ---
 
+## Nifty calendar monthly: entry filters, margin basis, close-out (CM-0, CM-8, 2026-10-13)
+
+`nifty-calendar/calendar-monthly/`. CM-0 decisions by Animesh, 2026-10-13; findings in `stories.md` §"CM-0 findings".
+
+- **Spread gate:** 3.0 points per leg (`spread_tolerance`), absolute, no summed or basis-point gate. The 2-point gate first planned rejected most far call strikes on the live chain.
+- **`vega_cap` is signed net vega per unit (net long positive), monthly default 20, uncalibrated.** It admits 600/600 (+15.4) and 400/400 (+18.5) on the Upstox scale; the source's "13" is on an
+  unmappable scale. Recalibrate from paper-run data after at least three entered cycles (procedure in the `stories.md` §"CM-8 cutover note"). Bi-weekly sets its own value.
+- **Inward wing search** down to `min_wing_points` (monthly 300), so 400/400 is reachable.
+- **EOD return on margin divides by `final_margin`** (as `eod_pt_summary` does for IC); `required_margin` is stored, not used for ROI. Winged margin is about 89 to 91k per lot against 142k for the
+  bare straddle, because the calculator recognises the cross-expiry hedge.
+- **No schema change.** Cycle state is derived from `paper_trades`; the cycle entry date is taken from the short legs because `PaperPosition.entry_date` is `None` for a BUY-only leg.
+- **Shell acts on the near-expiry `check_signals` call only** (the monitor calls once per expiry group), reading all legs from the store and fetching the far chain through the broker; `monitor.py` and
+  IC are untouched.
+- **Cutover is parallel-run-then-flip, no cron lines in the repo.** Daemon registration is in code; scripts default to `--dry-run`; the cron lines are listed in the cutover note.
+- **Open (not fixed in CM-8):** (a) the pre-commit mypy hook (`^src/(client|paper)/`) now reaches six pre-existing errors through `src/paper/margin_capture.py` (`src/payoff/core.py`,
+  `src/notifications/payoff_chart.py`, `payoff_chart_axes.py`, `ic_nifty_v1.py:929/941` `PhotoSender` vs `TelegramGateway`); CM-7 was committed with `SKIP=mypy` without authorization, so this needs
+  its own cleanup task or a narrowed hook scope; (b) a re-centre is two Telegram messages (see the CM-7 section above); (c) CM-9 (swap the interim Black-76 for `src/pricing`) is blocked on
+  `greeks-bs-fallback` GF-2/GF-3, so the story stays open.
+
+---
+
 ## Deferred / Not Yet Built
 
 - `src/strategy/`, `src/execution/`, `src/backtest/`, `src/risk/` (except 0.6c), `src/streaming/` — all empty
