@@ -124,8 +124,8 @@ rot them. (Items 3, 5 and 8 closed — numbers kept stable because item text cro
     pre-proposal check, then a conformance baseline. Requested by Animesh 2026-10-08. Parked: payoff-chart inline-caption change until DG-5 lands.
 27. **Logging consistency (epic)** — `docs/plan/logging-consistency/` — next **LF-1** (audit; needs a redacted `crontab -l` from Animesh). `logging-foundation/` → `logging-migration/` →
     `logging-enforcement/`. New `job_runs` heartbeat table. Soft order after item 26's `design-gate/`. Requested by Animesh 2026-10-08.
-28. **Nifty positional calendar (epic)** — `docs/plan/nifty-calendar/` — next **CM-0** (audit + live-infra probe). `calendar-monthly/` (shared pure core, shell, IC-equivalent infra, monthly variant) →
-    `calendar-biweekly/`. Paper only; net-long-vega diversifier to the short-vol book. Requested by Animesh 2026-10-12.
+28. **Nifty positional calendar (epic)** — `docs/plan/nifty-calendar/` — next **CM-5** (CM-0..4 done: audit and pure core). `calendar-monthly/` (shared pure core, shell, IC-equivalent infra, monthly
+    variant) → `calendar-biweekly/`. Paper only; net-long-vega diversifier to the short-vol book. Requested by Animesh 2026-10-12.
 29. **Telegram caption-fit audit** — `docs/plan/telegram-caption-audit/` — next **TCA-1** (inventory; TCA-1..3). Read-only: measure which Telegram messages fit a single photo-with-caption message
     (1024-char cap). No implementation until reviewed. Requested by Animesh 2026-10-13.
 
@@ -1290,4 +1290,7 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
 - [2026-10-13] strategy-payoff-charts chart-polish CP-10 accepted (Animesh) and CP-11 docs close done: story complete; archives with the epic (MO-9). Next in the epic: `chart-model-overlay/` MO-1,
   still blocked on GF-2 + GF-3.
 - [2026-10-13] nifty-calendar CM-0 audit done (e74f1ee): the monitor calls `check_signals` per expiry group, so the shell fetches the far chain itself; winged margin ₹89-91k per lot; the 2-point
-  spread gate rejects most far CE strikes; Nov monthly expiry is Mon 11-23. Four decisions open for Animesh in `calendar-monthly/stories.md` §CM-0 findings. Next: CM-1.
+  spread gate rejects most far CE strikes; Nov monthly expiry is Mon 11-23. Decisions settled 2026-10-13 (`416e43a`). Next: CM-1.
+- [2026-10-13] nifty-calendar CM-1..CM-4 done via /teamwork-preview (401edd7, 69cdff7, 64a07aa, b3e548a) plus review-fix commits 07f4bb6, ed6acf2: pure core in `src/nifty_calendar/` (models, Black-76
+  payoff, config/cycle, wing selector, exit rule). code-reviewer and greeks-analyst clean on re-review. Deferred: 80-char G2 lines (ruff limit 100), net-credit violation scale. Next: CM-5
+  (`NiftyCalendarV1` shell).

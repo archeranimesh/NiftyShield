@@ -54,6 +54,10 @@ Top-level `src/` packages, one line each (detail → `CONTEXT_TREE.md`):
 - `src/far_expiry/` — daily Dhan far-expiry chain capture store: `FarExpiryStore(db_path)` (`far_expiry_chain_snapshots` in `portfolio.sqlite`, `Decimal` as `TEXT`, missing Greeks stored as `NULL`),
   `FarExpiryRow`/`LiquidityRow`, pure `chain_to_liquidity_rows` / `stored_row_to_liquidity_row`. Written by `scripts/pipeline/capture_far_expiry_chain.py`, read by
   `scripts/dev/far_expiry_liquidity_report.py` (`dhan-far-expiry-chain/far-expiry-capture/`).
+- `src/nifty_calendar/` — pure core of the Nifty positional calendar (near ATM short straddle + far OTM long wings; `nifty-calendar/calendar-monthly/` CM-1..4): frozen
+  `CalendarLeg`/`CalendarStructure`/ `StructureMetrics`, interim Black-76 `pricing.py`, `payoff_at`/`compute_metrics` (required `far_carry`, `lot_size`), `CalendarVariantConfig`/`MONTHLY`,
+  `MonthlyCyclePolicy`/`active_variant`, `WingStructureSelector` (full 300..900 wing grid, `NoEntry`), `MonthlyExitRule`. Leaf package: imports only `src.models` and `src.market_calendar`.
+  Shell/scripts are CM-5..7.
 - `src/market_calendar/` — NSE holiday detection from version-controlled YAML: `is_trading_day`, `prev_trading_day` (fail-open).
 - `src/notifications/` — `NotifierProtocol`, `TelegramNotifier` (non-fatal, `parse_mode=MarkdownV2` — HTML `<pre>` migration complete + archived 2026-09-06, `telegram-markdown-migration/` epic; every
   caller escapes via `markdown.py`), `TelegramGateway` (council-free approval dispatch + callback polling + chat-ID allowlist), payoff chart PNGs (`payoff_chart*.py`: dark Roboto theme, axes and
