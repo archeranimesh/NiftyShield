@@ -29,7 +29,7 @@ Decided with Animesh on 2026-10-12:
 - **Fills follow IC:** `PaperFillSimulator` (mid plus VIX-regime slippage) with a spread gate. The gate here is an absolute points-per-leg tolerance (video: 1-2 points), not IC's 5% of mid, because
   far wings are cheap.
 - **Assumptions recorded, not trusted** (all config, all labelled): breach confirmation = 30-minute close beyond a breakeven; breakevens recomputed live from current IV, not frozen at entry; 1 lot;
-  wing start points 600/500 monthly and 400/300 bi-weekly.
+  wing start points 600 monthly and 400 bi-weekly, symmetric put and call (Animesh 2026-10-13, from the reference trades; update if a new reference differs).
 - **Out of scope:** an offline backtest of the mechanical cycle (the findings recommend one and `src/backtest` has F&O bhavcopy ingest; candidate follow-up epic); live execution; sizing; any edit to
   `ic_nifty_v1/v2.py`.
 

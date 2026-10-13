@@ -19,7 +19,7 @@ Spec source: `TradeResearch/findings/14ZZYoV4DBc_combined.md`. Reuses everything
 
 **What to implement:**
 
-1. `BIWEEKLY` config: target ₹1,600 per lot, hard hold 7 days, exit-by DTE 7, wing start 400 put / 300 call, vega cap about 5, breach adjust window 3-4 days, lots 1, strategy_name
+1. `BIWEEKLY` config: target ₹1,600 per lot, hard hold 7 days, exit-by DTE 7, wing start 400 put / 400 call, vega cap about 5, breach adjust window 3-4 days, lots 1, strategy_name
    `paper_nifty_calendar_biweekly`.
 2. `BiweeklyCyclePolicy.entry_window`: on the monthly exit day (or the previous bi-weekly's exit day) near = the weekly expiry after next (about 14 DTE), far = one week beyond it. Skip the current
    weekly. A same-pair redeploy plan (CB-2 asks for it) reuses the original pair and the original hard exit date.
@@ -94,8 +94,8 @@ note.
 
 **What to implement:**
 
-1. Fixture-driven walk across a month starting the Tuesday after a monthly expiry: monthly entry, monthly exit (target or day 7-10), bi-weekly entry, successive bi-weeklies, last bi-weekly exit before
-   the next monthly window, monthly entry again. Uses `MockBrokerClient`, an in-memory `PaperStore`, no network.
+1. Fixture-driven walk across a month starting the first session after a monthly expiry (the Wednesday, 10:30 IST): monthly entry, monthly exit (target or day 7-10), bi-weekly entry, successive
+   bi-weeklies, last bi-weekly exit before the next monthly window, monthly entry again. Uses `MockBrokerClient`, an in-memory `PaperStore`, no network.
 2. Asserts per date: exactly one variant active, no overlapping open positions across the two strategy names, no entry on a holiday, every close has a recorded exit event, cycle P&L groups four legs
    into one round trip per strategy.
 3. Update the cutover note: both cron entries, the order they run in, how to confirm the handoff in the first live paper week.

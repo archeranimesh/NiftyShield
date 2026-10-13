@@ -92,3 +92,17 @@ prices are not in this view. LTP is not the fill price, so treat anything derive
 - **Implied entry credit (rough).** Close cost at LTP is 325.50 + 248.15 - 222.25 - 313.55 = 37.85 points net debit. With realised P&L +5,421 on 2 lots at an assumed lot size of 65 (to be checked in
   `REFERENCES.md`), that is about 41.7 points a unit, so the net credit at entry was about 79 points a unit (about ₹5.2k a lot). Use only as a plausibility check for the CM-2 filters until the real
   entry prices arrive.
+
+## Decisions (Animesh, 2026-10-13)
+
+- **Monthly entry:** the first session after the previous monthly expiry, at 10:30 IST. The 29 Sep 2026 expiry was a Tuesday, so entry was Wednesday 30 Sep. This replaces the plan's "Tuesday following
+  the previous monthly expiry" and supersedes the entry-timing question above.
+- **Wing start points:** 400 points bi-weekly, 600 points monthly, symmetric put and call. The earlier 600/500 and 400/300 asymmetric defaults are dropped. The monthly reference trade itself used
+  400/400; if a new reference shows a different width, update the config. CM-0 still checks whether the selector filters admit 400/400.
+- **Breach and adjustment:** the plan's breach rule stands. The 9 Oct biweekly position stayed inside its upper breakeven (+0.4%), so no adjustment fired; that is the rule working, not a gap.
+- **Event-risk exit:** manual discretion, may be used occasionally. Not automated, so no event-calendar exit in `ExitDecision` and no event-date source.
+- **Lot size:** 65.
+- **Biweekly strikes:** wings are 400 points from the straddle.
+
+Still open: exact entry fills and IV for both reference trades (only needed for exact fixtures), and the CM-0 code and live-probe questions (payoff model, margin per lot, mixed-expiry messages and
+adapter, Greeks and spreads on the far wings, holiday-shifted expiry dates).

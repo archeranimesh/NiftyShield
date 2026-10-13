@@ -37,7 +37,8 @@ Spec source: `TradeResearch/findings/14ZZYoV4DBc_combined.md` (part 2 wins on co
     decisions for Animesh, not as rules.
 
 11. Completed monthly trade in `docs/plan/nifty-calendar/reference/README.md` (strikes 22600 straddle, 22200 PE / 23000 CE wings, exit before the RBI decision at 90% of target): does the selector
-    admit 400/400 wings, does the entry-timing phrase match the real entry date, and is an event-calendar exit needed in `ExitDecision`? Record as decisions for Animesh.
+    admit the reference 400/400 wings even though the monthly default is now 600? Entry timing, wing defaults, breach rule and lot size are decided (see the reference README §Decisions); an event-risk
+    exit is manual, not automated.
 
 **Tests:** none (research task). **Done:** each answer written with evidence; unresolved items listed as explicit decisions for Animesh.
 
@@ -104,13 +105,13 @@ story) via `search_graph("black scholes")` — do not write a second one.
 **What to implement:**
 
 1. `StructureSelector` as a `Protocol` with `select(chain_near, chain_far, spot, config) -> SelectionResult`. `SelectionResult` is either a structure or a `NoEntry(reason)`. Both are frozen.
-2. Default implementation: short straddle at the ATM strike (50 multiples allowed); wing strikes searched in multiples of 100 starting at the config's start points (monthly 600 put / 500 call).
+2. Default implementation: short straddle at the ATM strike (50 multiples allowed); wing strikes searched in multiples of 100 starting at the config's start points (monthly 600 put / 600 call).
    Hill-climb one 100-point step at a time on either wing until all filters hold or a step budget is exhausted.
 3. Filters, all config-driven: |net delta| at most a delta cap; net vega at most the variant cap (monthly 13); risk-reward at least 0.75; breakeven % distances within a symmetry tolerance; loss at
    breakevens within a tolerance; net credit required. Absolute bid/ask spread tolerance per leg (default 2 points) and a "Greeks present on all four legs" check.
 4. Return the *reason* for no entry (which filter failed on the best candidate), logged by the caller, so a skipped cycle is explainable.
 
-**Tests:** `test_selects_video_structure` (fixture chain yields wings near 600/500 satisfying all filters) · `test_no_entry_when_vega_cap_unreachable` · `test_wing_strikes_multiples_of_100` ·
+**Tests:** `test_selects_video_structure` (fixture chain yields wings near 600/600 satisfying all filters) · `test_no_entry_when_vega_cap_unreachable` · `test_wing_strikes_multiples_of_100` ·
 `test_wide_spread_leg_rejected` · `test_missing_greeks_is_no_entry_not_exception`.
 
 **Commit:** `feat(nifty-calendar): add wing structure selector`
@@ -130,8 +131,8 @@ story) via `search_graph("black scholes")` — do not write a second one.
 1. `CalendarVariantConfig` (frozen): name, strategy_name, target per lot, planned hold days, hard hold days, exit-by DTE (7), wing start points, vega cap, delta cap, risk-reward floor, symmetry
    tolerances, spread tolerance, breach confirmation minutes (30), breach adjust window days, lots. `MONTHLY` instance here; `BIWEEKLY` is added by `calendar-biweekly`.
 2. `CyclePolicy` `Protocol`: `entry_window(today) -> EntryPlan | None` (near and far expiry, planned exit date, hard exit date) and `next_variant_after_exit(today)`.
-3. `MonthlyCyclePolicy`: entry on the first trading day on or after the Tuesday following the previous monthly expiry; near = next monthly expiry, far = the month after; planned exit = entry + 7 days
-   (trading-day adjusted), hard exit = entry + 10 days; never later than DTE 7 of the near leg.
+3. `MonthlyCyclePolicy`: entry on the first trading day after the previous monthly expiry (the Wednesday), at 10:30 IST (Animesh 2026-10-13; the 30 Sep 2026 reference trade followed the 29 Sep
+   expiry); near = next monthly expiry, far = the month after; planned exit = entry + 7 days (trading-day adjusted), hard exit = entry + 10 days; never later than DTE 7 of the near leg.
 4. `CycleCalendar`: pure function `active_variant(date, policies) -> variant name | None`, so a handoff between the two strategies is decided in one place and both stay independent. It receives
    policies by injection and holds no variant constants.
 

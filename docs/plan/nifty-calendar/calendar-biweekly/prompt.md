@@ -10,8 +10,8 @@ task id) before writing any code. One task per session. Complete it fully. Stop.
 
 The epic `README.md` carries the motivation. The bi-weekly is the second leg of the presenter's cycle: after the monthly exits (day 7 to 10), he deploys back-to-back bi-weeklies until the next monthly
 expiry, then restarts the monthly. Entry is at about 14 DTE by skipping the current weekly: sell the expiry after next, buy wings one week beyond. Target ₹1,600/lot, max hold 7 days, exit before the
-short leg is a weekly (DTE 7 or less), wings about 400 put / 300 call, net vega at most about 5. Bi-weekly-only rules: a breach is acted on only by about day 3-4; on day 4-5 with no target and no
-breach, spot 200 points or more from the entry short strike means close and redeploy at spot; an early target hit redeploys the same expiry pair at shorter DTE with the same max-hold date.
+short leg is a weekly (DTE 7 or less), wings 400 put / 400 call, net vega at most about 5. Bi-weekly-only rules: a breach is acted on only by about day 3-4; on day 4-5 with no target and no breach,
+spot 200 points or more from the entry short strike means close and redeploy at spot; an early target hit redeploys the same expiry pair at shorter DTE with the same max-hold date.
 
 ## Scope guard
 
