@@ -110,9 +110,11 @@ once GF-2/GF-3 ship. Port it from `scratch/chart_poc/2026-10-13_calendar_payoff_
 
 1. `StructureSelector` as a `Protocol` with `select(chain_near, chain_far, spot, config) -> SelectionResult`. `SelectionResult` is either a structure or a `NoEntry(reason)`. Both are frozen.
 2. Default implementation: short straddle at the ATM strike (50 multiples allowed); wing strikes searched in multiples of 100 starting at the config's start points (monthly 600 put / 600 call).
-   Hill-climb one 100-point step at a time on either wing until all filters hold or a step budget is exhausted.
-3. Filters, all config-driven: |net delta| at most a delta cap; net vega at most the variant cap (monthly 13); risk-reward at least 0.75; breakeven % distances within a symmetry tolerance; loss at
-   breakevens within a tolerance; net credit required. Absolute bid/ask spread tolerance per leg (default 2 points) and a "Greeks present on all four legs" check.
+   Hill-climb one 100-point step at a time on either wing, outward or inward down to the config's `min_wing_points` (monthly 300; so 400/400 is reachable), until all filters hold or a step budget is
+   exhausted.
+3. Filters, all config-driven: |net delta| at most a delta cap; signed net vega per unit at most the variant cap (monthly 20; net long vega is positive, see CM-0 decisions); risk-reward at least 0.75;
+   breakeven % distances within a symmetry tolerance; loss at breakevens within a tolerance; net credit required. Absolute bid/ask spread tolerance per leg (monthly default 3.0 points) and a "Greeks
+   present on all four legs" check.
 4. Return the *reason* for no entry (which filter failed on the best candidate), logged by the caller, so a skipped cycle is explainable.
 
 **Tests:** `test_selects_video_structure` (fixture chain yields wings near 600/600 satisfying all filters) · `test_no_entry_when_vega_cap_unreachable` · `test_wing_strikes_multiples_of_100` ·
@@ -132,8 +134,8 @@ once GF-2/GF-3 ship. Port it from `scratch/chart_poc/2026-10-13_calendar_payoff_
 
 **What to implement:**
 
-1. `CalendarVariantConfig` (frozen): name, strategy_name, target per lot, planned hold days, hard hold days, exit-by DTE (7), wing start points, vega cap, delta cap, risk-reward floor, symmetry
-   tolerances, spread tolerance, breach confirmation minutes (30), breach adjust window days, lots. `MONTHLY` instance here; `BIWEEKLY` is added by `calendar-biweekly`.
+1. `CalendarVariantConfig` (frozen): name, strategy_name, target per lot, planned hold days, hard hold days, exit-by DTE (7), wing start points, minimum wing points, vega cap (per unit), delta cap,
+   risk-reward floor, symmetry tolerances, spread tolerance, breach confirmation minutes (30), breach adjust window days, lots. `MONTHLY` instance here; `BIWEEKLY` is added by `calendar-biweekly`.
 2. `CyclePolicy` `Protocol`: `entry_window(today) -> EntryPlan | None` (near and far expiry, planned exit date, hard exit date) and `next_variant_after_exit(today)`.
 3. `MonthlyCyclePolicy`: entry on the first trading day after the previous monthly expiry (the Wednesday), at 10:30 IST (Animesh 2026-10-13; the 30 Sep 2026 reference trade followed the 29 Sep
    expiry); near = next monthly expiry, far = the month after; planned exit = entry + 7 days (trading-day adjusted), hard exit = entry + 10 days; never later than DTE 7 of the near leg.
@@ -338,14 +340,15 @@ near expiry, reads **all** its positions from the injected `PaperStore`, and fet
 an opt-in whole-position dispatch in the monitor, edits shared infra on the IC tick path and is not recommended.
 
 **Other findings.** The November monthly expiry is **Monday 2026-11-23**, not Tuesday the 24th (holiday shift; `/v2/option/contract` lists 2026-10-27, 11-03, 11-09, 11-23, 12-29), so `CycleCalendar`
-must take expiries from the instrument list or holiday-aware rules, never "last Tuesday". The unit and sign of the "vega cap 13" are undefined in CM-1 and CM-2. The research findings file named in the
-`prompt.md` was not found at the path given, so the 13 could not be traced.
+must take expiries from the instrument list or holiday-aware rules, never "last Tuesday". The research file is at `/Users/abhadra/myWork/myCode/AI/TradeResearch/findings/14ZZYoV4DBc_combined.md`
+(outside this repo; the `prompt.md` path is relative to a sibling repo). It states "net vega: monthly ≤ ~13, bi-weekly ≤ ~5 (classic same-strike calendar ≈ 90)" with no unit, and the part-2 vega
+reasoning is garbled in the transcript. A classic calendar nets about 30 per unit on the Upstox chain, so the presenter's scale cannot be mapped onto ours.
 
-**Decisions for Animesh (unresolved).**
+**Decisions (Animesh, 2026-10-13, accepted as recommended).**
 
-1. Spread gate: 2 points per leg rejects most far CE strikes today (spreads 2.3 to 3.25), so the selector would return `NoEntry` or force awkward strikes. Options: raise to 3 points, or gate on the
-   sum of the four spreads, or gate in basis points of mid.
-2. Vega cap 13: per unit or per lot, and is it a magnitude cap on net long vega? At 65 units, +15.4 per unit is about ₹1,000 per vol point per lot. If 13 is per unit, today's default structure fails
-   it; state the unit and sign, or supply the source.
-3. EOD return on margin: divide by `final_margin` (about ₹90k per lot) or `required_margin` (about ₹240k per lot). IC stores both.
-4. CM-2 inward search: allow wings to move inward from 600 to a configured floor (suggest 300)?
+1. Spread gate: 3.0 points per leg, a config value (`spread_tolerance`). No summed or basis-point gate.
+2. Vega cap: an upper bound on **signed net vega per unit** (net long positive), config field `vega_cap`, monthly default **20**, which admits both 600/600 (+15.4) and 400/400 (+18.5). The 20 is
+   uncalibrated (the source's 13 is on an unmappable scale); recalibrate from paper-run data in CM-8. Bi-weekly sets its own value in `calendar-biweekly`.
+3. EOD return on margin: divide by `final_margin`, as `eod_pt_summary` already does for IC (`src/reporting/eod_pt_summary.py:487`); it also matches the reference trade's ₹75k to ₹86k per lot.
+   `required_margin` stays stored, not used for ROI.
+4. Inward search: wings may move inward to `min_wing_points`, monthly default **300**.

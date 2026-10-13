@@ -8,10 +8,10 @@ task id) before writing any code. One task per session. Complete it fully. Stop.
 
 ## Why this story exists
 
-The epic `README.md` carries the motivation and scope decisions; read it first. In short: the research spec (`TradeResearch/findings/14ZZYoV4DBc_combined.md`) defines a net-long-vega, near
-delta-neutral Nifty structure with explicit entry filters, DTE-based exits and a single re-centre rule. NiftyShield has no long-vega positional track. This story builds everything both variants need,
-then the monthly variant: first session after the previous monthly expiry (the Wednesday, entry at 10:30 IST), sell next month's ATM straddle, buy far-month OTM wings from the month after, ₹3,000/lot
-target, planned hold 7 days, hard close day 10.
+The epic `README.md` carries the motivation and scope decisions; read it first. In short: the research spec (`~/myWork/myCode/AI/TradeResearch/findings/14ZZYoV4DBc_combined.md` (sibling repo)) defines
+a net-long-vega, near delta-neutral Nifty structure with explicit entry filters, DTE-based exits and a single re-centre rule. NiftyShield has no long-vega positional track. This story builds
+everything both variants need, then the monthly variant: first session after the previous monthly expiry (the Wednesday, entry at 10:30 IST), sell next month's ATM straddle, buy far-month OTM wings
+from the month after, ₹3,000/lot target, planned hold 7 days, hard close day 10.
 
 ## Scope guard
 
