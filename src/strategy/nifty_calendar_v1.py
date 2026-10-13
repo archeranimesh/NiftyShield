@@ -71,6 +71,8 @@ _EXIT_SIGNAL: dict[ExitDecision, ExitSignal] = {
     ExitDecision.DTE_GUARD: ExitSignal.DTE_FORCED,
     ExitDecision.CLOSE_BREACH_LATE: ExitSignal.LOSS_STOP,
     ExitDecision.RECENTRE: ExitSignal.LOSS_STOP,
+    ExitDecision.REDEPLOY_SAME_PAIR: ExitSignal.PROFIT_TARGET,
+    ExitDecision.RECENTRE_OFF_CENTRE: ExitSignal.LOSS_STOP,
 }
 
 
@@ -174,7 +176,14 @@ class NiftyCalendarV1(ReEntryMixin):
             entry_date,
             lambda d: self._policy.entry_window(d) is not None,
         )
-        return None if origin is None else self._policy.entry_window(origin)
+        if origin is None:
+            return None
+        orig_plan = self._policy.entry_window(origin)
+        if orig_plan is None:
+            return None
+        if hasattr(self._policy, "redeploy_plan"):
+            return self._policy.redeploy_plan(orig_plan, entry_date)
+        return orig_plan
 
     async def plan_entry(self, market: OptionChain, now: datetime) -> list[SignalEvent]:
         """Entry events for a flat strategy; also called directly by the entry script.
@@ -384,7 +393,11 @@ class NiftyCalendarV1(ReEntryMixin):
             return
         self._write_exit_event(short, decision, meta)
         near = date.fromisoformat(meta["near_expiry"])
-        recentre = decision == ExitDecision.RECENTRE.value
+        recentre = decision in (
+            ExitDecision.RECENTRE.value,
+            ExitDecision.RECENTRE_OFF_CENTRE.value,
+            ExitDecision.REDEPLOY_SAME_PAIR.value,
+        )
         held = (today - short.entry_date).days if short.entry_date else 0
         await send_close_message(
             self._notifier, self._store, self._lookup, strategy_name=self.strategy_name,

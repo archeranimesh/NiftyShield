@@ -89,8 +89,14 @@ def cycle_entry_date(legs: dict[str, OpenLeg]) -> date:
 
 
 def is_recentre_close(trade: PaperTrade) -> bool:
-    """True for a closing leg written by a RECENTRE decision (``_close_structure`` notes prefix)."""
-    return (trade.notes or "").startswith(ExitDecision.RECENTRE.value)
+    """True for a closing leg written by a re-centre or redeploy decision (``_close_structure`` notes prefix)."""
+    return (trade.notes or "").startswith(
+        (
+            ExitDecision.RECENTRE.value,
+            ExitDecision.RECENTRE_OFF_CENTRE.value,
+            ExitDecision.REDEPLOY_SAME_PAIR.value,
+        )
+    )
 
 
 def cycle_origin_date(
@@ -111,12 +117,19 @@ def cycle_origin_date(
     Returns:
         The original entry date, or None when no ancestor date is an entry window.
     """
+    recentre_dates = {t.trade_date for t in trades if is_recentre_close(t)}
     sells = {
         t.trade_date
         for t in trades
         if t.leg_role == SHORT_CALL and t.action == TradeAction.SELL and t.trade_date <= entry_date
     }
-    return next((d for d in sorted(sells | {entry_date}, reverse=True) if has_window(d)), None)
+    candidate_dates = (
+        sells if (entry_date in recentre_dates or not sells) else (sells | {entry_date})
+    )
+    for d in sorted(candidate_dates, reverse=True):
+        if d not in recentre_dates and has_window(d):
+            return d
+    return None
 
 
 def leg_quotes(legs: dict[str, OpenLeg], chains: dict[date, OptionChain]) -> dict[str, OptionLeg]:

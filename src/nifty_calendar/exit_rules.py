@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 
 import structlog
 
-from src.nifty_calendar.config import MONTHLY, CalendarVariantConfig
+from src.nifty_calendar.config import BIWEEKLY, MONTHLY, CalendarVariantConfig
 from src.nifty_calendar.cycle import EntryPlan
 
 logger = structlog.stdlib.get_logger(__name__)
@@ -28,6 +28,8 @@ class ExitDecision(str, Enum):
     CLOSE_BREACH_LATE = "CLOSE_BREACH_LATE"
     TIME_EXIT = "TIME_EXIT"
     DTE_GUARD = "DTE_GUARD"
+    REDEPLOY_SAME_PAIR = "REDEPLOY_SAME_PAIR"
+    RECENTRE_OFF_CENTRE = "RECENTRE_OFF_CENTRE"
 
 
 @dataclass(frozen=True)
@@ -204,4 +206,129 @@ class MonthlyExitRule:
                     return ExitDecision.CLOSE_BREACH_LATE
 
         # 5. HOLD
+        return ExitDecision.HOLD
+
+
+class BiweeklyExitRule:
+    """Exit rule implementation for the bi-weekly calendar variant.
+
+    Enforces strict priority order:
+    1. DTE guard (exit if near leg DTE <= exit_by_dte)
+    2. Time exit (exit if past hard exit date/time)
+    3. Target profit (executable_pnl >= target_pnl; redeploy if DTE > exit_by_dte, else close)
+    4. Confirmed breakeven breach:
+       - Days held < breach_adjust_window_days_start: HOLD (pending Animesh confirmation)
+       - Days held in [breach_adjust_window_days_start, breach_adjust_window_days]: RECENTRE
+       - Days held > breach_adjust_window_days: CLOSE_BREACH_LATE
+    5. Off-centre spot drift on hold days [off_centre_window_days_start, off_centre_window_days_end]:
+       - abs(spot - entry_short_strike) >= recentre_spot_threshold_points: RECENTRE_OFF_CENTRE
+    6. Hold
+    """
+
+    def __init__(self, config: CalendarVariantConfig = BIWEEKLY) -> None:
+        """Initialize BiweeklyExitRule with variant configuration.
+
+        Args:
+            config: Calendar variant configuration (defaults to BIWEEKLY).
+        """
+        self.config = config
+
+    def evaluate(
+        self,
+        state: CycleExitState,
+        snapshot: ExitSnapshot,
+        now: datetime,
+    ) -> ExitDecision:
+        """Evaluate exit conditions for a bi-weekly calendar spread.
+
+        Args:
+            state: Cycle exit state including entry details and target PnL.
+            snapshot: Current market and position snapshot.
+            now: Current timestamp (must be timezone-aware).
+
+        Returns:
+            ExitDecision indicating the required action.
+
+        Raises:
+            ValueError: If `now` or any timestamp in `snapshot.spot_closes` is naive.
+        """
+        if now.tzinfo is None or now.tzinfo.utcoffset(now) is None:
+            raise ValueError("now must be timezone-aware datetime")
+
+        for ts, _ in snapshot.spot_closes:
+            if ts.tzinfo is None or ts.tzinfo.utcoffset(ts) is None:
+                raise ValueError("spot_closes timestamps must be timezone-aware")
+
+        now_ist = now.astimezone(_IST)
+
+        # 1. DTE_GUARD
+        dte = (state.plan.near_expiry - now_ist.date()).days
+        if dte <= self.config.exit_by_dte:
+            return ExitDecision.DTE_GUARD
+
+        # 2. TIME_EXIT
+        if now_ist.date() > state.plan.hard_exit_date or (
+            now_ist.date() == state.plan.hard_exit_date
+            and now_ist.time() >= self.config.hard_exit_time_ist
+        ):
+            return ExitDecision.TIME_EXIT
+
+        # 3. TARGET (executable_pnl only, ltp_pnl is ignored)
+        if snapshot.executable_pnl >= state.target_pnl:
+            if now_ist.date() <= state.entry_date:
+                logger.warning(
+                    "biweekly_exit_rule.first_day_target_hit",
+                    entry_date=state.entry_date.isoformat(),
+                    executable_pnl=str(snapshot.executable_pnl),
+                    target_pnl=str(state.target_pnl),
+                )
+            if dte > self.config.exit_by_dte:
+                return ExitDecision.REDEPLOY_SAME_PAIR
+            return ExitDecision.TARGET
+
+        # 4. Confirmed Breach
+        n_minutes = self.config.breach_confirm_minutes
+        window_delta = timedelta(minutes=n_minutes)
+        window_start = now_ist - window_delta
+
+        window_entries = [
+            (ts.astimezone(_IST), s)
+            for ts, s in snapshot.spot_closes
+            if window_start <= ts.astimezone(_IST) <= now_ist
+        ]
+
+        if len(window_entries) >= 2:
+            earliest_ts = min(ts for ts, _ in window_entries)
+            latest_ts = max(ts for ts, _ in window_entries)
+            if latest_ts - earliest_ts >= window_delta:
+                low_breach = (
+                    all(s < snapshot.breakeven_low for _, s in window_entries)
+                    and snapshot.spot < snapshot.breakeven_low
+                )
+                high_breach = (
+                    all(s > snapshot.breakeven_high for _, s in window_entries)
+                    and snapshot.spot > snapshot.breakeven_high
+                )
+                if low_breach or high_breach:
+                    days_held = (now_ist.date() - state.entry_date).days
+                    if days_held < self.config.breach_adjust_window_days_start:
+                        # Breach before day 3: HOLD until adjustment window opens
+                        pass
+                    elif days_held <= self.config.breach_adjust_window_days:
+                        return ExitDecision.RECENTRE
+                    else:
+                        return ExitDecision.CLOSE_BREACH_LATE
+
+        # 5. Off-centre spot drift on day 4-5
+        days_held = (now_ist.date() - state.entry_date).days
+        if (
+            self.config.off_centre_window_days_start
+            <= days_held
+            <= self.config.off_centre_window_days_end
+        ):
+            drift = abs(snapshot.spot - state.entry_short_strike)
+            if drift >= self.config.recentre_spot_threshold_points:
+                return ExitDecision.RECENTRE_OFF_CENTRE
+
+        # 6. HOLD
         return ExitDecision.HOLD

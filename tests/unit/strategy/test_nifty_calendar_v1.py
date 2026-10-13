@@ -19,9 +19,9 @@ import structlog
 from src.instruments.lookup import InstrumentLookup
 from src.models.options import OptionChain, OptionChainStrike, OptionLeg
 from src.models.portfolio import TradeAction
-from src.nifty_calendar.config import MONTHLY
-from src.nifty_calendar.cycle import MonthlyCyclePolicy
-from src.nifty_calendar.exit_rules import ExitDecision, MonthlyExitRule
+from src.nifty_calendar.config import BIWEEKLY, MONTHLY
+from src.nifty_calendar.cycle import BiweeklyCyclePolicy, MonthlyCyclePolicy
+from src.nifty_calendar.exit_rules import BiweeklyExitRule, ExitDecision, MonthlyExitRule
 from src.nifty_calendar.selector import WingStructureSelector
 from src.paper.models import PaperPosition, PaperTrade
 from src.paper.store import PaperStore
@@ -449,3 +449,164 @@ async def test_reentered_structure_resolves_to_original_cycle_plan(h: Harness) -
     assert events == []  # HOLD, not NC_PLAN_MISSING
     assert spy.states[0].entry_date == date(2026, 9, 30)  # the original cycle's plan
     assert spy.states[0].plan.hard_exit_date > h.now.date()
+
+
+@pytest.mark.asyncio
+async def test_biweekly_redeploy_keeps_original_expiries_and_hard_exit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Assert biweekly REDEPLOY_SAME_PAIR reopens the original near/far pair with original hard exit."""
+    from src.notifications import formatting as formatting_module
+
+    monkeypatch.setattr(
+        "src.strategy.reentry_mixin.load_vix_series",
+        lambda _d: pd.Series(np.linspace(10, 30, 252)),
+    )
+    monkeypatch.setitem(
+        formatting_module.STRATEGY_LABELS, BIWEEKLY.strategy_name, "Calendar Biweekly"
+    )
+    all_expiries = [
+        date(2026, 9, 29),
+        date(2026, 10, 6),
+        date(2026, 10, 13),
+        date(2026, 10, 20),
+        NEAR,
+        FAR,
+        date(2026, 12, 1),
+        date(2026, 12, 29),
+    ]
+    monthly_expiries = [date(2026, 9, 29), NEAR, FAR, date(2026, 12, 29)]
+    cfg = dataclasses.replace(BIWEEKLY, vega_cap=Decimal("20"))
+    policy = BiweeklyCyclePolicy(
+        expiries=all_expiries,
+        monthly_expiries=monthly_expiries,
+        is_trading_day_fn=lambda d: d.weekday() < 5,
+        config=cfg,
+    )
+    rule = BiweeklyExitRule(cfg)
+    h = Harness(
+        tmp_path,
+        monkeypatch,
+        config=cfg,
+        cycle_policy=policy,
+        exit_rule=rule,
+    )
+
+    # Initial entry on 14 Oct 2026: near is NEAR (27 Oct), far is FAR (23 Nov)
+    h.now = datetime(2026, 10, 14, 10, 35, tzinfo=_IST)
+    orig_plan = policy.entry_window(date(2026, 10, 14))
+    assert orig_plan is not None
+    assert orig_plan.near_expiry == NEAR
+    assert orig_plan.far_expiry == FAR
+    orig_hard_exit = orig_plan.hard_exit_date
+
+    # Open structure
+    positions = await h.enter()
+    assert len([p for p in positions if p.net_qty != 0]) == 4
+
+    # On 16 Oct 2026 (day 2): exit via REDEPLOY_SAME_PAIR
+    h.now = datetime(2026, 10, 16, 11, 30, tzinfo=_IST)
+    h.shell._exit_rule = _Rule(ExitDecision.REDEPLOY_SAME_PAIR)
+    events = await h.shell.check_signals(h.near, [])
+    assert [e.event_type for e in events] == ["NC_REDEPLOY_SAME_PAIR"]
+
+    # Close structure
+    assert await h.shell.apply_action([], _to_action(events[0])) == []
+
+    # Verify exit event was written with PROFIT_TARGET
+    events_in_db = h.store.get_open_exit_events(BIWEEKLY.strategy_name)
+    assert any(e["exit_signal"] == "PROFIT_TARGET" for e in events_in_db)
+
+    # Now re-enter same day via plan_entry
+    entry_events = await h.shell.plan_entry(h.near, h.now)
+    assert [e.event_type for e in entry_events] == ["NC_ENTRY"]
+
+    reopened_positions = await h.shell.apply_action([], _to_action(entry_events[0]))
+    assert len([p for p in reopened_positions if p.net_qty != 0]) == 4
+
+    # Reopened structure must resolve under original cycle plan (same near/far expiries & hard exit)
+    resolved_plan = h.shell.cycle_plan(h.now.date())
+    assert resolved_plan is not None
+    assert resolved_plan.near_expiry == NEAR
+    assert resolved_plan.far_expiry == FAR
+    assert resolved_plan.hard_exit_date == orig_hard_exit
+
+
+@pytest.mark.asyncio
+async def test_biweekly_recentre_off_centre_reopens_at_new_atm(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Assert biweekly RECENTRE_OFF_CENTRE closes and reopens at the new ATM strike on same expiries."""
+    from src.notifications import formatting as formatting_module
+
+    monkeypatch.setattr(
+        "src.strategy.reentry_mixin.load_vix_series",
+        lambda _d: pd.Series(np.linspace(10, 30, 252)),
+    )
+    monkeypatch.setitem(
+        formatting_module.STRATEGY_LABELS, BIWEEKLY.strategy_name, "Calendar Biweekly"
+    )
+    all_expiries = [
+        date(2026, 9, 29),
+        date(2026, 10, 6),
+        date(2026, 10, 13),
+        date(2026, 10, 20),
+        NEAR,
+        FAR,
+        date(2026, 12, 1),
+        date(2026, 12, 29),
+    ]
+    monthly_expiries = [date(2026, 9, 29), NEAR, FAR, date(2026, 12, 29)]
+    cfg = dataclasses.replace(
+        BIWEEKLY,
+        vega_cap=Decimal("20"),
+        off_centre_window_days_start=2,
+        off_centre_window_days_end=3,
+    )
+    policy = BiweeklyCyclePolicy(
+        expiries=all_expiries,
+        monthly_expiries=monthly_expiries,
+        is_trading_day_fn=lambda d: d.weekday() < 5,
+        config=cfg,
+    )
+    h = Harness(
+        tmp_path,
+        monkeypatch,
+        config=cfg,
+        cycle_policy=policy,
+        exit_rule=BiweeklyExitRule(cfg),
+    )
+
+    # Initial entry on 14 Oct 2026 at spot 22700
+    h.now = datetime(2026, 10, 14, 10, 35, tzinfo=_IST)
+    orig_plan = policy.entry_window(date(2026, 10, 14))
+    assert orig_plan is not None
+    orig_hard_exit = orig_plan.hard_exit_date
+
+    await h.enter()
+
+    # On 16 Oct 2026 (day 2): exit via RECENTRE_OFF_CENTRE after spot move
+    h.now = datetime(2026, 10, 16, 11, 30, tzinfo=_IST)
+    h.shell._exit_rule = _Rule(ExitDecision.RECENTRE_OFF_CENTRE)
+    events = await h.shell.check_signals(h.near, [])
+    assert [e.event_type for e in events] == ["NC_RECENTRE_OFF_CENTRE"]
+
+    # Close structure
+    assert await h.shell.apply_action([], _to_action(events[0])) == []
+
+    # Verify exit event was written with LOSS_STOP
+    events_in_db = h.store.get_open_exit_events(BIWEEKLY.strategy_name)
+    assert any(e["exit_signal"] == "LOSS_STOP" for e in events_in_db)
+
+    # Re-enter same day via plan_entry
+    entry_events = await h.shell.plan_entry(h.near, h.now)
+    assert [e.event_type for e in entry_events] == ["NC_ENTRY"]
+
+    reopened_positions = await h.shell.apply_action([], _to_action(entry_events[0]))
+    assert len([p for p in reopened_positions if p.net_qty != 0]) == 4
+
+    resolved_plan = h.shell.cycle_plan(h.now.date())
+    assert resolved_plan is not None
+    assert resolved_plan.near_expiry == NEAR
+    assert resolved_plan.far_expiry == FAR
+    assert resolved_plan.hard_exit_date == orig_hard_exit
