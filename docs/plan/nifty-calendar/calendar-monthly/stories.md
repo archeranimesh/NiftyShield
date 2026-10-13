@@ -27,13 +27,15 @@ Spec source: `TradeResearch/findings/14ZZYoV4DBc_combined.md` (part 2 wins on co
 4. Probe a live or recorded Upstox chain: for the current monthly pair, do all four legs carry delta, vega, IV, bid and ask? Which strikes (multiples of 100, far month) have a usable bid/ask?
 5. `EntryMessage` and `ExitMessage` fit: list every field that assumes one expiry. (`reconstruct_cycles` grouping is pre-answered, see findings below; `EntryMessage` is confirmed to carry a single
    `expiry` / `dte`.)
-6. `DefaultPositionAdapter` / `StrikeResolver`: does it raise `InvalidLegsError` on a mixed-expiry position, and what does a correct near-expiry payoff require?
+6. `DefaultPositionAdapter` / `StrikeResolver`: it raises `InvalidLegsError` only for an unknown type or an unresolved strike and never checks expiry (read from `src/payoff/registry.py` on 2026-10-13;
+   verify). What does a correct near-expiry payoff require? The 2026-10-13 POC already answers it: near legs at intrinsic, far legs priced with Black-76 at the leg IV and a forward from put-call
+   parity.
 7. How does `StrategyMonitor` register and schedule a strategy (cadence, `due_interval_s`, WARN dedup, auto-execute dispatch)? Name the exact registration lines in `scripts/monitor_daemon.py`.
 8. What does IC's entry script do for the duplicate-position guard and Telegram approval, and which parts are reusable without importing IC-specific modules?
 
-9. Payoff implementation is out of scope here (Animesh, 2026-10-13); record only what the existing `compute_payoff` and adapter do with a calendar. The questions below move to chart-model-overlay.
-   Original wording: does `compute_payoff` handle only expiry intrinsic value, and does a calendar's near-expiry curve need a Black-Scholes step with an IV input for the far legs? Can our T+0 curve
-   match the reference chart's projected P&L within about ₹900?
+9. POC evidence (`reference/README.md`, `scratch/chart_poc/`): the interim Black-76 curve matched Sensibull's expiry breakevens within about 30 points and max profit within about 4%, but T+0 P&L was
+   off by up to ~₹1.5k when IV was held at its exit-day level. Confirm with a live chain that per-leg IV, bid and ask are available on all four legs, and decide the IV and carry convention for the
+   chart (held per-leg IV, forward from parity).
 10. Same evidence: the reference trade was held at 0.4% from the upper breakeven without adjusting, and margin moved between roughly ₹2.25L and ₹2.57L for 3 lots. Record both as inputs to CM-4 and as
     decisions for Animesh, not as rules.
 
@@ -72,8 +74,9 @@ These were read from the code during epic planning. CM-0 re-verifies them agains
 - `src/nifty_calendar/__init__.py`, `models.py`, `payoff.py`, `errors.py`
 - `tests/unit/nifty_calendar/__init__.py`, `test_models.py`, `test_payoff.py`
 
-**Before any code:** `get_code_snippet("OptionLeg")`, `get_code_snippet("OptionChain")` and `search_graph` on every enum used; reuse the existing Black-Scholes implementation (`greeks-bs-fallback`
-story) via `search_graph("black scholes")` — do not write a second one.
+**Before any code:** `get_code_snippet("OptionLeg")`, `get_code_snippet("OptionChain")` and `search_graph` on every enum used; `src/pricing` does not exist yet (`greeks-bs-fallback` is at GF-1). Write
+the minimal interim Black-76 module `src/nifty_calendar/pricing.py` (price and implied vol, undiscounted, forward as an argument), marked interim in its docstring; CM-9 replaces it with `src/pricing`
+once GF-2/GF-3 ship. Port it from `scratch/chart_poc/2026-10-13_calendar_payoff_poc.py`, with tests.
 
 **What to implement:**
 
@@ -195,12 +198,13 @@ story) via `search_graph("black scholes")` — do not write a second one.
 
 ---
 
-## CM-6 — Telegram messages
+## CM-6 — Telegram messages and payoff chart
 
 **Files to change / create:**
 - `src/notifications/entry_message.py` — additive optional `far_expiry` / `far_dte` (or per-leg expiry) on `EntryMessage`; existing callers unchanged.
 - `src/notifications/` calendar label and recentre-alert builder, if `alerts.py` is the right home (decide per `src/notifications/CLAUDE.md`).
-- Tests under `tests/unit/notifications/`. No payoff adapter, registration or chart change (deferred to `chart-model-overlay`).
+- `src/notifications/payoff_chart.py` — additive optional `curve` argument on `render_payoff_png` and `send_payoff_chart`; existing callers byte-identical.
+- `src/strategy/payoff_registrations.py` and a calendar payoff adapter; `payoff_chart_axes.py` strike-tick dedupe; tests under `tests/unit/notifications/` and `tests/unit/payoff/`.
 
 **Before any code:** `get_code_snippet("EntryMessage")`, `ExitMessage`, `CloseLegRow`, `LegRow`; read `src/notifications/CLAUDE.md` §"Instrument Label Formatting" and `FORMATTING.md`.
 
@@ -211,13 +215,16 @@ story) via `search_graph("black scholes")` — do not write a second one.
 2. Close message: reuse `ExitMessage` unchanged. Signal text is the `ExitDecision` reason; cycle fields come from `cycle_pnl` (confirm four-leg grouping per CM-0). Re-centre sends one message showing
    close and the new entry, not two unrelated messages. Pass `cycle_decay_pct` / `cycle_short_*` only if the message is meant to describe the short straddle alone; `short_decay_pct` excludes the long
    wings, so for the calendar headline use the net `decay_pct` and `realized_pnl`, and say which one the message shows.
-3. Payoff chart: out of scope. Do not add an adapter or registration; the existing chart path fails closed on a mixed-expiry position, so no chart is sent. Calendar charts are built in
-   `docs/plan/strategy-payoff-charts/chart-model-overlay/`.
+3. Payoff chart: a calendar adapter supplies the four legs plus per-leg expiry, IV, entry price and the forward; the curve is near-expiry value with far legs priced by `src/nifty_calendar/pricing.py`
+   (CM-1 `payoff_at`), passed to the renderer through the new optional `curve` argument. Register it under both strategy names. Header max loss and R:R use a documented spot range (the POC showed they
+   otherwise depend on the sampling window), and a CE and PE at one strike show both in the tick row. If the adapter cannot build the chart (missing IV or price) it fails closed with a logged warning.
+   T+0, ±σ bands, POP, OI bars and the per-leg table stay in `chart-model-overlay`.
 4. All strings escaped at the one boundary the standard defines; no raw `print`.
 
-**Tests:** `test_entry_message_golden_existing_callers_unchanged` · `test_calendar_entry_message_renders_two_expiries` · `test_markdownv2_escaping` .
+**Tests:** `test_entry_message_golden_existing_callers_unchanged` · `test_calendar_entry_message_renders_two_expiries` · `test_markdownv2_escaping` · `test_renderer_unchanged_without_curve` ·
+`test_calendar_adapter_values_far_legs` · `test_calendar_adapter_fails_closed_on_missing_iv` · `test_breakevens_match_poc_within_tolerance`.
 
-**Commit:** `feat(notifications): add calendar entry message`
+**Commit:** `feat(notifications): add calendar entry message and payoff chart`
 
 ---
 
@@ -264,3 +271,19 @@ to IC classes — do not extend it.
 5. `python -m pytest tests/unit/ --tb=no -q` green; then Step 5d session close-out.
 
 **Commit:** `docs(plan): close nifty-calendar monthly story`
+
+---
+
+## CM-9 — Swap the interim pricer for `src/pricing`
+
+**Blocked until** `docs/plan/greeks-bs-fallback/tasks.md` GF-2 and GF-3 are ticked. If either is open, stop and report the block.
+
+**Files to change / create:**
+- `src/nifty_calendar/payoff.py`, `selector.py` (anything importing `pricing.py`) — switch to the shared pricer and IV solver.
+- `src/nifty_calendar/pricing.py` — delete.
+- `tests/unit/nifty_calendar/` — unchanged expectations; only imports move.
+
+**What to implement:** replace every use of the interim Black-76 module with `src/pricing` (price and `solve_iv`), keeping the forward-as-argument convention or the shared module's equivalent; delete
+the interim module. Re-run the CM-1 and CM-6 tests unchanged; breakevens must stay within the POC tolerance.
+
+**Commit:** `refactor(nifty-calendar): use shared Black-Scholes pricer`

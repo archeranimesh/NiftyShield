@@ -8,7 +8,8 @@ spec.
 
 - [ ] **CB-1** — `BIWEEKLY` config and `BiweeklyCyclePolicy` (skip-current-weekly pair, back-to-back chain, handoff to monthly) | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: <—>
 - [ ] **CB-2** — `BiweeklyExitRule` (₹1,600 target, day 3-4 breach window, 200-point rule, same-pair redeploy, time exit) | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: <—>
-- [ ] **CB-3** — Register `paper_nifty_calendar_biweekly`: daemon, entry and snapshot scripts by variant, `Cal BW` label | Owner: Claude | Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: <—>
+- [ ] **CB-3** — Register `paper_nifty_calendar_biweekly`: daemon, entry and snapshot scripts by variant, payoff registration, `Cal BW` label | Owner: Claude | Model: claude-sonnet-5-5 | Review:
+  code-reviewer | SHA: <—>
 - [ ] **CB-4** — Full-month two-variant integration test; close-out docs and cutover note update | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: <—>
 
 ## Story done when

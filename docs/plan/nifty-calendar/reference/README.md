@@ -107,7 +107,11 @@ prices are not in this view. LTP is not the fill price, so treat anything derive
 Still open: exact entry fills and IV for both reference trades (only needed for exact fixtures), and the CM-0 code and live-probe questions (payoff model, margin per lot, mixed-expiry messages and
 adapter, Greeks and spreads on the far wings, holiday-shifted expiry dates).
 
-## Scope note: payoff charts (Animesh, 2026-10-13)
+## Payoff chart decision and POC (Animesh, 2026-10-13)
 
-No payoff or chart implementation beyond what IC already has is done in the nifty-calendar epic. The chart evidence above (T+0 versus expiry curves, far-leg valuation, model tolerance of about ₹900,
-the stat strip, OI bars, per-leg P&L table) is input for `docs/plan/strategy-payoff-charts/chart-model-overlay/`, to be handled later.
+Ship the calendar chart now with the infra available, and change it when Black-Scholes lands. The 2026-10-13 POC (`scratch/chart_poc/2026-10-13_calendar_payoff_poc.py`) drove IC's unmodified renderer
+with a scratch Black-76 curve for the monthly trade: expiry breakevens 22118 / 23206 against Sensibull's 22120 / 23237 (5 Oct) and 22133 / 23163 (6 Oct), max profit 53,925 against 54,765 and 51,781,
+T+0 P&L within about ₹1.5k (5 Oct) and ₹175 (6 Oct) of actual with IV held at its exit-day level. The gap map (`2026-10-13-calendar-chart-gap-map.png`) lists what `src/` lacks: pricer, renderer curve
+seam, calendar adapter, a header range rule, a same-strike tick label, and the overlay features. T+0, ±σ bands, POP, OI bars and the per-leg table stay in
+`docs/plan/strategy-payoff-charts/chart-model-overlay/`. Entry prices in the POC were reconstructed from exit LTPs; the 470 CE against 225 PE implies spot well above 22600 at entry, so check against
+real fills when available.
