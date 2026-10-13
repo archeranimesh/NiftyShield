@@ -6,8 +6,8 @@ evidence, not exact fixtures. The completed monthly trade below (supplied 2026-1
 ## Structure (read from the legs table)
 
 Short 3 x 19 Oct CE and PE at one strike (the expiry tent peaks near 22250 on all three days), long 3 x 27 Oct PE and CE further out. 19 Oct 2026 is a Monday, so this is probably a holiday-shifted
-expiry (Dussehra 20 Oct); verify against `REFERENCES.md` before CM-0 hardcodes expiry logic. Grey 0-lot rows on 8 Oct (19 Oct 22550 CE/PE, 27 Oct 22100 PE and 22900 CE) are unchecked and the total
-equals the four open legs, so they read as earlier or closed legs excluded from the payoff. That is a guess, to be confirmed by Animesh.
+expiry (Dussehra 20 Oct); verify against `REFERENCES.md` before CM-0 hardcodes expiry logic. The grey 0-lot rows on 8 Oct (19 Oct 22550 CE/PE, 27 Oct 22100 PE and 22900 CE) belong to an unrelated
+strategy (Animesh, 2026-10-13); ignore them and their P&L.
 
 ## Time series
 
