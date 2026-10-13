@@ -215,7 +215,7 @@ class BiweeklyExitRule:
     Enforces strict priority order:
     1. DTE guard (exit if near leg DTE <= exit_by_dte)
     2. Time exit (exit if past hard exit date/time)
-    3. Target profit (executable_pnl >= target_pnl; redeploy if DTE > exit_by_dte, else close)
+    3. Target profit (executable_pnl >= target_pnl -> REDEPLOY_SAME_PAIR; DTE_GUARD already exits low DTE)
     4. Confirmed breakeven breach:
        - Days held < breach_adjust_window_days_start: HOLD (pending Animesh confirmation)
        - Days held in [breach_adjust_window_days_start, breach_adjust_window_days]: RECENTRE
@@ -282,9 +282,9 @@ class BiweeklyExitRule:
                     executable_pnl=str(snapshot.executable_pnl),
                     target_pnl=str(state.target_pnl),
                 )
-            if dte > self.config.exit_by_dte:
-                return ExitDecision.REDEPLOY_SAME_PAIR
-            return ExitDecision.TARGET
+            # Step 1 already returned DTE_GUARD for dte <= exit_by_dte, so a target hit here always
+            # has room to redeploy; the "target too late to redeploy" case is DTE_GUARD, not TARGET.
+            return ExitDecision.REDEPLOY_SAME_PAIR
 
         # 4. Confirmed Breach
         n_minutes = self.config.breach_confirm_minutes

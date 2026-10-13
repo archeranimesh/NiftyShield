@@ -181,6 +181,7 @@ class NiftyCalendarV1(ReEntryMixin):
         orig_plan = self._policy.entry_window(origin)
         if orig_plan is None:
             return None
+        # Optional policy hook (documented on CyclePolicy): pins the original pair and hard exit.
         if hasattr(self._policy, "redeploy_plan"):
             return self._policy.redeploy_plan(orig_plan, entry_date)
         return orig_plan

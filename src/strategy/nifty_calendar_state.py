@@ -123,6 +123,8 @@ def cycle_origin_date(
         for t in trades
         if t.leg_role == SHORT_CALL and t.action == TradeAction.SELL and t.trade_date <= entry_date
     }
+    # ``sells`` is non-empty whenever a structure is open (the only caller path); an empty ledger with
+    # no re-centre yields no ancestor, so ``entry_date`` is deliberately not added back in that case.
     candidate_dates = (
         sells if (entry_date in recentre_dates or not sells) else (sells | {entry_date})
     )

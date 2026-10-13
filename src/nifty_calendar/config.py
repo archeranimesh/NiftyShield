@@ -34,7 +34,8 @@ class CalendarVariantConfig:
         lots: Number of lots to trade.
         wing_step_points: Strike step size in points when searching for wings.
         max_wing_search_steps: Maximum search steps away from initial wing points.
-        recentre_spot_threshold_points: Spot drift from entry strike triggering recentre.
+        recentre_spot_threshold_points: Spot drift from entry strike triggering recentre. Index
+            points, so ``int`` like the other ``*_points`` fields (strike increments, not money).
         off_centre_window_days_start: Hold day start of off-centre recentre window.
         off_centre_window_days_end: Hold day end of off-centre recentre window.
         entry_time_ist: Standard entry time in IST.

@@ -43,7 +43,13 @@ class EntryPlan:
 
 @runtime_checkable
 class CyclePolicy(Protocol):
-    """Protocol for calendar spread cycle policies."""
+    """Protocol for calendar spread cycle policies.
+
+    A policy may also define ``redeploy_plan(current_plan, today) -> EntryPlan``. It is optional and
+    deliberately off the protocol: ``NiftyCalendarV1.cycle_plan`` detects it with ``hasattr`` and, when
+    present, uses it so a re-centre or same-pair redeploy keeps the original expiries and hard exit.
+    Renaming it silently disables that path, so keep the name in step with ``cycle_plan``.
+    """
 
     def entry_window(self, today: date) -> EntryPlan | None:
         """Return the entry plan if today is an entry day for this policy, else None.
@@ -231,6 +237,10 @@ class BiweeklyCyclePolicy:
         self._entry_dates: tuple[date, ...] | None = (
             tuple(entry_dates) if entry_dates is not None else None
         )
+        # Inputs are immutable, so the derived window is computed once, not per entry_window call.
+        self._candidates: frozenset[date] = (
+            frozenset() if entry_dates is not None else frozenset(self._candidate_entry_dates())
+        )
 
     def _next_trading_day(self, d: date) -> date:
         """Return the first trading day strictly after d."""
@@ -292,7 +302,7 @@ class BiweeklyCyclePolicy:
             if today not in self._entry_dates:
                 return None
         else:
-            if today not in self._candidate_entry_dates():
+            if today not in self._candidates:
                 return None
 
         next_monthly_expiries = [e for e in self._monthly_expiries if e > today]
