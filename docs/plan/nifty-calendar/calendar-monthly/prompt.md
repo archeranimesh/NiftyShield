@@ -37,6 +37,11 @@ re-verifies the audit against the code before CM-1 starts and amends this sectio
 shell acts only on the near-expiry call, reads all its positions from the injected `PaperStore`, and fetches the far chain through the injected broker; `StrategyMonitor` and IC stay untouched. The
 pure core cannot import `src.strategy._price_utils`, so it carries its own `mid` and `spread_points`. Findings and open decisions: `stories.md` §"CM-0 findings".
 
+**CM-5 outcome (2026-10-13).** SOLID triggers run: the shell takes eight injected collaborators plus `InstrumentLookup`, with no new `elif` on a decision method; rebuild logic sits in the
+leaf-adjacent `src/strategy/nifty_calendar_state.py`. Re-centre is close plus `ReEntryMixin._check_reentry` (writes the R5 event and sends the notice; the entry script re-enters), with `_ivr_passes`
+overridden to always pass because the structure is net long vega. Entry stays script-driven: a flat strategy is never ticked by the monitor, so the entry script (CM-7) calls
+`NiftyCalendarV1.plan_entry` and `apply_action`.
+
 ## Session-start load hints
 
 - `docs/plan/nifty-calendar/README.md` and the combined findings file above.
