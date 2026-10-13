@@ -4,7 +4,8 @@
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
 spec.
 
-**Open: CB-1..CB-4.** Blocked until `calendar-monthly/` is complete.
+**Open: CB-1..CB-4.** CB-1 and CB-2 are unblocked (they need only the CM-3 shell, already shipped). CB-3 and CB-4 wait on `calendar-monthly/` CM-9 (pricer swap, blocked on `greeks-bs-fallback`
+GF-2/GF-3), so new payoff wiring does not widen the swap.
 
 - [ ] **CB-1** — `BIWEEKLY` config and `BiweeklyCyclePolicy` (skip-current-weekly pair, back-to-back chain, handoff to monthly) | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: <—>
 - [ ] **CB-2** — `BiweeklyExitRule` (₹1,600 target, day 3-4 breach window, 200-point rule, same-pair redeploy, time exit) | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: <—>
