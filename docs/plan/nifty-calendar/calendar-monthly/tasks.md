@@ -21,7 +21,7 @@ spec.
 - [x] **CM-8** — Close-out: docs, module `CLAUDE.md`, graph re-index, parallel-run cutover note | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: 64fee3f
 - [ ] **CM-9** — Swap the interim pricer for `src/pricing` (blocked: `greeks-bs-fallback` GF-2/GF-3 not done) | Owner: Claude | Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: —
 - [x] **CM-10** — Entry-day re-entry at the adjacent strike: selector `exclude_short_strikes`, shell guard, `cycle_origin_date` rewrite | Owner: Claude | Model: claude-sonnet-5-5 | Review:
-  code-reviewer, greeks-analyst | SHA: <pending>
+  code-reviewer, greeks-analyst | SHA: c67e613
 
 ## Story done when
 

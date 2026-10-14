@@ -36,6 +36,7 @@ import structlog
 
 from src.instruments.lookup import InstrumentLookup, parse_expiry
 from src.models.portfolio import TradeAction
+from src.nifty_calendar.config import BIWEEKLY as NC_BIWEEKLY
 from src.nifty_calendar.config import MONTHLY as NC_MONTHLY
 from src.notifications.formatting import build_position_table
 from src.notifications.markdown import escape_markdown
@@ -72,7 +73,8 @@ _STRATEGY_LABELS: dict[str, str] = {
 }
 _STRATEGY_LABELS.update({cfg.strategy_name: "IC V2" for cfg in IC_V2_CONFIGS.values()})
 _STRATEGY_LABELS[CSPNiftyV1.strategy_name] = "CSP"
-_STRATEGY_LABELS[NC_MONTHLY.strategy_name] = "Cal M"
+_STRATEGY_LABELS[NC_MONTHLY.strategy_name] = NC_MONTHLY.label
+_STRATEGY_LABELS[NC_BIWEEKLY.strategy_name] = NC_BIWEEKLY.label
 
 # 3-Track base legs persist under their own per-track strategy_name (not
 # NiftyTrackComparisonV1.strategy_name, which is only the signal-registration

@@ -14,6 +14,7 @@ class CalendarVariantConfig:
     Attributes:
         name: Short identifier for the variant (e.g. 'monthly', 'biweekly').
         strategy_name: Full strategy name used in trade logs and db entries.
+        label: Short display label for messages and summaries (e.g. 'Cal M').
         target_per_lot: Target profit per lot in INR.
         planned_hold_days: Planned holding period in trading days.
         hard_hold_days: Maximum holding period in trading days before forced exit.
@@ -44,6 +45,7 @@ class CalendarVariantConfig:
 
     name: str
     strategy_name: str
+    label: str = "Cal"
     target_per_lot: Decimal
     planned_hold_days: int
     hard_hold_days: int
@@ -74,6 +76,7 @@ class CalendarVariantConfig:
 MONTHLY: CalendarVariantConfig = CalendarVariantConfig(
     name="monthly",
     strategy_name="paper_nifty_calendar_monthly",
+    label="Cal M",
     target_per_lot=Decimal("3000"),
     planned_hold_days=7,
     hard_hold_days=10,
@@ -104,6 +107,7 @@ MONTHLY: CalendarVariantConfig = CalendarVariantConfig(
 BIWEEKLY: CalendarVariantConfig = CalendarVariantConfig(
     name="biweekly",
     strategy_name="paper_nifty_calendar_biweekly",
+    label="Cal BW",
     target_per_lot=Decimal("1600"),
     planned_hold_days=5,
     hard_hold_days=7,

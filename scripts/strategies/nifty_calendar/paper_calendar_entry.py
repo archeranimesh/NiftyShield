@@ -1,5 +1,5 @@
 # scripts/strategies/nifty_calendar/paper_calendar_entry.py
-"""Entry script for the Nifty positional calendar (monthly variant).
+"""Entry script for the Nifty positional calendar (``--variant monthly|biweekly``).
 
 The monitor never ticks a flat strategy, so this script calls ``NiftyCalendarV1.plan_entry``
 and ``apply_action`` directly (entry events must not go through the monitor, whose close path
@@ -7,7 +7,8 @@ would treat their empty ``legs_to_close`` as a default close). It also re-enters
 after a RECENTRE close, under the original cycle's plan (Animesh, 2026-10-13).
 
 Default is ``--dry-run``: chains are fetched and the proposed legs printed; nothing is written
-or sent. ``--no-dry-run`` persists the four legs, captures margin, and sends the entry card
+or sent. Exits quietly when the chosen variant's entry window is not the active one, so cron can
+run both variants unconditionally. ``--no-dry-run`` persists the four legs, captures margin, and sends the entry card
 and payoff chart. Cron lines live in the CM-8 cutover note, not here.
 """
 
@@ -35,8 +36,7 @@ from src.config import settings
 from src.instruments.lookup import InstrumentLookup
 from src.market_calendar.holidays import guard_trading_day
 from src.models.options import OptionChain
-from src.nifty_calendar.config import MONTHLY
-from src.nifty_calendar.expiries import monthly_expiries
+from src.nifty_calendar.cycle import active_variant
 from src.nifty_calendar.selector import mid
 from src.notifications.calendar_messages import build_calendar_entry_message
 from src.notifications.entry_message import format_entry_message
@@ -47,7 +47,7 @@ from src.paper.constants import DEFAULT_BOD_PATH, DEFAULT_DB_PATH
 from src.paper.margin_capture import capture_entry_margin
 from src.paper.store import PaperStore
 from src.payoff.registry import PayoffContext
-from src.strategy.nifty_calendar_factory import build_calendar_shell
+from src.strategy.nifty_calendar_factory import REGISTRY, build_calendar_shell, build_cycle_policies
 from src.strategy.nifty_calendar_state import ROLES, build_view, resolve_open_legs
 from src.strategy.nifty_calendar_v1 import NiftyCalendarV1
 from src.strategy.payoff_registrations import ensure_registered
@@ -117,7 +117,9 @@ async def _send_entry_card(
     view = build_view(positions, lookup, chains, first_chain.underlying_spot, config.lot_size)
     spot = first_chain.underlying_spot
     ltps = {leg.position.instrument_key: mid(view.quotes[r]) for r, leg in view.legs.items()}
-    card = build_calendar_entry_message(view.structure, view.metrics, spot, today, ltps=ltps)
+    card = build_calendar_entry_message(
+        view.structure, view.metrics, spot, today, ltps=ltps, headline_label=config.label
+    )
     await notifier.send_notification(format_entry_message(card))
     ensure_registered()
     await send_payoff_chart(
@@ -147,9 +149,10 @@ async def run_entry(
 ) -> str:
     """Run one entry attempt and return its outcome code.
 
-    Outcomes: ``ALREADY_OPEN``, ``NO_EXPIRY``, ``CHAIN_FAILED``, ``NO_ENTRY`` (no window, too
-    early, a blocking trade today, or a failed filter), ``DRY_RUN``, ``ENTERED`` and
-    ``INCOMPLETE`` (a leg did not land; manual intervention needed).
+    Outcomes: ``ALREADY_OPEN``, ``NOT_ACTIVE`` (another variant owns today), ``NO_EXPIRY``,
+    ``CHAIN_FAILED``, ``NO_ENTRY`` (no window, too early, a blocking trade today, or a failed
+    filter), ``DRY_RUN``, ``ENTERED`` and ``INCOMPLETE`` (a leg did not land; manual
+    intervention needed).
 
     Args:
         shell: Wired strategy shell.
@@ -165,21 +168,27 @@ async def run_entry(
         logger.info("calendar_entry.already_open", strategy=name)
         return "ALREADY_OPEN"
     today = now.date()
-    listed = [date.fromisoformat(e) for e in lookup.get_all_option_expiries("NIFTY")]
-    upcoming = [e for e in monthly_expiries(listed, today) if e >= today]
-    if not upcoming:
-        logger.error("calendar_entry.no_monthly_expiry", strategy=name)
+    policies = build_cycle_policies(lookup, today)
+    if active_variant(today, policies) != shell.config.name:
+        logger.info("calendar_entry.variant_not_active", strategy=name, today=str(today))
+        return "NOT_ACTIVE"
+    plan = policies[shell.config.name].entry_window(today)
+    if plan is None:
+        logger.error("calendar_entry.no_expiry", strategy=name)
         return "NO_EXPIRY"
-    market = await _fetch_chain(broker, upcoming[0])
+    label = shell.config.label
+    market = await _fetch_chain(broker, plan.near_expiry)
     if market is None:
-        await _alert(notifier, f"Cal M entry blocked ({name}): option chain unavailable")
+        await _alert(notifier, f"{label} entry blocked ({name}): option chain unavailable")
         return "CHAIN_FAILED"
     events = await shell.plan_entry(market, now)
     entry = next((e for e in events if e.event_type == "NC_ENTRY"), None)
     if entry is None:
         for e in events:
             logger.warning("calendar_entry.no_entry", code=e.event_type, reason=e.description)
-            await _alert(notifier, f"Cal M entry skipped ({name}): {e.event_type} {e.description}")
+            await _alert(
+                notifier, f"{label} entry skipped ({name}): {e.event_type} {e.description}"
+            )
         return "NO_ENTRY"
     specs = entry.payload["legs_to_open"]
     if dry_run:
@@ -202,7 +211,7 @@ async def run_entry(
         logger.error("calendar_entry.legs_not_persisted", strategy=name, missing=missing)
         await _alert(
             notifier,
-            f"Cal M entry INCOMPLETE ({name}): legs {missing} did not land. "
+            f"{label} entry INCOMPLETE ({name}): legs {missing} did not land. "
             "Partial structure is open: manual intervention required.",
         )
         return "INCOMPLETE"
@@ -224,7 +233,10 @@ async def run_entry(
 
 def parse_args() -> argparse.Namespace:
     """Parse CLI arguments."""
-    parser = argparse.ArgumentParser(description="Nifty calendar (monthly) paper entry.")
+    parser = argparse.ArgumentParser(description="Nifty calendar paper entry.")
+    parser.add_argument(
+        "--variant", required=True, choices=sorted(REGISTRY), help="Calendar variant to enter."
+    )
     parser.add_argument(
         "--dry-run",
         action=argparse.BooleanOptionalAction,
@@ -251,7 +263,8 @@ async def _amain(args: argparse.Namespace) -> int:
     )
     vix = None if args.dry_run else await asyncio.to_thread(fetch_vix_latest)
     shell = build_calendar_shell(
-        broker=broker, store=store, notifier=notifier, lookup=lookup, config=MONTHLY,
+        broker=broker, store=store, notifier=notifier, lookup=lookup,
+        config=REGISTRY[args.variant].config,
         vix_fn=lambda: vix,
     )  # fmt: skip
     outcome = await run_entry(

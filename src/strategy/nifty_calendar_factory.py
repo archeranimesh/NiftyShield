@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from src.client.protocol import BrokerClient
 from src.instruments.lookup import InstrumentLookup
-from src.nifty_calendar.config import MONTHLY, CalendarVariantConfig
-from src.nifty_calendar.cycle import MonthlyCyclePolicy
-from src.nifty_calendar.exit_rules import MonthlyExitRule
+from src.nifty_calendar.config import BIWEEKLY, MONTHLY, CalendarVariantConfig
+from src.nifty_calendar.cycle import BiweeklyCyclePolicy, CyclePolicy, MonthlyCyclePolicy
+from src.nifty_calendar.exit_rules import BiweeklyExitRule, MonthlyExitRule
 from src.nifty_calendar.expiries import monthly_expiries
 from src.nifty_calendar.selector import WingStructureSelector
 from src.notifications.protocol import NotifierProtocol
@@ -21,8 +22,47 @@ from src.strategy.nifty_calendar_v1 import NiftyCalendarV1
 
 _IST = ZoneInfo("Asia/Kolkata")
 
-# Variant name -> (policy class, exit-rule class); a second variant is one more entry.
-_VARIANTS = {MONTHLY.name: (MonthlyCyclePolicy, MonthlyExitRule)}
+PolicyBuilder = Callable[[list[date], date, CalendarVariantConfig], CyclePolicy]
+
+
+@dataclass(frozen=True)
+class VariantEntry:
+    """One registered variant: its config, cycle-policy builder and exit-rule class."""
+
+    config: CalendarVariantConfig
+    build_policy: PolicyBuilder
+    rule_cls: type[MonthlyExitRule] | type[BiweeklyExitRule]
+
+
+def _monthly_policy(listed: list[date], today: date, config: CalendarVariantConfig) -> CyclePolicy:
+    return MonthlyCyclePolicy(monthly_expiries(listed, today), config=config)
+
+
+def _biweekly_policy(listed: list[date], today: date, config: CalendarVariantConfig) -> CyclePolicy:
+    return BiweeklyCyclePolicy(
+        sorted(set(listed)), monthly_expiries=monthly_expiries(listed, today), config=config
+    )
+
+
+# Variant name -> entry; a further variant is one more row.
+REGISTRY: dict[str, VariantEntry] = {
+    MONTHLY.name: VariantEntry(MONTHLY, _monthly_policy, MonthlyExitRule),
+    BIWEEKLY.name: VariantEntry(BIWEEKLY, _biweekly_policy, BiweeklyExitRule),
+}
+
+
+def build_cycle_policies(lookup: InstrumentLookup, today: date) -> dict[str, CyclePolicy]:
+    """Build every registered variant's cycle policy, keyed by variant name.
+
+    Used by the entry handoff: ``active_variant(today, policies)`` names the one variant
+    whose entry window is open.
+
+    Args:
+        lookup: BOD instrument lookup; supplies the listed expiries.
+        today: Date the expiry sets are built for.
+    """
+    listed = [date.fromisoformat(e) for e in lookup.get_all_option_expiries("NIFTY")]
+    return {n: v.build_policy(listed, today, v.config) for n, v in REGISTRY.items()}
 
 
 def build_calendar_shell(
@@ -53,17 +93,16 @@ def build_calendar_shell(
     Raises:
         KeyError: ``config.name`` has no registered variant.
     """
-    policy_cls, rule_cls = _VARIANTS[config.name]
+    entry = REGISTRY[config.name]
     listed = [date.fromisoformat(e) for e in lookup.get_all_option_expiries("NIFTY")]
-    expiries = monthly_expiries(listed, today or clock().date())
     return NiftyCalendarV1(
         broker=broker,
         store=store,
         notifier=notifier,
         simulator=PaperFillSimulator(),
         selector=WingStructureSelector(),
-        exit_rule=rule_cls(config),
-        cycle_policy=policy_cls(expiries, config=config),
+        exit_rule=entry.rule_cls(config),
+        cycle_policy=entry.build_policy(listed, today or clock().date(), config),
         config=config,
         lookup=lookup,
         vix_fn=vix_fn,

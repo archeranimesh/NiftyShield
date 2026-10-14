@@ -78,6 +78,7 @@ async def send_close_message(
     held_days: int,
     legs: list[ClosedLeg],
     recentre: bool,
+    label: str = "Cal M",
 ) -> None:
     """Send the close (or re-centre) card; any failure is logged, never raised."""
     if notifier is None or not legs:
@@ -101,6 +102,7 @@ async def send_close_message(
             inception_pnl=get_strategy_realized_pnl(store, strategy_name),
             stats=cycle_stats(trades),
             recentre=recentre,
+            headline_label=label,
         )
         # Pre-rendered MarkdownV2 card: sent through send_notification like every other close card.
         send = getattr(notifier, "send_notification", None)

@@ -86,3 +86,15 @@ def test_recentre_is_one_message_with_close_then_entry() -> None:
     text = format_recentre_message(_exit(recentre=True), msg)
     assert text.startswith("🔄 *Cal M Re\\-centre*")
     assert text.index("Rolled") < text.index("Cal M Entry")
+
+
+def test_biweekly_label_renders() -> None:
+    from src.nifty_calendar.config import BIWEEKLY
+
+    structure, spot, carry, lot = _make_video_fixture()
+    metrics = compute_metrics(structure, spot, far_carry=carry, lot_size=lot)
+    msg = build_calendar_entry_message(
+        structure, metrics, spot, TODAY, headline_label=BIWEEKLY.label
+    )
+    assert format_entry_message(msg).replace("\\", "").startswith("✅ *Cal BW Entry*")
+    assert "Cal BW" in format_exit_message(_exit(headline_label=BIWEEKLY.label)).replace("\\", "")

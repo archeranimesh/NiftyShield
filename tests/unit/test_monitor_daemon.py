@@ -501,14 +501,16 @@ def _calendar_daemon_patches(shell_factory: MagicMock, lookup: object):
 async def test_calendar_strategy_registered() -> None:
     from contextlib import ExitStack
 
-    shell = MagicMock(strategy_name="paper_nifty_calendar_monthly")
-    factory = MagicMock(return_value=shell)
+    factory = MagicMock(
+        side_effect=lambda **kw: MagicMock(strategy_name=kw["config"].strategy_name)
+    )
     with ExitStack() as stack:
         for p in _calendar_daemon_patches(factory, MagicMock()):
             stack.enter_context(p)
         await daemon.main()
-    factory.assert_called_once()
+    assert factory.call_count == 2
     assert "paper_nifty_calendar_monthly" in daemon.strategies_ref
+    assert "paper_nifty_calendar_biweekly" in daemon.strategies_ref
 
 
 @pytest.mark.asyncio
@@ -521,5 +523,7 @@ async def test_calendar_init_failure_does_not_block_daemon() -> None:
             stack.enter_context(p)
         with patch("scripts.monitor_daemon.logger.error") as log_error:
             await daemon.main()
-    log_error.assert_any_call("Failed to initialize NiftyCalendarV1", error="bad expiry set")
+    log_error.assert_any_call(
+        "Failed to initialize NiftyCalendarV1", variant="monthly", error="bad expiry set"
+    )
     assert "paper_nifty_calendar_monthly" not in daemon.strategies_ref

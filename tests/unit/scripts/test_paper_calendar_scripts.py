@@ -133,6 +133,37 @@ async def test_entry_message_failure_does_not_undo_the_entry(env: Env) -> None:
     assert len([p for p in env.h.store.get_positions(NAME) if p.net_qty]) == 4
 
 
+@pytest.mark.asyncio
+async def test_entry_script_noops_when_other_variant_active(
+    env: Env, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for active in ("biweekly", None):
+        monkeypatch.setattr(entry_mod, "active_variant", lambda _t, _p, a=active: a)
+        assert await env.enter() == "NOT_ACTIVE"
+    assert env.h.store.get_trades(NAME) == []
+    env.broker.get_option_chain.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_same_day_same_strike_redeploy_is_detected_not_dropped_silently(env: Env) -> None:
+    """A ledger collision from the shell reaches the entry script as a labelled NO_ENTRY alert."""
+    event = MagicMock(event_type="NC_LEDGER_COLLISION", description="short_call clash")
+    env.h.shell.plan_entry = AsyncMock(return_value=[event])  # type: ignore[method-assign]
+    assert await env.enter() == "NO_ENTRY"
+    alert = env.notifier.send_plain_message.await_args.args[0]
+    assert "NC_LEDGER_COLLISION" in alert.replace("\\", "") and "Cal M" in alert
+    assert env.h.store.get_trades(NAME) == []
+
+
+def test_variant_flag_choices_come_from_registry(monkeypatch: pytest.MonkeyPatch) -> None:
+    for mod in (entry_mod, snap_mod):
+        monkeypatch.setattr("sys.argv", ["x", "--variant", "biweekly"])
+        assert mod.parse_args().variant == "biweekly"
+        monkeypatch.setattr("sys.argv", ["x", "--variant", "weekly"])
+        with pytest.raises(SystemExit):
+            mod.parse_args()
+
+
 # --- snapshot ------------------------------------------------------------------------
 
 

@@ -662,6 +662,7 @@ STRATEGY_LABELS: dict[str, str] = {
     "paper_nifty_overlay": "Nifty Overlay",
     "paper_signal_track_v1": "Signal Track V1",
     "paper_nifty_calendar_monthly": "Calendar Monthly",
+    "paper_nifty_calendar_biweekly": "Calendar Bi-weekly",
 }
 
 # leg_role -> display label. Explicit dict, not `.title()` — `"covered_call".title()`

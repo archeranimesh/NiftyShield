@@ -113,10 +113,14 @@ except ImportError:
     SignalTrackV1 = None
 
 try:
+    from src.strategy.nifty_calendar_factory import (  # noqa: E402
+        REGISTRY as CALENDAR_VARIANTS,
+    )
     from src.strategy.nifty_calendar_factory import build_calendar_shell  # noqa: E402
 except ImportError:
     # Intentional: Ignore import errors for unimplemented strategies
     build_calendar_shell = None
+    CALENDAR_VARIANTS = {}
 
 logger = structlog.get_logger("scripts.monitor_daemon")
 
@@ -408,19 +412,27 @@ async def main() -> int:
         logger.warning("IronCondorV2 module not found; skipping IC V2 registration")
 
     if build_calendar_shell is not None and lookup is not None:
-        try:
-            calendar_shell = build_calendar_shell(
-                broker=broker,
-                store=store,
-                notifier=gateway,
-                lookup=lookup,
-                vix_data_dir=settings.vix_data_dir,
-            )
-            strategies.append(calendar_shell)
-            logger.info("Registered NiftyCalendarV1", strategy_name=calendar_shell.strategy_name)
-        except Exception as e:
-            # Intentional: Safe strategy init guard
-            logger.error("Failed to initialize NiftyCalendarV1", error=str(e))
+        for variant in CALENDAR_VARIANTS.values():
+            try:
+                calendar_shell = build_calendar_shell(
+                    broker=broker,
+                    store=store,
+                    notifier=gateway,
+                    lookup=lookup,
+                    config=variant.config,
+                    vix_data_dir=settings.vix_data_dir,
+                )
+                strategies.append(calendar_shell)
+                logger.info(
+                    "Registered NiftyCalendarV1", strategy_name=calendar_shell.strategy_name
+                )
+            except Exception as e:
+                # Intentional: Safe strategy init guard; one variant failing must not block the other
+                logger.error(
+                    "Failed to initialize NiftyCalendarV1",
+                    variant=variant.config.name,
+                    error=str(e),
+                )
     else:
         logger.warning("NiftyCalendarV1 unavailable (module or BOD lookup missing); skipping")
 

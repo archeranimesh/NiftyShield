@@ -418,7 +418,7 @@ class NiftyCalendarV1(ReEntryMixin):
         await send_close_message(
             self._notifier, self._store, self._lookup, strategy_name=self.strategy_name,
             signal=decision, near_expiry=near, today=today, held_days=held, legs=closed,
-            recentre=recentre,
+            recentre=recentre, label=self._config.label,
         )  # fmt: skip
         if recentre:
             await self._check_reentry(

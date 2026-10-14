@@ -1,5 +1,5 @@
 # scripts/strategies/nifty_calendar/paper_calendar_snapshot.py
-"""EOD snapshot for the Nifty positional calendar (monthly variant).
+"""EOD snapshot for the Nifty positional calendar (``--variant monthly|biweekly``).
 
 Writes the strategy's ``paper_nav_snapshots`` row (via ``PaperTracker``) and one
 ``paper_leg_snapshots`` row per leg role, then sends the EOD audit report and the payoff chart.
@@ -32,7 +32,6 @@ from src.config import settings
 from src.instruments.lookup import InstrumentLookup
 from src.market_calendar.holidays import guard_trading_day
 from src.models.options import OptionChain
-from src.nifty_calendar.config import MONTHLY
 from src.notifications.payoff_chart import send_payoff_chart
 from src.notifications.telegram_gateway import TelegramGateway
 from src.paper.constants import DEFAULT_BOD_PATH, DEFAULT_DB_PATH
@@ -40,7 +39,7 @@ from src.paper.models import PaperLegSnapshot, PaperPosition
 from src.paper.store import PaperStore
 from src.paper.tracker import PaperTracker
 from src.payoff.registry import PayoffContext
-from src.strategy.nifty_calendar_factory import build_calendar_shell
+from src.strategy.nifty_calendar_factory import REGISTRY, build_calendar_shell
 from src.strategy.nifty_calendar_report import build_eod_report
 from src.strategy.nifty_calendar_state import (
     CalendarView,
@@ -58,7 +57,6 @@ _SCRIPT_NAME = "scripts.strategies.nifty_calendar.paper_calendar_snapshot"
 logger = structlog.get_logger(_SCRIPT_NAME)
 
 _NIFTY = "NSE_INDEX|Nifty 50"
-_LABEL = "Cal M"
 
 
 class _Notifier(Protocol):
@@ -151,7 +149,7 @@ async def run_snapshot(
     margin = store.get_margin_snapshot(name, entry_date)
     report = build_eod_report(
         view,
-        label=_LABEL,
+        label=shell.config.label,
         strategy_name=name,
         snap_date=snap_date,
         spot=spot,
@@ -200,7 +198,10 @@ async def _send(
 
 def parse_args() -> argparse.Namespace:
     """Parse CLI arguments."""
-    parser = argparse.ArgumentParser(description="Nifty calendar (monthly) EOD snapshot.")
+    parser = argparse.ArgumentParser(description="Nifty calendar EOD snapshot.")
+    parser.add_argument(
+        "--variant", required=True, choices=sorted(REGISTRY), help="Calendar variant to snapshot."
+    )
     parser.add_argument("--date", type=date.fromisoformat, default=None, metavar="YYYY-MM-DD")
     parser.add_argument(
         "--dry-run",
@@ -227,7 +228,11 @@ async def _amain(args: argparse.Namespace) -> int:
         else None
     )
     shell = build_calendar_shell(
-        broker=broker, store=store, notifier=notifier, lookup=lookup, config=MONTHLY
+        broker=broker,
+        store=store,
+        notifier=notifier,
+        lookup=lookup,
+        config=REGISTRY[args.variant].config,
     )
     outcome, _ = await run_snapshot(
         shell=shell, store=store, broker=broker, lookup=lookup, notifier=notifier,

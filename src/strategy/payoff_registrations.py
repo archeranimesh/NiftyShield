@@ -12,7 +12,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from src.instruments.lookup import InstrumentLookup
-from src.nifty_calendar.config import MONTHLY
+from src.nifty_calendar.config import BIWEEKLY, MONTHLY
 from src.paper.constants import DEFAULT_BOD_PATH
 from src.payoff.core import PayoffLeg
 from src.payoff.errors import DuplicateRegistrationError
@@ -27,9 +27,8 @@ from src.strategy.ic_expiry_config import CONFIGS
 from src.strategy.ic_expiry_config_v2 import CONFIGS_V2
 from src.strategy.nifty_calendar_payoff import CalendarPayoffAdapter
 
-# Calendar variants charted with the repriced-far-leg adapter; bi-weekly is added by
-# ``calendar-biweekly`` once its config exists.
-_CALENDAR_CONFIGS = (MONTHLY,)
+# Calendar variants charted with the repriced-far-leg adapter.
+_CALENDAR_CONFIGS = (MONTHLY, BIWEEKLY)
 
 
 class BodStrikeResolver:
