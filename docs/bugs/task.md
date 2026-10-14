@@ -155,3 +155,10 @@ Design ruled by council 2026-09-25 (`docs/council/2026-09-25_mvp-corporate-actio
 
 - [ ] **B077.1** — Add variant-aware IC headline to the shared exit renderer, matching the IC EOD Audit header.
 - [ ] **B077.2** — Wire IC V1 and V2 close notifiers to pass variant and version; add tests.
+
+## BUG-078
+
+- [ ] **B078.1** — Write a failing test: `mvp_watch` against a DB with the pre-BUG-054 schema (no `mvp_corporate_actions`) must not crash.
+- [ ] **B078.2** — Ensure the schema in `mvp_watch.py` (call `init_db()` or ensure in `MVPStore.__init__`) and make B078.1 pass.
+- [ ] **B078.3** — Run `mvp_watch` live once, confirm `mvp_snapshots` resumes, and assess the 2026-09-30→10-14 gap for missed target/stop closes.
+- [ ] **B078.4** — Add an `mvp_watch` staleness line to the healthcheck.

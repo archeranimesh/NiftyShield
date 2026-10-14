@@ -1352,3 +1352,5 @@ through 2026-08-26, plus item 29's inline design history above). Add new entries
 - [2026-10-13] nifty-calendar CM-1..CM-4 done via /teamwork-preview (401edd7, 69cdff7, 64a07aa, b3e548a) plus review-fix commits 07f4bb6, ed6acf2: pure core in `src/nifty_calendar/` (models, Black-76
   payoff, config/cycle, wing selector, exit rule). code-reviewer and greeks-analyst clean on re-review. Deferred: 80-char G2 lines (ruff limit 100), net-credit violation scale. Next: CM-5
   (`NiftyCalendarV1` shell).
+- [2026-10-14] BUG-078 opened: `mvp_watch` crashes every run (`no such table: mvp_corporate_actions`) since 2026-09-30 — the cron script never calls `init_db()`; MVP snapshots and auto-close dead for
+  2 weeks.

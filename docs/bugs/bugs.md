@@ -509,3 +509,26 @@ plus the code-span strategy id on its own line.
 **Suggested fix:** render the IC close headline in the EOD-audit shape (colour + timeframe emoji, `IC Closed — <Timeframe>`, `\| #IC_<Timeframe>_<Version>`, strategy id line beneath), sharing the
 title/hashtag builder in `scripts/strategies/ic/paper_ic_snapshot.py` (or a helper extracted to `src/notifications/`) instead of a third format. Non-IC closes (CSP/CC/PP/Collar) unchanged. Tests:
 monthly V1, weekly V1 and monthly V2 headlines; non-IC card unchanged.
+
+---
+
+## BUG-078 — `scripts/mvp_watch.py` crashes every run with `no such table: mvp_corporate_actions`; MVP snapshots and target/stop auto-close dead since 2026-09-30
+
+| Field | Value |
+|---|---|
+| Severity | High — silent for 2 weeks; hourly LTP snapshots and target/stop-loss auto-close for tracked picks have not run |
+| Status | 🔴 Open |
+| Discovered | 2026-10-14 (found while catching up crons after the laptop-sleep outage; unrelated to it) |
+| Location | `scripts/mvp_watch.py` (`MVPStore(...)` at ~104 and ~231, no `init_db()`); `src/mvp/store.py::init_db`, `get_corporate_actions` |
+
+**Symptom:** every hourly cron run ends in `sqlite3.OperationalError: no such table: mvp_corporate_actions` (60 occurrences in `logs/mvp_watch.log`, first 2026-10-01 09:00 IST). `mvp_snapshots` has
+7873 rows, latest `2026-09-30T07:30Z`; nothing since. `DB_REGISTRY.md` lists the table as existing.
+
+**Root cause:** `mvp_corporate_actions` was added to `MVPStore.init_db()` by BUG-054 (B054.x, 2026-09-30). `init_db()` is only called from `scripts/mvp.py:669`; `mvp_watch.py` constructs `MVPStore`
+and never calls it. `portfolio.sqlite` predates the table, so it was never created, and the BUG-054 watch changes (`get_corporate_actions` in the split-gap interlock) crash on first read. Tests passed
+because they use fresh in-memory stores where `init_db()` runs.
+
+**Suggested fix:** call `store.init_db()` (idempotent, `CREATE TABLE IF NOT EXISTS`) in `mvp_watch.py` before first use, or have `MVPStore.__init__` ensure the schema. Regression test: a store opened
+on a DB created with the pre-BUG-054 schema must survive `get_corporate_actions()` / the watch loop. Then run `mvp_watch` once live and confirm `mvp_snapshots` resumes; assess whether the
+2026-09-30→10-14 gap needs a backfill or an explicit gap note, and whether any target/stop should have fired in it. Consider a healthcheck line for `mvp_watch` staleness so this cannot be silent
+again.
