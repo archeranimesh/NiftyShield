@@ -380,16 +380,32 @@ procedure for Animesh, not a repo change.
 2. *Exit criteria for the dry cycle.* At least one full monthly window observed with a sensible proposal (four legs, executable mids, winged `final_margin` near the CM-0 figure of about 90k per lot),
    no unexpected ERROR lines in `logs/`, and the Telegram alert text for `NO_ENTRY` reasons reads correctly. Outside the window `plan_entry` returns nothing and the script is a silent no-op, so a
    daily cron is safe once flipped.
-3. *Flip.* Add the two cron lines below (daily Mon-Fri; the scripts call `guard_trading_day` and self-gate on the cycle window), then restart the monitor daemon if it was not restarted after CM-7.
-   Keep the first live cycle under observation: check the entry card, `paper_margin_snapshots`, and the `paper_nav_snapshots` row after the first 15:45 run.
+3. *Flip.* Add the cron lines below (monthly pair first; daily Mon-Fri; the scripts call `guard_trading_day` and self-gate on the cycle window), then restart the monitor daemon if it was not restarted
+   after CM-7. Keep the first live cycle under observation: check the entry card, `paper_margin_snapshots`, and the `paper_nav_snapshots` row after the first 15:45 run.
 
 ```
-30 10 * * 1-5  cd /Users/abhadra/myWork/myCode/python/NiftyShield && python -m scripts.strategies.nifty_calendar.paper_calendar_entry --no-dry-run >> logs/nifty_calendar_entry.log 2>&1
-45 15 * * 1-5  cd /Users/abhadra/myWork/myCode/python/NiftyShield && python -m scripts.strategies.nifty_calendar.paper_calendar_snapshot --no-dry-run >> logs/nifty_calendar_snapshot.log 2>&1
+<!-- lint-ignore-length -->
+30 10 * * 1-5  cd /Users/abhadra/myWork/myCode/python/NiftyShield && python -m scripts.strategies.nifty_calendar.paper_calendar_entry --variant monthly --no-dry-run >> logs/nifty_calendar_entry.log 2>&1
+<!-- lint-ignore-length -->
+31 10 * * 1-5  cd /Users/abhadra/myWork/myCode/python/NiftyShield && python -m scripts.strategies.nifty_calendar.paper_calendar_entry --variant biweekly --no-dry-run >> logs/nifty_calendar_entry.log 2>&1
+<!-- lint-ignore-length -->
+45 15 * * 1-5  cd /Users/abhadra/myWork/myCode/python/NiftyShield && python -m scripts.strategies.nifty_calendar.paper_calendar_snapshot --variant monthly --no-dry-run >> logs/nifty_calendar_snapshot.log 2>&1
+<!-- lint-ignore-length -->
+46 15 * * 1-5  cd /Users/abhadra/myWork/myCode/python/NiftyShield && python -m scripts.strategies.nifty_calendar.paper_calendar_snapshot --variant biweekly --no-dry-run >> logs/nifty_calendar_snapshot.log 2>&1
 ```
 
-The entry cron is a no-op while a structure is open (`ALREADY_OPEN`). A re-centre closes in the daemon (close/ROLL card) and re-enters on the next entry-cron run the same day; if that run has already
-passed, re-run the entry script by hand with `--no-dry-run`.
+**Both variants (CB-4).** `--variant` is required on both scripts. Run order within each pair is irrelevant to correctness (each entry run reads the shared ledger and the day's single active variant),
+but keep monthly first so a log read top to bottom matches the cycle. Flip monthly first and leave the bi-weekly pair commented until the first monthly cycle has closed; the bi-weekly's first window
+then opens on the monthly's planned-exit day or later.
+
+*Handoff rules the entry cron enforces* (walked end to end by `tests/unit/nifty_calendar/test_full_cycle.py`): the variant whose window is not open logs `NOT_ACTIVE` and does nothing; a variant whose
+window is open while the other still holds a structure logs `OTHER_VARIANT_OPEN` and retries the next trading day (the bi-weekly hard exit date is fixed by its own plan, so a late start only shortens
+the hold, and `today >= hard_exit_date` skips a window that has already lapsed); a held structure logs `ALREADY_OPEN`.
+
+*Confirming the handoff in the first live paper week.* In `logs/nifty_calendar_entry.log` grep `calendar_entry`: on each trading day exactly one variant may log `ENTERED`, and no day may show two
+strategies with an open structure afterwards. Expect `OTHER_VARIANT_OPEN` lines for the bi-weekly on any day between the monthly's planned exit (day 7) and its hard exit (day 10) when the monthly has
+not hit its target. Before and after the 15:46 snapshot, `PaperStore.get_positions` for the two `paper_nifty_calendar_*` names must never both be non-flat. After the first close, `paper_exit_events`
+must hold one row per closed structure, and the ledger must show a four-leg open and a four-leg close for the cycle.
 
 **Known open items, not fixed in CM-8.**
 

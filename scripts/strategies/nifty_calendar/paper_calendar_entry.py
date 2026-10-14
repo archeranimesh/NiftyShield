@@ -137,6 +137,15 @@ async def _send_entry_card(
     )
 
 
+def _other_variant_open(store: PaperStore, variant: str) -> str | None:
+    """Return the strategy name of another registered variant holding positions, if any."""
+    for other, entry in REGISTRY.items():
+        name = entry.config.strategy_name
+        if other != variant and any(p.net_qty != 0 for p in store.get_positions(name)):
+            return name
+    return None
+
+
 async def run_entry(
     *,
     shell: NiftyCalendarV1,
@@ -149,7 +158,8 @@ async def run_entry(
 ) -> str:
     """Run one entry attempt and return its outcome code.
 
-    Outcomes: ``ALREADY_OPEN``, ``NOT_ACTIVE`` (another variant owns today), ``NO_EXPIRY``,
+    Outcomes: ``ALREADY_OPEN``, ``NOT_ACTIVE`` (another variant owns today),
+    ``OTHER_VARIANT_OPEN`` (another variant still holds a structure), ``NO_EXPIRY``,
     ``CHAIN_FAILED``, ``NO_ENTRY`` (no window, too early, a blocking trade today, or a failed
     filter), ``DRY_RUN``, ``ENTERED`` and ``INCOMPLETE`` (a leg did not land; manual
     intervention needed).
@@ -172,6 +182,9 @@ async def run_entry(
     if active_variant(today, policies) != shell.config.name:
         logger.info("calendar_entry.variant_not_active", strategy=name, today=str(today))
         return "NOT_ACTIVE"
+    if others := _other_variant_open(store, shell.config.name):
+        logger.info("calendar_entry.other_variant_open", strategy=name, open_strategy=others)
+        return "OTHER_VARIANT_OPEN"
     plan = policies[shell.config.name].entry_window(today)
     if plan is None:
         logger.error("calendar_entry.no_expiry", strategy=name)

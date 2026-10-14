@@ -102,4 +102,7 @@ note.
 
 **Tests:** `test_full_month_two_variants` · `test_no_overlap_between_variants` · `test_each_close_has_exit_event` · `test_holiday_month_variant`.
 
+**Finding (2026-10-14):** the walk showed the bi-weekly entering while the monthly was still open. Resolved with an `OTHER_VARIANT_OPEN` guard in `paper_calendar_entry.run_entry` (`DECISIONS.md` §"one
+variant open at a time"); `test_no_overlap_between_variants` fails without it.
+
 **Commit:** `docs(plan): close nifty-calendar bi-weekly story`

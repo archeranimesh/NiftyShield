@@ -64,7 +64,7 @@ Run against `docs/refactor/design-principles.md` and `code-deduplication-and-tax
 | Story | Purpose | Status | Depends on | Closing SHA |
 |---|---|---|---|---|
 | `calendar-monthly/` | Shared pure core, strategy shell, IC-equivalent infra wiring, monthly variant | 🔄 In progress | — | — |
-| `calendar-biweekly/` | Bi-weekly config, cycle policy, exit rules, wiring, full-cycle integration test | 🔄 In progress (CB-1..3 done; CB-4 open) | `calendar-monthly` | — |
+| `calendar-biweekly/` | Bi-weekly config, cycle policy, exit rules, wiring, full-cycle integration test | ✅ Done (CB-1..4); epic stays open for CM-9 | `calendar-monthly` | — |
 
 Status: ⬜ Not started · 🔄 In progress · ✅ Done. This column is the epic's progress view — per-task checkboxes live only in each sub-story's `tasks.md`.
 

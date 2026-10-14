@@ -124,9 +124,9 @@ rot them. (Items 3, 5 and 8 closed — numbers kept stable because item text cro
     pre-proposal check, then a conformance baseline. Requested by Animesh 2026-10-08. Parked: payoff-chart inline-caption change until DG-5 lands.
 27. **Logging consistency (epic)** — `docs/plan/logging-consistency/` — next **LF-1** (audit; needs a redacted `crontab -l` from Animesh). `logging-foundation/` → `logging-migration/` →
     `logging-enforcement/`. New `job_runs` heartbeat table. Soft order after item 26's `design-gate/`. Requested by Animesh 2026-10-08.
-28. **Nifty positional calendar (epic)** — `docs/plan/nifty-calendar/` — next **CM-9**, blocked on `greeks-bs-fallback` GF-2/GF-3 (CM-0..8 done: audit, pure core, strategy shell and Telegram
-    messages/payoff chart, scripts and EOD wiring). `calendar-monthly/` (shared pure core, shell, IC-equivalent infra, monthly variant) → `calendar-biweekly/`. Paper only; net-long-vega diversifier to
-    the short-vol book. Requested by Animesh 2026-10-12.
+28. **Nifty positional calendar (epic)** — `docs/plan/nifty-calendar/` — next **CM-9**, blocked on `greeks-bs-fallback` GF-2/GF-3 (CM-0..8, CM-10 and all of `calendar-biweekly/` done: audit, pure
+    core, strategy shell and Telegram messages/payoff chart, scripts and EOD wiring). `calendar-monthly/` (shared pure core, shell, IC-equivalent infra, monthly variant) → `calendar-biweekly/`. Paper
+    only; net-long-vega diversifier to the short-vol book. Requested by Animesh 2026-10-12.
 29. **Telegram caption-fit audit** — `docs/plan/telegram-caption-audit/` — next **TCA-1** (inventory; TCA-1..3). Read-only: measure which Telegram messages fit a single photo-with-caption message
     (1024-char cap). No implementation until reviewed. Requested by Animesh 2026-10-13.
 
@@ -166,7 +166,9 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
-- [2026-10-14] nifty-calendar CB-3 done (SHA backfilled next commit): `--variant` registry, `active_variant` handoff guard, `Cal BW` label, daemon/payoff/EOD registration; CB-4 next.
+- [2026-10-14] nifty-calendar CB-3 done (`8e5794e`): `--variant` registry, `active_variant` handoff guard, `Cal BW` label, daemon/payoff/EOD registration; CB-4 next.
+- [2026-10-14] nifty-calendar CB-4 done: full-month two-variant walk (`tests/unit/nifty_calendar/test_full_cycle.py`) found the bi-weekly entering while the monthly was still open; added
+  `OTHER_VARIANT_OPEN` guard to `paper_calendar_entry.run_entry`; cutover note now lists all four cron lines. Only CM-9 (blocked on GF-2/GF-3) remains in the epic.
 - [2026-10-14] nifty-calendar CM-10 done (`c67e613`): entry-day re-centre/redeploy re-enters at the adjacent strike, one re-entry per day, ledger-collision guard; CB-3 next.
 - [2026-10-13] calendar-biweekly CB-1, CB-2 closed (`6aca587`, `20817d1`): bi-weekly config, cycle policy, exit rule, shell redeploy/off-centre handling; CB-3 (collision guard) gates live use
 - [2026-10-13] calendar-monthly CM-8 closed (`64fee3f`): close-out docs, module CLAUDE.md, graph re-index, parallel-run cutover note

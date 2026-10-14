@@ -60,8 +60,10 @@ Top-level `src/` packages, one line each (detail → `CONTEXT_TREE.md`):
   `src/strategy/nifty_calendar_v1.py` (`NiftyCalendarV1`, strategy `paper_nifty_calendar_monthly`; helpers `nifty_calendar_state/_factory/_notify/_report/_payoff`), Telegram cards in
   `src/notifications/calendar_messages.py` (two-expiry `EntryMessage`, close/re-centre), payoff via an optional `curve` arg on the renderer, `src/paper/margin_capture.py` (`capture_entry_margin`,
   moved out of the IC gates, re-exported there), scripts `scripts/strategies/nifty_calendar/paper_calendar_entry.py` + `paper_calendar_snapshot.py` (dry-run by default), registered in
-  `monitor_daemon.py` and the EOD summaries. Entry is script-driven; a re-centre sends two Telegram messages. **Not live:** no cron lines yet — parallel-run-then-flip procedure in
-  `docs/plan/nifty-calendar/calendar-monthly/stories.md` §"CM-8 cutover note". CM-9 blocked on `greeks-bs-fallback` GF-2/GF-3. Details: `src/nifty_calendar/CLAUDE.md`.
+  `monitor_daemon.py` and the EOD summaries. Bi-weekly variant (`paper_nifty_calendar_biweekly`, `BIWEEKLY`/`BiweeklyCyclePolicy`/`BiweeklyExitRule`) runs through the same shell; the entry script
+  takes `--variant` and skips with `OTHER_VARIANT_OPEN` while the other variant holds a structure (CB-4). Entry is script-driven; a re-centre sends two Telegram messages. **Not live:** no cron lines
+  yet — parallel-run-then-flip procedure in `docs/plan/nifty-calendar/calendar-monthly/stories.md` §"CM-8 cutover note". CM-9 blocked on `greeks-bs-fallback` GF-2/GF-3. Details:
+  `src/nifty_calendar/CLAUDE.md`.
 - `src/market_calendar/` — NSE holiday detection from version-controlled YAML: `is_trading_day`, `prev_trading_day` (fail-open).
 - `src/notifications/` — `NotifierProtocol`, `TelegramNotifier` (non-fatal, `parse_mode=MarkdownV2` — HTML `<pre>` migration complete + archived 2026-09-06, `telegram-markdown-migration/` epic; every
   caller escapes via `markdown.py`), `TelegramGateway` (council-free approval dispatch + callback polling + chat-ID allowlist), payoff chart PNGs (`payoff_chart*.py`: dark Roboto theme, axes and

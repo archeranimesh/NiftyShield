@@ -99,10 +99,10 @@ Requested by Animesh 2026-09-10.
 **`telegram-caption-audit/`** · ⬜ Not started — next **TCA-1** (TCA-1..3). Read-only audit of every Telegram message type: how many fit a single photo-with-caption message (1024-char caption cap)
 versus needing a photo plus follow-up text. Findings only; the implementation story follows Animesh's review. Requested by Animesh 2026-10-13.
 
-**`nifty-calendar/`** · 🔄 In progress — epic, next **CM-9** (`calendar-monthly/`, CM-0..8 done, CM-9 open and blocked on `greeks-bs-fallback` GF-2/GF-3; `calendar-biweekly/` CB-1..3 done, CB-4 open
-and gated on CM-9). Paper-trades the TM Trading Nifty positional structure (near-expiry ATM short straddle plus far-expiry OTM wings) as a monthly and a bi-weekly variant on the existing paper
-backbone, with IC-equivalent infra (monitor, fills, snapshots, Telegram, payoff chart). New leaf package `src/nifty_calendar/` (pure core) plus a thin `src/strategy/nifty_calendar_v1.py` shell; no
-change to `ic_nifty_v1/v2.py`, no DB schema change expected (CM-0 confirms). Requested by Animesh 2026-10-12.
+**`nifty-calendar/`** · 🔄 In progress — epic, next **CM-9** (`calendar-monthly/`, CM-0..8 done, CM-9 open and blocked on `greeks-bs-fallback` GF-2/GF-3; `calendar-biweekly/` CB-1..4 done).
+Paper-trades the TM Trading Nifty positional structure (near-expiry ATM short straddle plus far-expiry OTM wings) as a monthly and a bi-weekly variant on the existing paper backbone, with
+IC-equivalent infra (monitor, fills, snapshots, Telegram, payoff chart). New leaf package `src/nifty_calendar/` (pure core) plus a thin `src/strategy/nifty_calendar_v1.py` shell; no change to
+`ic_nifty_v1/v2.py`, no DB schema change expected (CM-0 confirms). Requested by Animesh 2026-10-12.
 
 **`strategy-refactor-blueprint/`** · ⬜ Not started · next: **BP-1** (`/md-organize` run) Planning-only, multi-session: how to safely decompose `ic_nifty_v1.py`/`ic_nifty_v2.py` (~30% of
 `src/strategy/`'s 14,255 LOC) without disturbing live paper-trading cycles — golden-test-gated extraction, council-ruled decomposition boundary, then a generalized Claude/Antigravity/council routing

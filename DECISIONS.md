@@ -1351,6 +1351,14 @@ in DSN-4); backstop thresholds; Kite stays deferred pending confirmation.
 
 ---
 
+## Nifty calendar: one variant open at a time (CB-4, 2026-10-14)
+
+`nifty-calendar/calendar-biweekly/` CB-4. Decision by Animesh, 2026-10-14. The full-month walk showed the bi-weekly window opening on the monthly's planned-exit day (day 7) while the monthly, if its
+target is not hit, stays open to its hard exit (day 10), and nothing checked the other variant's positions. `run_entry` now returns `OTHER_VARIANT_OPEN` when another registered variant holds a
+structure, after the `NOT_ACTIVE` check. The bi-weekly then enters on the next window day with its own fixed hard exit (a shorter hold). Cycle policies stay position-blind by design.
+
+---
+
 ## Nifty calendar monthly: entry filters, margin basis, close-out (CM-0, CM-8, 2026-10-13)
 
 `nifty-calendar/calendar-monthly/`. CM-0 decisions by Animesh, 2026-10-13; findings in `stories.md` §"CM-0 findings".

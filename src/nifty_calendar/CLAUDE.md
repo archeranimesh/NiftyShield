@@ -18,6 +18,8 @@ Near-expiry ATM short straddle plus far-expiry OTM long wings (net long vega, ne
 - **Executable-price valuation.** Entry, exit and P&L use the bid/ask-derived mid or the side that would actually fill, never a stale LTP (far-leg LTP lags the quote; see CM-0 finding 4).
 - **No `if variant`.** Variants are frozen `CalendarVariantConfig` values (`MONTHLY`) plus implementers of three `Protocol` collaborators (`StructureSelector`, `ExitRule`, `CyclePolicy`) in a `dict`
   registry. Adding bi-weekly means a new config, policy and rule, not a branch.
+- **One variant open at a time.** The policies only say whose entry window is open; they never see positions. The cross-variant guard lives in the entry script (`OTHER_VARIANT_OPEN`), and
+  `tests/unit/nifty_calendar/test_full_cycle.py` fails if it is removed.
 - **Interim pricer.** `pricing.py` is a local Black-76 (price and IV solve, forward passed as an argument). It is temporary: CM-9 replaces it with `src/pricing` and deletes the file once
   `greeks-bs-fallback` GF-2/GF-3 ship. Do not add new importers.
 
