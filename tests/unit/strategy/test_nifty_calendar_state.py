@@ -18,10 +18,14 @@ from src.strategy.nifty_calendar_state import (
     cycle_origin_date,
     executable_pnl,
     far_carry,
+    is_close_trade,
     is_recentre_close,
+    ledger_collisions,
     leg_quotes,
     resolve_open_legs,
+    sold_short_strikes_on,
 )
+from src.strategy.protocol import LegSpec
 
 NEAR, FAR = date(2026, 10, 27), date(2026, 11, 23)
 
@@ -120,3 +124,58 @@ def test_cycle_origin_date_walks_back_to_the_entry_window() -> None:
 def test_cycle_origin_date_is_none_without_an_entry_window() -> None:
     trades = [_trade(date(2026, 10, 1), "short_call", TradeAction.SELL)]
     assert cycle_origin_date(trades, date(2026, 10, 1), lambda d: False) is None
+
+
+def test_cycle_origin_is_entry_day_when_recentred_the_same_day() -> None:
+    window = date(2026, 9, 30)
+    trades = [
+        _trade(window, "short_call", TradeAction.SELL),
+        _trade(window, "short_call", TradeAction.BUY, "RECENTRE x"),
+    ]
+    assert cycle_origin_date(trades, window, lambda d: d == window) == window
+
+
+def test_cycle_origin_ignores_cycles_closed_for_a_real_reason() -> None:
+    old, new = date(2026, 8, 31), date(2026, 9, 30)
+    trades = [
+        _trade(old, "short_call", TradeAction.SELL),
+        _trade(date(2026, 9, 2), "short_call", TradeAction.BUY, "TARGET x"),
+        _trade(new, "short_call", TradeAction.SELL),
+        _trade(new, "short_call", TradeAction.BUY, "RECENTRE x"),
+    ]
+    assert cycle_origin_date(trades, new, lambda d: d in (old, new)) == new
+
+
+def test_is_close_trade_by_role_and_side() -> None:
+    day = date(2026, 10, 1)
+    assert is_close_trade(_trade(day, "short_put", TradeAction.BUY))
+    assert is_close_trade(_trade(day, "long_call_wing", TradeAction.SELL))
+    assert not is_close_trade(_trade(day, "short_put", TradeAction.SELL))
+    assert not is_close_trade(_trade(day, "long_call_wing", TradeAction.BUY))
+
+
+def test_sold_short_strikes_on_reads_only_todays_short_sells() -> None:
+    lookup, _ = _setup()
+    day = date(2026, 9, 30)
+    trades = [
+        _trade(day, "short_call", TradeAction.SELL).model_copy(
+            update={"instrument_key": "NSE_FO|0"}
+        ),
+        _trade(day, "short_call", TradeAction.BUY).model_copy(
+            update={"instrument_key": "NSE_FO|0"}
+        ),
+        _trade(date(2026, 9, 29), "short_put", TradeAction.SELL).model_copy(
+            update={"instrument_key": "NSE_FO|1"}
+        ),
+    ]
+    assert sold_short_strikes_on(trades, lookup, day) == frozenset({Decimal("22700")})
+    assert sold_short_strikes_on(trades, lookup, date(2026, 10, 5)) == frozenset()
+
+
+def test_ledger_collisions_flags_only_exact_role_key_action_matches() -> None:
+    day = date(2026, 10, 1)
+    trades = [_trade(day, "short_call", TradeAction.SELL)]  # key NSE_FO|1
+    same = LegSpec("NSE_FO|1", "SELL", 65, "short_call", price=Decimal("1"))
+    other_key = LegSpec("NSE_FO|2", "SELL", 65, "short_put", price=Decimal("1"))
+    assert ledger_collisions([same, other_key], trades, day) == ["short_call"]
+    assert ledger_collisions([same], trades, date(2026, 10, 2)) == []

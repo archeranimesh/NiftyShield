@@ -53,9 +53,12 @@ from src.strategy.nifty_calendar_state import (
     entry_leg_specs,
     executable_pnl,
     far_carry,
+    is_close_trade,
     is_recentre_close,
+    ledger_collisions,
     leg_quotes,
     resolve_open_legs,
+    sold_short_strikes_on,
 )
 from src.strategy.protocol import ApprovedAction, LegClose, SignalEvent
 from src.strategy.reentry_mixin import ReEntryMixin
@@ -65,6 +68,7 @@ log = structlog.get_logger(__name__)
 _IST = ZoneInfo("Asia/Kolkata")
 _NIFTY_INSTRUMENT = "NSE_INDEX|Nifty 50"
 _CHAIN_TIMEOUT_S = 15.0
+_MAX_REENTRIES_PER_DAY = 1
 _EXIT_SIGNAL: dict[ExitDecision, ExitSignal] = {
     ExitDecision.TARGET: ExitSignal.PROFIT_TARGET,
     ExitDecision.TIME_EXIT: ExitSignal.TIME_STOP,
@@ -189,13 +193,18 @@ class NiftyCalendarV1(ReEntryMixin):
     async def plan_entry(self, market: OptionChain, now: datetime) -> list[SignalEvent]:
         """Entry events for a flat strategy; also called directly by the entry script.
 
-        Same-day re-entry after a RECENTRE close is allowed (Animesh, 2026-10-13) and uses the
-        original cycle's plan, so its hard exit date is kept; any other trade today blocks.
+        Same-day re-entry after a RECENTRE close is allowed, including on the cycle's own entry
+        day (Animesh, 2026-10-14), under the original cycle's plan so its hard exit date is
+        kept. Any other close today blocks, and at most one re-entry per day is allowed.
         """
         today = now.date()
-        todays = [t for t in self._store.get_trades(self.strategy_name) if t.trade_date == today]
-        if any(not is_recentre_close(t) for t in todays):
-            return []  # already traded today (e.g. closed on the entry day): no churn
+        trades = self._store.get_trades(self.strategy_name)
+        todays = [t for t in trades if t.trade_date == today]
+        if any(is_close_trade(t) and not is_recentre_close(t) for t in todays):
+            return []  # already closed today for a non-re-centre reason: no churn
+        recentres = sum(1 for t in todays if t.leg_role == SHORT_CALL and is_recentre_close(t))
+        if recentres > _MAX_REENTRIES_PER_DAY:  # the 2nd re-centre close today stays flat
+            return []
         plan = self.cycle_plan(today) if todays else self._policy.entry_window(today)
         if plan is None or now.time() < plan.entry_time_ist or today >= plan.hard_exit_date:
             return []
@@ -203,7 +212,10 @@ class NiftyCalendarV1(ReEntryMixin):
         far = await self._chain(plan.far_expiry, market)
         if near is None or far is None:
             return [self._warn("NC_CHAIN_UNAVAILABLE", "near or far chain unavailable")]
-        result = self._selector.select(near, far, market.underlying_spot, self._config)
+        # A same-day re-entry must not reuse a short strike already sold today: the ledger's
+        # unique key would drop the SELL silently. Fresh entries pass no exclusions.
+        blocked = sold_short_strikes_on(trades, self._lookup, today) if todays else frozenset()
+        result = self._selector.select(near, far, market.underlying_spot, self._config, blocked)
         if isinstance(result, NoEntry):
             log.info("nifty_calendar.no_entry", reason=result.reason, filter=result.failed_filter)
             return [self._warn("NC_NO_ENTRY", f"{result.reason} [{result.failed_filter}]")]
@@ -211,6 +223,9 @@ class NiftyCalendarV1(ReEntryMixin):
             specs = entry_leg_specs(result, self._lookup, self._config.lot_size)
         except CalendarError as exc:
             return [self._warn("NC_KEY_UNRESOLVED", str(exc))]
+        if clashes := ledger_collisions(specs, trades, today):
+            log.error("nifty_calendar.same_day_ledger_collision", legs=clashes)
+            return [self._warn("NC_LEDGER_COLLISION", f"legs {clashes} already traded today")]
         payload: dict[str, Any] = {
             "auto_execute": True,
             "auto_action": "OPEN_STRUCTURE",

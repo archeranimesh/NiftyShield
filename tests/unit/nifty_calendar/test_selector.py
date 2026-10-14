@@ -869,3 +869,76 @@ def test_candidate_without_breakeven_is_ranked_not_raised(
     res = selector.select(chain_near, chain_far, spot, MONTHLY)
     assert isinstance(res, NoEntry)
     assert res.failed_filter == "no_breakeven"
+
+
+def _two_strike_chains(spot: Decimal) -> tuple[OptionChain, OptionChain]:
+    """Reference 400/400 chains with a second, adjacent short strike (22,650) and its wings."""
+    pe = (Decimal("220.0"), Decimal("222.0"), Decimal("-0.25"), Decimal("25.0"), Decimal("14.0"))
+    ce = (Decimal("230.0"), Decimal("232.0"), Decimal("0.26"), Decimal("25.0"), Decimal("13.5"))
+    near, far = _build_chains(
+        spot,
+        date(2026, 10, 27),
+        date(2026, 11, 23),
+        Decimal("22600"),
+        {Decimal("22200"): pe, Decimal("22250"): pe},
+        {Decimal("23000"): ce, Decimal("23050"): ce},
+    )
+    adjacent = Decimal("22650")
+    near.strikes[adjacent] = near.strikes[Decimal("22600")]
+    far.strikes[adjacent] = far.strikes[Decimal("22600")]
+    return near, far
+
+
+def test_excluded_short_strike_moves_entry_to_adjacent_strike() -> None:
+    """A same-day collision at 22,650 re-enters at 22,600 with the wings re-anchored."""
+    spot = Decimal("22640")
+    near, far = _two_strike_chains(spot)
+
+    res = WingStructureSelector().select(near, far, spot, MONTHLY, frozenset({Decimal("22650")}))
+
+    assert isinstance(res, CalendarStructure) and res.short_strike == Decimal("22600")
+    assert res.long_pe_wing.strike == Decimal("22200")
+    assert res.long_ce_wing.strike == Decimal("23000")
+
+
+def test_exclusion_still_applies_entry_filters() -> None:
+    """The adjacent strike is not exempt: here it fails breakeven symmetry and is refused."""
+    spot = Decimal("22660")
+    near, far = _two_strike_chains(spot)
+    selector = WingStructureSelector()
+
+    base = selector.select(near, far, spot, MONTHLY)
+    moved = selector.select(near, far, spot, MONTHLY, frozenset({Decimal("22650")}))
+
+    assert isinstance(base, CalendarStructure) and base.short_strike == Decimal("22650")
+    assert isinstance(moved, NoEntry) and moved.failed_filter == "breakeven_symmetry"
+
+
+def test_exact_midpoint_spot_picks_lower_strike() -> None:
+    """Spot midway between two strikes resolves to the lower one, deterministically."""
+    spot = Decimal("22625")
+    near, far = _two_strike_chains(spot)
+
+    res = WingStructureSelector().select(near, far, spot, MONTHLY)
+
+    assert isinstance(res, CalendarStructure) and res.short_strike == Decimal("22600")
+
+
+def test_excluding_every_near_strike_is_no_entry() -> None:
+    """With no eligible strike left the selector refuses rather than raising."""
+    spot = Decimal("22600")
+    near, far = _build_chains(spot, date(2026, 10, 27), date(2026, 11, 23), spot, {}, {})
+
+    res = WingStructureSelector().select(near, far, spot, MONTHLY, frozenset({spot}))
+
+    assert isinstance(res, NoEntry) and res.failed_filter == "missing_quote"
+
+
+def test_excluding_a_strike_not_in_the_chain_changes_nothing() -> None:
+    """A stale excluded strike is ignored rather than raising."""
+    spot = Decimal("22600")
+    near, far = _two_strike_chains(spot)
+
+    res = WingStructureSelector().select(near, far, spot, MONTHLY, frozenset({Decimal("99999")}))
+
+    assert isinstance(res, CalendarStructure) and res.short_strike == Decimal("22600")

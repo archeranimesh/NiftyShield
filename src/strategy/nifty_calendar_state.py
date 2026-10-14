@@ -99,15 +99,64 @@ def is_recentre_close(trade: PaperTrade) -> bool:
     )
 
 
+def is_close_trade(trade: PaperTrade) -> bool:
+    """True for a structure-closing leg: a BUY back of a short or a SELL of a long wing."""
+    if trade.leg_role in _SHORT_ROLES:
+        return trade.action == TradeAction.BUY
+    return trade.action == TradeAction.SELL
+
+
+def sold_short_strikes_on(
+    trades: Sequence[PaperTrade], lookup: InstrumentLookup, trade_date: date
+) -> frozenset[Decimal]:
+    """Strikes of the short legs sold on ``trade_date``.
+
+    ``paper_trades`` is unique on (strategy, role, instrument, date, action), so a same-day
+    re-entry at one of these strikes would have its SELL silently dropped. The shell passes
+    them to the selector as excluded strikes. Keys the lookup cannot resolve are skipped.
+
+    Args:
+        trades: The strategy's ledger.
+        lookup: BOD instrument lookup used to resolve each key's strike.
+        trade_date: The day the re-entry would be written on.
+
+    Returns:
+        The distinct strikes, empty when no short was sold that day.
+    """
+    strikes: set[Decimal] = set()
+    for t in trades:
+        if t.trade_date != trade_date or t.action != TradeAction.SELL:
+            continue
+        if t.leg_role not in _SHORT_ROLES:
+            continue
+        inst = lookup.get_by_key(t.instrument_key)
+        if inst and inst.get("strike_price") is not None:
+            strikes.add(Decimal(str(inst["strike_price"])))
+    return frozenset(strikes)
+
+
+def ledger_collisions(
+    specs: Sequence[LegSpec], trades: Sequence[PaperTrade], trade_date: date
+) -> list[str]:
+    """Roles in ``specs`` whose (role, instrument, action) already has a trade on ``trade_date``.
+
+    Such a leg would be dropped by the ledger's unique key, leaving a half-open structure.
+    """
+    taken = {
+        (t.leg_role, t.instrument_key, t.action.value) for t in trades if t.trade_date == trade_date
+    }
+    return [s.leg_role for s in specs if (s.leg_role, s.instrument_key, s.action) in taken]
+
+
 def cycle_origin_date(
     trades: Sequence[PaperTrade], entry_date: date, has_window: Callable[[date], bool]
 ) -> date | None:
     """Entry date of the original cycle that a (possibly re-centred) structure belongs to.
 
-    A re-centre re-enters the same day with new strikes, so its shorts carry the
-    re-centre date, which is no entry window. Walking the short-call SELL dates
-    backwards from ``entry_date``, the first one that is an entry window is the
-    cycle's original entry, so its plan (hard day-10, DTE guard) still applies.
+    A cycle runs from its first short-call SELL until a close that is not a re-centre or
+    redeploy. Re-entries after a re-centre are part of the same cycle, including one on the
+    entry day itself, so the origin is the first short-call SELL after the last real close.
+    Its plan (hard day-10, DTE guard) still applies to the re-entry.
 
     Args:
         trades: The strategy's ledger.
@@ -115,23 +164,29 @@ def cycle_origin_date(
         has_window: True when a date is a policy entry window.
 
     Returns:
-        The original entry date, or None when no ancestor date is an entry window.
+        The original entry date, or None when it is not an entry window or no SELL exists.
     """
-    recentre_dates = {t.trade_date for t in trades if is_recentre_close(t)}
-    sells = {
+    last_close = max(
+        (
+            t.trade_date
+            for t in trades
+            if t.leg_role == SHORT_CALL
+            and t.action == TradeAction.BUY
+            and not is_recentre_close(t)
+            and t.trade_date <= entry_date
+        ),
+        default=None,
+    )
+    sells = [
         t.trade_date
         for t in trades
-        if t.leg_role == SHORT_CALL and t.action == TradeAction.SELL and t.trade_date <= entry_date
-    }
-    # ``sells`` is non-empty whenever a structure is open (the only caller path); an empty ledger with
-    # no re-centre yields no ancestor, so ``entry_date`` is deliberately not added back in that case.
-    candidate_dates = (
-        sells if (entry_date in recentre_dates or not sells) else (sells | {entry_date})
-    )
-    for d in sorted(candidate_dates, reverse=True):
-        if d not in recentre_dates and has_window(d):
-            return d
-    return None
+        if t.leg_role == SHORT_CALL
+        and t.action == TradeAction.SELL
+        and t.trade_date <= entry_date
+        and (last_close is None or t.trade_date > last_close)
+    ]
+    origin = min(sells, default=None)
+    return origin if origin is not None and has_window(origin) else None
 
 
 def leg_quotes(legs: dict[str, OpenLeg], chains: dict[date, OptionChain]) -> dict[str, OptionLeg]:

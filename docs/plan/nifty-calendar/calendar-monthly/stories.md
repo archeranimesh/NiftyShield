@@ -290,6 +290,18 @@ the interim module. Re-run the CM-1 and CM-6 tests unchanged; breakevens must st
 
 **Commit:** `refactor(nifty-calendar): use shared Black-Scholes pricer`
 
+## CM-10 — Entry-day re-entry at the adjacent strike
+
+Raised by CB-3 (2026-10-14). Decision record: `DECISIONS.md` §"Nifty calendar: entry-day re-entry at the adjacent strike".
+
+**Files:** `src/nifty_calendar/selector.py` (optional `exclude_short_strikes`), `src/strategy/nifty_calendar_v1.py` (`plan_entry`), `src/strategy/nifty_calendar_state.py` (`is_close_trade`,
+`sold_short_strikes_on`, `ledger_collisions`, `cycle_origin_date`), and their tests.
+
+**What it does:** see the DECISIONS entry. A re-centre or redeploy on the entry day re-enters under the original plan; the strikes sold today are excluded; any residual ledger clash returns WARN
+`NC_LEDGER_COLLISION`; one re-entry per day. `test_recentre_day_entry_blocked_by_same_day_entry_trades` was rewritten to pin the new behaviour.
+
+**Commit:** `feat(nifty-calendar): re-enter at adjacent strike on entry-day re-centre`
+
 ### CM-0 findings (2026-10-13, code audit + live Upstox probe)
 
 Probe: `scratch/data_probes/2026-10-13_nifty_calendar_cm0_probe.py` (read-only; the margin calculator places no order). Run at 11:30 IST with spot 22,505, near 2026-11-23, far 2026-12-29, ATM 22,500,

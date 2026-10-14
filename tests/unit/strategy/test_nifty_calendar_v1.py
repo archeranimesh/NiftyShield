@@ -392,13 +392,82 @@ async def test_other_trade_today_still_blocks_reentry(h: Harness) -> None:
     assert await h.shell.plan_entry(h.near, h.now) == []  # a TARGET close is not a re-centre
 
 
-@pytest.mark.asyncio
-async def test_recentre_day_entry_blocked_by_same_day_entry_trades(h: Harness) -> None:
+class _SpySelector:
+    """Real selector that records the strikes it was told to avoid on each call."""
+
+    def __init__(self, honour_exclusions: bool = True) -> None:
+        self.excluded: list[frozenset[Decimal]] = []
+        self._real = WingStructureSelector()
+        self._honour = honour_exclusions
+
+    def select(
+        self, near: Any, far: Any, spot: Any, config: Any, exclude: frozenset[Decimal] = frozenset()
+    ) -> Any:
+        self.excluded.append(exclude)
+        return self._real.select(near, far, spot, config, exclude if self._honour else frozenset())
+
+
+async def _enter_then_recentre_same_day(h: Harness) -> list[SignalEvent]:
+    """Enter, then RECENTRE-close later the same (entry) day; return the close events."""
     await h.enter()
     h.shell._exit_rule = _Rule(ExitDecision.RECENTRE)
-    events = await h.shell.check_signals(h.near, [])  # same day as the entry
+    h.now = h.now.replace(hour=11, minute=30)
+    events = await h.shell.check_signals(h.near, [])
+    assert [e.event_type for e in events] == ["NC_RECENTRE"]
     await h.shell.apply_action([], _to_action(events[0]))
-    assert await h.shell.plan_entry(h.near, h.now) == []  # the day's entry trades still block
+    return events
+
+
+@pytest.mark.asyncio
+async def test_entry_day_reentry_excludes_strike_sold_today(
+    h: Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Entry-day re-centre may re-enter, but never at the 22,700 short its first SELL used."""
+    monkeypatch.setattr(
+        "src.strategy.reentry_mixin.load_vix_series", lambda _d: pd.Series(np.linspace(10, 30, 252))
+    )
+    spy = _SpySelector()
+    h.shell._selector = spy
+    await h.enter()
+    assert spy.excluded == [frozenset()]  # a fresh entry carries no exclusions
+    h.shell._exit_rule = _Rule(ExitDecision.RECENTRE)
+    h.now = h.now.replace(hour=11, minute=30)
+    await h.shell.apply_action([], _to_action((await h.shell.check_signals(h.near, []))[0]))
+
+    events = await h.shell.plan_entry(h.near, h.now)
+
+    assert spy.excluded[-1] == frozenset({Decimal("22700")})
+    assert [e.event_type for e in events] == ["NC_NO_ENTRY"]  # the only listed strike is blocked
+
+
+@pytest.mark.asyncio
+async def test_same_day_same_strike_reentry_is_detected_not_dropped_silently(h: Harness) -> None:
+    """A selector that ignores the exclusion would write a dropped SELL; the shell refuses it."""
+    h.shell._selector = _SpySelector(honour_exclusions=False)
+    await _enter_then_recentre_same_day(h)
+
+    events = await h.shell.plan_entry(h.near, h.now)
+
+    assert [(e.event_type, e.severity) for e in events] == [("NC_LEDGER_COLLISION", "WARN")]
+
+
+@pytest.mark.asyncio
+async def test_second_recentre_same_day_stays_flat(
+    h: Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Only one re-entry per day: a second re-centre close the same day plans no entry."""
+    monkeypatch.setattr(
+        "src.strategy.reentry_mixin.load_vix_series", lambda _d: pd.Series(np.linspace(10, 30, 252))
+    )
+    await _enter_then_recentre_same_day(h)
+    trades = h.store.get_trades(MONTHLY.strategy_name)
+    # Simulate the re-entered structure being re-centred again: a second short_call BUY close.
+    second = [t for t in trades if t.leg_role == "short_call" and t.action == TradeAction.BUY][0]
+    h.store.record_trade(
+        second.model_copy(update={"instrument_key": "NSE_FO|999", "notes": "RECENTRE x"})
+    )
+
+    assert await h.shell.plan_entry(h.near, h.now) == []
 
 
 @pytest.mark.asyncio

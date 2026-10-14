@@ -75,10 +75,9 @@ history (resets on a daemon restart; accepted limitation documented in CM-4). Re
 2. Handoff: the entry script asks `CycleCalendar.active_variant(today)` and exits quietly (logged) if its own variant is not the active one, so cron can run both unconditionally.
 3. Re-centre and same-pair redeploy send one combined Telegram message, as the monthly re-centre does.
 4. Registration in the daemon and the EOD summaries; confirm both strategies show in open positions and strategy P&L.
-5. Same-day redeploy guard. `paper_trades` is `UNIQUE(strategy_name, leg_role, instrument_key, trade_date, action)` with `ON CONFLICT DO NOTHING`, so a same-pair redeploy (or re-centre) that lands on
-   the entry date of the cycle it replaces, at the same ATM strike, would have its second SELL silently dropped and the ledger would be wrong. The redeploy path must detect a dropped insert (no new
-   row returned), log it and not proceed as if the leg was opened. Decide with Animesh whether to defer the redeploy to the next day in that case or to pick the adjacent strike; default is defer,
-   logged, with a Telegram WARN. Unlikely but cheap to test, and a silent drop here would corrupt cycle P&L.
+5. Same-day redeploy guard: **done in `calendar-monthly/` CM-10** (shell blocked an entry-day re-entry outright; now it re-enters at the adjacent strike, one re-entry per day, and refuses with WARN
+   `NC_LEDGER_COLLISION` if a leg still clashes). CB-3's part: the entry script treats an `NC_LEDGER_COLLISION` event like any other `NO_ENTRY` alert (it is already alerted by the generic loop), and
+   the test below goes through the script path.
 
 **Tests:** `test_registry_lookup_both_variants` · `test_entry_script_noops_when_other_variant_active` · `test_biweekly_label_renders` · `test_unknown_variant_rejected` ·
 `test_same_day_same_strike_redeploy_is_detected_not_dropped_silently`.

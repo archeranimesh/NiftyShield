@@ -1335,6 +1335,22 @@ in DSN-4); backstop thresholds; Kite stays deferred pending confirmation.
 
 ---
 
+## Nifty calendar: entry-day re-entry at the adjacent strike (CM-10, 2026-10-14)
+
+`nifty-calendar/calendar-monthly/` CM-10, raised by `calendar-biweekly` CB-3. Decisions by Animesh, 2026-10-14. Supersedes the CM-7 rule that the entry trades of the same day block a re-entry.
+
+- **A re-centre or same-pair redeploy on the cycle's own entry day re-enters.** Before, the entry day's trades counted as "other trades today", so the close left the strategy flat for the whole cycle
+  (the entry window is a single day). `plan_entry` now blocks only on a close that is not a re-centre or redeploy (`is_close_trade` and not `is_recentre_close`).
+- **At most one re-entry per day:** a second re-centre close the same day stays flat (`_MAX_REENTRIES_PER_DAY`, counted from short-call re-centre closes today).
+- **Collision handling = adjacent strike, not defer.** `paper_trades` is unique on (strategy, role, instrument, date, action) with `ON CONFLICT DO NOTHING`, so a re-entry SELL at a strike already sold
+  today would be dropped silently. The shell passes the strikes of today's short SELLs to `StructureSelector.select(..., exclude_short_strikes=...)`, which takes the nearest remaining strike to spot
+  (a tie goes to the lower strike); wings re-anchor on it and all six filters still apply, so it may return `NoEntry`. A last guard, `ledger_collisions`, refuses (WARN `NC_LEDGER_COLLISION`) any
+  structure whose legs still clash, so a half-written structure cannot happen.
+- **`cycle_origin_date` rewritten:** the origin is the first short-call SELL after the last close that is not a re-centre or redeploy. The old walk skipped any date holding a re-centre close, which
+  made the entry day itself unusable as an origin.
+
+---
+
 ## Nifty calendar monthly: entry filters, margin basis, close-out (CM-0, CM-8, 2026-10-13)
 
 `nifty-calendar/calendar-monthly/`. CM-0 decisions by Animesh, 2026-10-13; findings in `stories.md` §"CM-0 findings".

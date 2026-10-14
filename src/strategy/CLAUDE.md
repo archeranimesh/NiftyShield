@@ -71,7 +71,7 @@ Thin shell over the pure core in `src/nifty_calendar/` (read that package's `CLA
   `plan_entry` and `apply_action` directly. The monitor only evaluates exits for an open structure.
 - **Cycle entry date comes from the short legs** (`PaperPosition.entry_date` is `None` for a BUY-only leg). The margin snapshot uses the same date.
 - **Re-centre** = close plus same-day re-entry under the original cycle's plan (original hard day-10 date kept). It is two Telegram messages: the shell's close/ROLL card, then the entry script's entry
-  card (`DECISIONS.md` §"Nifty calendar scripts").
+  card (`DECISIONS.md` §"Nifty calendar scripts"). An entry-day re-centre also re-enters (adjacent strike, one re-entry per day; CM-10, `DECISIONS.md` §"entry-day re-entry").
 - **No `if variant`** in the shell; the variant is the injected config, policy, selector and exit rule. Payoff charts need the registration block in `payoff_registrations.py`.
 
 ---

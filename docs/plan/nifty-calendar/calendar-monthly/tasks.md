@@ -4,7 +4,7 @@
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
 spec.
 
-**Open: CM-9** (blocked on `greeks-bs-fallback` GF-2/GF-3).
+**Open: CM-9** (blocked on `greeks-bs-fallback` GF-2/GF-3); CM-10 added 2026-10-14 for CB-3.
 - [x] **CM-0** — Prior-art audit and live-infra readiness probe; amend Design review if the code differs | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: e74f1ee
 - [x] **CM-1** — `src/nifty_calendar/` models and payoff maths (Greeks aggregation, breakevens, risk-reward, loss at breakevens, Black-76 repricing of far legs via an interim local pricer) | Owner:
   Antigravity | Model: n/a | Review: code-reviewer, greeks-analyst | SHA: 401edd7
@@ -20,6 +20,8 @@ spec.
 - [x] **CM-7** — Entry script, EOD snapshot script, `monitor_daemon` registration, EOD summary pick-up | Owner: Claude | Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: 9f47a68
 - [x] **CM-8** — Close-out: docs, module `CLAUDE.md`, graph re-index, parallel-run cutover note | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: 64fee3f
 - [ ] **CM-9** — Swap the interim pricer for `src/pricing` (blocked: `greeks-bs-fallback` GF-2/GF-3 not done) | Owner: Claude | Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: —
+- [x] **CM-10** — Entry-day re-entry at the adjacent strike: selector `exclude_short_strikes`, shell guard, `cycle_origin_date` rewrite | Owner: Claude | Model: claude-sonnet-5-5 | Review:
+  code-reviewer, greeks-analyst | SHA: <pending>
 
 ## Story done when
 
@@ -32,6 +34,7 @@ spec.
 - **CM-6** — entry, close and re-centre messages render in MarkdownV2 per `FORMATTING.md`; the payoff chart renders the calendar curve through IC's renderer with existing callers' output unchanged.
 - **CM-7** — scripts run in dry mode against `MockBrokerClient`; the strategy appears in the EOD summaries; the daemon registers it.
 - **CM-8** — docs per CLAUDE.md Step 5a done; cutover procedure written.
+- **CM-10** — a re-centre or redeploy on the entry day re-enters at the adjacent strike with no dropped ledger row; a second re-centre that day stays flat.
 - **CM-9** — `src/nifty_calendar/pricing.py` is deleted and the calendar payoff and filters use `src/pricing`, with every earlier test passing unchanged.
 
 ## After each task

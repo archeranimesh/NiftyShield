@@ -78,6 +78,7 @@ class StructureSelector(Protocol):
         chain_far: OptionChain,
         spot: Decimal,
         config: CalendarVariantConfig,
+        exclude_short_strikes: frozenset[Decimal] = frozenset(),
     ) -> SelectionResult:
         """Select a valid calendar structure or return NoEntry."""
         ...
@@ -108,6 +109,7 @@ class WingStructureSelector:
         chain_far: OptionChain,
         spot: Decimal,
         config: CalendarVariantConfig,
+        exclude_short_strikes: frozenset[Decimal] = frozenset(),
     ) -> SelectionResult:
         """Select an optimal calendar structure across the wing search grid.
 
@@ -121,6 +123,9 @@ class WingStructureSelector:
             chain_far: Far-expiry OptionChain snapshot.
             spot: Underlying spot price.
             config: CalendarVariantConfig parameters.
+            exclude_short_strikes: Strikes the short straddle must not use (a same-day
+                re-entry whose original strike would collide in the ledger). The nearest
+                remaining strike to spot is used; a tie goes to the lower strike.
 
         Returns:
             CalendarStructure if a candidate passes all filters, else NoEntry.
@@ -129,7 +134,10 @@ class WingStructureSelector:
             return NoEntry(reason="Near chain has no strikes", failed_filter="missing_quote")
 
         # 1. Determine near ATM strike (closest to spot, multiples of 50 allowed)
-        atm_strike = min(chain_near.strikes.keys(), key=lambda k: abs(k - spot))
+        eligible = [k for k in chain_near.strikes if k not in exclude_short_strikes]
+        if not eligible:
+            return NoEntry(reason="No eligible near strike", failed_filter="missing_quote")
+        atm_strike = min(eligible, key=lambda k: (abs(k - spot), k))
         near_strike_data = chain_near.strikes[atm_strike]
         near_ce = near_strike_data.ce
         near_pe = near_strike_data.pe
