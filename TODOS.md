@@ -9,6 +9,52 @@
 
 ---
 
+## Story and Epic Status (updated 2026-10-14)
+
+Snapshot of every active story, sorted by how many downstream stories it blocks (direct dependents, counted at sub-story level; the transitive count breaks ties). Progress is ticked/total from each
+`tasks.md`, which stays canonical. Ready = nothing outside Animesh's court blocks the next task.
+
+| Story (backlog #) | State | Next | Blocked by | Blocks |
+|---|---|---|---|---|
+| `yearly-foundation` (23) | 🔄 1/6 | YF-2 | none (YF-6 also needs DSC-2/3) | **6**: yearly-cc, yearly-pp, yearly-collar, yearly-ops-wiring, yearly-validation, ds-chain-monitoring |
+| `variance-gate` (21) | ⬜ 0/8 | VG0 (Animesh) | none (VG2.A needs 9 months) | **5**: backtest-engine, options_income, entry-event-filter, historical-data-abstraction, broker-abstraction |
+| `greeks-bs-fallback` (7) | ⬜ 0/6 | GF-1 | Animesh's 3 modeling decisions before GF-2 | **3**: chart-model-overlay, chain-decay-analysis, calendar-monthly CM-9 |
+| `backtest-engine` (11) | 🔄 3/16 | 1.1 (Animesh), 1.3a / 1.4 | variance-gate (phase gate) | **3**: backtest-eval-core, signals-eval-core, entry-event-filter |
+| `ds-chain-seam` (25) | ⬜ 0/5 | DSC-1 | none | **2**: ds-chain-monitoring, yearly-foundation (YF-6) |
+| `ds-chain-monitoring` (25) | ⬜ 0/5 | DSN-1 | DSC-3; DSN-2..4 also need YF-3 | **2**: yearly-validation (YV-5), ds-router-migration |
+| `far-expiry-liquidity-gate` (24) | ⛔ 0/3 | FG-1 | 15+ captured days (earliest 2026-11-02) | **2**: yearly-foundation (YF-3 registry), yearly-validation (YV-5) |
+| `design-gate` (26) | ⬜ 0/9 | DG-1 | none | **2**: design-baseline, logging-foundation (soft) |
+| `finideas-decommission` → `dhan-holdings-removal` (9) | ⬜ 0/11 | FD-1 | none | **1**: phase2-integrations |
+| `yearly-cc` ‖ `yearly-pp` (23) | ⛔ 0/4 | YC-1 / YP-1 | yearly-foundation | **1** each: yearly-collar |
+| `yearly-collar` (23) | ⛔ 0/2 | YL-1 | yearly-cc and yearly-pp | **1**: yearly-ops-wiring |
+| `yearly-ops-wiring` (23) | ⛔ 0/3 | YW-1 | yearly-collar | **1**: yearly-validation |
+| `logging-foundation` (27) | ⬜ 0/8 | LF-1 | redacted `crontab -l` from Animesh | **1**: logging-migration (LF-5) |
+| `logging-migration` (27) | ⛔ 0/5 | LM-1 | LF-5; after the Dec 2026 roll | **1**: logging-enforcement |
+| `backtest-eval-core` (13) | ⛔ 0/11 | B1.1 | backtest-engine 1.3 + 1.4 | **1**: signals-eval-core |
+| `phase2-integrations` (17) | ⛔ 0/4 | PV-1 | portfolio-snapshot-slimdown | **1**: broker-abstraction BA-14 / BA-15 (OE-1) |
+| `gamma-scan-phase-b` (4) | 🔄 5/6 | GS-6 (Animesh) | 5+ days of snapshots | 0 |
+| `calendar-monthly` (28) | 🔄 10/11 | CM-9 | greeks-bs-fallback GF-2 + GF-3 | 0 (`calendar-biweekly` ✅ 4/4) |
+| `chart-model-overlay` (6) | ⛔ 0/9 | MO-1 | greeks-bs-fallback GF-2 + GF-3 | 0 (`chart-core` ✅, `chart-polish` ✅) |
+| `chain-decay-analysis` (12) | ⛔ 0/4 | CDA-1 | greeks-bs-fallback (monthly bucket only) | 0 |
+| `yearly-validation` (23) | ⛔ 0/5 | YV-1 | ops-wiring; YV-5 also YF-6, FG-3, DSN-1..4 | 0 (the Dec 2026 roll) |
+| `ds-router-migration` (25) | ⛔ 0/6 | DSR-0 | ds-chain-monitoring and the Dec 2026 roll | 0 |
+| `signals-eval-core` (14) | ⛔ 0/23 | SE1.1 | backtest-eval-core + backtest-engine 1.12 | 0 |
+| `entry-event-filter` (16) | ⛔ 1/5 | EF-1 | backtest-engine Phase 2 | 0 |
+| `options_income` (15) | ⛔ 0/9 | S0 | Phase 0.8 gate direction (variance-gate) | 0 |
+| `historical-data-abstraction` (19) | ⛔ 0/11 | HD-0 | Phase 0.8 gate clears | 0 |
+| `broker-abstraction` (18) | ⛔ 0/16 | BA-14 / BA-15 | `src/execution/` (phase2-integrations OE-1) | 0 |
+| `design-baseline` (26) | ⛔ 0/4 | DBL-1 | design-gate DG-4 | 0 |
+| `logging-enforcement` (27) | ⛔ 0/6 | LE-1 | logging-migration LM-4 | 0 |
+| `strategy-refactor-blueprint` (10) | ⬜ 0/5 | BP-1 | none (BP-2 after item 2, BP-3 council) | 0 |
+| `telegram-caption-audit` (29) | ⬜ 0/3 | TCA-1 | none | 0 |
+| `tradetron-pp-protection-study` (30) | ⬜ 0/5 | PPS-1 | Animesh's approval for funded runs | 0 |
+| `technical-debt` (20) | 🔄 7/21 | DEBT-3 (opportunistic) | fires when the named file is touched | 0 |
+
+Done and awaiting archive or already archived: `ds-capability-map` ✅ 3/3, `dhan-chain-adapter` ✅ 4/4, `far-expiry-capture` ✅ 5/5, `risk-gamma-phase-a` ✅ 7/7, `calendar-biweekly` ✅ 4/4, `chart-core` ✅
+19/19, `chart-polish` ✅ 11/11. Open bugs: BUG-030 (next B030.1), BUG-019 (diagnostic-only); authoritative list in `docs/bugs/bugs.md`.
+
+---
+
 ## Execution Order and Dependencies (updated 2026-10-08)
 
 **Read this first.** It says which story to run when and what blocks what; `## Feature Backlog` below holds the pointers (list position = `/work` priority). `tasks.md` stays canonical for per-task
@@ -129,6 +175,8 @@ rot them. (Items 3, 5 and 8 closed — numbers kept stable because item text cro
     only; net-long-vega diversifier to the short-vol book. Requested by Animesh 2026-10-12.
 29. **Telegram caption-fit audit** — `docs/plan/telegram-caption-audit/` — next **TCA-1** (inventory; TCA-1..3). Read-only: measure which Telegram messages fit a single photo-with-caption message
     (1024-char cap). No implementation until reviewed. Requested by Animesh 2026-10-13.
+30. **Tradetron backtest studies (epic)** — `docs/plan/tradetron-backtest/` — next **PPS-1** (`tradetron-pp-protection-study/`, PPS-1..5). Cheap Tradetron backtests (₹20 a run) of put depth, cost and
+    deductible for the NIFTY overlays; funded runs need Animesh's approval. Scaffolded 2026-10-11.
 
 ## Open Bugs
 
