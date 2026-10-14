@@ -11,7 +11,7 @@ spec.
 - [x] **CB-3** — Register `paper_nifty_calendar_biweekly`: daemon, entry and snapshot scripts by variant, payoff registration, `Cal BW` label | Owner: Claude | Model: claude-sonnet-5-5 | Review:
   code-reviewer
   | SHA: 8e5794e
-- [x] **CB-4** — Full-month two-variant integration test; close-out docs and cutover note update | Owner: Claude | Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: <pending>
+- [x] **CB-4** — Full-month two-variant integration test; close-out docs and cutover note update | Owner: Claude | Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: adc992b
 
 ## Story done when
 
