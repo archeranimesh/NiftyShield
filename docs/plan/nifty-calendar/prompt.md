@@ -15,11 +15,13 @@ Story order is fixed — it is the row order of the **Stories** table in this fo
 
 1. `calendar-monthly/` — shared pure core, strategy shell, IC-equivalent infra, monthly variant
 2. `calendar-biweekly/` — bi-weekly variant on the shared core (blocked by: `calendar-monthly` complete)
+3. `monitor-entry/` — monitor-driven entry reporting and per-strategy logs (blocked by: `calendar-biweekly` complete)
 
 Do not jump ahead even if a later story looks more urgent.
 
 Open `calendar-monthly/tasks.md`. If it has any unchecked `- [ ]` line, the first one (top to bottom) is your task — stop searching, go to Step 2. Only if every box in `calendar-monthly/tasks.md` is
-checked: open `calendar-biweekly/tasks.md`, first unchecked line is your task. If every sub-story `tasks.md` is fully checked, the epic is complete — say so and stop; do not invent new work.
+checked: open `calendar-biweekly/tasks.md`; once that is also fully checked, open `monitor-entry/tasks.md`. The first unchecked line is your task. If every sub-story `tasks.md` is fully checked, the
+epic is complete — say so and stop; do not invent new work.
 
 ## Step 2 — confirm you are the right owner
 
