@@ -261,6 +261,13 @@ async def test_payload_has_headroom_for_reasoning_models(snapshot: MarketSnapsho
     assert provider._timeout.total == 60.0
 
 
+async def test_payload_requests_low_reasoning_effort(snapshot: MarketSnapshot) -> None:
+    session = _FakeSession(_FakeResponse(body=_valid_body("BEARISH", 3)))
+    with _patch_session(session):
+        await GeminiSignalProvider(api_key="k").get_signal(snapshot)
+    assert session.calls[0][1]["json"]["reasoning"] == {"effort": "low"}
+
+
 def test_is_runtime_signal_provider() -> None:
     assert isinstance(GeminiSignalProvider(api_key="k"), SignalProvider)
 

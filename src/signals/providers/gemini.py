@@ -97,6 +97,7 @@ class GeminiSignalProvider:
             "model": self._model,
             "messages": messages,
             "max_tokens": 2048,
+            "reasoning": {"effort": "low"},
             "temperature": 0,
             "response_format": {"type": "json_object"},
         }
