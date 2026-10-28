@@ -102,6 +102,7 @@ async def run() -> None:
     """Fetch LTP for all open picks, record snapshots,
     and auto-close breaches."""
     store = MVPStore(settings.db_path)
+    await asyncio.to_thread(store.init_db)  # BUG-078: DB may predate newer mvp_* tables
     picks = await asyncio.to_thread(store.get_open_picks)
     if not picks:
         logger.info("mvp_watch.no_open_picks")
@@ -229,6 +230,7 @@ async def run_eod() -> None:
     so the day's final snapshot is already recorded).
     """
     store = MVPStore(settings.db_path)
+    await asyncio.to_thread(store.init_db)  # BUG-078
     providers = await asyncio.to_thread(store.list_providers)
     all_picks = await asyncio.to_thread(store.list_picks)
     if not providers or not all_picks:

@@ -517,7 +517,7 @@ monthly V1, weekly V1 and monthly V2 headlines; non-IC card unchanged.
 | Field | Value |
 |---|---|
 | Severity | High — silent for 2 weeks; hourly LTP snapshots and target/stop-loss auto-close for tracked picks have not run |
-| Status | 🔴 Open |
+| Status | 🟢 Fixed 2026-10-28 — `init_db()` in `run()`/`run_eod()`; regression `test_mvp_watch_schema.py`; 09-30→10-28 snapshot gap not backfilled |
 | Discovered | 2026-10-14 (found while catching up crons after the laptop-sleep outage; unrelated to it) |
 | Location | `scripts/mvp_watch.py` (`MVPStore(...)` at ~104 and ~231, no `init_db()`); `src/mvp/store.py::init_db`, `get_corporate_actions` |
 
