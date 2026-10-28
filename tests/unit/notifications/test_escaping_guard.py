@@ -353,7 +353,7 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
     # guard credits every send in a function that calls an escaping helper. BUG-042 audited them:
     # _format_alert_message() and format_hourly_summary() escape every out-of-fence value, pinned
     # by tests/unit/notifications/test_bug042_call_site_escaping.py.
-    ("scripts/mvp_watch.py", 293): (
+    ("scripts/mvp_watch.py", 295): (
         "heuristic limitation, not a real gap (BUG-042 audit) - run_eod's message is built "
         "and fully escaped inside src/mvp/tracker.py::format_eod_summary() (escape_markdown() "
         "on every out-of-fence value, fenced table verbatim), but this guard only inspects the "
