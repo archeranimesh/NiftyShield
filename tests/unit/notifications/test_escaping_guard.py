@@ -55,7 +55,7 @@ from __future__ import annotations
 
 import ast
 import pathlib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import pytest
 
@@ -75,6 +75,12 @@ class CallSite:
     method: str
     enclosing_function: str
     escaped: bool
+    ordinal: int = 0  # position among this file+function's call sites, by line
+
+    @property
+    def key(self) -> tuple[str, str, int]:
+        """Line-independent identity: (file, enclosing function, ordinal)."""
+        return (self.file, self.enclosing_function, self.ordinal)
 
 
 def _iter_py_files():
@@ -166,6 +172,12 @@ def scan_call_sites() -> list[CallSite]:
                     escaped=_has_escaping_call(scope),
                 )
             )
+    sites.sort(key=lambda s: (s.file, s.enclosing_function, s.line))
+    seen: dict[tuple[str, str], int] = {}
+    for i, site in enumerate(sites):
+        n = seen.get((site.file, site.enclosing_function), 0)
+        seen[(site.file, site.enclosing_function)] = n + 1
+        sites[i] = replace(site, ordinal=n)
     return sites
 
 
@@ -173,55 +185,51 @@ def scan_call_sites() -> list[CallSite]:
 # `strategy-rollout/` has format-confirmed but not yet implemented in real code
 # (ROLL-* reference given), or a gap this scan surfaced that no prior MD-*/ROLL-*
 # task names (flagged "untracked gap" - worth a future task, not this one).
-# (file, line): reason
-_BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
-    ("scripts/signal_eod.py", 269): (
+# (file, enclosing function, ordinal within it): reason - line-independent, so
+# unrelated edits above a call site no longer break the guard.
+# Adding/removing another send in the same function shifts later ordinals - update keys then.
+_BASELINE_UNESCAPED: dict[tuple[str, str, int], str] = {
+    ("scripts/signal_eod.py", "_notify_outcome", 0): (
         "S5.5a — value is fully escaped inside the callee _format_outcome_notification() "
         "(the message-builder owns the MarkdownV2 boundary: escape_markdown() per dynamic "
         "value, literal * for bold), but this guard only inspects the immediate enclosing "
         "function (_notify_outcome), not the builder it calls — same shape as the morning_signal.py:218 entry. "
         "Line moved from 232 -> 255 by SOP-1/SOP-2's profit high/low addition (767c0bd, a73b6b6), then 255 -> 265 by BUG-063's exit-reason label."
     ),
-    ("scripts/signal_eod.py", 478): (
+    ("scripts/signal_eod.py", "_notify_report", 0): (
         "S5.5d — report body is wrapped as a MarkdownV2 fenced code block inside the "
         "callee _format_report_message() (fence content only needs backslash/backtick "
         "escaping, never the general escape_markdown), but this guard only inspects the "
         "immediate enclosing function (_notify_report), not the builder it calls. "
         "Line moved from 441 -> 464 by SOP-1/SOP-2's profit high/low addition (767c0bd, a73b6b6), then 464 -> 474 by BUG-063."
     ),
-    (
-        "scripts/dev/send_test_telegram.py",
-        65,
-    ): (
+    ("scripts/dev/send_test_telegram.py", "main", 0): (
         "won't-fix (confirmed 2026-08-25, Animesh) - manual dev/debug utility invoked ad hoc "
         "by whoever's testing, not a cron or strategy event path; deliberately excluded from "
         "MD-7.1/MD-7.2/MD-7.3"
     ),
-    ("scripts/eod_summary.py", 199): (
+    ("scripts/eod_summary.py", "main", 0): (
         "heuristic limitation, not a real gap - ROLL-6 migrated this (SHA on the task "
         "line); the message is built and fully escaped inside build_eod_summary_message() "
         "(escape_markdown() on every out-of-fence line), but this guard only inspects the "
         "immediate enclosing function (main), not the builder it calls - same shape as the "
         "paper_3track_snapshot.py:2030 entry. Line moved from 200 -> 198 by UXM's edits."
     ),
-    ("scripts/healthcheck.py", 373): (
+    ("scripts/healthcheck.py", "main", 0): (
         "heuristic limitation, not a real gap - ROLL-11 migrated this (SHA on the task "
         "line); the message is built and fully escaped inside build_healthcheck_alert() "
         "(escape_markdown() on every label, status word, detail and the bracketed time), "
         "but this guard only inspects the immediate enclosing function (main), not the "
         "builder it calls - same shape as the scripts/eod_summary.py:198 entry"
     ),
-    (
-        "scripts/position_health_check.py",
-        149,
-    ): (
+    ("scripts/position_health_check.py", "main", 0): (
         "heuristic limitation, not a real gap - ROLL-12 migrated this; the message is built "
         "and fully escaped inside build_position_health_message(), but this guard only inspects "
         "the immediate enclosing function (main)"
     ),
     # paper_3track_overlay_entry.py:1333 (_alert_bootstrap_failure) - BUG-042 escaped it
     # at the call site; no longer a baseline entry.
-    ("scripts/strategies/three_track/paper_3track_roll.py", 437): (
+    ("scripts/strategies/three_track/paper_3track_roll.py", "check_and_roll_leg", 0): (
         "heuristic limitation, not a real gap - ROLL-9 migrated this (SHA on the task "
         "line); the message is built and fully escaped inside build_roll_notification() "
         "(escape_markdown() on every dynamic value + static punctuation), but this guard "
@@ -235,14 +243,14 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
     # (compute_and_record_exit_signals) and the three BUG-032 multi-instrument alerts
     # (_check_overlay_multi_instrument_alert, _compute_overlay_leg_totals) - BUG-042
     # escaped all five at the call site; no longer baseline entries.
-    ("scripts/dev/paper_track_snapshot.py", 171): (
+    ("scripts/dev/paper_track_snapshot.py", "main", 0): (
         "value escaped inside callee build_proxy_critical_alert() — guard inspects enclosing function only"
     ),
-    ("scripts/strategies/three_track/paper_3track_snapshot.py", 2048): (
+    ("scripts/strategies/three_track/paper_3track_snapshot.py", "_run", 0): (
         "value escaped inside callee build_proxy_critical_alert() — guard inspects enclosing "
         "function only. Line moved from 2020 -> 2039 by BUG-061's edit, then 2039 -> 2048 by BUG-042's."
     ),
-    ("scripts/morning_signal.py", 181): (
+    ("scripts/morning_signal.py", "run", 0): (
         "S5.5c — value is fully escaped inside the callee _format_signal_notification() "
         "(the message-builder owns the MarkdownV2 boundary: escape_markdown() per dynamic "
         "value, literal * for bold), but this guard only inspects the immediate enclosing "
@@ -250,7 +258,7 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "Line moved from 295 -> 181 by SEC-4's extraction of the pipeline body into "
         "src/signals/pipeline.py::run_morning_signal_pipeline."
     ),
-    ("src/strategy/signal_track_v1.py", 417): (
+    ("src/strategy/signal_track_v1.py", "open_signal_paper_entry", 0): (
         "SPT-3 — value is fully escaped inside the callee build_signal_entry_message() "
         "(the message-builder owns the MarkdownV2 boundary: escape_markdown() per dynamic "
         "value + literal * for bold, fenced table content passed through verbatim), but "
@@ -258,7 +266,7 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "not the builder it calls — same shape as the scripts/morning_signal.py:282 entry. "
         "Line moved from 293 -> 379 by SPT-5's new imports/helpers above it, then 379 -> 394 by BUG-065's _deliver_exit_message helper, then 394 -> 397 by BUG-064's new imports."
     ),
-    ("src/strategy/signal_track_v1.py", 123): (
+    ("src/strategy/signal_track_v1.py", "_deliver_exit_message", 0): (
         "SPT-5 — value is fully escaped inside the callee build_signal_exit_message() "
         "(same MarkdownV2-boundary shape as the SPT-3 entry above: escape_markdown() per "
         "dynamic value + literal * for bold, fenced table content passed through verbatim), "
@@ -266,7 +274,7 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "calls. BUG-065 moved the send into _deliver_exit_message (line 645 -> 114, then 114 -> 117 by BUG-064's new imports), which "
         "receives the already-escaped build_signal_exit_message() text."
     ),
-    ("scripts/strategies/three_track/paper_3track_snapshot.py", 2094): (
+    ("scripts/strategies/three_track/paper_3track_snapshot.py", "_run", 1): (
         "ORD-3 - digest body is wrapped as a single MarkdownV2 fenced code block inside "
         "the callee _build_recovery_digest() (fence content is literal, no per-line/whole-"
         "string escape_markdown needed — same shape as the scripts/signal_eod.py:440 "
@@ -274,7 +282,7 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "not the builder it calls. Line moved from 2066 -> 2085 by BUG-061's edit, "
         "then 2085 -> 2094 by BUG-042's."
     ),
-    ("scripts/record/record_paper_trade.py", 775): (
+    ("scripts/record/record_paper_trade.py", "_send_entry_card_if_requested", 0): (
         "UEM-2 - heuristic limitation, not a real gap: the card is built by "
         "_build_entry_card() -> format_entry_message(), which escapes every "
         "interpolated value via escape_markdown() inside EntryMessage's own "
@@ -282,7 +290,7 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "inspects the immediate enclosing function (_send_entry_card_if_requested), "
         "not the builder it calls - same shape as the scripts/eod_summary.py:198 entry"
     ),
-    ("scripts/record/record_paper_trade.py", 848): (
+    ("scripts/record/record_paper_trade.py", "_send_close_card_if_requested", 0): (
         "UXM-4 - heuristic limitation, not a real gap: the card is built by "
         "format_exit_message(), which escapes every interpolated value via "
         "escape_markdown() inside ExitMessage's own renderer "
@@ -291,7 +299,7 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "builder it calls - same shape as the scripts/eod_summary.py:198 entry. "
         "Line moved from 845 -> 846 by a later edit above it."
     ),
-    ("src/strategy/collar_overlay_v1.py", 683): (
+    ("src/strategy/collar_overlay_v1.py", "_send_reentry_notification", 0): (
         "OEM-2 - heuristic limitation, not a real gap: the card is built by "
         "format_entry_message(), which escapes every interpolated value via "
         "escape_markdown() inside EntryMessage's own renderer "
@@ -301,7 +309,7 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "Line moved from 679 -> 680 by UXM-5's _send_close_notification rewrite above it, "
         "then 680 -> 683 by c408c1e."
     ),
-    ("src/strategy/collar_overlay_v1.py", 685): (
+    ("src/strategy/collar_overlay_v1.py", "_send_reentry_notification", 1): (
         "OEM-2 - heuristic limitation, not a real gap: the card is built by "
         "format_entry_message(), which escapes every interpolated value via "
         "escape_markdown() inside EntryMessage's own renderer "
@@ -311,7 +319,7 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "Line moved from 681 -> 682 by UXM-5's _send_close_notification rewrite above it, "
         "then 682 -> 685 by c408c1e."
     ),
-    ("src/strategy/cc_overlay_v1.py", 446): (
+    ("src/strategy/cc_overlay_v1.py", "_send_close_notification", 0): (
         "UXM-5 - heuristic limitation, not a real gap: the card is built by "
         "format_exit_message(), which escapes every interpolated value via "
         "escape_markdown() inside ExitMessage's own renderer "
@@ -319,7 +327,7 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "immediate enclosing function (_send_close_notification), not the "
         "builder it calls - same shape as the scripts/record/record_paper_trade.py:846 entry"
     ),
-    ("src/strategy/pp_overlay_v1.py", 469): (
+    ("src/strategy/pp_overlay_v1.py", "_send_close_notification", 0): (
         "UXM-5 - heuristic limitation, not a real gap: the card is built by "
         "format_exit_message(), which escapes every interpolated value via "
         "escape_markdown() inside ExitMessage's own renderer "
@@ -327,7 +335,7 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "immediate enclosing function (_send_close_notification), not the "
         "builder it calls - same shape as the scripts/record/record_paper_trade.py:846 entry"
     ),
-    ("src/strategy/collar_overlay_v1.py", 865): (
+    ("src/strategy/collar_overlay_v1.py", "_send_close_notification", 0): (
         "UXM-5 - heuristic limitation, not a real gap: the card is built by "
         "format_exit_message(), which escapes every interpolated value via "
         "escape_markdown() inside ExitMessage's own renderer "
@@ -337,7 +345,7 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
         "Line moved from 863 -> 866 by c408c1e, then 866 -> 865 by BUG-043 dropping "
         "the overlay_total_pnl kwarg."
     ),
-    ("src/strategy/auto_close.py", 386): (
+    ("src/strategy/auto_close.py", "_send_close_notification", 0): (
         "UXM-6 - heuristic limitation, not a real gap: the card is built by "
         "format_exit_message(), which escapes every interpolated value via "
         "escape_markdown() inside ExitMessage's own renderer "
@@ -353,7 +361,7 @@ _BASELINE_UNESCAPED: dict[tuple[str, int], str] = {
     # guard credits every send in a function that calls an escaping helper. BUG-042 audited them:
     # _format_alert_message() and format_hourly_summary() escape every out-of-fence value, pinned
     # by tests/unit/notifications/test_bug042_call_site_escaping.py.
-    ("scripts/mvp_watch.py", 295): (
+    ("scripts/mvp_watch.py", "run_eod", 0): (
         "heuristic limitation, not a real gap (BUG-042 audit) - run_eod's message is built "
         "and fully escaped inside src/mvp/tracker.py::format_eod_summary() (escape_markdown() "
         "on every out-of-fence value, fenced table verbatim), but this guard only inspects the "
@@ -385,7 +393,7 @@ def test_no_new_unescaped_send_call_sites():
     a documented, pre-existing entry in `_BASELINE_UNESCAPED` - not a new one.
     """
     sites = scan_call_sites()
-    unescaped = {(s.file, s.line): s for s in sites if not s.escaped}
+    unescaped = {s.key: s for s in sites if not s.escaped}
     undocumented = {k: v for k, v in unescaped.items() if k not in _BASELINE_UNESCAPED}
     assert not undocumented, (
         "New unescaped Telegram send call site(s) found - dynamic values must be "
@@ -394,8 +402,8 @@ def test_no_new_unescaped_send_call_sites():
         "_BASELINE_UNESCAPED in tests/unit/notifications/test_escaping_guard.py with "
         "a reason:\n"
         + "\n".join(
-            f"  {f}:{line} ({v.method}, in {v.enclosing_function})"
-            for (f, line), v in sorted(undocumented.items())
+            f"  {v.file}:{v.line} ({v.method}, in {v.enclosing_function}) key={k}"
+            for k, v in sorted(undocumented.items())
         )
     )
 
@@ -403,42 +411,42 @@ def test_no_new_unescaped_send_call_sites():
 def test_baseline_entries_are_still_unescaped():
     """Baseline entries must still reproduce, so the baseline can't rot silently.
 
-    If a line moved or was already fixed, this fails - forcing the entry to be
+    If a call site was already fixed or its function renamed/removed, this fails - forcing the entry to be
     removed (fixed) or corrected (moved), rather than left as permanent noise.
     """
     sites = scan_call_sites()
-    unescaped = {(s.file, s.line) for s in sites if not s.escaped}
+    unescaped = {s.key for s in sites if not s.escaped}
     stale = sorted(k for k in _BASELINE_UNESCAPED if k not in unescaped)
     assert not stale, (
-        "Baseline entries no longer reproduce (fixed, or line moved) - remove/update "
-        "them in _BASELINE_UNESCAPED:\n" + "\n".join(f"  {f}:{line}" for f, line in stale)
+        "Baseline entries no longer reproduce (fixed, or function renamed) - remove/update "
+        "them in _BASELINE_UNESCAPED:\n" + "\n".join(f"  {k}" for k in stale)
     )
 
 
 def test_baseline_has_no_duplicate_or_unused_entries():
-    """Every baseline key must correspond to a real (file, line) pair the scan visits."""
+    """Every baseline key must correspond to a real call site the scan visits."""
     sites = scan_call_sites()
-    all_call_site_keys = {(s.file, s.line) for s in sites}
+    all_call_site_keys = {s.key for s in sites}
     orphaned = sorted(k for k in _BASELINE_UNESCAPED if k not in all_call_site_keys)
     assert not orphaned, (
         "Baseline entries reference call sites the scanner no longer finds at all "
-        "(not just 'now escaped') - the file/line was moved, deleted, or refactored:\n"
-        + "\n".join(f"  {f}:{line}" for f, line in orphaned)
+        "(not just 'now escaped') - the function was renamed, deleted, or refactored:\n"
+        + "\n".join(f"  {k}" for k in orphaned)
     )
 
 
 @pytest.mark.parametrize(
-    "file_rel, line",
+    "key",
     [
-        ("src/strategy/collar_overlay_v1.py", 611),  # 608 -> 611 by c408c1e
-        ("src/strategy/collar_overlay_v1.py", 613),  # 610 -> 613 by c408c1e
+        ("src/strategy/collar_overlay_v1.py", "_send_reentry_failure_notification", 0),
+        ("src/strategy/collar_overlay_v1.py", "_send_reentry_failure_notification", 1),
     ],
 )
-def test_md3_audited_close_notifications_stay_escaped(file_rel, line):
+def test_md3_audited_close_notifications_stay_escaped(key):
     """Regression pin for MD-3's audited call sites: they must stay escaped.
 
     A future edit that reworks one of these methods and drops the escaping call
-    without touching this line number would otherwise slip past
+    without touching this entry would otherwise slip past
     test_no_new_unescaped_send_call_sites (which only complains about *new*
     unescaped sites, not regressions on already-escaped ones at the same line).
 
@@ -455,9 +463,6 @@ def test_md3_audited_close_notifications_stay_escaped(file_rel, line):
     to format_exit_message() (see the new src/strategy/auto_close.py:387
     _BASELINE_UNESCAPED entry above) — same shape as the UXM-5 drops.
     """
-    sites = {(s.file, s.line): s for s in scan_call_sites()}
-    site = sites.get((file_rel, line))
-    assert site is not None, (
-        f"expected a .send()/.send_plain_message() call at {file_rel}:{line}, found none"
-    )
-    assert site.escaped, f"{file_rel}:{line} lost its escaping-helper usage"
+    site = {s.key: s for s in scan_call_sites()}.get(key)
+    assert site is not None, f"expected a .send()/.send_plain_message() call at {key}, found none"
+    assert site.escaped, f"{key} lost its escaping-helper usage"
