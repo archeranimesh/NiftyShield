@@ -8,7 +8,7 @@
 | Date                    | 2026-05-15                                                                                         |
 | Status                  | Paper trading — data collection + P&L tracking                                                     |
 | Underlying              | Nifty 50 index — weekly options only                                                               |
-| Expiry scope            | Current-week expiry (Thursday) + Wednesday before it (0–1 DTE at entry)                           |
+| Expiry scope            | Current-week expiry (Tuesday) + Monday before it (0–1 DTE at entry)                           |
 | Lot size                | 75 units (verify against NSE before each expiry)                                                   |
 | Council source          | `docs/archive/council/research/2026-05-02_gamma-acceleration-mispricing-option-buying.md`          |
 | Council pending         | 2 open questions — see §14. Both must resolve before Phase 3 live deployment.                      |
@@ -50,7 +50,7 @@ PHASE A — Daily chain watch (every trading day, all week)
                   │
                   ▼
 PHASE B — Intraday entry scan (DTE 0–1 only, 5-min cadence)
-    gamma_scan.py  ← runs */5 09:25–15:00 Wed+Thu
+    gamma_scan.py  ← runs */5 09:25–15:00 Mon+Tue
          │
          ├── reads gamma_watchlist  → watchlist_hit flag per candidate
          ├── evaluates full signal stack on ALL near-expiry strikes
@@ -84,13 +84,13 @@ value even before Phase B is implemented — every day of chain data is irreplac
 tracking across the day).
 
 **Expiry coverage:** Current-week expiry + next-week expiry. This builds multi-DTE gamma profiles: the current week evolves from ~5 DTE down to 0 DTE, while next week starts at ~12 DTE and becomes
-next week's current. On expiry Thursday, capture both the expiring chain's final state and the new current-week chain's opening state.
+next week's current. On expiry Tuesday, capture both the expiring chain's final state and the new current-week chain's opening state.
 
 **Strike coverage:** All Nifty CE and PE strikes within ±10% of current spot. Approximately 40–60 strikes per expiry at NSE's 50-point intervals.
 
 ### Phase B — Intraday Entry Scan
 
-**Days:** Wednesday (DTE = 1) and Thursday (DTE = 0, expiry day) only.
+**Days:** Monday (DTE = 1) and Tuesday (DTE = 0, expiry day) only.
 
 **Hours:** 09:25–15:00 IST. No new entries after 14:30 (insufficient time for meaningful exit before 15:00 time stop). Exit-check scans continue until 15:00.
 
@@ -331,10 +331,10 @@ Close when mark ≤ ₹0.25 (effective zero for sub-₹10 options) or when ask_q
 
 ### E3 — Time Stop
 
-**DTE 0 (Thursday):** Close by 14:30 regardless of P&L.
+**DTE 0 (Tuesday):** Close by 14:30 regardless of P&L.
 
-**DTE 1 (Wednesday):** Close by 15:00 Wednesday unless mark ≥ 1.5× entry ask. If in profit ≥ 1.5×, carry overnight — but gamma and theta both compress overnight, so the probability of a 5R exit on
-Thursday morning from a ₹3 premium is low. When in doubt, close Wednesday and look for a fresh signal Thursday.
+**DTE 1 (Monday):** Close by 15:00 Monday unless mark ≥ 1.5× entry ask. If in profit ≥ 1.5×, carry overnight — but gamma and theta both compress overnight, so the probability of a 5R exit on Tuesday
+morning from a ₹3 premium is low. When in doubt, close Monday and look for a fresh signal Tuesday.
 
 ### Exit accounting
 
@@ -598,8 +598,8 @@ CREATE INDEX IF NOT EXISTS idx_gsl_watchlist ON gamma_signal_log (watchlist_hit,
 # Phase A — optional morning baseline, 10:30 IST every trading day
 30 10 * * 1-5  cd /path/to/NiftyShield && python scripts/gamma_daily_watch.py --morning >> logs/gamma_watch.log 2>&1
 
-# Phase B — intraday scan, every 5 min Wed+Thu 09:25–15:00 IST
-*/5 9-15 * * 3,4  cd /path/to/NiftyShield && python scripts/gamma_scan.py >> logs/gamma_scan.log 2>&1
+# Phase B — intraday scan, every 5 min Mon+Tue 09:25–15:00 IST
+*/5 9-15 * * 1,2  cd /path/to/NiftyShield && python scripts/gamma_scan.py >> logs/gamma_scan.log 2>&1
 ```
 
 ### gamma_daily_watch.py responsibilities
@@ -744,8 +744,8 @@ python scripts/ask_council.py \
 - [ ] Add `DHAN_DATA_API_KEY` to `.env` and `.env.example`
 - [ ] Create `gamma_signal_log` table in `portfolio.sqlite`
 - [ ] Implement `scripts/gamma_scan.py`
-- [ ] Add cron entry: `*/5 9-15 * * 3,4`
-- [ ] Run `gamma_scan.py --dry-run` on first qualifying Wednesday
+- [ ] Add cron entry: `*/5 9-15 * * 1,2`
+- [ ] Run `gamma_scan.py --dry-run` on first qualifying Monday
 
 ### Calibration milestones
 
@@ -771,7 +771,7 @@ python scripts/ask_council.py \
 ### Open
 
 - Speed cold start (first scan of day): confirmed to default `speed_5m = 0` → Layer 2 fails. Acceptable: first 5 minutes of each expiry day are excluded. Log as `speed_5m_unavailable`.
-- Wednesday overnight carry: for strikes where DTE 1 → DTE 0, should the watchlist elevation flag be the deciding factor for carry vs close at 15:00 Wednesday?
+- Monday overnight carry: for strikes where DTE 1 → DTE 0, should the watchlist elevation flag be the deciding factor for carry vs close at 15:00 Monday?
 - Event-day Vega reactivation: `event_flag = 1` does not currently modify any filter. The council says Vega becomes co-primary on event days — a separate event-day signal variant may be needed, but
   deferred until base strategy has ≥ 20 signals.
 - Phase A morning snapshot (10:30): optional for now. Evaluate whether distance_pct trajectory intraday (10:30 vs 15:20) meaningfully predicts watchlist outcomes before committing to the second daily
