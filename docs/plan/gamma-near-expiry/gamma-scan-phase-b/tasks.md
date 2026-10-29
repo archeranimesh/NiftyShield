@@ -5,15 +5,15 @@ spec.
 
 **Blocked until** `../risk-gamma-phase-a/` is complete and ≥ 5 trading days of `gamma_chain_snapshots` exist.
 
-**Open: GS-7.** GS-6 now runs last; see §Sequence.
+**Open: GS-8.** GS-6 now runs last; see §Sequence.
 - [x] **GS-1** — `gamma_signal_log` model, DDL (`DB_REGISTRY.md` entry) and `GammaStore` insert/update methods | Owner: Antigravity | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 7dfd971
 - [x] **GS-2** — `src/gamma/signals.py`: Layers 0–4 as predicates returning reason codes in an ordered `SignalStack` | Owner: Claude | Model: claude-sonnet-5 | Review: greeks-analyst | SHA: 594fedf
 - [x] **GS-3** — `DepthSource` Protocol + Dhan L2 adapter + `NullDepth` (reduced mode) | Owner: Antigravity | Model: claude-sonnet-5 | Review: code-reviewer | SHA: 1486e1c
 - [x] **GS-4** — `ranking.py` (§6 formula) and `exits.py` (E1/E2/E3) as pure functions | Owner: Claude | Model: claude-sonnet-5 | Review: greeks-analyst | SHA: b1e9316
 - [x] **GS-5** — `scripts/gamma_scan.py` thin orchestration: lock, atomic no-open-position check, paper-entry adapter around `record_paper_trade` | Owner: Claude | Model: claude-sonnet-5 | Review:
   code-reviewer | SHA: 28cec55
-- [ ] **GS-7** — Correct the expiry-day text: cron is `*/5 9-15 * * 1,2` (Mon DTE 1, Tue DTE 0 since the April 2026 expiry move), not `3,4` / Wed–Thu, in this file, the epic `README.md` and
-  `docs/strategies/near_expiry_buy_v1.md` | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: —
+- [x] **GS-7** — Correct the expiry-day text: cron is `*/5 9-15 * * 1,2` (Mon DTE 1, Tue DTE 0 since the April 2026 expiry move), not `3,4` / Wed–Thu, in this file, the epic `README.md` and
+  `docs/strategies/near_expiry_buy_v1.md` | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: 406f640
 - [ ] **GS-8** — Activate the Day-21 calibration: find why `strike_iv_pctile_20d` and `gamma_gearing_pctile_dte` are null on every `gamma_chain_snapshots` row, populate them, and replace the
   placeholder `gearing_threshold` of `5.0` with the per-DTE-bucket p75 (council Stage 3). Data-gated: starts on or after 2026-11-02 | Owner: Claude | Model: claude-sonnet-5-5 | Review: greeks-analyst
   | SHA: —

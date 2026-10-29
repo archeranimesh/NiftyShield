@@ -32,7 +32,7 @@ Snapshot of every active story, sorted by how many downstream stories it blocks 
 | `logging-migration` (27) | ⛔ 0/5 | LM-1 | LF-5; after the Dec 2026 roll | **1**: logging-enforcement |
 | `backtest-eval-core` (13) | ⛔ 0/11 | B1.1 | backtest-engine 1.3 + 1.4 | **1**: signals-eval-core |
 | `phase2-integrations` (17) | ⛔ 0/4 | PV-1 | portfolio-snapshot-slimdown | **1**: broker-abstraction BA-14 / BA-15 (OE-1) |
-| `gamma-scan-phase-b` (4) | 🔄 5/6 | GS-6 (Animesh) | 5+ days of snapshots | 0 |
+| `gamma-scan-phase-b` (4) | 🔄 5/6 | GS-8 (Claude; GS-6 last) | 5+ days of snapshots | 0 |
 | `calendar-monthly` (28) | 🔄 10/11 | CM-9 | greeks-bs-fallback GF-2 + GF-3 | 0 (`calendar-biweekly` ✅ 4/4) |
 | `chart-model-overlay` (6) | ⛔ 0/9 | MO-1 | greeks-bs-fallback GF-2 + GF-3 | 0 (`chart-core` ✅, `chart-polish` ✅) |
 | `chain-decay-analysis` (12) | ⛔ 0/4 | CDA-1 | greeks-bs-fallback (monthly bucket only) | 0 |
@@ -128,8 +128,8 @@ rot them. (Items 3, 5 and 8 closed — numbers kept stable because item text cro
 25. **Data source routing (epic)** — `docs/plan/data-source-routing/` — `ds-capability-map` ✅ done; next **DSC-1**. Council ruled 2026-10-07 (`DECISIONS.md`). Order: `ds-capability-map` →
     `ds-chain-seam` → `ds-chain-monitoring` (needs `yearly-foundation` YF-3) → `ds-router-migration` (after the Dec 2026 roll). Supersedes most of `broker-abstraction`. Open for Animesh: monitor
     cadence, backstop thresholds, Kite.
-4. **Gamma near-expiry buy (epic)** — `docs/plan/gamma-near-expiry/` — Phase A `risk-gamma-phase-a/` ✅ done; next Phase B `gamma-scan-phase-b/` GS-6 (human-owned; GS-1..6; GS-1..5 done), blocked until
-   ≥ 5 days of snapshots exist. In progress, independent of everything else; finish before starting new stories.
+4. **Gamma near-expiry buy (epic)** — `docs/plan/gamma-near-expiry/` — Phase A `risk-gamma-phase-a/` ✅ done; next Phase B `gamma-scan-phase-b/` GS-8 (GS-6 runs last, human-owned; GS-1..6; GS-1..5
+   done), blocked until ≥ 5 days of snapshots exist. In progress, independent of everything else; finish before starting new stories.
 6. **Strategy payoff charts on Telegram (IC first, any strategy via opt-in registry)** — `docs/plan/strategy-payoff-charts/` — `chart-core/` ✅ done (`6ef2a5f`); `chart-polish/` ✅ done (dark Roboto
    redesign, accepted 2026-10-13); `chart-model-overlay/` (MO-1..9) stays blocked, it waits on `greeks-bs-fallback` GF-2 + GF-3, i.e. item 7.
 7. **Greeks Black-Scholes fallback** — `docs/plan/greeks-bs-fallback/` — next **GF-1** (read-only audit scope). Needs Animesh's three modeling decisions (rate / DTE convention / delta tolerance)
@@ -214,6 +214,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-10-29] gamma-scan-phase-b GS-7 closed (`406f640`): Corrected strategy doc expiry days to Mon/Tue, cron 1,2
 - [2026-10-14] nifty-calendar CB-3 done (`8e5794e`): `--variant` registry, `active_variant` handoff guard, `Cal BW` label, daemon/payoff/EOD registration; CB-4 next.
 - [2026-10-14] nifty-calendar CB-4 done: full-month two-variant walk (`tests/unit/nifty_calendar/test_full_cycle.py`) found the bi-weekly entering while the monthly was still open; added
   `OTHER_VARIANT_OPEN` guard to `paper_calendar_entry.run_entry`; cutover note now lists all four cron lines. Only CM-9 (blocked on GF-2/GF-3) remains in the epic.
