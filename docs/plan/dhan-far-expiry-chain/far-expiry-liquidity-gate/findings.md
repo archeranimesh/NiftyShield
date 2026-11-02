@@ -1,6 +1,7 @@
 # Far-Expiry Liquidity Gate — FG-1 calibration findings
 
-> Proposed spread cap, OI floor, quote rule and fallback ladder per expiry type, from the captured far-expiry chain. Status: **proposal, awaiting Animesh sign-off** before FG-2 starts.
+> Proposed spread cap, OI floor, quote rule and fallback ladder per expiry type, from the captured far-expiry chain. Status: **signed off by Animesh 2026-11-02 with one amendment (yearly spread cap
+> 10%, not 5%)**; FG-2 may start.
 
 ## Window and method
 
@@ -33,8 +34,9 @@ side at |0.10| picked a 65-lot OI strike on 4 days, so an OI floor matters there
 
 Quote rule, all expiry types: both bid and ask strictly positive (two-sided). A bid-only or ask-only strike always fails; this matches the current gate and is not relaxed.
 
-Yearly (2027-12-28 type): spread cap 5% of mid, OI floor 50,000. Rationale: the 5% cap passes 11 of 15 CE days and every PE day with no ladder, and OI at the chosen strike is above 68k whenever the
-strike is genuinely liquid; 50k excludes the 65-lot strikes without excluding a liquid one. 10% is the tolerable upper bound (14/15 CE), but there is no data reason to loosen yearly past 5%.
+Yearly (2027-12-28 type): spread cap 10% of mid, OI floor 50,000. **Amended by Animesh 2026-11-02** from the proposed 5%: yearly liquidity is low, so the cap is the 10% hard maximum, which passes 14
+of 15 CE days and every PE day with no ladder (5% passed 11/15 CE). OI at the chosen strike is above 68k whenever the strike is genuinely liquid; 50k excludes the 65-lot strikes without excluding a
+liquid one. 10% is a ceiling, not a target: nothing past it is acceptable for any expiry type.
 
 Near-far (2026-12-29 type): spread cap 10% of mid, OI floor 10,000. Rationale: at 5% the strike passes only about half the days; the cap here is a data-driven concession, not a quality target. The OI
 floor is kept low because raising it to 50k cost 3 more PE failing days with no spread benefit.
