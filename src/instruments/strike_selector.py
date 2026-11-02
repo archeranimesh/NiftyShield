@@ -11,6 +11,8 @@ from typing import Any
 
 import structlog
 
+from src.instruments.liquidity_gate import GateFailure
+
 log = structlog.get_logger(__name__)
 
 _ZERO = Decimal("0")
@@ -148,33 +150,61 @@ def filter_strikes_by_delta(
     return rows
 
 
+def gate_failure_reason(
+    row: dict[str, Any],
+    spread_cap: Decimal,
+    min_oi: int = 0,
+    require_two_sided: bool = True,
+) -> GateFailure | None:
+    """Return why *row* fails the liquidity gate, or None if it passes.
+
+    Checks run in order: two-sided quote, spread, OI floor.
+
+    Args:
+        row: Strike dict with ``bid``, ``ask``, ``mid`` and optionally ``oi``.
+        spread_cap: Max (ask - bid) / mid.
+        min_oi: Minimum open interest.
+        require_two_sided: Require bid > 0 and ask > 0.
+
+    Returns:
+        A :class:`GateFailure` member, or None.
+    """
+    bid = Decimal(str(row.get("bid", 0)))
+    ask = Decimal(str(row.get("ask", 0)))
+    mid = Decimal(str(row.get("mid", 0)))
+    two_sided = bid > _ZERO and ask > _ZERO and mid > _ZERO
+    if require_two_sided and not two_sided:
+        return GateFailure.ONE_SIDED
+    if two_sided and (ask - bid) / mid > spread_cap:
+        return GateFailure.SPREAD
+    if int(row.get("oi", 0) or 0) < min_oi:
+        return GateFailure.OI
+    return None
+
+
 def _apply_liquidity_gate(
-    ranked: list[dict[str, Any]], gate_pct: float = 0.05
+    ranked: list[dict[str, Any]],
+    gate_pct: float = 0.05,
+    min_oi: int = 0,
+    require_two_sided: bool = True,
 ) -> list[dict[str, Any]]:
     """Filter out strikes with a bid/ask spread > gate_pct of mid price.
 
     This is a semi-public helper used by recording and roll scripts to ensure
-    liquidity constraints are satisfied.
+    liquidity constraints are satisfied. Defaults reproduce the original
+    behaviour (two-sided quote, 5% spread, no OI floor).
 
     Args:
         ranked: List of ranked strikes.
         gate_pct: Maximum spread as a fraction of mid price (default: 0.05 for 5%).
+        min_oi: Minimum open interest (default 0: no floor).
+        require_two_sided: Require bid > 0 and ask > 0 (default True).
 
     Returns:
         Filtered list of strikes.
     """
-    gate = Decimal(str(gate_pct))
-    filtered: list[dict[str, Any]] = []
-    for r in ranked:
-        bid = Decimal(str(r.get("bid", 0)))
-        ask = Decimal(str(r.get("ask", 0)))
-        mid = Decimal(str(r.get("mid", 0)))
-        if bid > _ZERO and ask > _ZERO and mid > _ZERO:
-            spread = ask - bid
-            spread_pct = spread / mid
-            if spread_pct <= gate:
-                filtered.append(r)
-    return filtered
+    cap = Decimal(str(gate_pct))
+    return [r for r in ranked if gate_failure_reason(r, cap, min_oi, require_two_sided) is None]
 
 
 def rank_strikes(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
