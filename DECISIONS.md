@@ -1394,3 +1394,10 @@ structure, after the `NOT_ACTIVE` check. The bi-weekly then enters on the next w
   so rendering does not depend on host fonts. The font loader falls back to DejaVu Sans with a logged warning, never a raise. Money in the header uses two new whole-rupee formatters,
   `format_money_whole` and `format_money_k`, rather than `format_money`'s decimals. `fmt_inr` (Indian grouping) was rejected because every other money value in the messages is comma-thousands;
   `format_pct_signed` was added for signed percentages. The overrides are rows in `FORMATTING.md` §5. POP waits for `chart-model-overlay/` and will arrive as one more `HeaderCell`.
+
+## Liquidity Gate
+
+**Liquidity gate thresholds are per-expiry-type `GateConfig` data, with a 10% spread hard ceiling (2026-11-02, FG-2):** `src/instruments/liquidity_gate.py` holds `GATE_CONFIGS` (yearly: 10% cap, OI
+50,000; near_far: 10% cap, OI 10,000), enforced by `GateConfig.__post_init__` so no expiry type may exceed `MAX_SPREAD_CAP`. The fallback ladder is an ordered list of `LadderStep`s walked by
+`evaluate_ladder`, never nested ifs. `_apply_liquidity_gate` keeps its original defaults (5%, two-sided, no OI floor) for existing callers. Source:
+`docs/plan/dhan-far-expiry-chain/far-expiry-liquidity-gate/findings.md`.
