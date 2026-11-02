@@ -15,14 +15,16 @@ Decided with Animesh on 2026-10-06:
 - **Vocabulary is the resolver's, for IC and overlays alike:** `leaps` = quarterly (last Mar/Jun/Sep/Dec, 46-200 DTE), `yearly` = nearest live December. Overlays take `--expiry-type {monthly,yearly}`.
   `monthly` stays the default so every existing cron and invocation is unchanged.
 - **IC needs no config change.** `CONFIGS` already holds weekly / monthly / leaps / yearly. The only IC work is the coexistence check in `yearly-validation/`.
-- **Yearly overlays are a separate book.** Own `strategy_name` namespace, own positions; the monthly overlay's open legs must never make a yearly entry a no-op, or the reverse.
+- **Yearly overlays are a separate book, one strategy each (2026-11-02).** Yearly CC, yearly PP and yearly Collar each get their own `strategy_name`, like the IC `CONFIGS` entries — not one shared
+  yearly namespace split by `leg_role`. The monthly overlay's open legs must never make a yearly entry a no-op, or the reverse.
 - **Dec 2026 now, Dec 2027 after it expires.** Dec 2026 runs on the current Upstox chain. Dec 2027 needs Dhan Greeks — see the sibling epic `dhan-far-expiry-chain/`.
 - **Liquidity is a coded gate, not a judgement call** (Animesh: "we may have to adjust based on liquidity"). The gate itself is built in `dhan-far-expiry-chain/far-expiry-liquidity-gate/`.
 
 ## Verified facts that shape the design (2026-10-06 recon)
 
 - CC, PP and Collar do **not** have separate `strategy_name`s. All three share `STRATEGY_OVERLAY = "paper_nifty_overlay"` and are told apart by `leg_role`. A yearly book therefore needs a second
-  shared namespace, not three new names.
+  shared namespace, not three new names. **Superseded 2026-11-02:** the yearly book uses three names, one per strategy (see Decisions). YF-3 defines three constants, and YF-5 consumers must match
+  three yearly names while the monthly book keeps its single name plus `leg_role`.
 - The strategy classes (`CCOverlayV1`, `PPOverlayV1`, `CollarOverlayV1`) already carry `strategy_name: str = STRATEGY_OVERLAY` as a field, so a yearly instance can be the same class with a different
   name and tenor policy — no new strategy classes.
 - `auto_cc_bootstrap` hardcodes `preference=["monthly"]` and `date.today()`; PP and Collar bootstraps do the same. Tenor and clock must become parameters.
@@ -55,12 +57,19 @@ SOLID triggers run against the plan (`docs/refactor/design-principles.md`):
 
 Status: ⬜ Not started · 🔄 In progress · ✅ Done. This column is the epic's progress view — per-task checkboxes live only in each sub-story's `tasks.md`.
 
-## Open decisions for Animesh
+## Decisions (Animesh, 2026-11-02)
 
-1. **Yearly tenor policy values.** Entry min DTE, review DTE, roll DTE, profit target and delta stop for a ~12-month leg are not the monthly values. Default until decided: entry min DTE 14
-   (unchanged), exit thresholds copied from monthly, `review_dte` / `roll_dte` set from the capture data in `far-expiry-liquidity-gate/` FG-3. Confirm or override before `yearly-cc/` starts.
-2. **Collateral.** Default: the yearly namespace counts toward the same `collateral_gate` pool as the monthly overlay (conservative, avoids silently doubling exposure on the same NiftyBees holding).
-   "Completely independent" could mean a separate budget instead — confirm before YF-5.
+1. **Exit at 15 DTE.** `review_dte` and `roll_dte` are both 15 for the yearly policy. FG-3 shrinks to confirming the far-expiry book is liquid enough at 15 DTE; it no longer derives `roll_dte`.
+2. **Entry floor above the exit threshold.** Entry min DTE must be strictly greater than 15 (proposed 20), or a leg can pass entry and trip the exit gate on the same day and churn. The resolver moves
+   to the next December once the near one reaches 15 DTE (Dec 2026 expires Tue 29 Dec, so about 14 Dec). Exact floor is set in YF-3.
+3. **Profit target 75% of decay on sold premium** (CC, and the Collar's short call). PP and the Collar's put leg are hedges: no profit target, exit only at 15 DTE.
+4. **Delta stop:** copied from monthly for now, tuned from paper-run data. A registry value, so a later change is one entry.
+5. **One strategy per yearly overlay** (yearly CC, PP, Collar), each with its own name.
+6. **Collateral is a separate gate for the yearly book.** No NiftyBees unit allocation during the paper phase. Precondition for going live: with separate pools the books can short calls against more
+   units than are held, so a fixed unit split (or a cross-book cap) must exist first.
+7. **NiftyBees P&L stays in the monthly overlay record, unchanged.** The yearly strategies record option legs only; a combined view joins the two at read time. Any report summing the monthly and
+   yearly books must count NiftyBees once (tests in YW-2 and YV-1).
+8. **Dhan data plan is being renewed** (lapses 2026-11-04). Deadline for the epic's data path: the Dec 2026 roll, about 14 Dec — `data-source-routing/` DSC and DSN work must land before then.
 
 ## Cross-cutting constraints
 
