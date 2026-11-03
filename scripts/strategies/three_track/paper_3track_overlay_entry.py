@@ -281,6 +281,13 @@ def _cc_gate_strategy_name(policy: OverlayTenorPolicy) -> str:
     return STRATEGY_CC_OVERLAY
 
 
+def _pp_gate_strategy_name(policy: OverlayTenorPolicy) -> str:
+    """Strategy name a PP gate violation is logged under (yearly keeps its own ledger name)."""
+    if is_yearly_overlay_strategy(policy.pp_strategy_name):
+        return policy.pp_strategy_name
+    return STRATEGY_PP_OVERLAY
+
+
 def auto_cc_bootstrap(
     bod_path: Path,
     *,
@@ -607,7 +614,12 @@ class OpenPPPositionUnresolvable(Exception):
     """
 
 
-def _open_pp_dte(db_path: Path, bod_path: Path, today: date | None = None) -> int | None:
+def _open_pp_dte(
+    db_path: Path,
+    bod_path: Path,
+    today: date | None = None,
+    strategy_name: str = STRATEGY_OVERLAY,
+) -> int | None:
     """Return the DTE of the currently open overlay_pp position, or None if flat.
 
     Distinguishes PP3's two entry triggers:
@@ -631,6 +643,8 @@ def _open_pp_dte(db_path: Path, bod_path: Path, today: date | None = None) -> in
             expiry-resolution fallback for numeric-only instrument keys
             (see BUG, 2026-08-13, below).
         today: Reference date; defaults to ``market_today()`` (IST).
+        strategy_name: Ledger namespace to measure (default ``STRATEGY_OVERLAY``; the yearly
+            book passes its own policy name so a monthly put is never read as the yearly one).
 
     Returns:
         Minimum DTE (calendar days) across any open ``overlay_pp`` rows, or
@@ -659,7 +673,7 @@ def _open_pp_dte(db_path: Path, bod_path: Path, today: date | None = None) -> in
             GROUP BY instrument_key
             HAVING net_qty > 0
             """,
-            (STRATEGY_OVERLAY,),
+            (strategy_name,),
         )
         rows = cur.fetchall()
         conn.close()
@@ -824,7 +838,7 @@ def auto_pp_bootstrap(
                     gate_name="ivr_pp_reentry",
                     threshold=str(_PP_REENTRY_IVR_THRESHOLD),
                     actual=f"{ivr:.4f}",
-                    strategy_name=STRATEGY_PP_OVERLAY,
+                    strategy_name=_pp_gate_strategy_name(policy),
                 )
             else:
                 logger.error("auto_pp.ivr_gate_failed", ivr=ivr)
@@ -1414,8 +1428,9 @@ def main() -> None:
         choices=sorted(OVERLAY_TENORS),
         default="monthly",
         help=(
-            "Tenor book for --auto-cc (default: monthly). 'yearly' opens one December "
-            "call under the yearly CC ledger name; not yet supported with --auto-pp/--auto-collar."
+            "Tenor book for --auto-cc / --auto-pp (default: monthly). 'yearly' opens one "
+            "December call / put under its own yearly ledger name; not yet supported with "
+            "--auto-collar."
         ),
     )
     parser.add_argument(
@@ -1453,15 +1468,15 @@ def main() -> None:
     args = parser.parse_args()
     setup_logging()
 
-    if args.expiry_type != "monthly" and not args.auto_cc:
+    if args.expiry_type != "monthly" and not (args.auto_cc or args.auto_pp):
         parser.error(
-            f"--expiry-type {args.expiry_type} is only supported with --auto-cc "
-            "(yearly PP/Collar land in later yearly-overlays stories)."
+            f"--expiry-type {args.expiry_type} is only supported with --auto-cc/--auto-pp "
+            "(yearly Collar lands in a later yearly-overlays story)."
         )
     policy = OVERLAY_TENORS[args.expiry_type]
-    # Every monthly policy name is STRATEGY_OVERLAY; only --auto-cc can select another book.
-    # Yearly PP/Collar stories must pick pp_/collar_strategy_name per overlay type here.
-    ledger = policy.cc_strategy_name
+    # Every monthly policy name is STRATEGY_OVERLAY; --auto-cc/--auto-pp can select a yearly book.
+    # The yearly Collar story must pick collar_strategy_name here.
+    ledger = policy.pp_strategy_name if args.auto_pp else policy.cc_strategy_name
 
     gate_violation: GateViolation | None = None
 
@@ -1482,7 +1497,7 @@ def main() -> None:
         # targeted entry, monthly cadence decision) have both landed — see
         # docs/plan/3track-consolidation/tasks.md PP2/PP3.
         try:
-            open_dte = _open_pp_dte(args.db_path, args.bod_path)
+            open_dte = _open_pp_dte(args.db_path, args.bod_path, strategy_name=ledger)
         except OpenPPPositionUnresolvable as exc:
             # Fail safe, not fail open: an overlay_pp position exists but we
             # can't tell its DTE (or couldn't even query for one) is NOT the
@@ -1506,7 +1521,9 @@ def main() -> None:
                 file=sys.stderr,
             )
             sys.exit(0)
-        cfg, gate_violation = auto_pp_bootstrap(args.bod_path, log_only_gates=args.log_only_gates)
+        cfg, gate_violation = auto_pp_bootstrap(
+            args.bod_path, log_only_gates=args.log_only_gates, policy=policy
+        )
         if cfg is None:
             print("ERROR: auto-PP bootstrap failed. Check logs.", file=sys.stderr)
             _alert_bootstrap_failure("PP", "logs/pp_entry.log")

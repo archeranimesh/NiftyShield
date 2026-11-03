@@ -101,9 +101,8 @@ def test_yearly_rerun_is_noop(env: dict[str, Any]) -> None:
     assert env["store"].get_positions(STRATEGY_OVERLAY_YEARLY_CC)[0].net_qty == qty
 
 
-@pytest.mark.parametrize("other", ["--auto-pp", "--auto-collar"])
-def test_yearly_with_pp_or_collar_flag_rejected(other: str, env: dict[str, Any]) -> None:
-    argv = ["x.py", other, "--expiry-type", "yearly", "--db-path", str(env["db"])]
+def test_yearly_with_collar_flag_rejected(env: dict[str, Any]) -> None:
+    argv = ["x.py", "--auto-collar", "--expiry-type", "yearly", "--db-path", str(env["db"])]
     with patch("sys.argv", argv), pytest.raises(SystemExit) as exc:
         oe.main()
     assert exc.value.code != 0
