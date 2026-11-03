@@ -214,6 +214,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-11-03] yearly-cc YC-1 closed (`ab5be2e`): Add --expiry-type {monthly,yearly} to --auto-cc; yearly records under the yearly CC ledger
 - [2026-11-03] ds-chain-monitoring DSN-4 closed (`8bcbfe1`): Monitor cadence and freshness bound in OverlayTenorPolicy; yearly 3600 s, monthly pinned 90 s; startup validation
 - [2026-11-03] ds-chain-monitoring DSN-1 closed (`b2c4fa9`): Dhan token pre-call check via JWT exp, once-per-incident alert through SourceHealth, healthcheck Dhan Token line
 - [2026-11-03] yearly-foundation YF-6 closed (`bd495e6`): Route yearly bootstrap chain fetch through ChainSource via shared snapshot-to-rows adapter
