@@ -55,7 +55,10 @@ Source of truth for every shape below: the ruling in `DECISIONS.md` ("Data sourc
 
 **Before any code:**
 - `get_code_snippet("InstrumentLookup")` — reuse it for the Upstox side; do not fork a second contract-lookup helper (design review in `prompt.md`).
-- Record the real Dhan master format from a downloaded file (segment and security-id columns) into the fixture; Animesh may need to supply the slice. Note the format in the commit body.
+- The fixtures already exist (2026-11-03): `tests/fixtures/contract_resolver/dhan_scrip_master_nifty_dec.csv` (598 NIFTY OPTIDX rows, expiries 2026-12-29 and 2027-12-28, full original header from
+  `https://images.dhan.co/api-data/api-scrip-master-detailed.csv`: join columns `EXCH_ID`, `SEGMENT`, `SECURITY_ID`, `UNDERLYING_SYMBOL`, `SM_EXPIRY_DATE`, `STRIKE_PRICE`, `OPTION_TYPE`; the NSE
+  derivatives segment is `D`) and `upstox_bod_nifty_dec.json` (265 NSE_FO records, same expiries, cut from `data/instruments/NSE.json.gz`; `expiry` is epoch milliseconds). 265 contracts are in both;
+  333 Dhan-only contracts cover the unlisted-strike test. Do not recreate them; note the format in the commit body.
 - Read `DSM-1`'s `roll_checks.md`: if the BOD does not list Dec 2027, stop and report — the council requires a separate decision.
 
 **What to implement:**
