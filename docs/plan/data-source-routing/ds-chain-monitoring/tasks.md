@@ -6,15 +6,15 @@ spec; `schema.md` for the persisted columns.
 **Open: DSN-1..DSN-5.** Blocked until `ds-chain-seam/` is complete and `yearly-overlays/yearly-foundation` YF-3 is done. DSN-1 may start earlier: it needs only the DSC-3 failure taxonomy.
 
 - [ ] **DSN-1** — Dhan token-staleness alert (alert only, no renewal) + healthcheck line; 806 and stale token page via Telegram | Owner: Claude | Model: claude-sonnet-5-5 | Review: code-reviewer |
-  SHA: <—>
+  SHA: —
 - [ ] **DSN-2** — Yearly monitor and snapshot paths read delta from the routed chain; persist `delta_source` / `delta_asof` per leg and `chain_source` / `chain_fetched_at` per overlay snapshot |
-  Owner: Claude | Model: claude-sonnet-5-5 | Review: code-reviewer + greeks-analyst | SHA: <—>
+  Owner: Claude | Model: claude-sonnet-5-5 | Review: code-reviewer + greeks-analyst | SHA: —
 - [ ] **DSN-3** — Stale-Greeks policy by action class, last-known delta from the capture store, +/-1 banned for yearly gates, delta-independent backstop alert | Owner: Claude | Model:
-  claude-sonnet-5-5 | Review: code-reviewer + greeks-analyst | SHA: <—>
+  claude-sonnet-5-5 | Review: code-reviewer + greeks-analyst | SHA: —
 - [ ] **DSN-4** — Monitor-cadence field in `OverlayTenorPolicy`; yearly cadence set (300 s or slower, final value here) and monthly pinned; freshness-bound startup validation | Owner: Claude | Model:
-  claude-sonnet-5-5 | Review: code-reviewer | SHA: <—>
+  claude-sonnet-5-5 | Review: code-reviewer | SHA: —
 - [ ] **DSN-5** — Source-flip seam: Dhan to Upstox after 2 consecutive trading days of non-zero delta on held contracts; dual-persist, tolerance band, dual-read logging | Owner: Claude | Model:
-  claude-sonnet-5-5 | Review: code-reviewer + greeks-analyst | SHA: <—>
+  claude-sonnet-5-5 | Review: code-reviewer + greeks-analyst | SHA: —
 
 ## Story done when
 

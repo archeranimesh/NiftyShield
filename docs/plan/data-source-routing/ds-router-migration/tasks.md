@@ -6,13 +6,13 @@ spec.
 **Open: DSR-0, DSR-1, DSR-2, DSR-3..n (enumerated by DSR-1), DSR-4, DSR-last.** Blocked until `ds-chain-monitoring/` is complete and the Dec 2026 roll is done. The council ruled all of this post-roll.
 
 - [ ] **DSR-0** — Capability matrix: verify token renewal, India VIX, batch LTP, order margin, candles, live-feed, MCP and skills claims against primary sources; write `capability_matrix.md` | Owner:
-  Claude | Model: claude-sonnet-5-5 | Review: none | SHA: <—>
+  Claude | Model: claude-sonnet-5-5 | Review: none | SHA: —
 - [ ] **DSR-1** — Prior-art audit: every direct `UpstoxMarketClient` importer and `parse_upstox_option_chain` caller, grouped into migration clusters; write `audit.md` | Owner: Claude | Model:
-  claude-sonnet-5-5 | Review: none | SHA: <—>
-- [ ] **DSR-2** — Quote and candle capability sources (Upstox, Dhan) + router and config | Owner: Claude | Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: <—>
-- [ ] **DSR-3** — Migrate cluster 1 (named by DSR-1); further clusters get their own DSR-n lines appended by DSR-1 | Owner: Claude | Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: <—>
-- [ ] **DSR-4** — Programmatic Dhan token renewal, only if DSR-0 finds a supported endpoint; otherwise record why not | Owner: Claude | Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: <—>
-- [ ] **DSR-last** — Subscription-health fallback generalised from chain-only to every capability | Owner: Claude | Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: <—>
+  claude-sonnet-5-5 | Review: none | SHA: —
+- [ ] **DSR-2** — Quote and candle capability sources (Upstox, Dhan) + router and config | Owner: Claude | Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: —
+- [ ] **DSR-3** — Migrate cluster 1 (named by DSR-1); further clusters get their own DSR-n lines appended by DSR-1 | Owner: Claude | Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: —
+- [ ] **DSR-4** — Programmatic Dhan token renewal, only if DSR-0 finds a supported endpoint; otherwise record why not | Owner: Claude | Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: —
+- [ ] **DSR-last** — Subscription-health fallback generalised from chain-only to every capability | Owner: Claude | Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: —
 
 ## Story done when
 
