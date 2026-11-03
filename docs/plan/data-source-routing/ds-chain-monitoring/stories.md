@@ -49,6 +49,8 @@ token age in the healthcheck. **Alert only; programmatic renewal is post-roll (`
    monthly rows record `upstox`). Rows written before DSN-2 stay `NULL`.
 4. A pre-existing yearly position must have an explicit recorded source before the monitor acts on its delta.
 5. New yearly code adds no direct `UpstoxMarketClient` chain import.
+6. Monthly `greeks_freshness_bound_s` stays 184 s (2 x 90 s cadence + one 4 s Dhan slot), signed off by Animesh 2026-11-03. It is a deliberate floor: monthly reads Upstox, whose Greeks are live, so
+   the bound only gates a future Dhan fallback. Do not tighten it or special-case monthly; `validate_tenor_policy` rejects anything below the formula minimum.
 
 **Tests:** yearly leg delta comes from Dhan when Upstox is all-zero and the row records it; monthly path writes `upstox` provenance and its routing, gates and decisions are otherwise unchanged (any
 test pinning a monthly snapshot row is updated deliberately for the new fields); an old row reads as unknown provenance.
