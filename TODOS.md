@@ -120,9 +120,9 @@ Forward spec work only — one `docs/plan/` story per line, pointer-only (title 
 starting the next story here; this list only decides *which story is next*. Bugs are **not** here — see `## Open Bugs`. Cross-references use folder names, never list positions, so renumbering can't
 rot them. (Items 3, 5 and 8 closed — numbers kept stable because item text cross-references them.)
 
-23. **Yearly overlays (epic)** — `docs/plan/yearly-overlays/` — next **YF-4** (clock-injectable expiry resolver; YF-1 audit, YF-2 fixtures, YF-3 tenor registry done). December-only CC / PP / Collar
-    book beside the monthly overlays; fixed order `yearly-foundation` → `yearly-cc` ‖ `yearly-pp` → `yearly-collar` → `yearly-ops-wiring` → `yearly-validation`. **Deadline: Dec 2026 roll.** YF-6 needs
-    `data-source-routing` DSC-2 / DSC-3; YV-5 needs `dhan-far-expiry-chain` FG-3 and `ds-chain-monitoring` DSN-1..4. Requested by Animesh 2026-10-06.
+23. **Yearly overlays (epic)** — `docs/plan/yearly-overlays/` — next **YF-5** (namespace read-paths; YF-1 audit, YF-2 fixtures, YF-3 tenor registry, YF-4 expiry resolver done). December-only CC / PP /
+    Collar book beside the monthly overlays; fixed order `yearly-foundation` → `yearly-cc` ‖ `yearly-pp` → `yearly-collar` → `yearly-ops-wiring` → `yearly-validation`. **Deadline: Dec 2026 roll.**
+    YF-6 needs `data-source-routing` DSC-2 / DSC-3; YV-5 needs `dhan-far-expiry-chain` FG-3 and `ds-chain-monitoring` DSN-1..4. Requested by Animesh 2026-10-06.
 24. **Dhan far-expiry chain (epic)** — `docs/plan/dhan-far-expiry-chain/` — `dhan-chain-adapter/` ✅ done (DA-0 renew decided 2026-10-13), `far-expiry-capture/` ✅ done; next **FG-3**, earliest
     2026-11-02 (15 captured trading days). Feeds `yearly-overlays` (FG-3 → YF-3 registry; YV-5).
 25. **Data source routing (epic)** — `docs/plan/data-source-routing/` — `ds-capability-map` ✅ done; next **DSC-1**. Council ruled 2026-10-07 (`DECISIONS.md`). Order: `ds-capability-map` →
@@ -214,6 +214,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-11-03] yearly-foundation YF-4 closed (`eb89581`): Pure resolve_overlay_expiry; today (market_today) and tenor policy injected into the three bootstraps and _open_pp_dte, monthly default
 - [2026-11-03] yearly-foundation YF-3 closed (`32629ac`): OverlayTenorPolicy registry (monthly pinned, yearly added) + three yearly strategy-name constants
 - [2026-11-03] yearly-foundation YF-2 closed (`2c03961`): Yearly fixtures (zero-Greeks Upstox chain, reuse Dec BOD and Dhan chains) and frozen_today helper
 - [2026-11-02] far-expiry-liquidity-gate FG-2 closed (`620d1b0`): Add OI floor, two-sided rule, failure reasons and fallback ladder to liquidity gate

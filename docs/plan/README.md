@@ -10,7 +10,7 @@ The **status** and **next** markers below are a *summary* of each story's `tasks
 
 ## Active Epics
 
-**`yearly-overlays/`** · 🔄 In progress (YF-1, YF-2, YF-3 done) · next: **YF-4** — December-only (`--expiry-type yearly`) CC / PP / Collar as an independent book beside the monthly overlays; IC `leaps`
+**`yearly-overlays/`** · 🔄 In progress (YF-1..YF-4 done) · next: **YF-5** — December-only (`--expiry-type yearly`) CC / PP / Collar as an independent book beside the monthly overlays; IC `leaps`
 (quarterly) and `yearly` (December) unchanged. Six sub-stories: `yearly-foundation/` (YF-1..6 audit, fixtures, `OverlayTenorPolicy`, clock-injectable resolver, namespace read-paths, chain-source
 wiring) → `yearly-cc/` (YC-1..2) and `yearly-pp/` (YP-1..2) → `yearly-collar/` (YL-1..2) → `yearly-ops-wiring/` (YW-1..3) → `yearly-validation/` (YV-1..5, independence + dry-run + live smoke + IC
 coexistence + paper-run runbook). No DB namespace schema change (confirmed in YF-1; provenance columns come from `ds-chain-monitoring`). Requested by Animesh 2026-10-06.
