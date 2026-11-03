@@ -120,12 +120,12 @@ Forward spec work only — one `docs/plan/` story per line, pointer-only (title 
 starting the next story here; this list only decides *which story is next*. Bugs are **not** here — see `## Open Bugs`. Cross-references use folder names, never list positions, so renumbering can't
 rot them. (Items 3, 5 and 8 closed — numbers kept stable because item text cross-references them.)
 
-23. **Yearly overlays (epic)** — `docs/plan/yearly-overlays/` — next **DSC-3** in `data-source-routing/ds-chain-seam` (YF-6 waits on ds-chain-seam; YF-1..YF-5 done). December-only CC / PP / Collar
+23. **Yearly overlays (epic)** — `docs/plan/yearly-overlays/` — next **DSC-4** in `data-source-routing/ds-chain-seam` (YF-6 waits on ds-chain-seam; YF-1..YF-5 done). December-only CC / PP / Collar
     book beside the monthly overlays; fixed order `yearly-foundation` → `yearly-cc` ‖ `yearly-pp` → `yearly-collar` → `yearly-ops-wiring` → `yearly-validation`. **Deadline: Dec 2026 roll.** YF-6 needs
     `data-source-routing` DSC-2 / DSC-3; YV-5 needs `dhan-far-expiry-chain` FG-3 and `ds-chain-monitoring` DSN-1..4. Requested by Animesh 2026-10-06.
 24. **Dhan far-expiry chain (epic)** — `docs/plan/dhan-far-expiry-chain/` — `dhan-chain-adapter/` ✅ done (DA-0 renew decided 2026-10-13), `far-expiry-capture/` ✅ done; next **FG-3**, earliest
     2026-11-02 (15 captured trading days). Feeds `yearly-overlays` (FG-3 → YF-3 registry; YV-5).
-25. **Data source routing (epic)** — `docs/plan/data-source-routing/` — `ds-capability-map` ✅ done; next **DSC-3**. Council ruled 2026-10-07 (`DECISIONS.md`). Order: `ds-capability-map` →
+25. **Data source routing (epic)** — `docs/plan/data-source-routing/` — `ds-capability-map` ✅ done; next **DSC-4**. Council ruled 2026-10-07 (`DECISIONS.md`). Order: `ds-capability-map` →
     `ds-chain-seam` → `ds-chain-monitoring` (needs `yearly-foundation` YF-3) → `ds-router-migration` (after the Dec 2026 roll). Supersedes most of `broker-abstraction`. Open for Animesh: monitor
     cadence, backstop thresholds, Kite.
 4. **Gamma near-expiry buy (epic)** — `docs/plan/gamma-near-expiry/` — Phase A `risk-gamma-phase-a/` ✅ done; next Phase B `gamma-scan-phase-b/` GS-8 (GS-6 runs last, human-owned; GS-1..6; GS-1..5
@@ -214,6 +214,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-11-03] ds-chain-seam DSC-3 closed (`053ead4`): chain sources return ChainSnapshot; ChainRouter with per-expiry fallback and health
 - [2026-11-03] ds-chain-seam DSC-2 closed (`eb333f1`): Contract resolver over Upstox BOD and Dhan master with exact joins
 - [2026-11-03] ds-chain-seam DSC-1 closed (`68d42bb`): SourceId, ContractRef, ChainSnapshot, ContractResolver and has_usable_delta added in src/models/contract.py
 - [2026-11-03] yearly-foundation YF-5 closed (`a7d1436`): Yearly overlay namespace recognised in read paths

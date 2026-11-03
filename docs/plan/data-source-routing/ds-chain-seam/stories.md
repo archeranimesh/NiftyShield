@@ -135,6 +135,8 @@ does not make Greeks usable for a specific held contract (callers check held con
 
 **What to implement:**
 
+0. **Upstox-only default wires the bare `UpstoxChainSource`, not a one-entry `ChainRouter`** (decided at DSC-3 close): the router raises `DataFetchError` on an all-zero chain, the bare source returns
+   it, and "default behaves exactly as today" requires the latter. Use `ChainRouter` only when the configured list has more than one source.
 1. Parse the config; an unknown source name (not a `SourceId`, or with no registered builder) fails at startup, not at first call. Follow the existing `Settings` nested-config style and use one naming
    scheme across DSC-4 and DSN-4. `market_data.chain.dhan_min_interval_s` is the only place the 4 s floor is stated; DSC-3's backoff, DSC-5's limiter and DSN-4's slot read it.
 2. Quote and candle entries are accepted and validated but only `["upstox"]` is wired until `ds-router-migration/`.
