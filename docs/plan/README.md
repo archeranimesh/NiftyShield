@@ -10,7 +10,7 @@ The **status** and **next** markers below are a *summary* of each story's `tasks
 
 ## Active Epics
 
-**`yearly-overlays/`** · 🔄 In progress (YF-1..YF-5 done) · next: **DSC-4** (`data-source-routing/ds-chain-seam`; YF-6 waits on ds-chain-seam) — December-only (`--expiry-type yearly`) CC / PP / Collar
+**`yearly-overlays/`** · 🔄 In progress (YF-1..YF-5 done) · next: **DSC-5** (`data-source-routing/ds-chain-seam`; YF-6 waits on ds-chain-seam) — December-only (`--expiry-type yearly`) CC / PP / Collar
 as an independent book beside the monthly overlays; IC `leaps` (quarterly) and `yearly` (December) unchanged. Six sub-stories: `yearly-foundation/` (YF-1..6 audit, fixtures, `OverlayTenorPolicy`,
 clock-injectable resolver, namespace read-paths, chain-source wiring) → `yearly-cc/` (YC-1..2) and `yearly-pp/` (YP-1..2) → `yearly-collar/` (YL-1..2) → `yearly-ops-wiring/` (YW-1..3) →
 `yearly-validation/` (YV-1..5, independence + dry-run + live smoke + IC coexistence + paper-run runbook). No DB namespace schema change (confirmed in YF-1; provenance columns come from
@@ -20,7 +20,7 @@ clock-injectable resolver, namespace read-paths, chain-source wiring) → `yearl
 roll window. Three sub-stories: `dhan-chain-adapter/` (DA-0..3, ✅) → `far-expiry-capture/` (FC-1..5, ✅) → `far-expiry-liquidity-gate/` (FG-1, FG-2 ✅; next FG-3). Deadline: Dhan data plan lapses
 2026-11-04 (DA-0: renew, decided 2026-10-13). Feeds `yearly-overlays/`. Requested by Animesh 2026-10-06.
 
-**`data-source-routing/`** · 🔄 In progress (council ruled 2026-10-07, absorbed) · next: **DSC-4** — capability-based routing of market data between Upstox and Dhan (per-capability config, health-aware
+**`data-source-routing/`** · 🔄 In progress (council ruled 2026-10-07, absorbed) · next: **DSC-5** — capability-based routing of market data between Upstox and Dhan (per-capability config, health-aware
 fallback), because the yearly book needs Dhan Greeks daily from the Dec 2026 roll. Four sub-stories: `ds-capability-map/` (DSM-1..3; all done, `roll_checks.md` written) → `ds-chain-seam/` (DSC-1..5,
 contract resolver + `ChainSnapshot` + shared Dhan throttle) → `ds-chain-monitoring/` (DSN-1..5, token alert, yearly read path, stale-Greeks policy, source-flip; pre-roll) → `ds-router-migration/`
 (DSR-0.., after the roll). Folds in `broker-abstraction/` (superseded in part). Requested by Animesh 2026-10-07.
