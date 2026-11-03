@@ -14,7 +14,15 @@
 
 **Before any code:** `get_code_snippet("main")` region around lines 441-466 of `monitor_daemon.py` via `sed -n`; `search_graph("Settings")` for the flag convention.
 
-**What to implement:** build overlay instances with `strategy_name=policy.strategy_name` and the policy injected; preserve the existing failure-isolation try/except per instance.
+**What to implement:** build overlay instances with the policy's per-strategy name (`policy.cc_strategy_name`, `policy.pp_strategy_name`, `policy.collar_strategy_name` — YF-3 split the single name)
+and the policy injected; preserve the existing failure-isolation try/except per instance.
+
+Wiring deferred here from earlier stories (2026-11-03, loop reports); do all of it in this task or record in the report which part moved:
+- Call `validate_overlay_tenors(settings.market_data.chain.dhan_min_interval_s)` once at daemon startup (DSN-4); an inconsistent policy aborts startup.
+- Run the yearly instances at `policy.monitor_cadence_s` (3600 s), not the 90 s monthly poll (DSN-4).
+- Build the Dhan chain path with a long-lived `SourceHealth`, an alert notifier and the DSN-1 `dhan_token_guard`, and the cross-process limiter `create_dhan_rate_limiter(clock, state_dir=<shared data
+  dir>)` (DSC-5), so the monitor and the capture cron share one 4 s throttle. Do not change the capture cron's own construction without Animesh's say; if sharing needs it, report that instead.
+- Document that yearly reaches Dhan only with `MARKET_DATA__CHAIN__SOURCES='["upstox","dhan"]'` and `DHAN_ACCESS_TOKEN` / `DHAN_CLIENT_ID` set (YF-6); the default stays Upstox-only.
 
 **Tests:**
 - `test_flag_off_registers_monthly_only`, `test_flag_on_registers_yearly_instances_with_yearly_namespace`.
