@@ -7,6 +7,11 @@ from typing import Literal
 
 from src.instruments.lookup import format_option_label
 from src.notifications.markdown import escape_markdown
+from src.paper.constants import (
+    STRATEGY_OVERLAY_YEARLY_CC,
+    STRATEGY_OVERLAY_YEARLY_COLLAR,
+    STRATEGY_OVERLAY_YEARLY_PP,
+)
 
 
 def format_money(value: Decimal, *, signed: bool = False) -> str:
@@ -660,6 +665,9 @@ STRATEGY_LABELS: dict[str, str] = {
     "paper_ic_nifty_v2_leaps": "IC V2 Leaps",
     "paper_ic_nifty_v2_yearly": "IC V2 Yearly",
     "paper_nifty_overlay": "Nifty Overlay",
+    STRATEGY_OVERLAY_YEARLY_CC: "Yearly Covered Call",
+    STRATEGY_OVERLAY_YEARLY_PP: "Yearly Protective Put",
+    STRATEGY_OVERLAY_YEARLY_COLLAR: "Yearly Collar",
     "paper_signal_track_v1": "Signal Track V1",
     "paper_nifty_calendar_monthly": "Calendar Monthly",
     "paper_nifty_calendar_biweekly": "Calendar Bi-weekly",

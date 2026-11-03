@@ -15,7 +15,7 @@ from decimal import Decimal
 from src.client.protocol import BrokerClient
 from src.instruments.lookup import InstrumentLookup
 from src.models.options import OptionChain
-from src.paper.constants import STRATEGY_OVERLAY
+from src.paper.constants import STRATEGY_OVERLAY, YEARLY_OVERLAY_STRATEGIES
 from src.paper.models import OverlayCoverage
 from src.paper.store import PaperStore
 from src.paper.track_snapshot import resolve_leg_delta
@@ -36,6 +36,7 @@ async def compute_overlay_coverage(
     lookup: InstrumentLookup,
     track_namespace: str,
     snapshot_date: date,
+    overlay_namespace: str = STRATEGY_OVERLAY,
 ) -> OverlayCoverage:
     """Compute the overlay coverage ratio for one track, at query time.
 
@@ -56,6 +57,9 @@ async def compute_overlay_coverage(
             ``STRATEGY_PROXY`` (src.paper.constants).
         snapshot_date: Date this ratio is computed for — a label on the
             result, not a persistence key (nothing here is written to disk).
+        overlay_namespace: Overlay ledger to join against (default: the monthly
+            ``STRATEGY_OVERLAY``). Each yearly overlay name is its own namespace and
+            is reported by its own call — see ``compute_overlay_coverage_by_namespace``.
 
     Returns:
         OverlayCoverage with ``coverage_pct=None`` when the track has no
@@ -70,9 +74,9 @@ async def compute_overlay_coverage(
     base_role = _BASE_LEG_ROLE_BY_TRACK[track_namespace]
     base_pos = store.get_position(track_namespace, base_role)
 
-    overlay_trades = store.get_trades(STRATEGY_OVERLAY)
+    overlay_trades = store.get_trades(overlay_namespace)
     overlay_roles = {t.leg_role for t in overlay_trades if t.leg_role.startswith("overlay_")}
-    overlay_positions = [store.get_position(STRATEGY_OVERLAY, role) for role in overlay_roles]
+    overlay_positions = [store.get_position(overlay_namespace, role) for role in overlay_roles]
     open_overlay_positions = [p for p in overlay_positions if p.net_qty != 0]
 
     fetched_chains: dict[str, OptionChain | None] = {}
@@ -100,3 +104,26 @@ async def compute_overlay_coverage(
         coverage_pct=coverage_pct,
         as_of=snapshot_date,
     )
+
+
+async def compute_overlay_coverage_by_namespace(
+    store: PaperStore,
+    broker: BrokerClient,
+    lookup: InstrumentLookup,
+    track_namespace: str,
+    snapshot_date: date,
+) -> dict[str, OverlayCoverage]:
+    """Coverage for one track, reported separately per overlay namespace.
+
+    Returns one row for the monthly ``STRATEGY_OVERLAY`` book and one per yearly
+    overlay name, keyed by namespace. The rows are never merged: the books are
+    independent, and yearly strategies hold option legs only (decision 7), so
+    summing rows later cannot double-count the base NiftyBees leg.
+    """
+    namespaces = (STRATEGY_OVERLAY, *YEARLY_OVERLAY_STRATEGIES)
+    return {
+        ns: await compute_overlay_coverage(
+            store, broker, lookup, track_namespace, snapshot_date, overlay_namespace=ns
+        )
+        for ns in namespaces
+    }

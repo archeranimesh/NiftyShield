@@ -37,7 +37,9 @@ from src.paper.constants import (
     STRATEGY_CSP,
     STRATEGY_OVERLAY,
     STRATEGY_SPOT,
+    YEARLY_OVERLAY_STRATEGIES,
     compute_max_lots,
+    is_yearly_overlay_strategy,
 )
 from src.paper.models import GateViolation
 
@@ -56,23 +58,34 @@ GATE_NAME = "niftybees_collateral_capacity"
 # summing it once, not once per overlay type, avoids triple-counting the same pool.
 _COLLATERAL_DRAWING_STRATEGIES = (STRATEGY_CSP, STRATEGY_OVERLAY)
 
+# The yearly overlay book is a separate pool (decision 6, 2026-11-02): its open lots are
+# never added to the monthly pool and vice versa, and no NiftyBees units are allocated to
+# it during the paper phase. Going live needs a fixed unit split or a cross-book cap first.
+_YEARLY_COLLATERAL_STRATEGIES = YEARLY_OVERLAY_STRATEGIES
+YEARLY_NIFTYBEES_UNITS = 0
 
-def _open_lots_across_strategies(store: PaperStore, lot_size: int) -> int:
+
+def _open_lots_across_strategies(
+    store: PaperStore,
+    lot_size: int,
+    strategies: tuple[str, ...] = _COLLATERAL_DRAWING_STRATEGIES,
+) -> int:
     """Sum absolute open lots across every strategy drawing on the NiftyBees pool.
 
     Args:
         store: PaperStore to read open positions from.
         lot_size: Nifty lot size used to convert net_qty to lots.
+        strategies: Namespaces forming the pool (default: the monthly pool,
+            ``STRATEGY_CSP`` + ``STRATEGY_OVERLAY``).
 
     Returns:
-        Total open lots (always non-negative) across ``STRATEGY_CSP`` and
-        ``STRATEGY_OVERLAY``. Each leg's ``net_qty`` is taken as absolute value —
-        a short put and a short call both consume collateral regardless of sign.
+        Total open lots (always non-negative) across ``strategies``. Each leg's ``net_qty`` is taken as absolute
+        value — a short put and a short call both consume collateral regardless of sign.
     """
     if lot_size <= 0:
         return 0
     total_qty = 0
-    for strategy_name in _COLLATERAL_DRAWING_STRATEGIES:
+    for strategy_name in strategies:
         for position in store.get_positions(strategy_name):
             total_qty += abs(position.net_qty)
     return total_qty // lot_size
@@ -104,8 +117,9 @@ def check_collateral_capacity(
         store: PaperStore — read for the NiftyBees holding + currently open
             lots, written to on breach.
         strategy_name: The strategy attempting the new entry (used only for the
-            logged ``GateViolation.strategy_name`` — the aggregate check itself
-            always sums across all collateral-drawing strategies).
+            logged ``GateViolation.strategy_name`` and to pick the pool: a yearly
+            overlay name checks the separate yearly pool, anything else the monthly
+            pool — the aggregate check sums across that pool's strategies).
         lots_requested: Lots the caller is about to open.
         nifty_spot: Current Nifty 50 spot price.
         niftybees_ltp: Current NiftyBees ETF LTP.
@@ -117,14 +131,19 @@ def check_collateral_capacity(
         ceiling, else ``None``. In both cases the caller should proceed with
         entry — this gate is warn-only by design, not a block.
     """
-    niftybees_units = _niftybees_units_held(store)
+    if is_yearly_overlay_strategy(strategy_name):
+        niftybees_units = YEARLY_NIFTYBEES_UNITS
+        pool = _YEARLY_COLLATERAL_STRATEGIES
+    else:
+        niftybees_units = _niftybees_units_held(store)
+        pool = _COLLATERAL_DRAWING_STRATEGIES
     max_lots = compute_max_lots(
         niftybees_units=niftybees_units,
         nifty_spot=nifty_spot,
         niftybees_ltp=niftybees_ltp,
         lot_size=lot_size,
     )
-    already_open = _open_lots_across_strategies(store, lot_size)
+    already_open = _open_lots_across_strategies(store, lot_size, pool)
     projected = already_open + lots_requested
 
     if projected <= max_lots:

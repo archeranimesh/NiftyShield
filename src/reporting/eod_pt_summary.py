@@ -40,7 +40,12 @@ from src.nifty_calendar.config import BIWEEKLY as NC_BIWEEKLY
 from src.nifty_calendar.config import MONTHLY as NC_MONTHLY
 from src.notifications.formatting import build_position_table
 from src.notifications.markdown import escape_markdown
-from src.paper.constants import STRATEGY_OVERLAY
+from src.paper.constants import (
+    STRATEGY_OVERLAY,
+    STRATEGY_OVERLAY_YEARLY_CC,
+    STRATEGY_OVERLAY_YEARLY_COLLAR,
+    STRATEGY_OVERLAY_YEARLY_PP,
+)
 from src.paper.models import PaperPosition
 from src.paper.store import PaperStore
 from src.strategy.csp_nifty_v1 import CSPNiftyV1
@@ -82,6 +87,14 @@ _STRATEGY_LABELS[NC_BIWEEKLY.strategy_name] = NC_BIWEEKLY.label
 _STRATEGY_LABELS["paper_nifty_spot"] = "Nifty Spot"
 _STRATEGY_LABELS["paper_nifty_futures"] = "Nifty Future"
 _STRATEGY_LABELS["paper_nifty_proxy"] = "Nifty Proxy"
+
+# Yearly overlay book: one strategy_name per overlay (unlike the monthly book's single
+# STRATEGY_OVERLAY split by leg_role), so each is a simple strategy and is picked up by
+# every ``_SIMPLE_STRATEGY_NAMES`` loop (open + closed legs). Option legs only — NiftyBees
+# P&L stays in the monthly record, so a combined view never counts it twice (decision 7).
+_STRATEGY_LABELS[STRATEGY_OVERLAY_YEARLY_CC] = "Yearly CC"
+_STRATEGY_LABELS[STRATEGY_OVERLAY_YEARLY_PP] = "Yearly PP"
+_STRATEGY_LABELS[STRATEGY_OVERLAY_YEARLY_COLLAR] = "Yearly Collar"
 if set(NiftyTrackComparisonV1.TRACK_STRATEGY_NAMES) != {
     "paper_nifty_spot",
     "paper_nifty_futures",

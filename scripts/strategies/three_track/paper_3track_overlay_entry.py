@@ -1218,8 +1218,10 @@ def _record_collar_trades(store: PaperStore, overlay_trades: list["OverlayTrade"
             )
 
 
-def _has_open_overlay_leg(store: PaperStore, leg_role: str) -> bool:
-    """True if STRATEGY_OVERLAY already holds an open position for *leg_role*.
+def _has_open_overlay_leg(
+    store: PaperStore, leg_role: str, strategy_name: str = STRATEGY_OVERLAY
+) -> bool:
+    """True if *strategy_name* (default STRATEGY_OVERLAY) holds an open position for *leg_role*.
 
     Overlay entry is a one-time bootstrap per leg (S6, 2026-07-28 decision) —
     once entered, the position is maintained via ExitSignalEngine-driven
@@ -1229,11 +1231,13 @@ def _has_open_overlay_leg(store: PaperStore, leg_role: str) -> bool:
     Args:
         store: PaperStore to query.
         leg_role: The overlay leg_role to check (see ``_PRIMARY_LEG_ROLE``).
+        strategy_name: Ledger namespace to check. A monthly leg never satisfies a yearly
+            check and the reverse, because the names differ.
 
     Returns:
-        True if an open position with this leg_role already exists.
+        True if an open position with this leg_role already exists in that namespace.
     """
-    return any(p.leg_role == leg_role for p in store.get_positions(STRATEGY_OVERLAY))
+    return any(p.leg_role == leg_role for p in store.get_positions(strategy_name))
 
 
 def _fetch_nifty_spot() -> Decimal | None:

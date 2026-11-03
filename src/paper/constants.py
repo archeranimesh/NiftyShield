@@ -43,6 +43,20 @@ STRATEGY_OVERLAY_YEARLY_CC = "paper_nifty_overlay_yearly_cc"
 STRATEGY_OVERLAY_YEARLY_PP = "paper_nifty_overlay_yearly_pp"
 STRATEGY_OVERLAY_YEARLY_COLLAR = "paper_nifty_overlay_yearly_collar"
 
+# The one place that answers "is this a yearly overlay namespace" — read paths iterate
+# or test against this instead of repeating the three names (YF-5).
+YEARLY_OVERLAY_STRATEGIES: tuple[str, ...] = (
+    STRATEGY_OVERLAY_YEARLY_CC,
+    STRATEGY_OVERLAY_YEARLY_PP,
+    STRATEGY_OVERLAY_YEARLY_COLLAR,
+)
+
+
+def is_yearly_overlay_strategy(strategy_name: str) -> bool:
+    """True if ``strategy_name`` is one of the three yearly overlay ledger names."""
+    return strategy_name in YEARLY_OVERLAY_STRATEGIES
+
+
 # Per-expiry IC variants
 STRATEGY_IC_WEEKLY = "paper_ic_nifty_v1_weekly"
 STRATEGY_IC_MONTHLY = "paper_ic_nifty_v1_monthly"

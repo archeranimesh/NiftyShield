@@ -21,6 +21,7 @@ from datetime import date
 from decimal import Decimal
 
 from src.models.portfolio import TradeAction
+from src.paper.constants import STRATEGY_OVERLAY
 from src.paper.models import PaperTrade
 
 
@@ -320,7 +321,7 @@ _IC_STRATEGIES = {
     "ic-leaps": "paper_ic_nifty_v1_leaps",
     "ic-v2": "paper_ic_nifty_v2_monthly",
 }
-_OVERLAY_STRATEGY = "paper_nifty_overlay"
+_OVERLAY_STRATEGY = STRATEGY_OVERLAY
 _OVERLAY_GROUPS = {
     "cc": ("overlay_cc",),
     "pp": ("overlay_pp",),

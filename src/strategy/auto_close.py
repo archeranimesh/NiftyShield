@@ -18,6 +18,7 @@ from src.models.options import OptionChain
 from src.notifications.exit_message import ExitKind, ExitMessage, format_exit_message
 from src.notifications.formatting import CloseLegRow, format_money
 from src.notifications.markdown import escape_markdown, mdcode
+from src.paper.constants import STRATEGY_OVERLAY
 from src.paper.cycle_pnl import cycle_stats, reconstruct_cycles
 from src.paper.models import PaperPosition
 
@@ -396,6 +397,7 @@ async def evaluate_pp_reentry_eod(
     notifier: Any | None,
     vix_data_dir: Path | None,
     today: date,
+    strategy_name: str = STRATEGY_OVERLAY,
 ) -> None:
     """Evaluate PP re-entry eligibility and notify if eligible (no auto-opening).
 
@@ -405,15 +407,18 @@ async def evaluate_pp_reentry_eod(
     pipeline), all overlay P&L/position reads go through STRATEGY_OVERLAY only.
     We check for an active overlay_pp leg under STRATEGY_OVERLAY and notify
     once if none is found and IVR passes the re-entry gate.
+
+    ``strategy_name`` selects the ledger namespace (default ``STRATEGY_OVERLAY``; the
+    yearly PP book passes ``STRATEGY_OVERLAY_YEARLY_PP``), so a monthly PP never
+    satisfies a yearly check and the reverse.
     """
-    from src.paper.constants import STRATEGY_OVERLAY
     from src.strategy.pp_overlay_v1 import PPOverlayV1
 
     try:
-        # Active if STRATEGY_OVERLAY carries a live overlay_pp position
+        # Active if the namespace carries a live overlay_pp position
         active_pp = [
             p
-            for p in store.get_positions(STRATEGY_OVERLAY)
+            for p in store.get_positions(strategy_name)
             if p.leg_role == "overlay_pp" and p.net_qty > 0
         ]
         if active_pp:
@@ -430,11 +435,12 @@ async def evaluate_pp_reentry_eod(
             return
 
         pp_strategy = PPOverlayV1(store=store, notifier=notifier, vix_data_dir=vix_data_dir)
+        pp_strategy.strategy_name = strategy_name  # per-book label for any later strategy call
         passed, _, _ = pp_strategy._ivr_passes(ivr)
 
         if passed and notifier is not None:
             # Realized P&L from the standalone overlay book
-            realized_pnl = get_strategy_realized_pnl(store, STRATEGY_OVERLAY)
+            realized_pnl = get_strategy_realized_pnl(store, strategy_name)
             ivr_str = escape_markdown(f"{ivr:.2f}")
 
             v = Decimal(str(realized_pnl))
