@@ -10,12 +10,14 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Final
 
 from src.client.chain_source import ChainRouter, ChainSource, DhanChainSource, UpstoxChainSource
-from src.client.dhan_market import DhanMarketClient
+from src.client.dhan_market import Clock, DhanMarketClient, RateLimiter, SpacingRateLimiter
 from src.client.mock_client import MockBrokerClient
 from src.client.protocol import BrokerClient
+from src.client.shared_rate_limiter import SharedRateLimiter
 from src.client.source_health import SourceHealth
 from src.client.upstox_live import UpstoxLiveClient
 from src.client.upstox_market import UpstoxMarketClient
@@ -67,6 +69,31 @@ def create_client(env: str, **kwargs: Any) -> BrokerClient:
         )
 
     raise ValueError(f"Unknown env '{env}'. Valid values: {VALID_ENVS}")
+
+
+def create_dhan_rate_limiter(
+    clock: Clock,
+    state_dir: Path | None = None,
+    spacing: float | None = None,
+) -> RateLimiter:
+    """Build the Dhan call throttle.
+
+    Without ``state_dir`` this is the in-process :class:`SpacingRateLimiter`
+    (today's behaviour). With it, a :class:`SharedRateLimiter` coordinates the
+    capture cron and the monitor daemon through files under ``state_dir``.
+
+    Args:
+        clock: Injected time source.
+        state_dir: Shared state directory; ``None`` keeps the limiter in-process.
+        spacing: Floor in seconds; defaults to ``market_data.chain.dhan_min_interval_s``.
+
+    Returns:
+        A :class:`RateLimiter`.
+    """
+    floor = settings.market_data.chain.dhan_min_interval_s if spacing is None else spacing
+    if state_dir is None:
+        return SpacingRateLimiter(spacing=floor, clock=clock)
+    return SharedRateLimiter(state_dir=state_dir, spacing=floor, clock=clock)
 
 
 @dataclass(frozen=True)
