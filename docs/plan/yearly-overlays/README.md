@@ -48,7 +48,7 @@ SOLID triggers run against the plan (`docs/refactor/design-principles.md`):
 
 | Story | Purpose | Status | Depends on | Closing SHA |
 |---|---|---|---|---|
-| `yearly-foundation/` | Audit, fixtures, `OverlayTenorPolicy`, resolver with injectable clock, namespace read-paths | 🔄 In progress — next YF-5 | — | — |
+| `yearly-foundation/` | Audit, fixtures, `OverlayTenorPolicy`, resolver with injectable clock, namespace read-paths | 🔄 In progress — next DSC-1 (YF-6 waits on ds-chain-seam) | — | — |
 | `yearly-cc/` | `--auto-cc --expiry-type yearly` + yearly CC behaviour | ⬜ Not started | `yearly-foundation` | — |
 | `yearly-pp/` | `--auto-pp --expiry-type yearly` + yearly PP roll/re-entry | ⬜ Not started | `yearly-foundation` | — |
 | `yearly-collar/` | `--auto-collar --expiry-type yearly` + same-expiry pair validation | ⬜ Not started | `yearly-cc`, `yearly-pp` | — |
