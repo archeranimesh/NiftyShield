@@ -7,6 +7,7 @@ from typing import Literal
 import structlog
 
 from src.paper.models import TradeState
+from src.strategy.overlay_tenor import OVERLAY_TENORS, OverlayTenorPolicy
 
 _log = structlog.get_logger(__name__)
 
@@ -274,21 +275,38 @@ class ExitSignalEngine:
         delta: float | None,
         dte: int,
         days_held: int,
+        policy: OverlayTenorPolicy = OVERLAY_TENORS["monthly"],
     ) -> list[ExitSignalResult]:
         """Evaluate exit signals for a Covered Call (CC) short call leg.
 
         Signal set mirrors CSP structure — same signal names, same severity pattern.
         Thresholds differ where direction or covered nature requires it.
+
+        Args:
+            entry_price: Sold premium per unit.
+            current_mark: Current mark per unit.
+            delta: Short-call delta, or None when unavailable.
+            dte: Days to expiry.
+            days_held: Unused (kept for call-site compatibility).
+            policy: Tenor policy supplying the profit target, delta stop, premium stop
+                (and whether it only alerts) and the DTE review threshold. Defaults to
+                the monthly policy, which equals the former hardcoded values.
         """
         entry_dec = Decimal(str(entry_price))
         mark_dec = Decimal(str(current_mark))
+        retention = Decimal(1) - policy.profit_target_decay
+        delta_stop_level = float(policy.delta_stop)
+        stop_mult = float(policy.premium_stop_multiple)
+        loss_stop_severity: Literal["WARN", "ACTION"] = (
+            "WARN" if policy.premium_stop_alert_only else "ACTION"
+        )
 
         delta_stop, premium_stop, rule_used = cls._get_sell_audit_fields(
             delta=delta,
             current_mark=mark_dec,
             entry_price=entry_dec,
-            delta_threshold=0.55,
-            premium_threshold_mult=Decimal("2.5"),
+            delta_threshold=delta_stop_level,
+            premium_threshold_mult=policy.premium_stop_multiple,
         )
 
         results: list[ExitSignalResult] = []
@@ -306,45 +324,45 @@ class ExitSignalEngine:
                     notes=f"Entry credit {entry_price} < 12/unit",
                 )
             )
-        # 2. PROFIT_TARGET: mark <= 30% of entry credit AND entry credit >= 15
-        elif entry_dec >= _CC_MIN_ENTRY_CREDIT and mark_dec <= entry_dec * _PROFIT_TARGET_RETENTION:
+        # 2. PROFIT_TARGET: mark <= (1 - policy.profit_target_decay) of entry credit AND entry credit >= 15
+        elif entry_dec >= _CC_MIN_ENTRY_CREDIT and mark_dec <= entry_dec * retention:
             results.append(
                 ExitSignalResult(
                     exit_signal="PROFIT_TARGET",
                     severity="ACTION",
-                    threshold_value=float(_PROFIT_TARGET_RETENTION),
+                    threshold_value=float(retention),
                     delta_stop_would_fire=delta_stop,
                     premium_stop_would_fire=premium_stop,
                     actual_rule_used=rule_used,
-                    notes=f"Mark {current_mark} <= 30% of entry credit {entry_price}",
+                    notes=f"Mark {current_mark} <= {retention:.0%} of entry credit {entry_price}",
                 )
             )
 
-        # 3. LOSS_STOP: mark >= 2.5x entry credit
+        # 3. LOSS_STOP: mark >= premium_stop_multiple x entry credit (alert-only -> WARN)
         if premium_stop:
             results.append(
                 ExitSignalResult(
                     exit_signal="LOSS_STOP",
-                    severity="ACTION",
-                    threshold_value=2.5,
+                    severity=loss_stop_severity,
+                    threshold_value=stop_mult,
                     delta_stop_would_fire=delta_stop,
                     premium_stop_would_fire=premium_stop,
                     actual_rule_used=rule_used,
-                    notes=f"Mark {current_mark} >= 2.5x entry credit {entry_price}",
+                    notes=f"Mark {current_mark} >= {stop_mult}x entry credit {entry_price}",
                 )
             )
 
-        # 4. DELTA_STOP: delta >= 0.55
-        if delta is not None and delta >= 0.55:
+        # 4. DELTA_STOP: delta >= policy.delta_stop
+        if delta is not None and delta >= delta_stop_level:
             results.append(
                 ExitSignalResult(
                     exit_signal="DELTA_STOP",
                     severity="ACTION",
-                    threshold_value=0.55,
+                    threshold_value=delta_stop_level,
                     delta_stop_would_fire=delta_stop,
                     premium_stop_would_fire=premium_stop,
                     actual_rule_used=rule_used,
-                    notes=f"Short call delta {delta} >= 0.55",
+                    notes=f"Short call delta {delta} >= {delta_stop_level}",
                 )
             )
         # 5. DELTA_WARN: delta >= 0.45 (only if DELTA_STOP did not fire)
@@ -371,16 +389,16 @@ class ExitSignalEngine:
         # `days_held` is intentionally unused here but kept in the signature — both call
         # sites (cc_overlay_v1.py, paper_3track_snapshot.py) still pass it, and this method
         # is shared with the collar short-call leg evaluation.
-        if dte <= 5:
+        if dte <= policy.review_dte:
             results.append(
                 ExitSignalResult(
                     exit_signal="DTE_REVIEW",
                     severity="ACTION",
-                    threshold_value=5.0,
+                    threshold_value=float(policy.review_dte),
                     delta_stop_would_fire=delta_stop,
                     premium_stop_would_fire=premium_stop,
                     actual_rule_used=rule_used,
-                    notes=f"DTE {dte} <= 5 — auto-close (EC-5 collapse of TIME_STOP+DTE_REVIEW)",
+                    notes=f"DTE {dte} <= {policy.review_dte} — auto-close (EC-5 collapse of TIME_STOP+DTE_REVIEW)",
                 )
             )
 

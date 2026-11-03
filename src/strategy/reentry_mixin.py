@@ -78,6 +78,7 @@ class ReEntryMixin:
     reentry_leg_role: str
     reentry_script_hint: str
     reentry_ivr_threshold: float = 0.25
+    reentry_min_dte: int = 14
 
     _store: PaperStore | None
     _notifier: Any | None
@@ -124,7 +125,7 @@ class ReEntryMixin:
         """Evaluate re-entry eligibility and write a paper_exit_events row.
 
         Three gates — all must pass for ELIGIBLE:
-        1. (expiry - today).days >= 14 calendar days to expiry.
+        1. (expiry - today).days >= ``reentry_min_dte`` (default 14) calendar days to expiry.
         2. Trailing 252-day IVR >= 0.25 (None/insufficient history -> blocked conservatively).
         3. No open position with leg_role == self.reentry_leg_role in store for this strategy.
 
@@ -176,10 +177,10 @@ class ReEntryMixin:
         block: tuple[str, str | None] | None = None
         _ivr_insufficient = ("IVR history insufficient", "Cannot verify R3")
 
-        # ── Gate 1: DTE ≥ 14 ─────────────────────────────────────────────────
+        # ── Gate 1: DTE ≥ reentry_min_dte ─────────────────────────────────────────────────
         dte = (expiry - today).days if expiry is not None else 0
-        if expiry is None or dte < 14:
-            block = (f"DTE={dte} < 14", "Too close to expiry")
+        if expiry is None or dte < self.reentry_min_dte:
+            block = (f"DTE={dte} < {self.reentry_min_dte}", "Too close to expiry")
 
         # ── Gate 2: IVR passes ───────────────────────────────────────────────
         if block is None:

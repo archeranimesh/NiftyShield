@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from datetime import date
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -10,7 +12,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from scripts.strategies.three_track import paper_3track_overlay_entry as oe
-from src.paper.constants import STRATEGY_OVERLAY, STRATEGY_OVERLAY_YEARLY_CC
+from src.models.portfolio import TradeAction
+from src.paper.constants import STRATEGY_OVERLAY, STRATEGY_OVERLAY_YEARLY_CC, STRATEGY_SPOT
+from src.paper.models import PaperTrade
 from src.paper.store import PaperStore
 from tests.unit.scripts.test_overlay_chain_wiring import (
     BOD,
@@ -109,3 +113,32 @@ def test_yearly_without_auto_cc_rejected(env: dict[str, Any]) -> None:
     with patch("sys.argv", ["x.py", "--expiry-type", "yearly"]), pytest.raises(SystemExit) as e:
         oe.main()
     assert e.value.code != 0
+
+
+def _open_legacy_spot_cc(env: dict[str, Any]) -> None:
+    """Open an ``overlay_cc`` short call under the legacy ``STRATEGY_SPOT`` ledger."""
+    env["store"].record_trade(
+        PaperTrade(
+            strategy_name=STRATEGY_SPOT,
+            leg_role="overlay_cc",
+            instrument_key="NSE_FO|legacy",
+            trade_date=date(2026, 9, 1),
+            action=TradeAction.SELL,
+            quantity=75,
+            price=Decimal("100"),
+        )
+    )
+
+
+def test_legacy_spot_overlay_cc_still_blocks_monthly_entry(env: dict[str, Any]) -> None:
+    _open_legacy_spot_cc(env)
+    with pytest.raises(SystemExit) as exc:
+        _main(env)
+    assert exc.value.code == 0
+    assert _cc_legs(env, STRATEGY_OVERLAY) == []
+
+
+def test_legacy_spot_overlay_cc_does_not_block_yearly_entry(env: dict[str, Any]) -> None:
+    _open_legacy_spot_cc(env)
+    _main(env, "--expiry-type", "yearly")
+    assert len(_cc_legs(env, STRATEGY_OVERLAY_YEARLY_CC)) == 1

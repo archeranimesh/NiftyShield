@@ -1540,8 +1540,9 @@ def main() -> None:
         # re-block the routine-roll case here — bypass it for this path only.
         already_bootstrapped = False
 
-    # Idempotency guard for CC overlay entry on paper_nifty_spot track
-    if cfg.overlay_type == "cc":
+    # Idempotency guard for CC overlay entry on paper_nifty_spot track. It protects the
+    # monthly ledger only: a yearly entry (another ledger) is never blocked by it.
+    if cfg.overlay_type == "cc" and ledger == STRATEGY_OVERLAY:
         spot_positions = store.get_positions(STRATEGY_SPOT)
         if any(p.leg_role == "overlay_cc" and p.net_qty != 0 for p in spot_positions):
             logger.info(

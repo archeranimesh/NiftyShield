@@ -24,6 +24,7 @@ from src.paper.constants import DEFAULT_BOD_PATH, STRATEGY_OVERLAY
 from src.paper.models import PaperPosition, PaperTrade
 from src.strategy._price_utils import find_option_leg, resolve_option_expiry
 from src.strategy.exit_signals import ExitSignalEngine
+from src.strategy.overlay_tenor import OVERLAY_TENORS, OverlayTenorPolicy
 from src.strategy.protocol import ApprovedAction, LegClose, SignalEvent
 from src.strategy.reentry_mixin import ReEntryMixin
 
@@ -63,6 +64,7 @@ class CCOverlayV1(ReEntryMixin):
         notifier: Any = None,
         vix_data_dir: Path | str | None = None,
         instrument_lookup: InstrumentLookup | None = None,
+        tenor: OverlayTenorPolicy = OVERLAY_TENORS["monthly"],
     ) -> None:
         """Initialise CCOverlayV1.
 
@@ -75,7 +77,12 @@ class CCOverlayV1(ReEntryMixin):
                 instrument keys that carry no strike/type in the key string
                 itself. If not injected, lazily built from ``DEFAULT_BOD_PATH``
                 on first use (same pattern as ``PaperStore._resolve_instrument_lookup``).
+            tenor: Tenor policy; supplies the ledger name, exit thresholds and re-entry
+                DTE floor. Defaults to the monthly policy.
         """
+        self.tenor = tenor
+        self.strategy_name = tenor.cc_strategy_name
+        self.reentry_min_dte = tenor.reentry_min_dte
         self._store = store
         self._notifier = notifier
         self._instrument_lookup = instrument_lookup
@@ -147,6 +154,7 @@ class CCOverlayV1(ReEntryMixin):
                 delta=delta,
                 dte=dte,
                 days_held=days_held,
+                policy=self.tenor,
             )
 
             for result in results:
