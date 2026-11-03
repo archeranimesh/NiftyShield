@@ -214,6 +214,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-11-03] ds-chain-monitoring DSN-1 closed (`b2c4fa9`): Dhan token pre-call check via JWT exp, once-per-incident alert through SourceHealth, healthcheck Dhan Token line
 - [2026-11-03] yearly-foundation YF-6 closed (`bd495e6`): Route yearly bootstrap chain fetch through ChainSource via shared snapshot-to-rows adapter
 - [2026-11-03] ds-chain-seam DSC-5 closed (`c22c5ae`): SharedRateLimiter shares the Dhan throttle across processes via flock plus a timestamp file
 - [2026-11-03] ds-chain-seam DSC-4 closed (`94bb30b`): chain routing config via Settings and factory wiring, Upstox-only default pinned

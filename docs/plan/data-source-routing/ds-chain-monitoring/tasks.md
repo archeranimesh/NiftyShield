@@ -3,10 +3,10 @@
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
 spec; `schema.md` for the persisted columns.
 
-**Open: DSN-1..DSN-5.** Blocked until `ds-chain-seam/` is complete and `yearly-overlays/yearly-foundation` YF-3 is done. DSN-1 may start earlier: it needs only the DSC-3 failure taxonomy.
+**Open: DSN-4** (the combined loop runs it next). DSN-2, DSN-3 and DSN-5 wait until after `yearly-ops-wiring/` registers the yearly book. DSN-1 is done.
 
-- [ ] **DSN-1** — Dhan token-staleness alert (alert only, no renewal) + healthcheck line; 806 and stale token page via Telegram | Owner: Claude | Model: claude-sonnet-5-5 | Review: code-reviewer |
-  SHA: —
+- [x] **DSN-1** — Dhan token-staleness alert (alert only, no renewal) + healthcheck line; 806 and stale token page via Telegram | Owner: Claude | Model: claude-sonnet-5-5 | Review: code-reviewer |
+  SHA: b2c4fa9
 - [ ] **DSN-2** — Yearly monitor and snapshot paths read delta from the routed chain; persist `delta_source` / `delta_asof` per leg and `chain_source` / `chain_fetched_at` per overlay snapshot |
   Owner: Claude | Model: claude-sonnet-5-5 | Review: code-reviewer + greeks-analyst | SHA: —
 - [ ] **DSN-3** — Stale-Greeks policy by action class, last-known delta from the capture store, +/-1 banned for yearly gates, delta-independent backstop alert | Owner: Claude | Model:
