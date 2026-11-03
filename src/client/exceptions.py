@@ -8,7 +8,9 @@ Hierarchy:
     │   └── LTPFetchError        — LTP batch request failed entirely
     ├── OrderRejectedError        — exchange/broker rejected the order (terminal)
     │   └── InsufficientMarginError — not enough margin (terminal)
-    └── InstrumentNotFoundError   — invalid instrument key (terminal)
+    ├── InstrumentNotFoundError   — invalid instrument key (terminal)
+    ├── AmbiguousContractError    — duplicate contract or native key in a master (terminal)
+    └── UnknownSourceError        — no contract master registered for a source (terminal)
 """
 
 
@@ -51,3 +53,11 @@ class InstrumentNotFoundError(BrokerError):
 
 class NotSubscribedError(BrokerError):
     """User not subscribed to this segment/data (e.g. Dhan 806) — terminal."""
+
+
+class AmbiguousContractError(BrokerError):
+    """A broker master lists one contract more than once, or one native key twice — terminal."""
+
+
+class UnknownSourceError(BrokerError):
+    """No contract master is registered for the requested source — terminal."""

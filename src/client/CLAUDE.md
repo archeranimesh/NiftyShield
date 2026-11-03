@@ -63,10 +63,12 @@ BrokerError
 │   └── LTPFetchError
 ├── OrderRejectedError
 │   └── InsufficientMarginError
-└── InstrumentNotFoundError
+├── InstrumentNotFoundError
+├── AmbiguousContractError    (duplicate contract/key in a broker master; build-time, terminal)
+└── UnknownSourceError        (no contract master for a source; terminal)
 ```
 
-`DataFetchError` is retryable. `OrderRejectedError` and `InstrumentNotFoundError` are terminal — do not retry.
+`DataFetchError` is retryable. `OrderRejectedError`, `InstrumentNotFoundError`, `AmbiguousContractError` and `UnknownSourceError` are terminal — do not retry.
 
 ---
 
