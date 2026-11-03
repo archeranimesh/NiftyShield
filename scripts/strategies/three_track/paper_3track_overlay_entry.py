@@ -61,6 +61,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
 import structlog
 import yaml
@@ -71,6 +72,8 @@ from scripts.lookup.find_strike_by_delta import _select_delta_candidates, run_co
 from scripts.strategies.ic.ic_entry_gates import make_gate_violation
 from src.backtest.ivr import compute_ivr
 from src.backtest.vix_ingest import load_vix_series
+from src.client.chain_rows import ChainFetch
+from src.client.factory import create_overlay_chain_fetch
 from src.client.upstox_market import UpstoxMarketClient
 from src.config import settings
 from src.instruments.lookup import InstrumentLookup, parse_expiry
@@ -249,12 +252,30 @@ class OverlayConfig:
     call_oi: int
 
 
+def _upstox_chain_fetch(underlying: str, expiry: str) -> list[dict[str, Any]]:
+    """Direct Upstox raw-row fetch: the monthly default, unchanged."""
+    client = UpstoxMarketClient(settings.upstox_analytics_token)
+    return client.get_option_chain_sync(underlying, expiry)
+
+
+def _select_chain_fetch(
+    policy: OverlayTenorPolicy, lookup: InstrumentLookup, chain_fetch: ChainFetch | None
+) -> ChainFetch:
+    """Pick the chain fetch: injected, else routed per the policy, else direct Upstox."""
+    if chain_fetch is not None:
+        return chain_fetch
+    if policy.routed_chain:
+        return create_overlay_chain_fetch(lookup)
+    return _upstox_chain_fetch
+
+
 def auto_cc_bootstrap(
     bod_path: Path,
     *,
     log_only_gates: bool = True,
     today: date | None = None,
     policy: OverlayTenorPolicy = OVERLAY_TENORS["monthly"],
+    chain_fetch: ChainFetch | None = None,
 ) -> tuple[OverlayConfig | None, GateViolation | None]:
     """Automate CC entry (fetch chain, apply gates, select strike).
 
@@ -268,6 +289,8 @@ def auto_cc_bootstrap(
 
         today: Reference date; defaults to ``market_today()`` (IST).
         policy: Tenor policy (expiry bucket, entry DTE floor); defaults to monthly.
+        chain_fetch: Raw-row chain fetch ``(underlying, expiry) -> rows``; defaults to the
+            policy's source (direct Upstox, or the routed ``ChainSource`` for yearly).
 
     Returns:
         Tuple of (OverlayConfig or None, GateViolation or None). cfg is None
@@ -332,8 +355,8 @@ def auto_cc_bootstrap(
 
     # Fetch live chain
     try:
-        client = UpstoxMarketClient(settings.upstox_analytics_token)
-        raw_chain = client.get_option_chain_sync("NSE_INDEX|Nifty 50", expiry_str)
+        fetch = _select_chain_fetch(policy, lookup, chain_fetch)
+        raw_chain = fetch("NSE_INDEX|Nifty 50", expiry_str)
     except Exception as exc:
         logger.error("auto_cc.chain_fetch_failed", error=str(exc))
         return None, None
@@ -402,6 +425,7 @@ def auto_collar_bootstrap(
     log_only_gates: bool = True,
     today: date | None = None,
     policy: OverlayTenorPolicy = OVERLAY_TENORS["monthly"],
+    chain_fetch: ChainFetch | None = None,
 ) -> tuple[OverlayConfig | None, GateViolation | None]:
     """Automate first-ever Collar entry (fetch chain, apply gates, select both legs).
 
@@ -426,6 +450,8 @@ def auto_collar_bootstrap(
 
         today: Reference date; defaults to ``market_today()`` (IST).
         policy: Tenor policy (expiry bucket, entry DTE floor); defaults to monthly.
+        chain_fetch: Raw-row chain fetch ``(underlying, expiry) -> rows``; defaults to the
+            policy's source (direct Upstox, or the routed ``ChainSource`` for yearly).
 
     Returns:
         Tuple of (OverlayConfig or None, GateViolation or None). cfg has both
@@ -491,8 +517,8 @@ def auto_collar_bootstrap(
 
     # Fetch live chain
     try:
-        client = UpstoxMarketClient(settings.upstox_analytics_token)
-        raw_chain = client.get_option_chain_sync("NSE_INDEX|Nifty 50", expiry_str)
+        fetch = _select_chain_fetch(policy, lookup, chain_fetch)
+        raw_chain = fetch("NSE_INDEX|Nifty 50", expiry_str)
     except Exception as exc:
         logger.error("auto_collar.chain_fetch_failed", error=str(exc))
         return None, None
@@ -710,6 +736,7 @@ def auto_pp_bootstrap(
     log_only_gates: bool = True,
     today: date | None = None,
     policy: OverlayTenorPolicy = OVERLAY_TENORS["monthly"],
+    chain_fetch: ChainFetch | None = None,
 ) -> tuple[OverlayConfig | None, GateViolation | None]:
     """Automate PP entry — bootstrap (no open put) or routine roll gap-fill.
 
@@ -727,6 +754,8 @@ def auto_pp_bootstrap(
 
         today: Reference date; defaults to ``market_today()`` (IST).
         policy: Tenor policy (expiry bucket, entry DTE floor); defaults to monthly.
+        chain_fetch: Raw-row chain fetch ``(underlying, expiry) -> rows``; defaults to the
+            policy's source (direct Upstox, or the routed ``ChainSource`` for yearly).
 
     Returns:
         Tuple of (OverlayConfig or None, GateViolation or None). cfg is None
@@ -794,8 +823,8 @@ def auto_pp_bootstrap(
 
     # Fetch live chain
     try:
-        client = UpstoxMarketClient(settings.upstox_analytics_token)
-        raw_chain = client.get_option_chain_sync("NSE_INDEX|Nifty 50", expiry_str)
+        fetch = _select_chain_fetch(policy, lookup, chain_fetch)
+        raw_chain = fetch("NSE_INDEX|Nifty 50", expiry_str)
     except Exception as exc:
         logger.error("auto_pp.chain_fetch_failed", error=str(exc))
         return None, violation

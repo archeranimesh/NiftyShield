@@ -8,12 +8,17 @@ never import concrete client classes directly.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final
 
+import aiohttp
+
+from src.client.chain_rows import DEFAULT_FETCH_TIMEOUT_S, ChainFetch, rows_fetch
 from src.client.chain_source import ChainRouter, ChainSource, DhanChainSource, UpstoxChainSource
+from src.client.contract_resolver import MasterContractResolver, UpstoxContractMaster
 from src.client.dhan_market import Clock, DhanMarketClient, RateLimiter, SpacingRateLimiter
 from src.client.mock_client import MockBrokerClient
 from src.client.protocol import BrokerClient
@@ -22,7 +27,8 @@ from src.client.source_health import SourceHealth
 from src.client.upstox_live import UpstoxLiveClient
 from src.client.upstox_market import UpstoxMarketClient
 from src.config import settings
-from src.models.contract import ContractResolver, SourceId
+from src.instruments.lookup import InstrumentLookup
+from src.models.contract import ChainSnapshot, ContractResolver, SourceId
 
 VALID_ENVS: Final = ("prod", "sandbox", "test")
 
@@ -168,3 +174,56 @@ def create_chain_source(
     if len(built) == 1:
         return built[0][1]
     return ChainRouter(built, health=health, dhan_min_interval_s=floor)
+
+
+class _SystemClock:
+    """Wall-clock ``Clock`` for the Dhan client."""
+
+    async def sleep(self, seconds: float) -> None:
+        await asyncio.sleep(seconds)
+
+    def time(self) -> float:
+        return asyncio.get_running_loop().time()
+
+
+def create_overlay_chain_fetch(
+    lookup: InstrumentLookup, timeout_s: float = DEFAULT_FETCH_TIMEOUT_S
+) -> ChainFetch:
+    """Build the routed, sync raw-row chain fetch for the overlay bootstraps.
+
+    The chain source order comes from ``market_data.chain.sources`` (the
+    Upstox-only default behaves as a bare Upstox fetch). Contract keys are the
+    Upstox ledger keys from the BOD ``lookup``. The Dhan throttle here is
+    in-process; the cross-process limiter is wired by the monitor work.
+
+    Args:
+        lookup: Loaded BOD lookup, the source of ledger keys.
+        timeout_s: Whole-fetch timeout.
+
+    Returns:
+        A :data:`ChainFetch` yielding raw Upstox rows.
+
+    Raises:
+        AmbiguousContractError: The BOD maps one contract or key twice.
+        ValueError: Chain routing config names an unbuildable source.
+    """
+    resolver = MasterContractResolver({SourceId.UPSTOX: UpstoxContractMaster(lookup, ["NIFTY"])})
+
+    async def get_chain(underlying: str, expiry: str) -> ChainSnapshot:
+        async with aiohttp.ClientSession() as session:
+            clock = _SystemClock()
+            dhan = DhanMarketClient(
+                session=session,
+                rate_limiter=create_dhan_rate_limiter(clock),
+                clock=clock,
+                access_token=settings.dhan_access_token or "",
+                client_id=settings.dhan_client_id or "",
+            )
+            source = create_chain_source(
+                upstox=UpstoxMarketClient(settings.upstox_analytics_token),
+                dhan=dhan,
+                resolver=resolver,
+            )
+            return await source.get_chain(underlying, expiry)
+
+    return rows_fetch(get_chain, timeout_s)

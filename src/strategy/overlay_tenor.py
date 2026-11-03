@@ -48,6 +48,9 @@ class OverlayTenorPolicy:
         delta_stop: Short-call delta at or above which DELTA_STOP fires.
         premium_stop_multiple: Short-leg mark / entry premium multiple for the premium stop.
         premium_stop_alert_only: True if the premium stop alerts without closing.
+        routed_chain: True to fetch the entry chain through the configured
+            ``ChainSource`` routing (Dhan fallback for zero Upstox Greeks);
+            False keeps the direct Upstox fetch.
     """
 
     expiry_type: ExpiryType
@@ -63,6 +66,7 @@ class OverlayTenorPolicy:
     delta_stop: Decimal
     premium_stop_multiple: Decimal
     premium_stop_alert_only: bool
+    routed_chain: bool = False
 
 
 OVERLAY_TENORS: Mapping[ExpiryType, OverlayTenorPolicy] = MappingProxyType(
@@ -96,6 +100,7 @@ OVERLAY_TENORS: Mapping[ExpiryType, OverlayTenorPolicy] = MappingProxyType(
             delta_stop=Decimal("0.55"),  # copied from monthly; tune from paper-run data
             premium_stop_multiple=Decimal("2.5"),
             premium_stop_alert_only=True,
+            routed_chain=True,  # Upstox returns zero Greeks past ~90 DTE
         ),
     }
 )

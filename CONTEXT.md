@@ -22,7 +22,7 @@ Top-level `src/` packages, one line each (detail → `CONTEXT_TREE.md`):
 
 - `src/auth/` — Upstox OAuth + Nuvama request_id + Dhan manual-token login/verify flows.
 - `src/client/` — `BrokerClient` / `ChainSource` protocols + impls (Upstox live/sandbox, Mock, Dhan, Composite); `factory.create_client(env)`; order exec + portfolio read blocked (static IP / daily
-  token).
+  token). `chain_rows.py` adapts a `ChainSnapshot` to raw Upstox rows for the overlay bootstraps (`factory.create_overlay_chain_fetch`; yearly tenor only).
 - `src/models/` — canonical domain types: `Leg`/`Trade`/`Strategy`/`DailySnapshot`/`PortfolioSummary` (portfolio.py), MF types (mf.py), `OptionLeg`/`OptionChain` frozen Pydantic (options.py).
 - `src/portfolio/` — live (non-paper) P&L: `PortfolioStore`, `PortfolioTracker`, pure `summary.py`/`formatting.py`, `SnapshotService`, `overlay_coverage.py`; finideas strategies (ILTS, FinRakshak).
 - `src/paper/` — paper-trading engine. Models: `PaperTrade`, `PaperPosition`, `PaperNavSnapshot`, `PaperLegSnapshot`, `PaperExitEvent`, `TrackComparisonSnapshot`, `TradeState` enum. `PaperStore`

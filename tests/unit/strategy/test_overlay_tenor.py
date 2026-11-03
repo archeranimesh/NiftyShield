@@ -89,3 +89,8 @@ def test_registry_is_read_only() -> None:
 
 def test_policy_type_exported() -> None:
     assert isinstance(OVERLAY_TENORS["monthly"], OverlayTenorPolicy)
+
+
+def test_only_yearly_routes_the_entry_chain() -> None:
+    assert OVERLAY_TENORS["yearly"].routed_chain is True
+    assert OVERLAY_TENORS["monthly"].routed_chain is False

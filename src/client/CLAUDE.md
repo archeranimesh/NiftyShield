@@ -85,6 +85,11 @@ alerts; empty or all-zero falls through for that call only; transport failure re
 than one a `ChainRouter`. Builders are a `dict[SourceId, builder]`; unknown or unsupplied sources raise `ValueError` at build time. The 4 s floor lives only in `market_data.chain.dhan_min_interval_s`
 (`src.config.DEFAULT_DHAN_MIN_INTERVAL_S`). Quote/candle entries are validated but not wired until `ds-router-migration/`.
 
+`chain_rows.py` is the one `ChainSnapshot` -> raw Upstox row adapter (`chain_to_rows`) and sync bridge (`rows_fetch`) for the CC / PP / Collar bootstraps, which select strikes from raw rows because
+`OverlayConfig` needs `instrument_key`. Keys come only from `ChainSnapshot.instrument_keys` (Upstox ledger keys); a leg without one is dropped and counted, zero resolvable rows is an empty chain
+(structural abort). `factory.create_overlay_chain_fetch(lookup)` composes it; bootstraps use it when `OverlayTenorPolicy.routed_chain` is set (yearly), else the direct Upstox fetch. Never copy the
+adapter.
+
 ---
 
 ## `upstox_market.py` — Legacy Module
