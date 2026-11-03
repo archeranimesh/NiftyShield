@@ -85,7 +85,7 @@ from src.instruments.strike_selector import (
 from src.market_calendar.holidays import market_today
 from src.models.portfolio import TradeAction
 from src.notifications.entry_message import EntryMessage, format_entry_message
-from src.notifications.formatting import LegRow, format_strike
+from src.notifications.formatting import LegRow, format_strike, strategy_label
 from src.notifications.markdown import escape_markdown
 from src.notifications.telegram import build_notifier
 from src.paper.constants import (
@@ -98,6 +98,7 @@ from src.paper.constants import (
     STRATEGY_OVERLAY,
     STRATEGY_PP_OVERLAY,
     STRATEGY_SPOT,
+    is_yearly_overlay_strategy,
 )
 from src.paper.models import GateViolation, PaperTrade
 from src.paper.store import PaperStore
@@ -269,6 +270,17 @@ def _select_chain_fetch(
     return _upstox_chain_fetch
 
 
+def _cc_gate_strategy_name(policy: OverlayTenorPolicy) -> str:
+    """Strategy name a CC gate violation is logged under.
+
+    The monthly book keeps its historical ``STRATEGY_CC_OVERLAY`` tag; a yearly policy
+    logs under its own ledger name so yearly gate stats never mix into the monthly ones.
+    """
+    if is_yearly_overlay_strategy(policy.cc_strategy_name):
+        return policy.cc_strategy_name
+    return STRATEGY_CC_OVERLAY
+
+
 def auto_cc_bootstrap(
     bod_path: Path,
     *,
@@ -344,7 +356,7 @@ def auto_cc_bootstrap(
                     gate_name="ivr_cc_reentry",
                     threshold="0.25",
                     actual=f"{ivr:.4f}",
-                    strategy_name=STRATEGY_CC_OVERLAY,
+                    strategy_name=_cc_gate_strategy_name(policy),
                 )
             else:
                 logger.error("auto_cc.ivr_gate_failed", ivr=ivr)
@@ -992,7 +1004,9 @@ class OverlayTrade:
     leg_role: str
 
 
-def _query_open_call_role(db_path: Path, call_instrument_key: str) -> str | None:
+def _query_open_call_role(
+    db_path: Path, call_instrument_key: str, strategy_name: str = STRATEGY_OVERLAY
+) -> str | None:
     """Return the leg_role of an already-open short call on *call_instrument_key*.
 
     A "short call" is any leg with a net negative quantity whose leg_role is
@@ -1002,6 +1016,7 @@ def _query_open_call_role(db_path: Path, call_instrument_key: str) -> str | None
     Args:
         db_path: Path to the SQLite portfolio DB.
         call_instrument_key: The instrument key of the call leg about to be entered.
+        strategy_name: Ledger namespace to query (default ``STRATEGY_OVERLAY``).
 
     Returns:
         The existing leg_role (``"overlay_cc"`` or ``"overlay_collar_call"``) if
@@ -1023,7 +1038,7 @@ def _query_open_call_role(db_path: Path, call_instrument_key: str) -> str | None
             GROUP BY leg_role
             HAVING net_qty < 0
             """,
-            (STRATEGY_OVERLAY, call_instrument_key),
+            (strategy_name, call_instrument_key),
         )
         row = cur.fetchone()
         conn.close()
@@ -1042,6 +1057,7 @@ def _query_open_call_role(db_path: Path, call_instrument_key: str) -> str | None
 def build_overlay_trades(
     cfg: OverlayConfig,
     existing_call_role: str | None = None,
+    strategy_name: str = STRATEGY_OVERLAY,
 ) -> tuple[list[OverlayTrade], list[str]]:
     """Build PaperTrade objects for the shared, track-independent overlay leg.
 
@@ -1060,6 +1076,8 @@ def build_overlay_trades(
         cfg: Validated OverlayConfig.
         existing_call_role: leg_role of an already-open short call on the same
             call_instrument_key, from ``_query_open_call_role``. None if none.
+        strategy_name: Ledger namespace the trades are recorded under (default
+            ``STRATEGY_OVERLAY``; the yearly book passes its own policy name).
 
     Returns:
         Tuple of (list of OverlayTrade, list of warning strings).
@@ -1074,7 +1092,7 @@ def build_overlay_trades(
         trades.append(
             OverlayTrade(
                 trade=PaperTrade(
-                    strategy_name=STRATEGY_OVERLAY,
+                    strategy_name=strategy_name,
                     leg_role="overlay_pp",
                     instrument_key=cfg.put_instrument_key,
                     trade_date=cfg.entry_date,
@@ -1086,7 +1104,7 @@ def build_overlay_trades(
                         f"spread={cfg.put_spread_pct}%, OI={cfg.put_oi:,}. {cycle_tag}"
                     ),
                 ),
-                strategy=STRATEGY_OVERLAY,
+                strategy=strategy_name,
                 leg_role="overlay_pp",
             )
         )
@@ -1102,7 +1120,7 @@ def build_overlay_trades(
             trades.append(
                 OverlayTrade(
                     trade=PaperTrade(
-                        strategy_name=STRATEGY_OVERLAY,
+                        strategy_name=strategy_name,
                         leg_role="overlay_cc",
                         instrument_key=cfg.call_instrument_key,
                         trade_date=cfg.entry_date,
@@ -1114,7 +1132,7 @@ def build_overlay_trades(
                             f"spread={cfg.call_spread_pct}%, OI={cfg.call_oi:,}. {cycle_tag}"
                         ),
                     ),
-                    strategy=STRATEGY_OVERLAY,
+                    strategy=strategy_name,
                     leg_role="overlay_cc",
                 )
             )
@@ -1124,7 +1142,7 @@ def build_overlay_trades(
         trades.append(
             OverlayTrade(
                 trade=PaperTrade(
-                    strategy_name=STRATEGY_OVERLAY,
+                    strategy_name=strategy_name,
                     leg_role="overlay_collar_put",
                     instrument_key=cfg.put_instrument_key,
                     trade_date=cfg.entry_date,
@@ -1136,7 +1154,7 @@ def build_overlay_trades(
                         f"spread={cfg.put_spread_pct}%, OI={cfg.put_oi:,}. {cycle_tag}"
                     ),
                 ),
-                strategy=STRATEGY_OVERLAY,
+                strategy=strategy_name,
                 leg_role="overlay_collar_put",
             )
         )
@@ -1152,7 +1170,7 @@ def build_overlay_trades(
             trades.append(
                 OverlayTrade(
                     trade=PaperTrade(
-                        strategy_name=STRATEGY_OVERLAY,
+                        strategy_name=strategy_name,
                         leg_role="overlay_collar_call",
                         instrument_key=cfg.call_instrument_key,
                         trade_date=cfg.entry_date,
@@ -1164,7 +1182,7 @@ def build_overlay_trades(
                             f"spread={cfg.call_spread_pct}%, OI={cfg.call_oi:,}. {cycle_tag}"
                         ),
                     ),
-                    strategy=STRATEGY_OVERLAY,
+                    strategy=strategy_name,
                     leg_role="overlay_collar_call",
                 )
             )
@@ -1392,6 +1410,15 @@ def main() -> None:
         help="Automate CC entry (bypasses YAML config, fetches chain, applies gates).",
     )
     parser.add_argument(
+        "--expiry-type",
+        choices=sorted(OVERLAY_TENORS),
+        default="monthly",
+        help=(
+            "Tenor book for --auto-cc (default: monthly). 'yearly' opens one December "
+            "call under the yearly CC ledger name; not yet supported with --auto-pp/--auto-collar."
+        ),
+    )
+    parser.add_argument(
         "--auto-pp",
         action="store_true",
         help=(
@@ -1426,6 +1453,16 @@ def main() -> None:
     args = parser.parse_args()
     setup_logging()
 
+    if args.expiry_type != "monthly" and not args.auto_cc:
+        parser.error(
+            f"--expiry-type {args.expiry_type} is only supported with --auto-cc "
+            "(yearly PP/Collar land in later yearly-overlays stories)."
+        )
+    policy = OVERLAY_TENORS[args.expiry_type]
+    # Every monthly policy name is STRATEGY_OVERLAY; only --auto-cc can select another book.
+    # Yearly PP/Collar stories must pick pp_/collar_strategy_name per overlay type here.
+    ledger = policy.cc_strategy_name
+
     gate_violation: GateViolation | None = None
 
     if args.auto_cc:
@@ -1433,7 +1470,9 @@ def main() -> None:
         # decision), and EC-5 (DTE<=5 exit collapse) have all landed, and EC-5's tests
         # were confirmed green on a live host the same day (see DECISIONS.md, TODOS.md
         # item 6). See docs/plan/3track-consolidation/tasks.md CC5 for the closure note.
-        cfg, gate_violation = auto_cc_bootstrap(args.bod_path, log_only_gates=args.log_only_gates)
+        cfg, gate_violation = auto_cc_bootstrap(
+            args.bod_path, log_only_gates=args.log_only_gates, policy=policy
+        )
         if cfg is None:
             print("ERROR: auto-CC bootstrap failed. Check logs.", file=sys.stderr)
             _alert_bootstrap_failure("CC", "logs/cc_entry.log")
@@ -1487,7 +1526,7 @@ def main() -> None:
     # Bootstrap-only (S6): skip entirely if this overlay's marker leg is already
     # open. Overlay entry is a one-time bootstrap, never a recurring re-entry.
     primary_role = _PRIMARY_LEG_ROLE[cfg.overlay_type]
-    already_bootstrapped = _has_open_overlay_leg(store, primary_role)
+    already_bootstrapped = _has_open_overlay_leg(store, primary_role, ledger)
 
     if args.auto_pp:
         # PP3, 2026-08-03: the generic S6 gate above assumes at most one open
@@ -1515,7 +1554,7 @@ def main() -> None:
     # recording overlay_cc and overlay_collar_call on the same contract.
     existing_call_role: str | None = None
     if cfg.overlay_type in ("cc", "collar") and cfg.call_instrument_key:
-        existing_call_role = _query_open_call_role(args.db_path, cfg.call_instrument_key)
+        existing_call_role = _query_open_call_role(args.db_path, cfg.call_instrument_key, ledger)
         if existing_call_role:
             logger.info(
                 "open_call_role.found",
@@ -1523,7 +1562,9 @@ def main() -> None:
                 leg_role=existing_call_role,
             )
 
-    overlay_trades, warnings = build_overlay_trades(cfg, existing_call_role=existing_call_role)
+    overlay_trades, warnings = build_overlay_trades(
+        cfg, existing_call_role=existing_call_role, strategy_name=ledger
+    )
 
     if not overlay_trades:
         print("ERROR: no trades to record — overlay leg was blocked.", file=sys.stderr)
@@ -1542,14 +1583,12 @@ def main() -> None:
                 leg_role=primary_role,
             )
             print(
-                f"SKIPPED: {primary_role} already open under {STRATEGY_OVERLAY} — "
+                f"SKIPPED: {primary_role} already open under {ledger} — "
                 "overlay entry is a one-time bootstrap, not a recurring re-entry.",
                 file=sys.stderr,
             )
         else:
-            _check_overlay_collateral_capacity(
-                store, STRATEGY_OVERLAY, lots_requested=len(overlay_trades)
-            )
+            _check_overlay_collateral_capacity(store, ledger, lots_requested=len(overlay_trades))
             if cfg.overlay_type == "collar":
                 _record_collar_trades(store, overlay_trades)
             else:
@@ -1609,8 +1648,11 @@ def main() -> None:
                         overlay_type=cfg.overlay_type,
                     )
                 else:
+                    headline_label = cfg.overlay_type.upper()
+                    if is_yearly_overlay_strategy(ledger):
+                        headline_label = strategy_label(ledger).upper()
                     msg = EntryMessage(
-                        headline_label=cfg.overlay_type.upper(),
+                        headline_label=headline_label,
                         expiry=date.fromisoformat(cfg.expiry),
                         dte=cfg.dte_at_entry,
                         spot=float(spot),
