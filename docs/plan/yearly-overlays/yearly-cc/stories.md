@@ -40,6 +40,10 @@
 
 1. Replace each tenor-bearing constant with `self.tenor.<field>`; the class default stays the monthly policy so existing construction sites do not change.
 2. Yearly instance gets the yearly policy and namespace via constructor injection.
+3. Independence leftover from YC-1 (2026-11-03): `scripts/strategies/three_track/paper_3track_overlay_entry.py` still has a legacy idempotency guard that skips a CC entry when an `overlay_cc` leg is
+   open under `STRATEGY_SPOT`. A yearly entry must not be blocked by it (decision 5: the monthly book's open legs never make a yearly entry a no-op). Make the guard apply only to the ledger it
+   protects, keyed on the ledger name already passed through the script and not on a new `elif expiry_type == "yearly"`; pin the monthly behaviour first and add
+   `test_legacy_spot_overlay_cc_does_not_block_yearly_entry`. Add that file to this task's files.
 
 **Tests:**
 - `test_yearly_cc_review_dte_uses_policy` — a leg at DTE 20 is not reviewed under a yearly review_dte of 5 but is under a test policy of 30.
