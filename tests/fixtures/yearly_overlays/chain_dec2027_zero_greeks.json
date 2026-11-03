@@ -1,0 +1,197 @@
+[
+  {
+    "expiry": "2027-12-28",
+    "strike_price": 23000.0,
+    "underlying_spot_price": 25000.0,
+    "call_options": {
+      "market_data": {
+        "ltp": 3350.0,
+        "bid_price": 3345.0,
+        "ask_price": 3355.0,
+        "oi": 1000,
+        "volume": 0
+      },
+      "option_greeks": {
+        "delta": 0,
+        "gamma": 0,
+        "theta": 0,
+        "vega": 0,
+        "iv": 0,
+        "pop": 0
+      }
+    },
+    "put_options": {
+      "market_data": {
+        "ltp": 420.0,
+        "bid_price": 415.0,
+        "ask_price": 425.0,
+        "oi": 1000,
+        "volume": 0
+      },
+      "option_greeks": {
+        "delta": 0,
+        "gamma": 0,
+        "theta": 0,
+        "vega": 0,
+        "iv": 0,
+        "pop": 0
+      }
+    }
+  },
+  {
+    "expiry": "2027-12-28",
+    "strike_price": 24000.0,
+    "underlying_spot_price": 25000.0,
+    "call_options": {
+      "market_data": {
+        "ltp": 2680.0,
+        "bid_price": 2675.0,
+        "ask_price": 2685.0,
+        "oi": 1000,
+        "volume": 0
+      },
+      "option_greeks": {
+        "delta": 0,
+        "gamma": 0,
+        "theta": 0,
+        "vega": 0,
+        "iv": 0,
+        "pop": 0
+      }
+    },
+    "put_options": {
+      "market_data": {
+        "ltp": 610.0,
+        "bid_price": 605.0,
+        "ask_price": 615.0,
+        "oi": 1000,
+        "volume": 0
+      },
+      "option_greeks": {
+        "delta": 0,
+        "gamma": 0,
+        "theta": 0,
+        "vega": 0,
+        "iv": 0,
+        "pop": 0
+      }
+    }
+  },
+  {
+    "expiry": "2027-12-28",
+    "strike_price": 25000.0,
+    "underlying_spot_price": 25000.0,
+    "call_options": {
+      "market_data": {
+        "ltp": 2100.0,
+        "bid_price": 2095.0,
+        "ask_price": 2105.0,
+        "oi": 1000,
+        "volume": 0
+      },
+      "option_greeks": {
+        "delta": 0,
+        "gamma": 0,
+        "theta": 0,
+        "vega": 0,
+        "iv": 0,
+        "pop": 0
+      }
+    },
+    "put_options": {
+      "market_data": {
+        "ltp": 880.0,
+        "bid_price": 875.0,
+        "ask_price": 885.0,
+        "oi": 1000,
+        "volume": 0
+      },
+      "option_greeks": {
+        "delta": 0,
+        "gamma": 0,
+        "theta": 0,
+        "vega": 0,
+        "iv": 0,
+        "pop": 0
+      }
+    }
+  },
+  {
+    "expiry": "2027-12-28",
+    "strike_price": 26000.0,
+    "underlying_spot_price": 25000.0,
+    "call_options": {
+      "market_data": {
+        "ltp": 1580.0,
+        "bid_price": 1575.0,
+        "ask_price": 1585.0,
+        "oi": 1000,
+        "volume": 0
+      },
+      "option_greeks": {
+        "delta": 0,
+        "gamma": 0,
+        "theta": 0,
+        "vega": 0,
+        "iv": 0,
+        "pop": 0
+      }
+    },
+    "put_options": {
+      "market_data": {
+        "ltp": 1230.0,
+        "bid_price": 1225.0,
+        "ask_price": 1235.0,
+        "oi": 1000,
+        "volume": 0
+      },
+      "option_greeks": {
+        "delta": 0,
+        "gamma": 0,
+        "theta": 0,
+        "vega": 0,
+        "iv": 0,
+        "pop": 0
+      }
+    }
+  },
+  {
+    "expiry": "2027-12-28",
+    "strike_price": 27000.0,
+    "underlying_spot_price": 25000.0,
+    "call_options": {
+      "market_data": {
+        "ltp": 1150.0,
+        "bid_price": 1145.0,
+        "ask_price": 1155.0,
+        "oi": 1000,
+        "volume": 0
+      },
+      "option_greeks": {
+        "delta": 0,
+        "gamma": 0,
+        "theta": 0,
+        "vega": 0,
+        "iv": 0,
+        "pop": 0
+      }
+    },
+    "put_options": {
+      "market_data": {
+        "ltp": 1700.0,
+        "bid_price": 1695.0,
+        "ask_price": 1705.0,
+        "oi": 1000,
+        "volume": 0
+      },
+      "option_greeks": {
+        "delta": 0,
+        "gamma": 0,
+        "theta": 0,
+        "vega": 0,
+        "iv": 0,
+        "pop": 0
+      }
+    }
+  }
+]

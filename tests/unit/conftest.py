@@ -1,3 +1,6 @@
+from collections.abc import Callable
+from datetime import date
+
 import pytest
 import structlog
 
@@ -73,3 +76,22 @@ def _clear_structlog_contextvars():
     structlog.contextvars.clear_contextvars()
     yield
     structlog.contextvars.clear_contextvars()
+
+
+@pytest.fixture
+def frozen_today(monkeypatch: pytest.MonkeyPatch) -> Callable[..., None]:
+    """Return ``freeze(day, *modules)``: pin ``market_today`` for overlay-clock tests.
+
+    Patches ``src.market_calendar.holidays.market_today`` plus ``market_today`` as
+    imported into each dotted module path given (e.g. ``"src.strategy.cc_overlay_v1"``).
+    Reverted automatically at test teardown.
+    """
+
+    def freeze(day: date, *modules: str) -> None:
+        import src.market_calendar.holidays as holidays
+
+        monkeypatch.setattr(holidays, "market_today", lambda: day)
+        for mod in modules:
+            monkeypatch.setattr(f"{mod}.market_today", lambda: day)
+
+    return freeze
