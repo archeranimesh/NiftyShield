@@ -3,7 +3,7 @@
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
 spec.
 
-**Open: DSC-5.** `ds-capability-map/` is complete; DSC-5 is next.
+**Open: none.** `ds-capability-map/` and `ds-chain-seam/` are complete; next is `ds-chain-monitoring/` DSN-1.
 
 - [x] **DSC-1** — `ContractRef`, `ChainSnapshot`, `ContractResolver` protocol in `src/models/contract.py` | Owner: Claude | Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: 68d42bb
 - [x] **DSC-2** — `ContractResolver` implementation from the Upstox BOD and the Dhan instrument master (exact joins, partial map legal) | Owner: Claude | Model: claude-sonnet-5-5 | Review:
@@ -12,7 +12,7 @@ spec.
   claude-sonnet-5-5 | Review: code-reviewer + greeks-analyst | SHA: 053ead4
 - [x] **DSC-4** — Chain routing config via `Settings` + `factory.py` wiring; Upstox-only default pinned by a regression test | Owner: Claude | Model: claude-sonnet-5-5 | Review: code-reviewer | SHA:
   94bb30b
-- [ ] **DSC-5** — Cross-process Dhan throttle shared by the capture cron and the monitor daemon | Owner: Claude | Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: —
+- [x] **DSC-5** — Cross-process Dhan throttle shared by the capture cron and the monitor daemon | Owner: Claude | Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: c22c5ae
 
 ## Story done when
 

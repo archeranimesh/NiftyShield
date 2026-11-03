@@ -20,7 +20,7 @@ Snapshot of every active story, sorted by how many downstream stories it blocks 
 | `variance-gate` (21) | ⬜ 0/8 | VG0 (Animesh) | none (VG2.A needs 9 months) | **5**: backtest-engine, options_income, entry-event-filter, historical-data-abstraction, broker-abstraction |
 | `greeks-bs-fallback` (7) | ⬜ 0/6 | GF-1 | Animesh's 3 modeling decisions before GF-2 | **3**: chart-model-overlay, chain-decay-analysis, calendar-monthly CM-9 |
 | `backtest-engine` (11) | 🔄 3/16 | 1.1 (Animesh), 1.3a / 1.4 | variance-gate (phase gate) | **3**: backtest-eval-core, signals-eval-core, entry-event-filter |
-| `ds-chain-seam` (25) | ⬜ 0/5 | DSC-1 | none | **2**: ds-chain-monitoring, yearly-foundation (YF-6) |
+| `ds-chain-seam` (25) | ✅ 5/5 | none (done) | none | **2**: ds-chain-monitoring, yearly-foundation (YF-6) |
 | `ds-chain-monitoring` (25) | ⬜ 0/5 | DSN-1 | DSC-3; DSN-2..4 also need YF-3 | **2**: yearly-validation (YV-5), ds-router-migration |
 | `far-expiry-liquidity-gate` (24) | ⛔ 0/3 | FG-1 | 15+ captured days (earliest 2026-11-02) | **2**: yearly-foundation (YF-3 registry), yearly-validation (YV-5) |
 | `design-gate` (26) | ⬜ 0/9 | DG-1 | none | **2**: design-baseline, logging-foundation (soft) |
@@ -75,7 +75,7 @@ state. Arrows: `A → B` means B cannot start until A is done. `‖` means the t
 | 0 | `dhan-far-expiry-chain/` (DA-0 → FC-1..5 → FG-1..3) | 24 | FG-1 (blocked on capture) | FG-1 needs 15+ captured trading days | YV-5, YF-3 registry (FG-3 writes `roll_dte`) |
 | 0 | `variance-gate/` | 21 | VG0 (Animesh) | none | gates A-D; `options_income/`; `entry-event-filter/` |
 | 1 ROLL | `yearly-overlays/yearly-foundation/` YF-2..5 | 23 | YF-2 | none | all other yearly stories; `ds-chain-monitoring` (needs YF-3) |
-| 1 ROLL | `data-source-routing/ds-chain-seam/` DSC-1..5 | 25 | DSC-1 | none (DSM-1 done) | YF-6; `ds-chain-monitoring` |
+| 1 ROLL | `data-source-routing/ds-chain-seam/` DSC-1..5 (done) | 25 | none | none (DSM-1 done) | YF-6; `ds-chain-monitoring` |
 | 1 ROLL | YF-6 (chain wiring into the 3 bootstraps) | 23 | after YF-4 and DSC-3 | YF-4, DSC-2, DSC-3 | yearly-cc / pp / collar run on the routed chain; YV-5 |
 | 1 ROLL | `yearly-cc/` ‖ `yearly-pp/` → `yearly-collar/` | 23 | after YF-5 | `yearly-foundation` complete (collar: cc and pp) | `yearly-ops-wiring` |
 | 1 ROLL | `data-source-routing/ds-chain-monitoring/` DSN-1..4 | 25 | DSN-1 after DSC-3 | DSC-3; DSN-2..4 also need YF-3 | YV-5 |
@@ -214,6 +214,8 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-11-03] ds-chain-seam DSC-5 closed (`c22c5ae`): SharedRateLimiter shares the Dhan throttle across processes via flock plus a timestamp file
+- [2026-11-03] ds-chain-seam DSC-4 closed (`94bb30b`): chain routing config via Settings and factory wiring, Upstox-only default pinned
 - [2026-11-03] ds-chain-seam DSC-3 closed (`053ead4`): chain sources return ChainSnapshot; ChainRouter with per-expiry fallback and health
 - [2026-11-03] ds-chain-seam DSC-2 closed (`eb333f1`): Contract resolver over Upstox BOD and Dhan master with exact joins
 - [2026-11-03] ds-chain-seam DSC-1 closed (`68d42bb`): SourceId, ContractRef, ChainSnapshot, ContractResolver and has_usable_delta added in src/models/contract.py
