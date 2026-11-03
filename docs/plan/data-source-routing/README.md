@@ -64,7 +64,7 @@ SOLID triggers run against the plan (`docs/refactor/design-principles.md`):
 |---|---|---|---|---|
 | `ds-capability-map/` | Council run and absorb (done), roll-critical checks (BOD Dec 2027 coverage, Dhan failure shapes) | ✅ Done | — | a4a4b14 |
 | `ds-chain-seam/` | `ContractRef` / `ChainSnapshot`, resolver, per-expiry fallback and health, chain routing config, shared Dhan throttle | ✅ Done (`c22c5ae`) | `ds-capability-map` | — |
-| `ds-chain-monitoring/` | Token alert, yearly read path with provenance, stale-Greeks policy, cadence, source flip | 🔄 DSN-1 done, next DSN-4 | `ds-chain-seam`; `yearly-foundation` YF-3 | — |
+| `ds-chain-monitoring/` | Token alert, yearly read path with provenance, stale-Greeks policy, cadence, source flip | 🔄 DSN-1, DSN-4 done; next DSN-2 | `ds-chain-seam`; `yearly-foundation` YF-3 | — |
 | `ds-router-migration/` | Capability matrix, quote / candle router, importer migration, token renewal, generalised health | ⬜ Not started | `ds-chain-monitoring` (and Dec 2026 roll done) | — |
 
 Status: ⬜ Not started · 🔄 In progress · ✅ Done. This column is the epic's progress view — per-task checkboxes live only in each sub-story's `tasks.md`.

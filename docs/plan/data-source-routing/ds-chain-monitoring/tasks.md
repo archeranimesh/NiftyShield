@@ -3,7 +3,7 @@
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
 spec; `schema.md` for the persisted columns.
 
-**Open: DSN-4** (the combined loop runs it next). DSN-2, DSN-3 and DSN-5 wait until after `yearly-ops-wiring/` registers the yearly book. DSN-1 is done.
+**Open: DSN-2** (remaining: DSN-2, DSN-3, DSN-5; all wait until after `yearly-ops-wiring/` registers the yearly book). DSN-1 and DSN-4 are done.
 
 - [x] **DSN-1** — Dhan token-staleness alert (alert only, no renewal) + healthcheck line; 806 and stale token page via Telegram | Owner: Claude | Model: claude-sonnet-5-5 | Review: code-reviewer |
   SHA: b2c4fa9
@@ -11,8 +11,8 @@ spec; `schema.md` for the persisted columns.
   Owner: Claude | Model: claude-sonnet-5-5 | Review: code-reviewer + greeks-analyst | SHA: —
 - [ ] **DSN-3** — Stale-Greeks policy by action class, last-known delta from the capture store, +/-1 banned for yearly gates, delta-independent backstop alert | Owner: Claude | Model:
   claude-sonnet-5-5 | Review: code-reviewer + greeks-analyst | SHA: —
-- [ ] **DSN-4** — Monitor-cadence field in `OverlayTenorPolicy`; yearly cadence set (300 s or slower, final value here) and monthly pinned; freshness-bound startup validation | Owner: Claude | Model:
-  claude-sonnet-5-5 | Review: code-reviewer | SHA: —
+- [x] **DSN-4** — Monitor-cadence field in `OverlayTenorPolicy`; yearly cadence set (300 s or slower, final value here) and monthly pinned; freshness-bound startup validation | Owner: Claude | Model:
+  claude-sonnet-5-5 | Review: code-reviewer | SHA: 8bcbfe1
 - [ ] **DSN-5** — Source-flip seam: Dhan to Upstox after 2 consecutive trading days of non-zero delta on held contracts; dual-persist, tolerance band, dual-read logging | Owner: Claude | Model:
   claude-sonnet-5-5 | Review: code-reviewer + greeks-analyst | SHA: —
 
