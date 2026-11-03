@@ -75,9 +75,10 @@ Resolved by the council on 2026-10-07: contract identity (Option A) and token re
 
 1. **Kite / Zerodha.** The council deferred it post-roll; BA-6..BA-9 stay deferred (no credentials, no consumer). Confirm or restore.
 2. **Dhan yearly plan.** Resolved 2026-10-11: Animesh renews for one year (Rs 4,788). DA-0 in `dhan-far-expiry-chain/`; 806 gets only a generic fall-back-to-Upstox branch.
-3. **Yearly monitor cadence.** Proposal: 300 s or slower (the council's 60 s is "initial"). Set in DSN-4.
-4. **Backstop thresholds.** Premium multiple or spot distance to strike for the delta-independent alert (DSN-3); depends on the yearly tenor policy values (`yearly-overlays/README.md` open decision
-   1).
+3. **Yearly monitor cadence.** Resolved 2026-11-03: hourly (3600 s). The freshness bound is therefore at least 2 x 3600 s + one 4 s slot (7204 s), validated at startup in DSN-4; the 1-trading-day
+   alert in DSN-3 is unchanged.
+4. **Backstop thresholds.** Resolved 2026-11-03: premium multiple 2.5x entry premium on short legs (CC, Collar call), alert-only; no spot-distance trigger until paper data shows the premium trigger
+   firing late; no backstop on PP / Collar put. Value held in the yearly tenor policy (DSN-3).
 5. **Schema acceptance.** Four additive `TEXT NULL` columns (`ds-chain-monitoring/schema.md`). `yearly-overlays/` YF-1 must not conclude "no schema change".
 6. **Dec 2027 not in the Upstox BOD.** Resolved by DSM-1 (2026-10-11): Dec 2027 is listed (35 contracts, thin, 500+ strike steps), so no separate decision is needed; Option A stands.
 

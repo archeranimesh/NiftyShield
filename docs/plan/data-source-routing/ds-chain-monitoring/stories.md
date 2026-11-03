@@ -72,7 +72,8 @@ token age in the healthcheck. **Alert only; programmatic renewal is post-roll (`
 4. **The +/-1 approximation is banned** from yearly gates, stops and roll decisions; it may be computed for a diagnostic line only.
 5. **Alert** when the newest usable delta is older than 1 trading day.
 6. **Backstop (alert-only in paper):** while Greeks are unavailable, watch each open yearly short leg on a delta-independent trigger — premium multiple (LTP vs entry premium) or spot distance to
-   strike — and alert when breached. Thresholds come from the yearly tenor policy (open decision 1 in `yearly-overlays/README.md`); until set, the backstop is off and the task records that.
+   strike — and alert when breached. Decided 2026-11-03: premium multiple only, alert at LTP >= 2.5x entry premium on the CC and the Collar's short call (copied from monthly CC, tuned from paper
+   data); no spot-distance trigger yet; PP and the Collar's put leg get no backstop (hedges). The 2.5 lives in the yearly tenor policy registry.
 7. Trading-day ages use `src/market_calendar/`.
 8. No local Black '76 or other model here.
 
@@ -88,7 +89,7 @@ fixture breach and is silent below threshold.
 ## DSN-4 — Monitor cadence
 
 **Files to change / create:**
-- `OverlayTenorPolicy` registry (YF-3) — add a cadence field; yearly value set here (proposal: 300 s or slower), monthly pinned to today's value.
+- `OverlayTenorPolicy` registry (YF-3) — add a cadence field; yearly value set here (decided 2026-11-03: 3600 s, hourly), monthly pinned to today's value.
 - `src/config.py` — `yearly_chain_monitor_cadence_s`, `greeks_fresh_max_age_s`, `greeks_cache_max_age_trading_days` (3), `greeks_action_max_age_trading_days` (1).
 - `tests/unit/` — extend.
 
