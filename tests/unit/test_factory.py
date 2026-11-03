@@ -7,13 +7,17 @@ token validation or UpstoxMarketClient instantiation.
 from __future__ import annotations
 
 from decimal import Decimal
+from unittest.mock import MagicMock
 
 import pytest
 
-from src.client.factory import create_client
+from src.client import factory
+from src.client.chain_source import ChainRouter, DhanChainSource, UpstoxChainSource
+from src.client.factory import create_chain_source, create_client
 from src.client.mock_client import MockBrokerClient
 from src.client.protocol import BrokerClient
 from src.client.upstox_live import UpstoxLiveClient
+from src.models.contract import SourceId
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -103,3 +107,45 @@ class TestCreateClientInvalidEnv:
     def test_error_message_contains_valid_envs_hint(self) -> None:
         with pytest.raises(ValueError, match="prod"):
             create_client("bad-env")
+
+
+# ---------------------------------------------------------------------------
+# Chain routing (DSC-4)
+# ---------------------------------------------------------------------------
+
+
+class TestCreateChainSource:
+    def test_default_config_wires_bare_upstox_source(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Regression pin: default config is today's behaviour, not a one-entry router."""
+        for key in ("MARKET_DATA__CHAIN__SOURCES", "MARKET_DATA__CHAIN__DHAN_MIN_INTERVAL_S"):
+            monkeypatch.delenv(key, raising=False)
+        src = create_chain_source(upstox=MagicMock())
+        assert type(src) is UpstoxChainSource
+
+    def test_two_sources_wire_a_router(self) -> None:
+        src = create_chain_source(
+            upstox=MagicMock(),
+            dhan=MagicMock(),
+            sources=[SourceId.UPSTOX, SourceId.DHAN],
+            dhan_min_interval_s=4.0,
+        )
+        assert isinstance(src, ChainRouter)
+
+    def test_single_dhan_source_is_bare(self) -> None:
+        src = create_chain_source(upstox=None, dhan=MagicMock(), sources=[SourceId.DHAN])
+        assert type(src) is DhanChainSource
+
+    def test_missing_client_for_configured_source_fails_at_build(self) -> None:
+        with pytest.raises(ValueError, match="dhan"):
+            create_chain_source(upstox=MagicMock(), sources=[SourceId.UPSTOX, SourceId.DHAN])
+
+    def test_source_without_registered_builder_fails_at_build(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(factory, "_CHAIN_BUILDERS", {})
+        with pytest.raises(ValueError, match="upstox"):
+            create_chain_source(upstox=MagicMock(), sources=[SourceId.UPSTOX])
+
+    def test_empty_sources_rejected(self) -> None:
+        with pytest.raises(ValueError):
+            create_chain_source(upstox=MagicMock(), sources=[])

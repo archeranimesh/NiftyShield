@@ -11,10 +11,58 @@ Usage::
 """
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
-from pydantic import Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from src.models.contract import SourceId
+
+# The one place the Dhan option-chain call floor is stated (seconds).
+DEFAULT_DHAN_MIN_INTERVAL_S: Final[float] = 4.0
+
+
+def _default_sources() -> list[SourceId]:
+    return [SourceId.UPSTOX]
+
+
+class CapabilityRouting(BaseModel):
+    """Ordered source preference for one market-data capability.
+
+    Orders, positions and margin are deliberately not routable.
+    """
+
+    sources: list[SourceId] = Field(
+        default_factory=_default_sources,
+        description="Ordered source preference; first usable answer wins.",
+    )
+
+    @field_validator("sources")
+    @classmethod
+    def _non_empty_unique(cls, v: list[SourceId]) -> list[SourceId]:
+        if not v:
+            raise ValueError("sources must not be empty")
+        if len(set(v)) != len(v):
+            raise ValueError("sources must not repeat a source")
+        return v
+
+
+class ChainRouting(CapabilityRouting):
+    """Option-chain routing: source order plus the Dhan call floor."""
+
+    dhan_min_interval_s: float = Field(
+        default=DEFAULT_DHAN_MIN_INTERVAL_S,
+        gt=0,
+        description="Minimum seconds between Dhan chain calls (also the 805 backoff).",
+    )
+
+
+class MarketDataSettings(BaseModel):
+    """``market_data.*`` routing. Quote and candles are validated, not yet wired."""
+
+    chain: ChainRouting = Field(default_factory=ChainRouting)
+    quote: CapabilityRouting = Field(default_factory=CapabilityRouting)
+    candles: CapabilityRouting = Field(default_factory=CapabilityRouting)
 
 
 class Settings(BaseSettings):
@@ -28,6 +76,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
+        # MARKET_DATA__CHAIN__SOURCES='["upstox","dhan"]' -> market_data.chain.sources
+        env_nested_delimiter="__",
         # Extra env vars that are not declared here are silently ignored.
         extra="ignore",
     )
@@ -172,6 +222,14 @@ class Settings(BaseSettings):
     bod_instruments_path: str = Field(
         default="data/instruments/NSE.json.gz",
         description="Path to the Beginning-of-Day instrument JSON from Upstox.",
+    )
+
+    # ------------------------------------------------------------------
+    # Market-data routing
+    # ------------------------------------------------------------------
+    market_data: MarketDataSettings = Field(
+        default_factory=MarketDataSettings,
+        description="Per-capability source order. Defaults reproduce Upstox-only behaviour.",
     )
 
     # ------------------------------------------------------------------

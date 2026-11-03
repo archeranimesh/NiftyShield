@@ -11,6 +11,7 @@ from src.client.capability_router import CapabilityRouter
 from src.client.dhan_market import DhanMarketClient
 from src.client.source_health import SourceHealth
 from src.client.upstox_market import UpstoxMarketClient, parse_upstox_option_chain
+from src.config import DEFAULT_DHAN_MIN_INTERVAL_S
 from src.models.contract import (
     ChainSnapshot,
     ContractRef,
@@ -23,8 +24,6 @@ from src.models.options import OptionChain, OptionLeg
 logger = structlog.get_logger(__name__)
 
 CHAIN_CAPABILITY = "chain"
-# Documented Dhan chain floor; DSC-4 reads it from Settings and passes it in.
-DEFAULT_DHAN_MIN_INTERVAL_S = 4.0
 # Request underlying (Upstox instrument key) -> normalised ContractRef underlying.
 _REF_UNDERLYING = {"NSE_INDEX|Nifty 50": "NIFTY"}
 

@@ -81,6 +81,10 @@ reusable for quotes and candles) with `SourceHealth` (`source_health.py`, keyed 
 alerts; empty or all-zero falls through for that call only; transport failure retries once then opens a circuit. A single-entry `ChainRouter` raises on an all-zero chain, unlike a bare
 `UpstoxChainSource`.
 
+`factory.create_chain_source` builds it from `settings.market_data.chain` (`MARKET_DATA__CHAIN__SOURCES='["upstox","dhan"]'`; default `["upstox"]`): one configured source returns the bare source, more
+than one a `ChainRouter`. Builders are a `dict[SourceId, builder]`; unknown or unsupplied sources raise `ValueError` at build time. The 4 s floor lives only in `market_data.chain.dhan_min_interval_s`
+(`src.config.DEFAULT_DHAN_MIN_INTERVAL_S`). Quote/candle entries are validated but not wired until `ds-router-migration/`.
+
 ---
 
 ## `upstox_market.py` — Legacy Module

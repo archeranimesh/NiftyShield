@@ -26,6 +26,7 @@ def test_defaults_with_no_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
         "DHAN_CLIENT_ID",
         "DHAN_ACCESS_TOKEN",
         "NUVAMA_SETTINGS_FILE",
+        "MARKET_DATA__CHAIN__SOURCES",
     ]:
         monkeypatch.delenv(key, raising=False)
 
@@ -138,3 +139,60 @@ def test_dynamic_settings_correctness_independent_of_hash(
     # wrongly reuse the cached Settings built with no token set.
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "leaked-token")
     assert dynamic.telegram_bot_token == "leaked-token"
+
+
+# ── market_data routing config (DSC-4) ──────────────────────────────
+
+
+def _clean_market_data_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    for key in [
+        "MARKET_DATA__CHAIN__SOURCES",
+        "MARKET_DATA__CHAIN__DHAN_MIN_INTERVAL_S",
+        "MARKET_DATA__QUOTE__SOURCES",
+        "MARKET_DATA__CANDLES__SOURCES",
+    ]:
+        monkeypatch.delenv(key, raising=False)
+
+
+def test_market_data_defaults_are_upstox_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression pin: with no env, every capability routes to Upstox alone, 4 s floor."""
+    _clean_market_data_env(monkeypatch)
+    s = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert [x.value for x in s.market_data.chain.sources] == ["upstox"]
+    assert [x.value for x in s.market_data.quote.sources] == ["upstox"]
+    assert [x.value for x in s.market_data.candles.sources] == ["upstox"]
+    assert s.market_data.chain.dhan_min_interval_s == 4.0
+
+
+def test_market_data_chain_sources_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The yearly setting parses from a nested env var, order preserved."""
+    _clean_market_data_env(monkeypatch)
+    monkeypatch.setenv("MARKET_DATA__CHAIN__SOURCES", '["upstox", "dhan"]')
+    monkeypatch.setenv("MARKET_DATA__CHAIN__DHAN_MIN_INTERVAL_S", "6")
+    s = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert [x.value for x in s.market_data.chain.sources] == ["upstox", "dhan"]
+    assert s.market_data.chain.dhan_min_interval_s == 6.0
+
+
+@pytest.mark.parametrize("raw", ['["kite"]', "[]", '["dhan", "dhan"]'])
+def test_market_data_invalid_sources_rejected(monkeypatch: pytest.MonkeyPatch, raw: str) -> None:
+    """Unknown, empty and duplicate source lists fail at Settings construction."""
+    _clean_market_data_env(monkeypatch)
+    monkeypatch.setenv("MARKET_DATA__CHAIN__SOURCES", raw)
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)  # type: ignore[call-arg]
+
+
+def test_market_data_quote_unknown_source_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Quote and candle entries are validated even though they are not wired yet."""
+    _clean_market_data_env(monkeypatch)
+    monkeypatch.setenv("MARKET_DATA__QUOTE__SOURCES", '["kite"]')
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)  # type: ignore[call-arg]
+
+
+def test_market_data_non_positive_floor_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clean_market_data_env(monkeypatch)
+    monkeypatch.setenv("MARKET_DATA__CHAIN__DHAN_MIN_INTERVAL_S", "0")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)  # type: ignore[call-arg]
