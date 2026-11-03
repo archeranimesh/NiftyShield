@@ -175,6 +175,7 @@ consistent with this module's non-fatal contract above.
 `payoff_chart.py` (`render_payoff_png`) composes three leaf modules: `payoff_chart_theme.py` (frozen `ChartTheme`, dark only), `payoff_chart_axes.py` (pure axis maths + draw helpers) and
 `payoff_chart_header.py` (stat-header cells, packing, drawing). Colours come from `ChartTheme`, never inline hex. **Font-fallback invariant:** `chart_font_family()` must never raise — if the
 bundled Roboto in `assets/fonts/` cannot load it logs a warning and returns `"DejaVu Sans"`, so a chart always renders. Header money uses `format_money_whole` / `format_money_k`.
+Generic do/don't standard for any new chart: `docs/reference/chart_guidelines.md`.
 
 ---
 
