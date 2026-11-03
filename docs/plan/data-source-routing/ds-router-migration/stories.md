@@ -51,8 +51,9 @@ summaries pasted on 2026-10-07 (pages unreachable from the session); mark them u
 
 ## DSR-2 .. DSR-last (outline — specced from the DSR-1 audit and the absorbed ruling)
 
-- **DSR-2:** `QuoteSource` / `CandleSource` implementations for Upstox (wrap `UpstoxLiveClient`) and Dhan (`DhanMarketClient` quote and candle calls, 4 s / rate-limit aware), a registry-`dict` router
-  and config in `src/client/` + `src/config.py` + `factory.py`. Default config reproduces Upstox-only behaviour.
+- **DSR-2:** `QuoteSource` / `CandleSource` implementations for Upstox (wrap `UpstoxLiveClient`) and Dhan (`DhanMarketClient` quote and candle calls, 4 s / rate-limit aware). The router is the
+  `capability_router` from `ds-chain-seam/` DSC-3 (ordered fallback plus `SourceHealth`, usable-result check injected), instantiated for quote and candle capabilities; do not write a second router.
+  Config in `src/config.py` + `factory.py` uses `SourceId` and the registry `dict`. Default config reproduces Upstox-only behaviour.
 - **DSR-3..n:** per cluster — inject the router instead of constructing `UpstoxMarketClient`; no behaviour change under default config.
 - **DSR-last:** a health tracker per capability: 806 or stale token marks the capability unhealthy, falls back to the next source, alerts once, and re-probes on a backoff. Reuses DSN-1's alert path.
 - **DSR-4:** programmatic Dhan token renewal, only if DSR-0 finds a supported endpoint. A renewal job needs its own failure alert (a missed day must not silently break a chain that depends on a

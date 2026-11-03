@@ -32,7 +32,9 @@ token age in the healthcheck. **Alert only; programmatic renewal is post-roll (`
 
 **Files to change / create:**
 - The yearly monitor and snapshot code path (locate with `trace_path` from `StrategyMonitor` and `paper_snapshot`; the yearly book arrives with `yearly-ops-wiring/`, so this task wires the injected
-  `ChainSource` and persistence, not new strategies).
+  `ChainSource` and persistence, not new strategies). Sequence after `yearly-foundation` YF-5: both edit `track_snapshot` / `paper_snapshot` namespace sites (28 in `paper_3track_snapshot.py`,
+  `yearly-foundation/audit.md`), so doing DSN-2 first duplicates or conflicts with that work. DSN-3 and DSN-5 also act on the yearly monitor and follow `yearly-ops-wiring/` registration, or use a test
+  harness until it lands.
 - `src/paper/store.py` — additive columns per `schema.md`, migration following the existing pattern.
 - `docs/plan/data-source-routing/ds-chain-monitoring/schema.md` — already written; tick nothing there.
 - `tests/unit/paper/`, `tests/unit/strategy/` — extend.
@@ -69,7 +71,9 @@ test pinning a monthly snapshot row is updated deliberately for the new fields);
 **What to implement (ruling Q4 + Animesh clarification):**
 
 1. **Delta-dependent actions** — new entries, rolls and re-entries gated on delta, delta-stop exits, `check_entry_allowed` — run on live routed delta only. With none: do nothing and alert.
-2. **Delta-independent automation** — profit target, DTE and time exits, expiry settlement, LTP P&L — keeps running without Greeks.
+2. **Delta-independent automation** — profit target, DTE and time exits, expiry settlement, LTP P&L — keeps running without Greeks. "Delta available" is always the shared `has_usable_delta(chain,
+   held_refs)` from DSC-1; do not write a second zero-delta check. Config rule for this story and DSN-4: values that differ by tenor (cadence, backstop multiple, flip tolerance, staleness limits) live
+   in the `OverlayTenorPolicy` registry; only global switches live in `Settings`. DSN-4's `greeks_*` names follow that rule.
 3. **Last-known delta from the capture store** serves degraded aggregation (age up to 1 trading day) and labelled display (up to 3). Beyond 3 trading days: unavailable, fail closed.
 4. **The +/-1 approximation is banned** from yearly gates, stops and roll decisions; it may be computed for a diagnostic line only.
 5. **Alert** when the newest usable delta is older than 1 trading day.
@@ -92,11 +96,12 @@ fixture breach and is silent below threshold.
 
 **Files to change / create:**
 - `OverlayTenorPolicy` registry (YF-3) — add a cadence field; yearly value set here (decided 2026-11-03: 3600 s, hourly), monthly pinned to today's value.
-- `src/config.py` — `yearly_chain_monitor_cadence_s`, `greeks_fresh_max_age_s`, `greeks_cache_max_age_trading_days` (3), `greeks_action_max_age_trading_days` (1).
+- The cadence, freshness bound, cache and action ages (3 and 1 trading days) are tenor-dependent, so they sit in the `OverlayTenorPolicy` registry with the cadence field; `src/config.py` gains only a
+  global override if one is needed, named in the same style as DSC-4. Do not state the same value in both places.
 - `tests/unit/` — extend.
 
 **What to implement:** freshness bound = at least 2 x cadence plus one 4 s throttle slot; validate at startup and reject inconsistent config (for example a 120 s bound with a 300 s cadence). One Dhan
-chain call per cycle, through the shared throttle (DSC-5).
+chain call per cycle, through the shared throttle (DSC-5); the 4 s slot is read from `market_data.chain.dhan_min_interval_s`, not restated.
 
 **Tests:** monthly cadence pinned; yearly cadence keeps calls at least 4 s apart; inconsistent bound rejected.
 
@@ -111,7 +116,8 @@ chain call per cycle, through the shared throttle (DSC-5).
 **What to implement (ruling Q3):**
 
 1. While a position is on Dhan Greeks, the monitor also reads the Upstox chain (dual read) to detect recovery.
-2. Flip the position's active Greeks source Dhan to Upstox only after **2 consecutive trading days** of non-zero Upstox delta on its **held** `ContractRef`s. No DTE trigger.
+2. Flip the position's active Greeks source Dhan to Upstox only after **2 consecutive trading days** of non-zero Upstox delta on its **held** `ContractRef`s, checked with `has_usable_delta(chain,
+   held_refs)` (DSC-1). No DTE trigger. The two source ids are `SourceId` values and the 0.05 / 25% band below is a registry value, not a literal in the monitor.
 3. On the flip snapshot persist both deltas. If they differ by more than 0.05 absolute or 25% relative, suppress delta stops, delta re-entry and delta entry gates for that position for **that session
    only**, log a WARNING, and still snapshot both numbers.
 4. Collar legs sharing an expiry use the same source.

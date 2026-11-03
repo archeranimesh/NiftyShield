@@ -10,6 +10,9 @@ added columns; do not invent a new one.
 | `paper_overlay_pnl_snapshots` | `chain_source` | `TEXT NULL` | `upstox`, `dhan`, `last_known` |
 | `paper_overlay_pnl_snapshots` | `chain_fetched_at` | `TEXT NULL` | ISO timestamp |
 
+The source values in the table are the `SourceId` values from `ds-chain-seam/` DSC-1 (plus `last_known` and `unavailable`, which are not sources); a new source adds an enum member and no schema
+change.
+
 Rules:
 
 - Provenance is recorded at leg level. If an aggregate delta is persisted at overlay level, the contributing leg observations are linked through `delta_asof`, never collapsed into one source string.

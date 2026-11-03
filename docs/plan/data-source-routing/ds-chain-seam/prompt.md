@@ -22,8 +22,13 @@ positions path.
 ## Design review
 
 Run `docs/refactor/design-principles.md` triggers before DSC-1: ISP (one narrow `Protocol` per capability), DIP (constructor injection; `factory.py` is the only place that names a concrete source),
-OCP (routing is a `dict` registry, not an `elif`), SRP (resolver, rate limiter, router separate). Prior-art: extend `ChainSource` / `CompositeChainSource` / `parse_dhan_option_chain`, do not duplicate
-them; run the `code-deduplication-and-taxonomy.md` check against `InstrumentLookup` before writing a second contract-lookup helper. Record the outcome here when DSC-1 starts.
+OCP (routing is a `dict` registry, not an `elif`), SRP (resolver, rate limiter, router separate). Prior-art: extend `ChainSource` / `parse_dhan_option_chain` and generalise `CompositeChainSource` into
+the ordered-list `ChainRouter`, do not duplicate them; run the `code-deduplication-and-taxonomy.md` check against `InstrumentLookup` before writing a second contract-lookup helper. Record the outcome
+here when DSC-1 starts.
+
+Design review outcome, 2026-11-03 (applied to the stories): one `SourceId` enum is the only source vocabulary (no `Literal["upstox","dhan"]` copies); the resolver composes a `dict[SourceId,
+ContractMaster]`; the router takes an ordered list and its generic fallback-plus-health core is shared with `ds-router-migration/` DSR-2; one `has_usable_delta` predicate replaces three would-be
+zero-delta checks; the 4 s floor is read from config only. Acceptance test: a fake third source routes with no edit to router, resolver or models.
 
 ## Session-start load hints
 
