@@ -315,3 +315,23 @@ def test_zero_iv_normalised_to_none():
     assert leg.iv is None
     assert leg.delta == Decimal("0.5")
     assert leg.gamma == Decimal("0.1")
+
+
+def test_dhan_error_code_reads_flat_and_nested_bodies():
+    from src.client.dhan_market import _dhan_error_code
+
+    assert _dhan_error_code({"errorCode": "805"}) == "805"
+    assert _dhan_error_code({"Data": {"806": "x"}, "status": "failed"}) == "806"
+    assert _dhan_error_code({"data": {"805": "x"}, "status": "failed"}) == "805"
+    assert _dhan_error_code({"data": {"last_price": 1}, "status": "success"}) == ""
+
+
+@pytest.mark.asyncio
+async def test_805_is_distinguishable_rate_limit_error(mock_session_post):
+    from src.client.exceptions import RateLimitError
+
+    mock_session_post.return_value = _make_mock_response(json_data={"errorCode": "805"})
+    async with aiohttp.ClientSession() as session:
+        client = DhanMarketClient(session, DummyRateLimiter(), FakeClock(), "t", "c", max_retries=0)
+        with pytest.raises(RateLimitError):
+            await client.get_option_chain("NSE_INDEX|Nifty 50", date(2027, 12, 30))

@@ -90,7 +90,8 @@ async def main() -> int:
                 await asyncio.sleep(4.0)
 
             try:
-                chain = await chain_source.get_chain("NSE_INDEX|Nifty 50", expiry_str)
+                snapshot = await chain_source.get_chain("NSE_INDEX|Nifty 50", expiry_str)
+                chain = snapshot.chain
                 captured_at = datetime.now(timezone.utc)
                 await asyncio.to_thread(
                     far_store.record_chain,

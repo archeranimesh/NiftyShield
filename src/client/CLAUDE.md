@@ -59,8 +59,10 @@ Offline test double — `set_price` / `set_margin` / `simulate_error` / `reset` 
 BrokerError
 ├── AuthenticationError
 ├── RateLimitError
+│   └── ProviderRateLimitError (Dhan 805 after client retries; also a DataFetchError)
 ├── DataFetchError
 │   └── LTPFetchError
+├── NotSubscribedError        (Dhan 806; terminal)
 ├── OrderRejectedError
 │   └── InsufficientMarginError
 ├── InstrumentNotFoundError
@@ -69,6 +71,15 @@ BrokerError
 ```
 
 `DataFetchError` is retryable. `OrderRejectedError`, `InstrumentNotFoundError`, `AmbiguousContractError` and `UnknownSourceError` are terminal — do not retry.
+
+---
+
+## Chain routing
+
+`ChainSource.get_chain` returns a `ChainSnapshot`. `ChainRouter` (`chain_source.py`) takes an ordered `list[tuple[SourceId, ChainSource]]` and delegates to `CapabilityRouter` (`capability_router.py`,
+reusable for quotes and candles) with `SourceHealth` (`source_health.py`, keyed `(SourceId, capability)`). Taxonomy: 805 sleeps the floor and re-raises (never flips); 806 / auth marks unhealthy and
+alerts; empty or all-zero falls through for that call only; transport failure retries once then opens a circuit. A single-entry `ChainRouter` raises on an all-zero chain, unlike a bare
+`UpstoxChainSource`.
 
 ---
 

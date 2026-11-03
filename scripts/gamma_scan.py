@@ -682,10 +682,11 @@ async def run_scan(deps: ScanDeps, now: datetime, dry_run: bool = False) -> Scan
         logger.info("gamma_scan.skip", reason="dte_out_of_range", expiry=str(expiry))
         return ScanOutcome(skipped="dte_out_of_range")
     try:
-        chain = await deps.chain_source.get_chain(NIFTY_UNDERLYING, expiry.isoformat())
+        snapshot = await deps.chain_source.get_chain(NIFTY_UNDERLYING, expiry.isoformat())
     except DataFetchError as exc:
         logger.error("gamma_scan.chain_fetch_failed", error=str(exc))
         return ScanOutcome(skipped="chain_fetch_failed")
+    chain = snapshot.chain
     fetched_mono = time_mod.monotonic()
     if not chain.strikes:
         logger.warning("gamma_scan.empty_chain", expiry=str(expiry))

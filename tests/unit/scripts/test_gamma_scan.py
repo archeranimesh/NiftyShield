@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import fcntl
 import sqlite3
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal as D
 from pathlib import Path
 from typing import Any
@@ -24,6 +24,7 @@ from src.gamma.signals import (
     l0_vix,
 )
 from src.gamma.store import GammaStore
+from src.models.contract import ChainSnapshot, SourceId
 from src.models.options import OptionChain, OptionChainStrike, OptionLeg
 
 EXPIRY = date(2026, 10, 13)  # Tuesday
@@ -64,12 +65,17 @@ class FakeChain:
         self.calls = 0
         self.fail = False
 
-    async def get_chain(self, underlying: str, expiry: str) -> OptionChain:
+    async def get_chain(self, underlying: str, expiry: str) -> ChainSnapshot:
         self.calls += 1
         self.log.append("chain")
         if self.fail:
             raise DataFetchError("boom")
-        return self.chain
+        return ChainSnapshot(
+            chain=self.chain,
+            greeks_source=SourceId.UPSTOX,
+            fetched_at=datetime.now(timezone.utc),
+            instrument_keys={},
+        )
 
 
 class FakeDepth:

@@ -10,7 +10,12 @@ from typing import Any, Protocol
 import aiohttp
 import structlog
 
-from src.client.exceptions import AuthenticationError, DataFetchError, NotSubscribedError
+from src.client.exceptions import (
+    AuthenticationError,
+    DataFetchError,
+    NotSubscribedError,
+    ProviderRateLimitError,
+)
 from src.models.options import OptionChain, OptionChainStrike, OptionLeg
 
 logger = structlog.stdlib.get_logger(__name__)
@@ -125,6 +130,23 @@ def parse_dhan_option_chain(data: dict[str, Any], expiry: date) -> OptionChain:
 _DHAN_UNDERLYING_MAP = {"NSE_INDEX|Nifty 50": (13, "IDX_I")}
 
 
+def _dhan_error_code(data: dict[str, Any]) -> str:
+    """Extract Dhan's error code from a flat or nested failure body.
+
+    Flat: ``{"errorCode": "805"}``. Nested (seen on 401, key case varies):
+    ``{"Data": {"809": "..."}, "status": "failed"}``.
+    """
+    flat = data.get("errorCode", data.get("error_code", ""))
+    if flat:
+        return str(flat)
+    if str(data.get("status", "")).lower() != "failed":
+        return ""
+    for key, value in data.items():
+        if key.lower() == "data" and isinstance(value, dict) and value:
+            return str(next(iter(value)))
+    return ""
+
+
 class DhanMarketClient:
     def __init__(
         self,
@@ -162,7 +184,7 @@ class DhanMarketClient:
                     data = await resp.json()
 
                     # Dhan custom error codes in JSON
-                    err_code = str(data.get("errorCode", data.get("error_code", "")))
+                    err_code = _dhan_error_code(data)
                     if err_code == "806":
                         raise NotSubscribedError("Not subscribed to this segment (806)")
                     if err_code == "805":
@@ -170,7 +192,7 @@ class DhanMarketClient:
                             retries += 1
                             await self._clock.sleep(1.0 * (2**retries))
                             continue
-                        raise DataFetchError("Error 805 after max retries")
+                        raise ProviderRateLimitError("Error 805 after max retries")
 
                     resp.raise_for_status()
                     return data  # type: ignore

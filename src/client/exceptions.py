@@ -4,6 +4,7 @@ Hierarchy:
     BrokerError
     ├── AuthenticationError       — token expired, invalid credentials, OAuth failure
     ├── RateLimitError            — 429 or rate limit threshold hit (retryable)
+    │   └── ProviderRateLimitError — Dhan 805 after retries; also a DataFetchError (diamond)
     ├── DataFetchError            — market data fetch failed (retryable)
     │   └── LTPFetchError        — LTP batch request failed entirely
     ├── OrderRejectedError        — exchange/broker rejected the order (terminal)
@@ -36,6 +37,14 @@ class LTPFetchError(DataFetchError):
     Raised when the API response is empty or the HTTP request fails
     for every instrument in a batch. Callers should treat this as a
     hard failure and not proceed with stale/zero prices.
+    """
+
+
+class ProviderRateLimitError(RateLimitError, DataFetchError):
+    """Provider rate limit (Dhan 805) persisted after client retries.
+
+    Also a ``DataFetchError`` so pre-existing handlers keep catching it; routers
+    catch it first as a ``RateLimitError`` (back off, never flip source).
     """
 
 
