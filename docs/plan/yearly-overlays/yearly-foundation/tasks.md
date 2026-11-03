@@ -3,11 +3,12 @@
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit unless noted. See `prompt.md` for why the story exists; see `stories.md` for the per-task implementation
 spec.
 
-**Open: YF-6.**
+**Open: YF-4.**
 - [x] **YF-1** — Audit every overlay site that hardcodes STRATEGY_OVERLAY, "monthly", `date.today()` or a monthly DTE gate; write `audit.md` | Owner: Claude | Model: claude-sonnet-5-5 | Review: none |
   SHA: a2e5b92
 - [x] **YF-2** — Test fixtures: BOD with Dec 2026 + Dec 2027, zero-Greeks and populated chain fixtures, frozen-clock helper | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: 2c03961
-- [ ] **YF-3** — `OverlayTenorPolicy` registry (monthly pinned to today's values, yearly added) + `STRATEGY_OVERLAY_YEARLY` constant | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA: —
+- [x] **YF-3** — `OverlayTenorPolicy` registry (monthly pinned to today's values, yearly added) + `STRATEGY_OVERLAY_YEARLY` constant | Owner: Antigravity | Model: n/a | Review: code-reviewer | SHA:
+  32629ac
 - [ ] **YF-4** — Pure `resolve_overlay_expiry(lookup, today, policy)`; inject `today` + policy into the three bootstraps (default monthly) | Owner: Claude | Model: claude-sonnet-5-5 | Review:
   code-reviewer | SHA: —
 - [ ] **YF-5** — Namespace read-paths (reentry_mixin, collateral_gate, auto_close, overlay_coverage, eod_pt_summary, track_snapshot) recognise the yearly namespace | Owner: Claude | Model:
