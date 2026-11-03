@@ -43,11 +43,13 @@ token age in the healthcheck. **Alert only; programmatic renewal is post-roll (`
 
 1. The yearly monitor and snapshot paths take an injected `ChainSource`; delta for held contracts is looked up by `ContractRef`, not by broker key.
 2. Build the `position_deltas` map (keyed by Upstox `instrument_key`) from the `ChainSnapshot` and pass it to `PortfolioDeltaTracker.aggregate_delta` unchanged.
-3. Persist `delta_source` and `delta_asof` per leg and `chain_source` and `chain_fetched_at` per overlay snapshot, from the first Dec 2027 read.
+3. Persist `delta_source` and `delta_asof` per leg and `chain_source` and `chain_fetched_at` per overlay snapshot, for both the monthly and the yearly book from DSN-2 onward (decided 2026-11-03;
+   monthly rows record `upstox`). Rows written before DSN-2 stay `NULL`.
 4. A pre-existing yearly position must have an explicit recorded source before the monitor acts on its delta.
 5. New yearly code adds no direct `UpstoxMarketClient` chain import.
 
-**Tests:** yearly leg delta comes from Dhan when Upstox is all-zero and the row records it; monthly path writes `NULL` provenance and is otherwise unchanged; an old row reads as unknown provenance.
+**Tests:** yearly leg delta comes from Dhan when Upstox is all-zero and the row records it; monthly path writes `upstox` provenance and its routing, gates and decisions are otherwise unchanged (any
+test pinning a monthly snapshot row is updated deliberately for the new fields); an old row reads as unknown provenance.
 
 **Review:** `code-reviewer` and `greeks-analyst`.
 

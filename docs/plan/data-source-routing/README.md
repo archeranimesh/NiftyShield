@@ -79,7 +79,8 @@ Resolved by the council on 2026-10-07: contract identity (Option A) and token re
    alert in DSN-3 is unchanged.
 4. **Backstop thresholds.** Resolved 2026-11-03: premium multiple 2.5x entry premium on short legs (CC, Collar call), alert-only; no spot-distance trigger until paper data shows the premium trigger
    firing late; no backstop on PP / Collar put. Value held in the yearly tenor policy (DSN-3).
-5. **Schema acceptance.** Four additive `TEXT NULL` columns (`ds-chain-monitoring/schema.md`). `yearly-overlays/` YF-1 must not conclude "no schema change".
+5. **Schema acceptance.** Resolved 2026-11-03: accepted. Four additive `TEXT NULL` columns (`ds-chain-monitoring/schema.md`), written by both the monthly and the yearly book from DSN-2 onward; older
+   rows stay `NULL` (unknown), no backfill. `yearly-overlays/` YF-1 must not conclude "no schema change".
 6. **Dec 2027 not in the Upstox BOD.** Resolved by DSM-1 (2026-10-11): Dec 2027 is listed (35 contracts, thin, 500+ strike steps), so no separate decision is needed; Option A stands.
 
 ## Cross-cutting constraints
