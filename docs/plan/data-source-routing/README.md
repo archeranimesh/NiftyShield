@@ -73,7 +73,8 @@ Status: ⬜ Not started · 🔄 In progress · ✅ Done. This column is the epic
 
 Resolved by the council on 2026-10-07: contract identity (Option A) and token renewal (alert pre-roll, renewal post-roll).
 
-1. **Kite / Zerodha.** The council deferred it post-roll; BA-6..BA-9 stay deferred (no credentials, no consumer). Confirm or restore.
+1. **Kite / Zerodha.** The council deferred it post-roll; BA-6..BA-9 stay deferred (no credentials, no consumer). Resolved 2026-11-03: deferral confirmed; revisit after the Dec 2026 roll, when
+   `ds-router-migration/` starts and Kite credentials and a concrete consumer exist.
 2. **Dhan yearly plan.** Resolved 2026-10-11: Animesh renews for one year (Rs 4,788). DA-0 in `dhan-far-expiry-chain/`; 806 gets only a generic fall-back-to-Upstox branch.
 3. **Yearly monitor cadence.** Resolved 2026-11-03: hourly (3600 s). The freshness bound is therefore at least 2 x 3600 s + one 4 s slot (7204 s), validated at startup in DSN-4; the 1-trading-day
    alert in DSN-3 is unchanged.
