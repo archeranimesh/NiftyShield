@@ -744,13 +744,11 @@ def test_entry_success(tmp_path, capsys):
         patch(
             "scripts.strategies.three_track.paper_3track_overlay_entry._apply_liquidity_gate"
         ) as mock_gate,
-        patch("scripts.strategies.three_track.paper_3track_overlay_entry.date") as mock_date,
+        patch(
+            "scripts.strategies.three_track.paper_3track_overlay_entry.market_today",
+            return_value=date(2026, 8, 1),
+        ),
     ):
-        from datetime import date
-
-        mock_date.today.return_value = date(2026, 8, 1)
-        mock_date.fromisoformat.side_effect = date.fromisoformat
-
         mock_lookup = MagicMock()
         mock_lookup_cls.from_file.return_value = mock_lookup
         mock_lookup.get_expiry_candidates.return_value = [("monthly", "2026-08-27")]

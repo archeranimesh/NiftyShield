@@ -13,8 +13,10 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import date, timedelta
 from decimal import Decimal
 from types import MappingProxyType
+from typing import TYPE_CHECKING
 
 from src.paper.constants import (
     STRATEGY_OVERLAY,
@@ -23,6 +25,9 @@ from src.paper.constants import (
     STRATEGY_OVERLAY_YEARLY_PP,
 )
 from src.strategy.ic_expiry_config import ExpiryType
+
+if TYPE_CHECKING:
+    from src.instruments.lookup import InstrumentLookup
 
 
 @dataclass(frozen=True)
@@ -94,3 +99,34 @@ OVERLAY_TENORS: Mapping[ExpiryType, OverlayTenorPolicy] = MappingProxyType(
         ),
     }
 )
+
+
+def resolve_overlay_expiry(
+    lookup: InstrumentLookup, today: date, policy: OverlayTenorPolicy
+) -> str | None:
+    """Resolve the contract expiry a new overlay entry should use.
+
+    Wraps one ``get_expiry_candidates`` call: expiries at or within ``roll_dte`` of
+    ``today`` are excluded (``min_expiry``), so the yearly book moves to the next December once
+    the near one reaches its roll threshold. The first candidate whose label matches
+    ``policy.expiry_bucket`` is then checked against ``policy.entry_min_dte``.
+
+    Args:
+        lookup: BOD instrument lookup.
+        today: Reference date for DTE (callers inject ``market_today()``).
+        policy: Tenor policy supplying the bucket, roll window and entry floor.
+
+    Returns:
+        Expiry as ``YYYY-MM-DD``, or ``None`` if no candidate exists or its DTE is below
+        ``policy.entry_min_dte``. Both are structural failures for the caller.
+    """
+    candidates = lookup.get_expiry_candidates(
+        underlying="NIFTY",
+        today=today,
+        preference=[policy.expiry_bucket],
+        min_expiry=(today + timedelta(days=policy.roll_dte)).isoformat(),
+    )
+    expiry = next((exp for label, exp in candidates if label == policy.expiry_bucket), None)
+    if expiry is None or (date.fromisoformat(expiry) - today).days < policy.entry_min_dte:
+        return None
+    return expiry

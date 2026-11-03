@@ -79,6 +79,7 @@ from src.instruments.strike_selector import (
     filter_strikes_by_delta,
     rank_strikes,
 )
+from src.market_calendar.holidays import market_today
 from src.models.portfolio import TradeAction
 from src.notifications.entry_message import EntryMessage, format_entry_message
 from src.notifications.formatting import LegRow, format_strike
@@ -98,6 +99,7 @@ from src.paper.constants import (
 from src.paper.models import GateViolation, PaperTrade
 from src.paper.store import PaperStore
 from src.risk.collateral_gate import check_collateral_capacity
+from src.strategy.overlay_tenor import OVERLAY_TENORS, OverlayTenorPolicy, resolve_overlay_expiry
 from src.utils.logging import setup_logging
 
 _SCRIPT_NAME = "scripts.strategies.three_track.paper_3track_overlay_entry"
@@ -251,6 +253,8 @@ def auto_cc_bootstrap(
     bod_path: Path,
     *,
     log_only_gates: bool = True,
+    today: date | None = None,
+    policy: OverlayTenorPolicy = OVERLAY_TENORS["monthly"],
 ) -> tuple[OverlayConfig | None, GateViolation | None]:
     """Automate CC entry (fetch chain, apply gates, select strike).
 
@@ -262,42 +266,35 @@ def auto_cc_bootstrap(
             (paper-trading phase, no real capital at risk; see DECISIONS.md
             2026-08-07). When False, restores the original hard-block.
 
+        today: Reference date; defaults to ``market_today()`` (IST).
+        policy: Tenor policy (expiry bucket, entry DTE floor); defaults to monthly.
+
     Returns:
         Tuple of (OverlayConfig or None, GateViolation or None). cfg is None
-        on any structural failure (BOD load, no monthly expiry, DTE < 14,
+        on any structural failure (BOD load, no resolvable expiry / DTE below policy.entry_min_dte,
         history-unavailable, chain fetch, no eligible strike) — these are
         never gated by log_only_gates, they always abort. The GateViolation
         is populated only when the IVR gate would have blocked under strict
         mode.
     """
-    today = date.today()
+    today = today or market_today()
     try:
         lookup = InstrumentLookup.from_file(bod_path)
-        expiries = lookup.get_expiry_candidates(
-            underlying="NIFTY",
-            today=today,
-            preference=["monthly"],
-        )
+        expiry_str = resolve_overlay_expiry(lookup, today, policy)
     except Exception as exc:
         logger.error("auto_cc.bod_load_failed", error=str(exc))
         return None, None
 
-    expiry_str = None
-    for label, exp_str in expiries:
-        if label == "monthly":
-            expiry_str = exp_str
-            break
-
+    # Structural (never bypassed by log_only_gates): no candidate, or DTE < entry floor.
     if not expiry_str:
-        logger.error("auto_cc.no_monthly_expiry_found")
+        logger.error(
+            "auto_cc.no_expiry_resolved",
+            expiry_type=policy.expiry_type,
+            entry_min_dte=policy.entry_min_dte,
+        )
         return None, None
 
-    # Gate 1: DTE >= 14 (structural — never bypassed by log_only_gates).
-    expiry_date = date.fromisoformat(expiry_str)
-    dte = (expiry_date - today).days
-    if dte < 14:
-        logger.error("auto_cc.dte_gate_failed", dte=dte)
-        return None, None
+    dte = (date.fromisoformat(expiry_str) - today).days
 
     # Gate 2: IVR >= 0.25. THRESHOLD gate: log-only under --log-only-gates
     # (default on), matching auto_pp_bootstrap/ic_entry_gates.resolve_ivr's
@@ -381,7 +378,7 @@ def auto_cc_bootstrap(
         cycle=1,  # Cycle doesn't matter for auto CC
         lot_size=_resolve_lot_size(lookup, selected_row["instrument_key"]),
         expiry=expiry_str,
-        expiry_type="monthly",
+        expiry_type=policy.expiry_type,
         dte_at_entry=dte,
         put_strike=0.0,
         put_instrument_key="",
@@ -403,6 +400,8 @@ def auto_collar_bootstrap(
     bod_path: Path,
     *,
     log_only_gates: bool = True,
+    today: date | None = None,
+    policy: OverlayTenorPolicy = OVERLAY_TENORS["monthly"],
 ) -> tuple[OverlayConfig | None, GateViolation | None]:
     """Automate first-ever Collar entry (fetch chain, apply gates, select both legs).
 
@@ -425,43 +424,36 @@ def auto_collar_bootstrap(
             risk; see DECISIONS.md 2026-08-07). When False, restores the
             original hard-block.
 
+        today: Reference date; defaults to ``market_today()`` (IST).
+        policy: Tenor policy (expiry bucket, entry DTE floor); defaults to monthly.
+
     Returns:
         Tuple of (OverlayConfig or None, GateViolation or None). cfg has both
         put_* and call_* fields populated on success, or is None on any
-        structural failure (BOD load, no monthly expiry, DTE < 14,
+        structural failure (BOD load, no resolvable expiry / DTE below policy.entry_min_dte,
         history-unavailable, chain fetch, or no viable combo) — these are
         never gated by log_only_gates, they always abort. The GateViolation
         is populated only when the IVR gate would have blocked under strict
         mode.
     """
-    today = date.today()
+    today = today or market_today()
     try:
         lookup = InstrumentLookup.from_file(bod_path)
-        expiries = lookup.get_expiry_candidates(
-            underlying="NIFTY",
-            today=today,
-            preference=["monthly"],
-        )
+        expiry_str = resolve_overlay_expiry(lookup, today, policy)
     except Exception as exc:
         logger.error("auto_collar.bod_load_failed", error=str(exc))
         return None, None
 
-    expiry_str = None
-    for label, exp_str in expiries:
-        if label == "monthly":
-            expiry_str = exp_str
-            break
-
+    # Structural (never bypassed by log_only_gates): no candidate, or DTE < entry floor.
     if not expiry_str:
-        logger.error("auto_collar.no_monthly_expiry_found")
+        logger.error(
+            "auto_collar.no_expiry_resolved",
+            expiry_type=policy.expiry_type,
+            entry_min_dte=policy.entry_min_dte,
+        )
         return None, None
 
-    # Gate 1: DTE >= 14 (structural — never bypassed by log_only_gates).
-    expiry_date = date.fromisoformat(expiry_str)
-    dte = (expiry_date - today).days
-    if dte < 14:
-        logger.error("auto_collar.dte_gate_failed", dte=dte)
-        return None, None
+    dte = (date.fromisoformat(expiry_str) - today).days
 
     # Gate 2: IVR >= 0.25 (same threshold as auto_cc_bootstrap/ReEntryMixin).
     # THRESHOLD gate: log-only under --log-only-gates (default on). Data
@@ -514,7 +506,7 @@ def auto_collar_bootstrap(
     try:
         combos = run_collar_mode(
             raw_data_by_expiry={expiry_str: raw_chain},
-            expiries=[("monthly", expiry_str)],
+            expiries=[(policy.expiry_bucket, expiry_str)],
         )
     except RuntimeError as exc:
         logger.error("auto_collar.ladder_missing", error=str(exc))
@@ -537,7 +529,7 @@ def auto_collar_bootstrap(
         cycle=1,  # Cycle doesn't matter for auto collar
         lot_size=_resolve_lot_size(lookup, call_row["instrument_key"]),
         expiry=expiry_str,
-        expiry_type="monthly",
+        expiry_type=policy.expiry_type,
         dte_at_entry=dte,
         put_strike=float(put_row["strike"]),
         put_instrument_key=put_row["instrument_key"],
@@ -577,7 +569,7 @@ class OpenPPPositionUnresolvable(Exception):
     """
 
 
-def _open_pp_dte(db_path: Path, bod_path: Path) -> int | None:
+def _open_pp_dte(db_path: Path, bod_path: Path, today: date | None = None) -> int | None:
     """Return the DTE of the currently open overlay_pp position, or None if flat.
 
     Distinguishes PP3's two entry triggers:
@@ -600,6 +592,7 @@ def _open_pp_dte(db_path: Path, bod_path: Path) -> int | None:
         bod_path: Path to the BOD instrument JSON file, used as the
             expiry-resolution fallback for numeric-only instrument keys
             (see BUG, 2026-08-13, below).
+        today: Reference date; defaults to ``market_today()`` (IST).
 
     Returns:
         Minimum DTE (calendar days) across any open ``overlay_pp`` rows, or
@@ -639,7 +632,7 @@ def _open_pp_dte(db_path: Path, bod_path: Path) -> int | None:
     if not rows:
         return None
 
-    today = date.today()
+    today = today or market_today()
 
     # Expiry resolution: regex-first (human-readable trading-symbol form),
     # BOD-lookup fallback for numeric-only keys. BUG (2026-08-13, found by
@@ -715,6 +708,8 @@ def auto_pp_bootstrap(
     bod_path: Path,
     *,
     log_only_gates: bool = True,
+    today: date | None = None,
+    policy: OverlayTenorPolicy = OVERLAY_TENORS["monthly"],
 ) -> tuple[OverlayConfig | None, GateViolation | None]:
     """Automate PP entry — bootstrap (no open put) or routine roll gap-fill.
 
@@ -730,42 +725,34 @@ def auto_pp_bootstrap(
             routine roll always proceeds same-day regardless (no-gap
             requirement); when False, restores the original hard-block.
 
+        today: Reference date; defaults to ``market_today()`` (IST).
+        policy: Tenor policy (expiry bucket, entry DTE floor); defaults to monthly.
+
     Returns:
         Tuple of (OverlayConfig or None, GateViolation or None). cfg is None
-        on any structural failure (BOD load, no monthly expiry, DTE < 14,
+        on any structural failure (BOD load, no resolvable expiry / DTE below policy.entry_min_dte,
         chain fetch, no eligible strike) — these are never gated by
         log_only_gates, they always abort. The GateViolation is populated
         only when the IVR gate would have blocked under strict mode.
     """
-    today = date.today()
-
+    today = today or market_today()
     try:
         lookup = InstrumentLookup.from_file(bod_path)
-        expiries = lookup.get_expiry_candidates(
-            underlying="NIFTY",
-            today=today,
-            preference=["monthly"],
-        )
+        expiry_str = resolve_overlay_expiry(lookup, today, policy)
     except Exception as exc:
         logger.error("auto_pp.bod_load_failed", error=str(exc))
         return None, None
 
-    expiry_str = None
-    for label, exp_str in expiries:
-        if label == "monthly":
-            expiry_str = exp_str
-            break
-
+    # Structural (never bypassed by log_only_gates): no candidate, or DTE < entry floor.
     if not expiry_str:
-        logger.error("auto_pp.no_monthly_expiry_found")
+        logger.error(
+            "auto_pp.no_expiry_resolved",
+            expiry_type=policy.expiry_type,
+            entry_min_dte=policy.entry_min_dte,
+        )
         return None, None
 
-    # Gate 1: DTE >= 14 (structural — matches ReEntryMixin's own floor).
-    expiry_date = date.fromisoformat(expiry_str)
-    dte = (expiry_date - today).days
-    if dte < 14:
-        logger.error("auto_pp.dte_gate_failed", dte=dte)
-        return None, None
+    dte = (date.fromisoformat(expiry_str) - today).days
 
     # Gate 2: IVR — inverted threshold gate for PP (blocks when IVR too HIGH).
     # THRESHOLD gate: log-only under --log-only-gates (default on), matching
@@ -856,7 +843,7 @@ def auto_pp_bootstrap(
             cycle=1,  # Cycle doesn't matter for auto PP
             lot_size=_resolve_lot_size(lookup, selected_row["instrument_key"]),
             expiry=expiry_str,
-            expiry_type="monthly",
+            expiry_type=policy.expiry_type,
             dte_at_entry=dte,
             put_strike=float(selected_row["strike"]),
             put_instrument_key=selected_row["instrument_key"],
