@@ -16,6 +16,17 @@ from scripts.healthcheck import (
     main,
     run_checks,
 )
+from scripts.healthcheck import _check_dhan_token as real_check_dhan_token
+
+
+@pytest.fixture(autouse=True)
+def _no_real_dhan_token(monkeypatch):
+    """Keep run_checks hermetic: never read the developer's real Dhan token."""
+    monkeypatch.setattr(
+        healthcheck_module,
+        "_check_dhan_token",
+        lambda: healthcheck_module.CheckResult("Dhan Token", "ok"),
+    )
 
 
 def _by_label(results: list[CheckResult], label: str) -> CheckResult:
@@ -66,6 +77,7 @@ def test_run_checks_all_pass(mock_disk, mock_load_vix, mock_connect, tmp_path) -
         "Disk Space",
         "3track Cron",
         "Far-Expiry Capture",
+        "Dhan Token",
     }
 
 
@@ -534,3 +546,22 @@ def test_healthcheck_run_checks_returns_check_results(
     assert results
     assert all(isinstance(r, healthcheck_module.CheckResult) for r in results)
     assert not any(isinstance(r, str) for r in results)
+
+
+def test_dhan_token_check_valid_expired_and_missing() -> None:
+    from datetime import timedelta
+    from unittest.mock import patch
+
+    from tests.unit.auth.test_dhan_token import NOW, make_jwt
+
+    token = make_jwt(NOW + timedelta(hours=10), NOW - timedelta(hours=14)) + "SECRETSIG"
+    with patch("scripts.healthcheck.settings") as s:
+        s.dhan_access_token = token
+        assert real_check_dhan_token(NOW).severity == "ok"
+        s.dhan_access_token = make_jwt(NOW - timedelta(hours=3), NOW - timedelta(hours=27))
+        expired = real_check_dhan_token(NOW)
+        s.dhan_access_token = None
+        missing = real_check_dhan_token(NOW)
+    assert expired.severity == "critical" and "age 27.0h" in (expired.detail or "")
+    assert missing.severity == "critical" and missing.status_word == "MISSING"
+    assert "SECRETSIG" not in repr(expired)

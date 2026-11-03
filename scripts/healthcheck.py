@@ -39,6 +39,7 @@ from dotenv import load_dotenv
 # configured") despite has_issue correctly firing.
 load_dotenv()
 
+from src.auth.dhan_token import TokenState, inspect_token  # noqa: E402
 from src.backtest.vix_ingest import load_vix_series  # noqa: E402
 from src.config import settings  # noqa: E402
 from src.db import connect  # noqa: E402
@@ -172,6 +173,30 @@ def _check_far_expiry_capture(db_path: Path, target_date: date) -> CheckResult:
         return CheckResult(label, "warn", "ERROR", str(e))
 
 
+def _check_dhan_token(now: datetime | None = None) -> CheckResult:
+    """Report the Dhan access-token validity and age (never the token).
+
+    Args:
+        now: Timezone-aware override for testing; defaults to UTC now.
+
+    Returns:
+        A ``CheckResult`` labelled ``"Dhan Token"``: expired or missing is
+        critical, expiring soon is a warning. Never raises.
+    """
+    try:
+        status = inspect_token(settings.dhan_access_token, now or datetime.now(timezone.utc))
+    except Exception as e:  # a bad token must never take down the other checks
+        logger.exception("healthcheck.dhan_token_failed", error=type(e).__name__)
+        return CheckResult("Dhan Token", "warn", "ERROR", type(e).__name__)
+    logger.info("healthcheck.dhan_token", state=status.state.value)
+    word = status.state.value.upper()
+    if status.state in (TokenState.EXPIRED, TokenState.MISSING):
+        return CheckResult("Dhan Token", "critical", word, status.describe())
+    if status.state in (TokenState.EXPIRING, TokenState.UNREADABLE):
+        return CheckResult("Dhan Token", "warn", word, status.describe())
+    return CheckResult("Dhan Token", "ok")
+
+
 def run_checks(
     target_date: date, db_path: Path, vix_dir: Path, cron_log_path: Path
 ) -> list[CheckResult]:
@@ -257,6 +282,9 @@ def run_checks(
 
     # Check 7: far-expiry chain capture heartbeat (dhan-far-expiry-chain FC-4)
     results.append(_check_far_expiry_capture(db_path, target_date))
+
+    # Check 8: Dhan access-token validity (ds-chain-monitoring DSN-1)
+    results.append(_check_dhan_token())
 
     return results
 

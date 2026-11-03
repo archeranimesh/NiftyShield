@@ -20,6 +20,7 @@ from src.client.chain_rows import DEFAULT_FETCH_TIMEOUT_S, ChainFetch, rows_fetc
 from src.client.chain_source import ChainRouter, ChainSource, DhanChainSource, UpstoxChainSource
 from src.client.contract_resolver import MasterContractResolver, UpstoxContractMaster
 from src.client.dhan_market import Clock, DhanMarketClient, RateLimiter, SpacingRateLimiter
+from src.client.dhan_token_guard import DhanTokenGuard, TokenGuardedChainSource
 from src.client.mock_client import MockBrokerClient
 from src.client.protocol import BrokerClient
 from src.client.shared_rate_limiter import SharedRateLimiter
@@ -137,6 +138,7 @@ def create_chain_source(
     sources: Sequence[SourceId] | None = None,
     dhan_min_interval_s: float | None = None,
     health: SourceHealth | None = None,
+    dhan_token_guard: DhanTokenGuard | None = None,
 ) -> ChainSource:
     """Build the chain source from ``market_data.chain`` routing config.
 
@@ -151,6 +153,7 @@ def create_chain_source(
         sources: Ordered sources; defaults to ``settings.market_data.chain.sources``.
         dhan_min_interval_s: Dhan floor; defaults to the configured value.
         health: Shared health tracker for the router.
+        dhan_token_guard: When given, the Dhan source checks the token before each call.
 
     Returns:
         A :class:`ChainSource`.
@@ -170,7 +173,10 @@ def create_chain_source(
         builder = _CHAIN_BUILDERS.get(source_id)
         if builder is None:
             raise ValueError(f"no chain source registered for '{source_id.value}'")
-        built.append((source_id, builder(deps)))
+        source = builder(deps)
+        if source_id is SourceId.DHAN and dhan_token_guard is not None:
+            source = TokenGuardedChainSource(source, dhan_token_guard)
+        built.append((source_id, source))
     if len(built) == 1:
         return built[0][1]
     return ChainRouter(built, health=health, dhan_min_interval_s=floor)
