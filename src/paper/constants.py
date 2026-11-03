@@ -36,6 +36,13 @@ STRATEGY_SIGNAL_TRACK = "paper_signal_track_v1"
 # coverage query and any future caller share one definition.
 STRATEGY_OVERLAY = "paper_nifty_overlay"
 
+# Yearly (December) overlay book — one strategy name per overlay (Animesh, 2026-11-02),
+# unlike the monthly book's single shared STRATEGY_OVERLAY split by leg_role. This
+# supersedes the earlier single STRATEGY_OVERLAY_YEARLY plan.
+STRATEGY_OVERLAY_YEARLY_CC = "paper_nifty_overlay_yearly_cc"
+STRATEGY_OVERLAY_YEARLY_PP = "paper_nifty_overlay_yearly_pp"
+STRATEGY_OVERLAY_YEARLY_COLLAR = "paper_nifty_overlay_yearly_collar"
+
 # Per-expiry IC variants
 STRATEGY_IC_WEEKLY = "paper_ic_nifty_v1_weekly"
 STRATEGY_IC_MONTHLY = "paper_ic_nifty_v1_monthly"
