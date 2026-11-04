@@ -122,10 +122,3 @@ def test_open_pp_dte_measures_only_the_given_namespace(env: dict[str, Any]) -> N
     args = (env["db"], BOD, TODAY)
     assert oe._open_pp_dte(*args) == 56
     assert oe._open_pp_dte(*args, strategy_name=STRATEGY_OVERLAY_YEARLY_PP) is None
-
-
-def test_yearly_with_collar_flag_still_rejected(env: dict[str, Any]) -> None:
-    argv = ["x.py", "--auto-collar", "--expiry-type", "yearly", "--db-path", str(env["db"])]
-    with patch("sys.argv", argv), pytest.raises(SystemExit) as exc:
-        oe.main()
-    assert exc.value.code != 0

@@ -57,6 +57,7 @@ import argparse
 import asyncio
 import re
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
@@ -187,8 +188,11 @@ def _resolve_lot_size(lookup: InstrumentLookup, instrument_key: str) -> int:
 def _validate_collar_pairs(
     overlay_trades: list["OverlayTrade"],
     existing_call_role: str | None = None,
+    *,
+    expected_expiry: str | None = None,
+    expiry_of: Callable[[str], str | None] | None = None,
 ) -> None:
-    """Ensure a collar entry has both put and call present.
+    """Ensure a collar entry has both put and call present, on one shared expiry.
 
     A partial collar (put without call or call without put) is never permitted
     at the entry/close layer.  Exception: if the call leg was intentionally
@@ -202,11 +206,33 @@ def _validate_collar_pairs(
             call_instrument_key under STRATEGY_OVERLAY, if any (from
             ``_query_open_call_role``).  Used to exempt a put-only submission
             where the call was skipped due to dedup.
+        expected_expiry: ISO expiry both legs must sit on (the single resolved
+            overlay expiry). None skips the expiry check (monthly path unchanged).
+        expiry_of: Maps an instrument key to its ISO expiry (None if unknown); required
+            with ``expected_expiry``. An unresolvable leg counts as a mismatch.
 
     Raises:
-        SystemExit: If the collar leg set is incomplete with no dedup exemption.
+        SystemExit: If the collar leg set is incomplete with no dedup exemption, or a
+            collar leg's expiry differs from ``expected_expiry``.
+        ValueError: ``expected_expiry`` is given without ``expiry_of``.
     """
+    if expected_expiry is not None and expiry_of is None:
+        raise ValueError("expiry_of is required when expected_expiry is set")
     roles = {ot.trade.leg_role for ot in overlay_trades if ot.trade.leg_role in _COLLAR_ROLES}
+    if expected_expiry is not None and expiry_of is not None:
+        bad = {
+            ot.trade.leg_role: expiry_of(ot.trade.instrument_key)
+            for ot in overlay_trades
+            if ot.trade.leg_role in _COLLAR_ROLES
+            and expiry_of(ot.trade.instrument_key) != expected_expiry
+        }
+        if bad:
+            print(
+                f"ERROR: collar legs not on the resolved expiry {expected_expiry}: {bad}. "
+                "Both legs must share one expiry.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
     if not roles or roles == _COLLAR_ROLES:
         return
 
@@ -221,6 +247,28 @@ def _validate_collar_pairs(
         file=sys.stderr,
     )
     sys.exit(1)
+
+
+def _bod_expiry_resolver(bod_path: Path) -> Callable[[str], str | None]:
+    """Return a ``instrument_key -> ISO expiry`` resolver backed by the BOD file.
+
+    Args:
+        bod_path: Path to the BOD instrument JSON file.
+
+    Returns:
+        A resolver yielding None for an unknown key or an unreadable BOD file.
+    """
+    try:
+        lookup = InstrumentLookup.from_file(bod_path)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("collar_pair.bod_load_failed", error=str(exc))
+        return lambda _key: None
+
+    def _expiry_of(instrument_key: str) -> str | None:
+        inst = lookup.get_by_key(instrument_key)
+        return parse_expiry(inst.get("expiry")) if inst else None
+
+    return _expiry_of
 
 
 @dataclass
@@ -1423,9 +1471,9 @@ def main() -> None:
         choices=sorted(OVERLAY_TENORS),
         default="monthly",
         help=(
-            "Tenor book for --auto-cc / --auto-pp (default: monthly). 'yearly' opens one "
-            "December call / put under its own yearly ledger name; not yet supported with "
-            "--auto-collar."
+            "Tenor book for --auto-cc / --auto-pp / --auto-collar (default: monthly). 'yearly' opens one "
+            "December call / put (or the collar pair, both on one expiry) under its own "
+            "yearly ledger name."
         ),
     )
     parser.add_argument(
@@ -1463,15 +1511,19 @@ def main() -> None:
     args = parser.parse_args()
     setup_logging()
 
-    if args.expiry_type != "monthly" and not (args.auto_cc or args.auto_pp):
+    if args.expiry_type != "monthly" and not (args.auto_cc or args.auto_pp or args.auto_collar):
         parser.error(
-            f"--expiry-type {args.expiry_type} is only supported with --auto-cc/--auto-pp "
-            "(yearly Collar lands in a later yearly-overlays story)."
+            f"--expiry-type {args.expiry_type} is only supported with "
+            "--auto-cc/--auto-pp/--auto-collar."
         )
     policy = OVERLAY_TENORS[args.expiry_type]
-    # Every monthly policy name is STRATEGY_OVERLAY; --auto-cc/--auto-pp can select a yearly book.
-    # The yearly Collar story must pick collar_strategy_name here.
-    ledger = policy.pp_strategy_name if args.auto_pp else policy.cc_strategy_name
+    # Every monthly policy name is STRATEGY_OVERLAY; a yearly book has one name per overlay.
+    if args.auto_pp:
+        ledger = policy.pp_strategy_name
+    elif args.auto_collar:
+        ledger = policy.collar_strategy_name
+    else:
+        ledger = policy.cc_strategy_name
 
     gate_violation: GateViolation | None = None
 
@@ -1525,7 +1577,7 @@ def main() -> None:
             sys.exit(1)
     elif args.auto_collar:
         cfg, gate_violation = auto_collar_bootstrap(
-            args.bod_path, log_only_gates=args.log_only_gates
+            args.bod_path, log_only_gates=args.log_only_gates, policy=policy
         )
         if cfg is None:
             print("ERROR: auto-collar bootstrap failed. Check logs.", file=sys.stderr)
@@ -1586,7 +1638,14 @@ def main() -> None:
     # Guard: collar legs must always be submitted as a complete pair,
     # unless the call was intentionally skipped because overlay_cc already exists.
     if cfg.overlay_type == "collar":
-        _validate_collar_pairs(overlay_trades, existing_call_role=existing_call_role)
+        # Monthly keeps its existing (expiry-agnostic) pair check; yearly enforces one expiry.
+        check_expiry = args.auto_collar and args.expiry_type == "yearly"
+        _validate_collar_pairs(
+            overlay_trades,
+            existing_call_role=existing_call_role,
+            expected_expiry=cfg.expiry if check_expiry else None,
+            expiry_of=_bod_expiry_resolver(args.bod_path) if check_expiry else None,
+        )
 
     if not args.dry_run:
         if already_bootstrapped:
