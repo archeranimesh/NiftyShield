@@ -40,6 +40,11 @@ from src.notifications.formatting import (  # noqa: E402
 )
 from src.notifications.markdown import escape_markdown  # noqa: E402
 from src.notifications.telegram import build_notifier  # noqa: E402
+from src.paper.constants import (  # noqa: E402
+    STRATEGY_OVERLAY_YEARLY_CC,
+    STRATEGY_OVERLAY_YEARLY_COLLAR,
+    STRATEGY_OVERLAY_YEARLY_PP,
+)
 from src.paper.store import PaperStore  # noqa: E402
 from src.paper.tracker import get_strategy_realized_pnl  # noqa: E402
 from src.utils.logging import setup_logging  # noqa: E402
@@ -60,6 +65,9 @@ _STRATEGY_META: dict[str, tuple[str, str]] = {
     "paper_ic_nifty_v1_yearly": ("IC", "V1 Yrly"),
     "paper_ic_nifty_v2_monthly": ("IC", "V2 Mth"),
     "paper_nifty_overlay": ("Overlay", "Overlay"),
+    STRATEGY_OVERLAY_YEARLY_CC: ("Overlay", "Yearly CC"),
+    STRATEGY_OVERLAY_YEARLY_PP: ("Overlay", "Yearly PP"),
+    STRATEGY_OVERLAY_YEARLY_COLLAR: ("Overlay", "Yearly Collar"),
     "paper_csp_nifty_v1": ("CSP", "V1"),
     "paper_nifty_calendar_monthly": ("Calendar", "Cal M"),
 }

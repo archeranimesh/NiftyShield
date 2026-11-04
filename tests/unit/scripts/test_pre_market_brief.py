@@ -399,3 +399,44 @@ async def test_no_open_positions_path(tmp_path: Path) -> None:
         assert "<b>" not in msg
         assert "No active open positions" in msg
         assert "```" not in msg
+
+
+@pytest.mark.asyncio
+async def test_report_lists_yearly_rows_separately(tmp_path: Path) -> None:
+    """Yearly overlay namespaces get their own labelled rows next to the monthly book."""
+    names = [
+        "paper_nifty_overlay",
+        "paper_nifty_overlay_yearly_cc",
+        "paper_nifty_overlay_yearly_pp",
+    ]
+    with (
+        patch("scripts.pre_market_brief.settings.telegram_bot_token", "dummy"),
+        patch("scripts.pre_market_brief.settings.telegram_chat_id", "dummy"),
+        patch("scripts.pre_market_brief.settings.db_path", str(tmp_path / "test.db")),
+        patch("scripts.pre_market_brief.settings.upstox_env", "test"),
+        patch("scripts.pre_market_brief.create_client"),
+        patch("scripts.pre_market_brief.get_current_ivr", return_value=None),
+        patch("scripts.pre_market_brief.PaperStore") as mock_store_cls,
+        patch(
+            "scripts.pre_market_brief._compute_unrealized_with_fallback",
+            side_effect=lambda store, broker, name, positions: Decimal(len(positions) * 100),
+        ),
+        patch(
+            "scripts.pre_market_brief.TelegramGateway.send_plain_message", new_callable=AsyncMock
+        ) as mock_send,
+    ):
+        mock_store = mock_store_cls.return_value
+        mock_store.get_strategy_names.return_value = names
+        mock_store.get_positions.side_effect = lambda name: [
+            _open_position(name, "overlay_pp" if name.endswith("_pp") else "overlay_cc")
+        ]
+        mock_send.return_value = True
+
+        from scripts.pre_market_brief import main
+
+        await main()
+
+        msg = mock_send.call_args[0][0]
+        assert "Nifty Overlay" in msg
+        assert "Yearly Covered Call" in msg
+        assert "Yearly Protective Put" in msg

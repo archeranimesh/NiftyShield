@@ -75,6 +75,8 @@ from src.paper.constants import (
     STRATEGY_OVERLAY,
     STRATEGY_PROXY,
     STRATEGY_SPOT,
+    YEARLY_OVERLAY_STRATEGIES,
+    is_yearly_overlay_strategy,
 )
 from src.paper.formatting import format_track_summary
 from src.paper.metrics import compute_nee
@@ -93,6 +95,7 @@ from src.paper.store import PaperStore
 from src.paper.track_snapshot import TrackSnapshot, generate_track_snapshot
 from src.paper.tracker import _compute_leg_unrealized_pnl, _compute_realized_pnl_by_leg
 from src.strategy.exit_signals import ExitSignalEngine
+from src.strategy.overlay_tenor import OVERLAY_TENORS, OverlayTenorPolicy
 from src.utils.logging import bind_trace_id, generate_trace_id, setup_logging
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -150,6 +153,32 @@ def _compute_dte(instrument_key: str, today: date) -> int | None:
     """Return days-to-expiry for the key's embedded expiry, or None."""
     expiry = _parse_expiry_from_key(instrument_key)
     return (expiry - today).days if expiry is not None else None
+
+
+def _overlay_policy_for(strategy_name: str) -> OverlayTenorPolicy:
+    """Tenor policy governing an overlay position's exit thresholds.
+
+    Args:
+        strategy_name: The position's ledger namespace.
+
+    Returns:
+        The registry policy that owns ``strategy_name``; monthly for any
+        non-yearly name (the monthly book and track-attached legs).
+
+    Raises:
+        ValueError: ``strategy_name`` is a yearly namespace no registry policy owns.
+            Never falls back to monthly thresholds for a yearly leg.
+    """
+    if not is_yearly_overlay_strategy(strategy_name):
+        return OVERLAY_TENORS["monthly"]
+    for policy in OVERLAY_TENORS.values():
+        if strategy_name in (
+            policy.cc_strategy_name,
+            policy.pp_strategy_name,
+            policy.collar_strategy_name,
+        ):
+            return policy
+    raise ValueError(f"yearly overlay {strategy_name!r} has no tenor policy in OVERLAY_TENORS")
 
 
 def _dispatch_evaluate(
@@ -250,6 +279,7 @@ def _dispatch_evaluate(
             delta=float(leg.delta) if leg.delta is not None else None,
             dte=dte,
             days_held=days_held,
+            policy=_overlay_policy_for(pos.strategy_name),
         )
 
     if role == "overlay_pp" and pos.net_qty > 0:
@@ -266,6 +296,7 @@ def _dispatch_evaluate(
             current_mark=float(leg.ltp),
             delta=float(leg.delta) if leg.delta is not None else None,
             dte=dte,
+            policy=_overlay_policy_for(pos.strategy_name),
         )
 
     if role == "overlay_collar_call" and pos.net_qty < 0:
@@ -293,6 +324,7 @@ def _dispatch_evaluate(
             delta=float(leg.delta) if leg.delta is not None else None,
             dte=dte,
             days_held=days_held,
+            policy=_overlay_policy_for(pos.strategy_name),
         )
 
     if role == "overlay_collar_put":
@@ -1217,6 +1249,7 @@ def _leg_entry_basis(store: PaperStore, track_name: str, role: str) -> Decimal |
 def _compute_overlay_pnl_snapshots(
     store: PaperStore,
     snap_date: date,
+    strategy_name: str = STRATEGY_OVERLAY,
 ) -> list[OverlayPnLSnapshot]:
     """Compute the per-overlay P&L snapshots for the standalone overlay book.
 
@@ -1235,16 +1268,18 @@ def _compute_overlay_pnl_snapshots(
     Args:
         store: PaperStore instance.
         snap_date: Date of this snapshot.
+        strategy_name: Overlay ledger namespace; defaults to the monthly
+            ``STRATEGY_OVERLAY``, pass a yearly name for that book.
 
     Returns:
         List of OverlayPnLSnapshot, one per overlay_type present today, all
-        stamped ``strategy_name=STRATEGY_OVERLAY`` (BUG-028's canonical
+        stamped with the given ``strategy_name`` (monthly default: ``STRATEGY_OVERLAY``, BUG-028's canonical
         attribution — no schema change, same
         ``(strategy_name, overlay_type, snapshot_date)`` primary key).
     """
     today_by_role: dict[str, PaperLegSnapshot] = {}
     for role in _OVERLAY_ROLES:
-        leg = store.get_leg_snapshot(STRATEGY_OVERLAY, role, snap_date)
+        leg = store.get_leg_snapshot(strategy_name, role, snap_date)
         if leg is not None:
             today_by_role[role] = leg
 
@@ -1255,7 +1290,7 @@ def _compute_overlay_pnl_snapshots(
     for role in _OVERLAY_ROLES:
         if role in today_by_role:
             continue
-        prev_leg = store.get_prev_leg_snapshot(STRATEGY_OVERLAY, role, snap_date)
+        prev_leg = store.get_prev_leg_snapshot(strategy_name, role, snap_date)
         if prev_leg is not None and prev_leg.net_qty:
             unpriced.add(role)
             logger.warning("overlay_pnl.leg_unpriced_today", leg_role=role)
@@ -1271,14 +1306,14 @@ def _compute_overlay_pnl_snapshots(
         pnl_inception_abs = sum((today_by_role[r].total_pnl for r in roles), Decimal("0"))
 
         entry_basis = sum(
-            (b for r in roles if (b := _leg_entry_basis(store, STRATEGY_OVERLAY, r)) is not None),
+            (b for r in roles if (b := _leg_entry_basis(store, strategy_name, r)) is not None),
             Decimal("0"),
         )
         pnl_inception_pct = _safe_pct(pnl_inception_abs, entry_basis if entry_basis else None)
 
         prev_by_role: dict[str, PaperLegSnapshot] = {}
         for r in roles:
-            prev = store.get_prev_leg_snapshot(STRATEGY_OVERLAY, r, snap_date)
+            prev = store.get_prev_leg_snapshot(strategy_name, r, snap_date)
             if prev is not None:
                 prev_by_role[r] = prev
 
@@ -1317,7 +1352,7 @@ def _compute_overlay_pnl_snapshots(
                         prev_by_role[r].ltp,
                         prev_by_role[r].net_qty
                         if prev_by_role[r].net_qty is not None
-                        else _position_qty(store, STRATEGY_OVERLAY, r),
+                        else _position_qty(store, strategy_name, r),
                     )
                     or Decimal("0")
                     for r in roles
@@ -1329,7 +1364,7 @@ def _compute_overlay_pnl_snapshots(
 
         results.append(
             OverlayPnLSnapshot(
-                strategy_name=STRATEGY_OVERLAY,
+                strategy_name=strategy_name,
                 overlay_type=overlay_type,
                 snapshot_date=snap_date,
                 pnl_1d_abs=pnl_1d_abs,
@@ -1359,7 +1394,11 @@ def _overlay_positions_by_role(
 
 
 def _overlay_multi_instrument_streak_days(
-    store: PaperStore, role: str, snap_date: date, max_lookback: int = 30
+    store: PaperStore,
+    role: str,
+    snap_date: date,
+    max_lookback: int = 30,
+    strategy_name: str = STRATEGY_OVERLAY,
 ) -> int:
     """Count consecutive prior days this role's snapshot was multi-instrument.
 
@@ -1374,7 +1413,7 @@ def _overlay_multi_instrument_streak_days(
     streak = 0
     cursor = snap_date
     for _ in range(max_lookback):
-        prev = store.get_prev_leg_snapshot(STRATEGY_OVERLAY, role, cursor)
+        prev = store.get_prev_leg_snapshot(strategy_name, role, cursor)
         if prev is None or prev.ltp is not None:
             break
         streak += 1
@@ -1388,6 +1427,7 @@ async def _check_overlay_multi_instrument_alert(
     snap_date: date,
     n: int,
     notifier: TelegramNotifier | None,
+    strategy_name: str = STRATEGY_OVERLAY,
 ) -> None:
     """Fire/dedup the BUG-032 anomaly alert for a role holding >1 open instrument.
 
@@ -1407,7 +1447,7 @@ async def _check_overlay_multi_instrument_alert(
     unset in production. That would have reproduced BUG-032's own "silent
     failure" shape one level up, in the fix meant to prevent it.
     """
-    prev = store.get_prev_leg_snapshot(STRATEGY_OVERLAY, role, snap_date)
+    prev = store.get_prev_leg_snapshot(strategy_name, role, snap_date)
     was_multi = prev is not None and prev.ltp is None
 
     if n <= 1:
@@ -1426,7 +1466,9 @@ async def _check_overlay_multi_instrument_alert(
                     logger.warning("overlay_leg_totals.telegram_failed", error=str(exc))
         return
 
-    streak_before = _overlay_multi_instrument_streak_days(store, role, snap_date)
+    streak_before = _overlay_multi_instrument_streak_days(
+        store, role, snap_date, strategy_name=strategy_name
+    )
     today_streak = streak_before + 1
     escalated = today_streak >= _MULTI_INSTRUMENT_ESCALATION_DAYS
 
@@ -1461,8 +1503,9 @@ async def _compute_overlay_leg_totals(
     broker: Any,
     snap_date: date,
     notifier: TelegramNotifier | None = None,
+    strategy_name: str = STRATEGY_OVERLAY,
 ) -> dict[str, tuple[Decimal, Decimal, Decimal, Decimal | None, int]]:
-    """Compute today's per-leg-role P&L for the standalone overlay book.
+    """Compute today's per-leg-role P&L for an overlay book (monthly by default).
 
     BUG-028 (2026-08-10): the overlay book (``STRATEGY_OVERLAY``) is no
     longer discovered as a side effect of a 3-track base snapshot — it is
@@ -1498,6 +1541,8 @@ async def _compute_overlay_leg_totals(
         notifier: Optional TelegramNotifier for the BUG-032 anomaly alert.
             None suppresses the alert (log lines still fire) — used by
             dry-run/preview callers that don't want Telegram side effects.
+        strategy_name: Overlay ledger namespace; defaults to the monthly
+            ``STRATEGY_OVERLAY``, pass a yearly name for that book.
 
     Returns:
         Mapping of leg_role -> (unrealized_pnl, realized_pnl, total_pnl, ltp,
@@ -1509,13 +1554,13 @@ async def _compute_overlay_leg_totals(
         A role can be absent even when trades exist for it, if it is
         currently multi-instrument with a missing LTP (see above).
     """
-    trades = store.get_trades(STRATEGY_OVERLAY)
+    trades = store.get_trades(strategy_name)
     if not trades:
         return {}
 
     leg_roles = sorted({t.leg_role for t in trades})
     realized_by_leg = _compute_realized_pnl_by_leg(trades)
-    positions_by_role = _overlay_positions_by_role(store, STRATEGY_OVERLAY)
+    positions_by_role = _overlay_positions_by_role(store, strategy_name)
 
     open_keys = sorted(
         {
@@ -1594,7 +1639,9 @@ async def _compute_overlay_leg_totals(
         # Runs regardless of `notifier` — logging must not go silent just
         # because Telegram credentials are unset (code-review finding,
         # 2026-08-24; see _check_overlay_multi_instrument_alert docstring).
-        await _check_overlay_multi_instrument_alert(store, role, snap_date, n, notifier)
+        await _check_overlay_multi_instrument_alert(
+            store, role, snap_date, n, notifier, strategy_name
+        )
 
     return totals
 
@@ -1603,6 +1650,7 @@ def _save_overlay_leg_snapshots(
     store: PaperStore,
     totals: dict[str, tuple[Decimal, Decimal, Decimal, Decimal | None, int]],
     snap_date: date,
+    strategy_name: str = STRATEGY_OVERLAY,
 ) -> None:
     """Persist today's standalone overlay leg snapshots (``paper_leg_snapshots``).
 
@@ -1613,7 +1661,7 @@ def _save_overlay_leg_snapshots(
     """
     for role, (unrealized, realized, total, ltp, net_qty) in totals.items():
         snap = PaperLegSnapshot(
-            strategy_name=STRATEGY_OVERLAY,
+            strategy_name=strategy_name,
             leg_role=role,
             snapshot_date=snap_date,
             unrealized_pnl=unrealized,
@@ -2078,6 +2126,17 @@ async def _run(args: argparse.Namespace) -> None:
         if overlay_totals:
             _save_overlay_leg_snapshots(store, overlay_totals, snap_date)
             for overlay_snap in _compute_overlay_pnl_snapshots(store, snap_date):
+                store.record_overlay_pnl_snapshot(overlay_snap)
+
+        # Yearly overlay book: one namespace per overlay, same overlay_type keys.
+        for yearly_name in YEARLY_OVERLAY_STRATEGIES:
+            yearly_totals = await _compute_overlay_leg_totals(
+                store, broker, snap_date, notifier, yearly_name
+            )
+            if not yearly_totals:
+                continue
+            _save_overlay_leg_snapshots(store, yearly_totals, snap_date, yearly_name)
+            for overlay_snap in _compute_overlay_pnl_snapshots(store, snap_date, yearly_name):
                 store.record_overlay_pnl_snapshot(overlay_snap)
 
         # S9 — NiftyBees vs standalone overlay book recovery comparison +

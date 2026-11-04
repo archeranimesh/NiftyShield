@@ -205,3 +205,21 @@ async def test_eod_summary_bkd_uses_get_strategy_realized_pnl(tmp_path, monkeypa
     # get_strategy_realized_pnl's return (11,024), not the snapshot column (999,999).
     assert "+11,024" in sent[0]
     assert "999,999" not in sent[0]
+
+
+def test_report_lists_yearly_rows_separately():
+    sample = [
+        ("paper_nifty_overlay", Decimal("210.00"), Decimal("-85.50")),
+        ("paper_nifty_overlay_yearly_cc", Decimal("400.00"), Decimal("0.00")),
+        ("paper_nifty_overlay_yearly_collar", Decimal("-100.00"), Decimal("0.00")),
+    ]
+    table = _table_lines(build_eod_summary_message("07 Aug 2026", 0, sample))
+    labels = [_row_cells(ln)[0] for ln in table if not _is_rule(ln)]
+    assert "Overlay" in labels and "Yearly CC" in labels and "Yearly Collar" in labels
+    overlay_total = next(ln for ln in table if _row_cells(ln)[0] == "> OVERLAY TOTAL")
+    assert _money_to_int(_row_cells(overlay_total)[3]) == (210 - 86) + 400 - 100
+
+
+def test_monthly_only_output_unchanged():
+    labels = [_row_cells(ln)[0] for ln in _table_lines(build_eod_summary_message("d", 0, _SAMPLE))]
+    assert not any(label.startswith("Yearly") for label in labels)
