@@ -2,13 +2,13 @@
 
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit.
 
-**Open: YL-3.**
+**Open: none — complete.**
 - [x] **YL-1** — `--expiry-type {monthly,yearly}` on `--auto-collar`; `auto_collar_bootstrap` and `_validate_collar_pairs` enforce one shared December expiry | Owner: Antigravity | Model: n/a |
   Review: code-reviewer | SHA: 733d070
 - [x] **YL-2** — `CollarOverlayV1` yearly instance: DTE_REVIEW, re-entry gate and `collar_entry` reselection (expiry, DTE floor) read the policy | Owner: Claude | Model: claude-sonnet-5-5 | Review:
   greeks-analyst | SHA: d5bb596
-- [ ] **YL-3** — Route the collar entry chain through the policy (`ChainSource`); yearly with no routed chain fails loud; ignore `closing_dte` on the yearly path; IVR-gate comment | Owner: Claude |
-  Model: claude-sonnet-5-5 | Review: greeks-analyst | SHA: —
+- [x] **YL-3** — Route the collar entry chain through the policy (`ChainSource`); yearly with no routed chain fails loud; ignore `closing_dte` on the yearly path; IVR-gate comment | Owner: Claude |
+  Model: claude-sonnet-5-5 | Review: greeks-analyst | SHA: ad90a6e
 
 ## Story done when
 
