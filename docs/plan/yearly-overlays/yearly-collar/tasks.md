@@ -2,10 +2,9 @@
 
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit.
 
-**Open: YL-1, YL-2.**
-
-- [ ] **YL-1** — `--expiry-type {monthly,yearly}` on `--auto-collar`; `auto_collar_bootstrap` and `_validate_collar_pairs` enforce one shared December expiry | Owner: Antigravity | Model: n/a |
-  Review: code-reviewer | SHA: —
+**Open: YL-2.**
+- [x] **YL-1** — `--expiry-type {monthly,yearly}` on `--auto-collar`; `auto_collar_bootstrap` and `_validate_collar_pairs` enforce one shared December expiry | Owner: Antigravity | Model: n/a |
+  Review: code-reviewer | SHA: 733d070
 - [ ] **YL-2** — `CollarOverlayV1` yearly instance: DTE_REVIEW and re-entry gates read the policy | Owner: Claude | Model: claude-sonnet-5-5 | Review: greeks-analyst | SHA: —
 
 ## Story done when
