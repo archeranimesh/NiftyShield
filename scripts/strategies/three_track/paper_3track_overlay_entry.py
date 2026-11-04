@@ -138,11 +138,6 @@ _PP_EXPIRY_RE = re.compile(r"NSE_FO\|NIFTY(\d{2}[A-Za-z]{3}\d{4})(PE|CE)", re.IG
 # at peak post-crash vol), not too low.
 _PP_REENTRY_IVR_THRESHOLD = 0.60
 
-# ROLL_ELIGIBLE threshold in ExitSignalEngine.evaluate_pp — kept in lockstep
-# per PP3's story requirement so the entry script's routine-roll trigger and
-# the exit-signal engine's roll trigger never drift apart.
-_PP_ROLL_DTE_THRESHOLD = 5
-
 _COLLAR_PUT_ROLE = "overlay_collar_put"
 _COLLAR_CALL_ROLE = "overlay_collar_call"
 _COLLAR_ROLES = frozenset({_COLLAR_PUT_ROLE, _COLLAR_CALL_ROLE})
@@ -624,11 +619,11 @@ def _open_pp_dte(
 
     Distinguishes PP3's two entry triggers:
       - None (no open overlay_pp row at all) -> bootstrap/gap-fill.
-      - DTE <= _PP_ROLL_DTE_THRESHOLD -> routine roll; the fresh put must be
+      - DTE <= the caller's policy.roll_dte (monthly 5, yearly 15) -> routine roll; the fresh put must be
         bought the same day (no-gap requirement — operator: "i do not want
         unprotected day"), which means the outgoing (this row) and the
         incoming put are briefly both open under the same leg_role.
-      - DTE > _PP_ROLL_DTE_THRESHOLD -> a fresh put already covers; nothing
+      - DTE > the caller's policy.roll_dte -> a fresh put already covers; nothing
         to do this run.
 
     Mirrors ``_query_open_call_role``'s standalone sqlite-net-qty pattern
@@ -767,7 +762,7 @@ def auto_pp_bootstrap(
     """Automate PP entry — bootstrap (no open put) or routine roll gap-fill.
 
     Caller (``main()``) must already have checked ``_open_pp_dte`` and
-    short-circuited on a fresh (DTE > ``_PP_ROLL_DTE_THRESHOLD``) open
+    short-circuited on a fresh (DTE > ``policy.roll_dte``) open
     position before calling this — this function only resolves the expiry/
     IVR/strike-selection path, it does not re-check the open-position gate.
 
@@ -1439,7 +1434,7 @@ def main() -> None:
         help=(
             "Automate PP entry (bypasses YAML config, fetches chain, applies gates). "
             "Bootstrap when no put is open; routine-roll gap-fill when the open put "
-            f"has DTE <= {_PP_ROLL_DTE_THRESHOLD}; no-op (exit 0) otherwise."
+            "has DTE <= the tenor policy roll_dte (monthly 5, yearly 15); no-op (exit 0) otherwise."
         ),
     )
     parser.add_argument(
@@ -1513,11 +1508,11 @@ def main() -> None:
             )
             _alert_bootstrap_failure("PP", "logs/pp_entry.log")
             sys.exit(1)
-        if open_dte is not None and open_dte > _PP_ROLL_DTE_THRESHOLD:
+        if open_dte is not None and open_dte > policy.roll_dte:
             logger.info("auto_pp.fresh_position_open", dte=open_dte)
             print(
                 f"SKIPPED: overlay_pp already open at DTE={open_dte} "
-                f"(> {_PP_ROLL_DTE_THRESHOLD}) — nothing to do.",
+                f"(> {policy.roll_dte}) — nothing to do.",
                 file=sys.stderr,
             )
             sys.exit(0)
@@ -1548,7 +1543,7 @@ def main() -> None:
     if args.auto_pp:
         # PP3, 2026-08-03: the generic S6 gate above assumes at most one open
         # leg ever. PP's routine-roll trigger deliberately holds two puts
-        # briefly — the outgoing (still open, DTE <= _PP_ROLL_DTE_THRESHOLD)
+        # briefly — the outgoing (still open, DTE <= policy.roll_dte)
         # and the fresh one being entered here — to satisfy the "no
         # unprotected day" requirement. The PP-specific _open_pp_dte gate
         # above already distinguishes bootstrap/routine-roll from "fresh

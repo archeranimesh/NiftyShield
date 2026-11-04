@@ -24,6 +24,7 @@ from src.paper.constants import DEFAULT_BOD_PATH, STRATEGY_OVERLAY
 from src.paper.models import PaperPosition, PaperTrade
 from src.strategy._price_utils import find_option_leg, resolve_option_expiry
 from src.strategy.exit_signals import ExitSignalEngine
+from src.strategy.overlay_tenor import OVERLAY_TENORS, OverlayTenorPolicy
 from src.strategy.protocol import ApprovedAction, LegClose, SignalEvent
 from src.strategy.reentry_mixin import ReEntryMixin
 
@@ -64,6 +65,7 @@ class PPOverlayV1(ReEntryMixin):
         notifier: Any = None,
         vix_data_dir: Path | str | None = None,
         instrument_lookup: InstrumentLookup | None = None,
+        tenor: OverlayTenorPolicy = OVERLAY_TENORS["monthly"],
     ) -> None:
         """Initialise PPOverlayV1.
 
@@ -76,7 +78,12 @@ class PPOverlayV1(ReEntryMixin):
                 instrument keys that carry no strike/type in the key string
                 itself. If not injected, lazily built from ``DEFAULT_BOD_PATH``
                 on first use (same pattern as ``PaperStore._resolve_instrument_lookup``).
+            tenor: Tenor policy; supplies the ledger name, roll DTE and re-entry DTE
+                floor. Defaults to the monthly policy.
         """
+        self.tenor = tenor
+        self.strategy_name = tenor.pp_strategy_name
+        self.reentry_min_dte = tenor.reentry_min_dte
         self._store = store
         self._notifier = notifier
         self._instrument_lookup = instrument_lookup
@@ -160,6 +167,7 @@ class PPOverlayV1(ReEntryMixin):
                 current_mark=current_mark,
                 delta=delta,
                 dte=dte,
+                policy=self.tenor,
             )
 
             for result in results:
@@ -277,15 +285,15 @@ class PPOverlayV1(ReEntryMixin):
 
         # ROLL_PP deliberately does NOT call _check_reentry (PP3, investigated
         # 2026-08-03, confirmed correct-as-is — not the CC3 gap class). The
-        # mixin's DTE gate (>= 14) would be evaluated against closed_pos's
-        # expiry, which by construction has <= 5 DTE remaining whenever
+        # mixin's DTE gate (>= reentry_min_dte) would be evaluated against closed_pos's
+        # expiry, which by construction has <= roll_dte DTE remaining whenever
         # ROLL_ELIGIBLE fires — it would report BLOCKED on every routine roll,
         # a spam notification with zero information content. ROLL_PP is
         # contract continuation, not a full exit to a fresh cycle (unlike
         # MONETIZE_PP, a real crash-triggered exit that may sit flat for
         # months). The actual reopen for ROLL_PP is handled by
         # paper_3track_overlay_entry.py's auto_pp_bootstrap() (--auto-pp),
-        # gated on DTE <= 5 to match evaluate_pp's own ROLL_ELIGIBLE threshold
+        # gated on DTE <= policy.roll_dte to match evaluate_pp's own ROLL_ELIGIBLE threshold
         # — see docs/plan/3track-consolidation/stories.md PP3.
         if action.action_type == "MONETIZE_PP" and closed_pos is not None:
             expiry = self._parse_expiry(closed_pos.instrument_key)
@@ -379,7 +387,9 @@ class PPOverlayV1(ReEntryMixin):
             is_crash_monetize = action.action_type == "MONETIZE_PP"
             kind = ExitKind.CRASH_MONETIZE if is_crash_monetize else ExitKind.ROLL
             state_line = (
-                "RE_ENTRY_PENDING (monitoring IVR ≤ 0.60, DTE ≥ 14)" if is_crash_monetize else None
+                f"RE_ENTRY_PENDING (monitoring IVR ≤ 0.60, DTE ≥ {self.reentry_min_dte})"
+                if is_crash_monetize
+                else None
             )
             this_exit_pnl = (exit_price - entry_debit) * abs(pos.net_qty)
 

@@ -35,7 +35,7 @@ def test_monthly_policy_pins_current_values() -> None:
     assert p.entry_min_dte == 14  # paper_3track_overlay_entry `dte < 14`
     assert p.reentry_min_dte == 14  # reentry_mixin `dte < 14`
     assert p.review_dte == 5  # exit_signals evaluate_cc `dte <= 5`
-    assert p.roll_dte == 5  # evaluate_pp / _PP_ROLL_DTE_THRESHOLD
+    assert p.roll_dte == 5  # evaluate_pp / main() PP roll gate
     assert p.profit_target_decay == Decimal("0.70")  # retention 0.30
     assert p.delta_stop == Decimal("0.55")
     assert p.premium_stop_multiple == Decimal("2.5")

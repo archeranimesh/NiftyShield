@@ -28,6 +28,7 @@ if TYPE_CHECKING:
 from src.paper.tracker import get_strategy_realized_pnl
 from src.strategy.executor import PaperFillSimulator
 from src.strategy.overlay_closer import OverlayCloser
+from src.strategy.overlay_tenor import OVERLAY_TENORS
 
 log = structlog.get_logger(__name__)
 
@@ -434,8 +435,14 @@ async def evaluate_pp_reentry_eod(
         if ivr is None:
             return
 
-        pp_strategy = PPOverlayV1(store=store, notifier=notifier, vix_data_dir=vix_data_dir)
-        pp_strategy.strategy_name = strategy_name  # per-book label for any later strategy call
+        tenor = next(
+            (t for t in OVERLAY_TENORS.values() if t.pp_strategy_name == strategy_name),
+            OVERLAY_TENORS["monthly"],
+        )
+        pp_strategy = PPOverlayV1(
+            store=store, notifier=notifier, vix_data_dir=vix_data_dir, tenor=tenor
+        )
+        pp_strategy.strategy_name = strategy_name  # keep an explicit non-policy name honoured
         passed, _, _ = pp_strategy._ivr_passes(ivr)
 
         if passed and notifier is not None:

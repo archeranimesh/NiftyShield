@@ -462,12 +462,13 @@ class ExitSignalEngine:
         current_mark: float,
         delta: float | None,
         dte: int,
+        policy: OverlayTenorPolicy = OVERLAY_TENORS["monthly"],
     ) -> list[ExitSignalResult]:
         """Evaluate exit signals for a Protective Put (PP) long put leg.
 
         Signal priority (both may fire; caller takes first only):
           1. CRASH_MONETIZE — delta ≤ -0.80 OR value ≥ 5× entry debit
-          2. ROLL_ELIGIBLE  — DTE ≤ 5 (auto-roll to next expiry)
+          2. ROLL_ELIGIBLE  — DTE ≤ ``policy.roll_dte`` (monthly 5; auto-roll to next expiry)
 
         No spread guard: paper mode slippage is handled by PaperFillSimulator.
 
@@ -476,6 +477,7 @@ class ExitSignalEngine:
             current_mark: Current LTP / mark of the long put.
             delta: Current delta of the long put (negative, e.g. -0.85).
             dte: Days to expiry.
+            policy: Tenor policy supplying the roll DTE. Defaults to monthly (5).
 
         Returns:
             List of ExitSignalResult, sorted ACTION-first. Empty list if no signal.
@@ -498,14 +500,14 @@ class ExitSignalEngine:
             )
         )
 
-        # 2. ROLL_ELIGIBLE: DTE <= 5 (auto-roll to next expiry)
-        if dte <= 5:
+        # 2. ROLL_ELIGIBLE: DTE <= policy.roll_dte (auto-roll to next expiry)
+        if dte <= policy.roll_dte:
             results.append(
                 ExitSignalResult(
                     exit_signal="ROLL_ELIGIBLE",
                     severity="ACTION",
-                    threshold_value=5.0,
-                    notes=f"DTE {dte} ≤ 5 — roll PP to next expiry",
+                    threshold_value=float(policy.roll_dte),
+                    notes=f"DTE {dte} ≤ {policy.roll_dte} — roll PP to next expiry",
                 )
             )
 
