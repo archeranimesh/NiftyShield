@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
 from types import MappingProxyType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from src.config import DEFAULT_DHAN_MIN_INTERVAL_S
 from src.paper.constants import (
@@ -81,6 +81,22 @@ class OverlayTenorPolicy:
     greeks_cache_max_age_days: int = 3
     greeks_action_max_age_days: int = 1
     routed_chain: bool = False
+
+    def reentry_hint(self, overlay: Literal["cc", "pp", "collar"]) -> str:
+        """Operator hint for opening a new position of ``overlay`` in this book.
+
+        Args:
+            overlay: Overlay kind.
+
+        Returns:
+            The legacy ``find_overlay_strikes.py`` flow for the monthly book, the
+            tenor-aware entry script (``--expiry-type``) for any other tenor.
+        """
+        if self.expiry_type == "monthly":
+            return f"run find_overlay_strikes.py --overlay-type {overlay}"
+        return (
+            f"run paper_3track_overlay_entry.py --auto-{overlay} --expiry-type {self.expiry_type}"
+        )
 
     def __post_init__(self) -> None:
         """Reject structurally impossible cadence and age values.

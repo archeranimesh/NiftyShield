@@ -461,7 +461,7 @@ async def evaluate_pp_reentry_eod(
                 f"{escape_markdown('IVR    : ')}{ivr_str} "
                 f"{escape_markdown('(passes reentry threshold)')}\n"
                 f"{escape_markdown('Status : No open PP → ELIGIBLE')}\n"
-                f"{escape_markdown('Action : Run find_overlay_strikes.py --overlay-type pp to initiate manually')}\n"
+                f"{escape_markdown('Action : ' + tenor.reentry_hint('pp').capitalize() + ' to initiate manually')}\n"
                 f"Overlay P&L {escape_markdown('(total realized)')}: {realized_pnl_str}"
             )
             await notifier.send(msg)

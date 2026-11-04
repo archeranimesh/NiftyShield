@@ -24,7 +24,9 @@ import signal
 import sys
 from datetime import date
 from pathlib import Path
+from typing import Any
 
+import aiohttp
 import structlog
 from dotenv import load_dotenv
 
@@ -35,13 +37,29 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 load_dotenv()
 
 from scripts.strategies.three_track.paper_expiry_settle import notify_settlement  # noqa: E402
-from src.client.factory import create_client  # noqa: E402
+from src.client.chain_source import ChainSource  # noqa: E402
+from src.client.contract_resolver import (  # noqa: E402
+    MasterContractResolver,
+    UpstoxContractMaster,
+)
+from src.client.dhan_market import DhanMarketClient  # noqa: E402
+from src.client.dhan_token_guard import DhanTokenGuard, notifier_alert  # noqa: E402
+from src.client.factory import (  # noqa: E402
+    create_chain_source,
+    create_client,
+    create_dhan_rate_limiter,
+)
 from src.client.protocol import BrokerClient  # noqa: E402
-from src.client.upstox_market import parse_upstox_option_chain  # noqa: E402
+from src.client.source_health import SourceHealth  # noqa: E402
+from src.client.upstox_market import (  # noqa: E402
+    UpstoxMarketClient,
+    parse_upstox_option_chain,
+)
 from src.config import settings  # noqa: E402
 from src.db import connect as _connect  # noqa: E402
 from src.instruments.lookup import InstrumentLookup  # noqa: E402
 from src.market_calendar.holidays import market_today  # noqa: E402
+from src.models.contract import SourceId  # noqa: E402
 from src.notifications.markdown import escape_markdown, mdcode  # noqa: E402
 from src.notifications.telegram import build_notifier  # noqa: E402
 from src.notifications.telegram_gateway import TelegramGateway  # noqa: E402
@@ -52,6 +70,7 @@ from src.strategy.executor import (  # noqa: E402
 )
 from src.strategy.expiry_settlement import settle_expired_legs  # noqa: E402
 from src.strategy.monitor import StrategyMonitor  # noqa: E402
+from src.strategy.overlay_tenor import OVERLAY_TENORS, validate_overlay_tenors  # noqa: E402
 from src.strategy.protocol import ApprovedAction, LegSpec  # noqa: E402
 from src.utils.logging import setup_logging  # noqa: E402
 
@@ -137,11 +156,135 @@ monitor_task: asyncio.Task | None = None
 gateway_task: asyncio.Task | None = None
 store_ref: PaperStore | None = None
 strategies_ref: list[str] = []
+chain_session_ref: aiohttp.ClientSession | None = None
 _shutdown_started: bool = False
 
 # BUG-060: bound on the startup settlement (one candle fetch per expired expiry)
 _SETTLEMENT_TIMEOUT_S: float = 60.0
 _NOTIFY_TIMEOUT_S: float = 15.0
+
+
+class _LoopClock:
+    """Event-loop ``Clock`` for the Dhan client and rate limiter."""
+
+    async def sleep(self, seconds: float) -> None:
+        await asyncio.sleep(seconds)
+
+    def time(self) -> float:
+        return asyncio.get_running_loop().time()
+
+
+def build_yearly_chain_source(
+    lookup: InstrumentLookup,
+    notifier: TelegramGateway,
+    session: aiohttp.ClientSession,
+    state_dir: Path,
+) -> ChainSource:
+    """Build the routed chain source the yearly overlays share.
+
+    Long-lived collaborators (health tracker, token guard, cross-process Dhan
+    limiter) live as long as the daemon, so the 4 s Dhan throttle and the
+    unhealthy-source state persist across monitor cycles.
+
+    Args:
+        lookup: Loaded BOD lookup (source of Upstox ledger keys).
+        notifier: Gateway used for source-health alerts.
+        session: Long-lived HTTP session for the Dhan client.
+        state_dir: Directory for the cross-process throttle files.
+
+    Returns:
+        A :class:`ChainSource` per ``market_data.chain.sources``.
+    """
+    clock = _LoopClock()
+    health = SourceHealth(alert=notifier_alert(notifier))
+    dhan = DhanMarketClient(
+        session=session,
+        rate_limiter=create_dhan_rate_limiter(clock, state_dir=state_dir),
+        clock=clock,
+        access_token=settings.dhan_access_token or "",
+        client_id=settings.dhan_client_id or "",
+    )
+    return create_chain_source(
+        upstox=UpstoxMarketClient(settings.upstox_analytics_token),
+        dhan=dhan,
+        resolver=MasterContractResolver({SourceId.UPSTOX: UpstoxContractMaster(lookup, ["NIFTY"])}),
+        health=health,
+        dhan_token_guard=DhanTokenGuard(health, lambda: settings.dhan_access_token),
+    )
+
+
+def register_overlays(
+    strategies: list[Any],
+    *,
+    store: PaperStore,
+    notifier: TelegramGateway,
+    vix_data_dir: Path | None,
+    yearly: bool,
+    chain_source: ChainSource | None = None,
+) -> None:
+    """Append CC / PP / Collar instances for each registered tenor.
+
+    Loops over ``OVERLAY_TENORS``; the yearly tenor is skipped unless ``yearly``.
+    Each instance gets its tenor policy (ledger name, thresholds, re-entry hint).
+    Yearly instances run at the policy's monitor cadence and the yearly Collar gets
+    the routed ``chain_source``. One failing instance never blocks the others.
+
+    Args:
+        strategies: Registry list to append to.
+        store: Paper store.
+        notifier: Telegram gateway.
+        vix_data_dir: VIX Parquet directory (None -> settings default).
+        yearly: Whether to register the yearly book.
+        chain_source: Routed chain source for the yearly Collar.
+
+    Raises:
+        ValueError: ``yearly`` is set without a ``chain_source``.
+    """
+    if yearly and chain_source is None:
+        raise ValueError("yearly overlays require a routed chain_source")
+    classes = [
+        (CCOverlayV1, "CCOverlayV1"),
+        (PPOverlayV1, "PPOverlayV1"),
+        (CollarOverlayV1, "CollarOverlayV1"),
+    ]
+    for tenor_key, policy in OVERLAY_TENORS.items():
+        is_yearly = policy.routed_chain
+        if is_yearly and not yearly:
+            continue
+        for overlay_cls, overlay_name in classes:
+            if overlay_cls is None:
+                logger.warning(
+                    "Overlay module not found; skipping registration", overlay=overlay_name
+                )
+                continue
+            kwargs: dict[str, Any] = {
+                "store": store,
+                "notifier": notifier,
+                "vix_data_dir": vix_data_dir,
+            }
+            if is_yearly:
+                kwargs["tenor"] = policy
+                if overlay_cls is CollarOverlayV1:
+                    kwargs["chain_source"] = chain_source
+            try:
+                instance = overlay_cls(**kwargs)
+                if is_yearly:
+                    instance.due_interval_s = policy.monitor_cadence_s
+                strategies.append(instance)
+                logger.info(
+                    "Registered overlay strategy",
+                    overlay=overlay_name,
+                    tenor=tenor_key,
+                    strategy_name=instance.strategy_name,
+                )
+            except Exception as e:
+                # Intentional: Safe overlay init guard
+                logger.error(
+                    "Failed to initialize overlay strategy",
+                    overlay=overlay_name,
+                    tenor=tenor_key,
+                    error=str(e),
+                )
 
 
 async def warn_stale_flat_legs_at_startup(store: PaperStore) -> None:
@@ -239,6 +382,9 @@ async def shutdown():
             # Intentional: Ignore errors during task cancellation on shutdown
             pass
 
+    if chain_session_ref is not None and not chain_session_ref.closed:
+        await chain_session_ref.close()
+
     # 2. Set all PENDING approvals to EXPIRED
     if store_ref:
         try:
@@ -272,7 +418,7 @@ async def shutdown():
 
 
 async def main() -> int:
-    global monitor_task, gateway_task, store_ref, strategies_ref
+    global monitor_task, gateway_task, store_ref, strategies_ref, chain_session_ref
 
     desc = "Paper Trading Monitor Daemon"
     parser = argparse.ArgumentParser(description=desc)
@@ -290,6 +436,12 @@ async def main() -> int:
     args = parser.parse_args()
 
     logger.info("Starting Paper Trading Monitor Daemon", pid=os.getpid())
+
+    try:
+        validate_overlay_tenors(settings.market_data.chain.dhan_min_interval_s)
+    except ValueError as e:
+        logger.error("Inconsistent overlay tenor policy; aborting startup", error=str(e))
+        return 1
 
     # Build DB store
     store = PaperStore(args.db_path)
@@ -475,28 +627,25 @@ async def main() -> int:
     if MONITOR_OVERLAYS:
         logger.info("MONITOR_OVERLAYS=1 — registering overlay strategies")
         vix_data_dir = Path(settings.vix_data_dir) if settings.vix_data_dir else None
-        overlay_kwargs = {"store": store, "notifier": gateway, "vix_data_dir": vix_data_dir}
-        for overlay_cls, overlay_name in [
-            (CCOverlayV1, "CCOverlayV1"),
-            (PPOverlayV1, "PPOverlayV1"),
-            (CollarOverlayV1, "CollarOverlayV1"),
-        ]:
-            if overlay_cls is not None:
-                try:
-                    strategies.append(overlay_cls(**overlay_kwargs))
-                    logger.info("Registered overlay strategy", name=overlay_name)
-                except Exception as e:
-                    # Intentional: Safe overlay init guard
-                    logger.error(
-                        "Failed to initialize overlay strategy",
-                        name=overlay_name,
-                        error=str(e),
-                    )
+        yearly = settings.monitor_yearly_overlays
+        chain_source = None
+        if yearly:
+            if lookup is None:
+                logger.error("MONITOR_YEARLY_OVERLAYS=1 but BOD lookup missing; yearly skipped")
+                yearly = False
             else:
-                logger.warning(
-                    "Overlay module not found; skipping registration",
-                    name=overlay_name,
+                chain_session_ref = aiohttp.ClientSession()
+                chain_source = build_yearly_chain_source(
+                    lookup, gateway, chain_session_ref, Path(args.db_path).parent
                 )
+        register_overlays(
+            strategies,
+            store=store,
+            notifier=gateway,
+            vix_data_dir=vix_data_dir,
+            yearly=yearly,
+            chain_source=chain_source,
+        )
     else:
         logger.info("MONITOR_OVERLAYS=0 — overlay strategies disabled (Phase 0)")
 

@@ -192,6 +192,19 @@ class Settings(BaseSettings):
     )
 
     # ------------------------------------------------------------------
+    # Monitor daemon
+    # ------------------------------------------------------------------
+    monitor_yearly_overlays: bool = Field(
+        default=False,
+        description=(
+            "MONITOR_YEARLY_OVERLAYS=1 registers the yearly CC/PP/Collar overlay instances "
+            "next to the monthly ones (requires MONITOR_OVERLAYS=1). Yearly reaches Dhan only "
+            'with MARKET_DATA__CHAIN__SOURCES=\'["upstox","dhan"]\' and DHAN_ACCESS_TOKEN / '
+            "DHAN_CLIENT_ID set; the default stays Upstox-only."
+        ),
+    )
+
+    # ------------------------------------------------------------------
     # Data paths
     # ------------------------------------------------------------------
     db_path: str = Field(

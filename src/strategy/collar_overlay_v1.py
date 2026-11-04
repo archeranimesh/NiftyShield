@@ -114,6 +114,7 @@ class CollarOverlayV1(ReEntryMixin):
         self._chain_source = chain_source
         self.strategy_name = tenor.collar_strategy_name
         self.reentry_min_dte = tenor.reentry_min_dte
+        self.reentry_script_hint = tenor.reentry_hint("collar")
         self._store = store
         self._notifier = notifier
         self._broker = broker

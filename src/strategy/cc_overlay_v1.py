@@ -83,6 +83,7 @@ class CCOverlayV1(ReEntryMixin):
         self.tenor = tenor
         self.strategy_name = tenor.cc_strategy_name
         self.reentry_min_dte = tenor.reentry_min_dte
+        self.reentry_script_hint = tenor.reentry_hint("cc")
         self._store = store
         self._notifier = notifier
         self._instrument_lookup = instrument_lookup
