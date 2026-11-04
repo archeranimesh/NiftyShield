@@ -49,3 +49,28 @@ byte-identical to today. The IVR gate: keep as is, and report in the task output
 - `test_yearly_collar_reselect_resolves_december`, `test_yearly_collar_reselect_dte_floor_from_policy`, `test_monthly_collar_reselect_unchanged`.
 
 **Commit:** `feat(overlay): drive collar DTE gates from tenor policy`
+
+## YL-3 — Route the collar entry chain through the policy (added 2026-11-04)
+
+Found by `greeks-analyst` on YL-2 (d5bb596): `select_and_build_collar_entry` calls `broker.get_option_chain` directly (`collar_entry.py`), ignoring `policy.routed_chain`. Plain Upstox returns zero
+Greeks past ~90 DTE, so the December delta ladder is empty, `CollarEntrySelectionError` is raised and the yearly book is left flat after the close.
+
+**Files to change / create:**
+- `src/strategy/collar_entry.py` — take the chain from the policy's routed `ChainSource` when set; yearly with none set raises; ignore `closing_dte` (DTE<=5 roll-to-next-month) on the yearly path and
+  log it.
+- `src/strategy/collar_overlay_v1.py` — accept an optional constructor-injected `ChainSource` Protocol and pass it down; one-line comment at the IVR gate (see below).
+- `tests/unit/strategy/test_collar_overlay_yearly.py`.
+
+More than 2 files: list them in the go-ahead.
+
+**Before any code:** read `docs/plan/ds-chain-seam/` (or the ds-chain-monitoring stories) for the `ChainSource` / `policy.routed_chain` shapes and match them; if they diverge from this spec, STOP and
+report. `docs/refactor/design-principles.md` (injected Protocol, no new `elif` on a decision method). `get_code_snippet("select_and_build_collar_entry")`.
+
+**What to implement:** routed chain when present, broker fallback only when the policy has none and is not yearly (monthly byte-identical, golden tests unchanged). Yearly policy without a routed chain
+fails loudly rather than degrading to plain Upstox. IVR gate stays at 0.25 for every tenor: add a comment that yearly shares the threshold used by all strategies and that a yearly-specific value is a
+later calibration from paper-run data. `reentry_script_hint` stays in YW-1.
+
+**Tests:** `test_yearly_collar_reselect_uses_routed_chain`, `test_yearly_collar_without_routed_chain_raises`, `test_yearly_collar_ignores_closing_dte`, `test_monthly_collar_reselect_chain_unchanged`.
+
+**Commit:** `feat(overlay): route collar entry chain via policy`
+
