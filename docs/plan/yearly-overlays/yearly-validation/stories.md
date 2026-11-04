@@ -14,7 +14,9 @@
 **What to implement:** seed one book via the store, act on the other, assert on positions, `paper_exit_events`, `collateral_gate`, `overlay_coverage`, and `paper_overlay_pnl_snapshots` keys.
 
 **Tests:** `test_monthly_open_does_not_block_yearly_entry`, `test_yearly_open_does_not_block_monthly_entry`, `test_exit_event_in_one_book_not_visible_in_other`,
-`test_collateral_pool_counts_both_books_per_decision`.
+`test_collateral_pool_counts_both_books_per_decision`, `test_yearly_cc_and_collar_call_legs_do_not_double_cover` (added 2026-11-04: books are separate ledgers, so a yearly CC and a yearly collar could
+both short a call against the same holdings; if this test fails, decide on a guard rather than adding one speculatively). Note: `test_collateral_pool_counts_both_books_per_decision` predates decision
+6 (yearly collateral gate separate from the monthly pool); reconcile its expectation with decision 6 before writing it.
 
 **Commit:** `test(overlay): prove monthly and yearly books are independent`
 

@@ -22,6 +22,9 @@ Wiring deferred here from earlier stories (2026-11-03, loop reports); do all of 
 - Run the yearly instances at `policy.monitor_cadence_s` (3600 s), not the 90 s monthly poll (DSN-4).
 - Build the Dhan chain path with a long-lived `SourceHealth`, an alert notifier and the DSN-1 `dhan_token_guard`, and the cross-process limiter `create_dhan_rate_limiter(clock, state_dir=<shared data
   dir>)` (DSC-5), so the monitor and the capture cron share one 4 s throttle. Do not change the capture cron's own construction without Animesh's say; if sharing needs it, report that instead.
+- Set `reentry_script_hint` on each yearly instance (CC, PP, Collar) to `paper_3track_overlay_entry.py --auto-<cc|pp|collar> --expiry-type yearly`; the class defaults still point at the monthly
+  `find_overlay_strikes.py` flow, and `auto_close`'s "Run find_overlay_strikes.py --overlay-type pp" message needs the same treatment (added 2026-11-04, YP-2/YL-1 loop reports).
+- Make a yearly instance without a policy fail loudly instead of defaulting to monthly thresholds (added 2026-11-04; see YW-2 for the snapshot/dispatch call sites).
 - Document that yearly reaches Dhan only with `MARKET_DATA__CHAIN__SOURCES='["upstox","dhan"]'` and `DHAN_ACCESS_TOKEN` / `DHAN_CLIENT_ID` set (YF-6); the default stays Upstox-only.
 
 **Tests:**
@@ -39,6 +42,10 @@ Wiring deferred here from earlier stories (2026-11-03, loop reports); do all of 
 **Before any code:** `get_code_snippet` for each builder; load `FORMATTING.md` and `src/notifications/CLAUDE.md` §"Instrument Label Formatting".
 
 **What to implement:** each builder iterates namespaces from the registry and prefixes yearly rows ("Yearly CC" etc.); overlay P&L uses the yearly `strategy_name` as the key, `overlay_type` unchanged.
+
+**Policy-less evaluator calls (added 2026-11-04).** `paper_3track_snapshot.py:264` calls `evaluate_pp` without a policy, and `dispatch_evaluate` calls `evaluate_cc` without one (gap left by YC-2). The
+EOD snapshot therefore never shows ROLL_ELIGIBLE for a yearly put at DTE 6-15. Pass the instance's tenor policy at both call sites, and add `test_snapshot_flags_roll_eligible_for_yearly_put_at_dte_10`
+and `test_dispatch_evaluate_cc_uses_yearly_policy`. `dispatch_evaluate`'s file is not yet located: find it via the graph and list it in the go-ahead.
 
 **Tests:** golden-table tests for each builder with one monthly and one yearly leg: `test_report_lists_yearly_rows_separately`, `test_monthly_only_output_unchanged`.
 
