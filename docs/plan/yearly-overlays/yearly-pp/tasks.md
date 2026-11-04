@@ -2,11 +2,11 @@
 
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit.
 
-**Open: YP-2.**
+**Open: none — complete.**
 - [x] **YP-1** — `--expiry-type {monthly,yearly}` on `--auto-pp`; `auto_pp_bootstrap` resolves December, records under the yearly namespace | Owner: Antigravity | Model: n/a | Review: code-reviewer |
   SHA: 88b6b74
-- [ ] **YP-2** — Yearly PP roll window (`_open_pp_dte`, `_PP_ROLL_DTE_THRESHOLD`) and crash-monetize re-entry gate read the policy | Owner: Claude | Model: claude-sonnet-5-5 | Review: roll-validator |
-  SHA: —
+- [x] **YP-2** — Yearly PP roll window (`_open_pp_dte`, `_PP_ROLL_DTE_THRESHOLD`) and crash-monetize re-entry gate read the policy | Owner: Claude | Model: claude-sonnet-5-5 | Review: roll-validator |
+  SHA: 2460e2d
 
 ## Story done when
 

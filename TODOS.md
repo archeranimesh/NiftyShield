@@ -214,6 +214,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-11-04] yearly-pp YP-2 closed (`2460e2d`): PP roll window and crash-monetize re-entry floor read the tenor policy
 - [2026-11-03] yearly-pp YP-1 closed (`88b6b74`): yearly --auto-pp flag, namespace-aware _open_pp_dte, yearly PP bootstrap
 - [2026-11-03] yearly-cc YC-2 closed (`d05289d`): CCOverlayV1 tenor policy drives exits and re-entry; legacy spot guard scoped to monthly ledger
 - [2026-11-03] yearly-cc YC-1 closed (`ab5be2e`): Add --expiry-type {monthly,yearly} to --auto-cc; yearly records under the yearly CC ledger
