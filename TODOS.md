@@ -27,7 +27,7 @@ Snapshot of every active story, sorted by how many downstream stories it blocks 
 | `finideas-decommission` → `dhan-holdings-removal` (9) | ⬜ 0/11 | FD-1 | none | **1**: phase2-integrations |
 | `yearly-cc` ‖ `yearly-pp` (23) | ⛔ 0/4 | YC-1 / YP-1 | yearly-foundation | **1** each: yearly-collar |
 | `yearly-collar` (23) | ⛔ 0/2 | YL-1 | yearly-cc and yearly-pp | **1**: yearly-ops-wiring |
-| `yearly-ops-wiring` (23) | ⛔ 0/3 | YW-1 | yearly-collar | **1**: yearly-validation |
+| `yearly-ops-wiring` (23) | ⛔ 0/3 | YW-3 | yearly-collar | **1**: yearly-validation |
 | `logging-foundation` (27) | ⬜ 0/8 | LF-1 | redacted `crontab -l` from Animesh | **1**: logging-migration (LF-5) |
 | `logging-migration` (27) | ⛔ 0/5 | LM-1 | LF-5; after the Dec 2026 roll | **1**: logging-enforcement |
 | `backtest-eval-core` (13) | ⛔ 0/11 | B1.1 | backtest-engine 1.3 + 1.4 | **1**: signals-eval-core |
@@ -214,6 +214,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-11-04] yearly-ops-wiring YW-2 closed (`434e0bb`): yearly labels/reports: eod_summary rows, policy-aware snapshot dispatch, per-namespace overlay P&L
 - [2026-11-04] yearly-ops-wiring YW-1 closed (`d49880a`): Daemon registers yearly CC/PP/Collar behind MONITOR_YEARLY_OVERLAYS; routed chain, hourly cadence, policy-derived re-entry hint
 - [2026-11-04] yearly-collar YL-3 closed (`ad90a6e`): Collar entry chain routed via injected ChainSource; yearly without one fails loud
 - [2026-11-04] yearly-collar YL-2 closed (`d5bb596`): CollarOverlayV1 tenor policy; collar reselection resolves expiry, DTE floor and ledger from policy
