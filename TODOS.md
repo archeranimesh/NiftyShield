@@ -214,6 +214,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-11-04] yearly-collar YL-2 closed (`d5bb596`): CollarOverlayV1 tenor policy; collar reselection resolves expiry, DTE floor and ledger from policy
 - [2026-11-04] yearly-collar YL-1 closed (`733d070`): yearly expiry-type on auto-collar; pair validated on one December expiry
 - [2026-11-04] yearly-pp YP-2 closed (`2460e2d`): PP roll window and crash-monetize re-entry floor read the tenor policy
 - [2026-11-03] yearly-pp YP-1 closed (`88b6b74`): yearly --auto-pp flag, namespace-aware _open_pp_dte, yearly PP bootstrap
