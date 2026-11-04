@@ -2,10 +2,9 @@
 
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit.
 
-**Open: YW-1..YW-3.**
-
-- [ ] **YW-1** — `monitor_daemon.py` registers yearly CC/PP/Collar instances from the policy registry behind `MONITOR_YEARLY_OVERLAYS` (default off) | Owner: Claude | Model: claude-sonnet-5-5 |
-  Review: code-reviewer | SHA: —
+**Open: YW-2..YW-3.**
+- [x] **YW-1** — `monitor_daemon.py` registers yearly CC/PP/Collar instances from the policy registry behind `MONITOR_YEARLY_OVERLAYS` (default off) | Owner: Claude | Model: claude-sonnet-5-5 |
+  Review: code-reviewer | SHA: d49880a
 - [ ] **YW-2** — Labels and reports: `STRATEGY_LABELS`, `eod_summary`, `eod_pt_summary`, `pre_market_brief`, 3-track overlay P&L show the yearly book as separate rows | Owner: Antigravity | Model: n/a
   | Review: greeks-analyst | SHA: —
 - [ ] **YW-3** — Cron entries, runbook lines, `DB_REGISTRY.md` note (no new table) and `CONTEXT_TREE.md` update | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: —

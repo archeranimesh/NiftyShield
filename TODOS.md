@@ -214,6 +214,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-11-04] yearly-ops-wiring YW-1 closed (`d49880a`): Daemon registers yearly CC/PP/Collar behind MONITOR_YEARLY_OVERLAYS; routed chain, hourly cadence, policy-derived re-entry hint
 - [2026-11-04] yearly-collar YL-3 closed (`ad90a6e`): Collar entry chain routed via injected ChainSource; yearly without one fails loud
 - [2026-11-04] yearly-collar YL-2 closed (`d5bb596`): CollarOverlayV1 tenor policy; collar reselection resolves expiry, DTE floor and ledger from policy
 - [2026-11-04] yearly-collar YL-1 closed (`733d070`): yearly expiry-type on auto-collar; pair validated on one December expiry
