@@ -108,6 +108,12 @@ def _row(strike: int, key: str, mid: float) -> dict[str, Any]:
     return {"strike": strike, "instrument_key": key, "mid": mid, "ltp": mid, "delta": 0.2}
 
 
+def _routed_source() -> MagicMock:
+    source = MagicMock()
+    source.get_chain = AsyncMock(return_value=MagicMock())
+    return source
+
+
 def _select(lookup: MagicMock, today: date, **kwargs: Any) -> tuple[Any, MagicMock, MagicMock]:
     broker = MagicMock()
     broker.get_option_chain = AsyncMock(return_value=[{"underlying_spot_price": 24000}])
@@ -115,6 +121,7 @@ def _select(lookup: MagicMock, today: date, **kwargs: Any) -> tuple[Any, MagicMo
         patch(f"{_ENTRY}.InstrumentLookup.from_file", return_value=lookup),
         patch(f"{_ENTRY}.load_vix_series", return_value=pd.Series([15.0] * 260)),
         patch(f"{_ENTRY}._find_candidates_for_ladder") as find,
+        patch(f"{_ENTRY}.chain_to_rows", return_value=[{"underlying_spot_price": 24000}]),
     ):
         find.side_effect = [[_row(25200, "CE", 45.0)], [_row(23900, "PE", 38.0)]]
         result = asyncio.run(
@@ -131,10 +138,11 @@ def _yearly_lookup(expiry: str) -> MagicMock:
 
 def test_yearly_collar_reselect_resolves_december() -> None:
     today = date(2026, 11, 20)
-    (trades, *_), broker, lookup = _select(
-        _yearly_lookup("2027-12-28"), today, closing_dte=15, policy=_YEARLY
+    source = _routed_source()
+    (trades, *_), _, lookup = _select(
+        _yearly_lookup("2027-12-28"), today, closing_dte=15, policy=_YEARLY, chain_source=source
     )
-    assert broker.get_option_chain.call_args[0][1] == "2027-12-28"
+    assert source.get_chain.call_args[0][1] == "2027-12-28"
     kwargs = lookup.get_expiry_candidates.call_args.kwargs
     assert kwargs["preference"] == ["yearly"]
     assert kwargs["min_expiry"] == (today + timedelta(days=15)).isoformat()
@@ -145,10 +153,12 @@ def test_yearly_collar_reselect_dte_floor_from_policy() -> None:
     today = date(2026, 11, 20)
     near = (today + timedelta(days=19)).isoformat()
     with pytest.raises(CollarEntrySelectionError, match="DTE >= 20"):
-        _select(_yearly_lookup(near), today, policy=_YEARLY)
+        _select(_yearly_lookup(near), today, policy=_YEARLY, chain_source=_routed_source())
     # Same expiry clears when the policy floor is lowered (monthly's 14 floor would not matter).
     low = replace(_YEARLY, entry_min_dte=16)
-    (trades, *_), _, _ = _select(_yearly_lookup(near), today, policy=low)
+    (trades, *_), _, _ = _select(
+        _yearly_lookup(near), today, policy=low, chain_source=_routed_source()
+    )
     assert len(trades) == 2
 
 
@@ -168,3 +178,39 @@ def test_monthly_dte_floor_still_14() -> None:
     lookup.get_expiry_candidates.return_value = [("monthly", "2026-11-14")]
     with pytest.raises(CollarEntrySelectionError, match="dte=10 < 14"):
         _select(lookup, date(2026, 11, 4), policy=OVERLAY_TENORS["monthly"])
+
+
+# ── YL-3: routed chain ───────────────────────────────────────────────────────
+
+
+def test_yearly_collar_reselect_uses_routed_chain() -> None:
+    source = _routed_source()
+    _, broker, _ = _select(
+        _yearly_lookup("2027-12-28"), date(2026, 11, 20), policy=_YEARLY, chain_source=source
+    )
+    source.get_chain.assert_awaited_once_with("NSE_INDEX|Nifty 50", "2027-12-28")
+    broker.get_option_chain.assert_not_called()
+
+
+def test_yearly_collar_without_routed_chain_raises() -> None:
+    with pytest.raises(CollarEntrySelectionError, match="requires a routed chain"):
+        _select(_yearly_lookup("2027-12-28"), date(2026, 11, 20), policy=_YEARLY)
+
+
+def test_yearly_collar_ignores_closing_dte() -> None:
+    today = date(2026, 11, 20)
+    lookups = []
+    for closing in (None, 3):
+        lookup = _yearly_lookup("2027-12-28")
+        (trades, *_), _, _ = _select(
+            lookup, today, closing_dte=closing, policy=_YEARLY, chain_source=_routed_source()
+        )
+        lookups.append((lookup.get_expiry_candidates.call_args.kwargs, trades[0].notes))
+    assert lookups[0] == lookups[1]
+
+
+def test_monthly_collar_reselect_chain_unchanged() -> None:
+    lookup = MagicMock()
+    lookup.get_expiry_candidates.return_value = [("monthly", "2026-11-24")]
+    _, broker, _ = _select(lookup, date(2026, 11, 4), policy=OVERLAY_TENORS["monthly"])
+    broker.get_option_chain.assert_awaited_once_with("NSE_INDEX|Nifty 50", "2026-11-24")

@@ -25,6 +25,7 @@ ladder is already duplicated into ``auto_cc_bootstrap`` in the entry script.
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -35,6 +36,7 @@ import structlog
 
 from src.backtest.ivr import compute_ivr
 from src.backtest.vix_ingest import load_vix_series
+from src.client.chain_rows import DEFAULT_FETCH_TIMEOUT_S, chain_to_rows
 from src.config import settings
 from src.instruments.lookup import InstrumentLookup
 from src.instruments.strike_selector import (
@@ -48,6 +50,7 @@ from src.paper.models import PaperTrade
 from src.strategy.overlay_tenor import OverlayTenorPolicy, resolve_overlay_expiry
 
 if TYPE_CHECKING:
+    from src.client.chain_source import ChainSource
     from src.client.protocol import BrokerClient
     from src.paper.store import PaperStore
 
@@ -194,6 +197,8 @@ def _check_gates(dte: int, policy: OverlayTenorPolicy | None = None) -> None:
 
     The IVR gate mirrors ReEntryMixin / auto_cc_bootstrap and is the same for every tenor.
     """
+    # Yearly shares the 0.25 threshold used by all strategies; a yearly-specific value is a
+    # later calibration from paper-run data.
     min_dte = _DTE_MIN_GATE if policy is None else policy.entry_min_dte
     if dte < min_dte:
         raise CollarEntrySelectionError(f"DTE gate failed: dte={dte} < {min_dte}")
@@ -213,6 +218,32 @@ def _check_gates(dte: int, policy: OverlayTenorPolicy | None = None) -> None:
         raise CollarEntrySelectionError(f"IVR gate failed: ivr={ivr}")
 
 
+_NIFTY_KEY = "NSE_INDEX|Nifty 50"
+
+
+async def _fetch_chain_rows(
+    broker: BrokerClient,
+    chain_source: ChainSource | None,
+    expiry_str: str,
+    policy: OverlayTenorPolicy | None,
+) -> list[dict[str, Any]]:
+    """Fetch raw Upstox chain rows: routed source when given, else the broker (monthly only).
+
+    Raises:
+        CollarEntrySelectionError: Policy requires a routed chain but none was injected.
+    """
+    if chain_source is not None:
+        snapshot = await asyncio.wait_for(
+            chain_source.get_chain(_NIFTY_KEY, expiry_str), DEFAULT_FETCH_TIMEOUT_S
+        )
+        return chain_to_rows(snapshot)
+    if policy is not None and policy.routed_chain:
+        raise CollarEntrySelectionError(
+            f"{policy.expiry_bucket} collar requires a routed chain source; none configured"
+        )
+    return await broker.get_option_chain(_NIFTY_KEY, expiry_str)
+
+
 async def select_and_build_collar_entry(
     broker: BrokerClient,
     store: PaperStore,
@@ -223,6 +254,7 @@ async def select_and_build_collar_entry(
     bod_path: Path | None = None,
     lot_size: int = LOT_SIZE,
     policy: OverlayTenorPolicy | None = None,
+    chain_source: ChainSource | None = None,
 ) -> tuple[list[PaperTrade], Decimal, float | None, float | None]:
     """Resolve expiry, run Collar1/Collar2 selection, apply gates, build two legs.
 
@@ -247,6 +279,9 @@ async def select_and_build_collar_entry(
         lot_size: Quantity per leg.
         policy: Tenor policy supplying the expiry bucket, DTE floor and ledger name for
             the new legs. None (or the monthly policy) keeps the legacy monthly behaviour.
+            On a non-monthly tenor ``closing_dte`` is ignored (logged).
+        chain_source: Routed ``ChainSource`` for the entry chain. Required when the policy
+            sets ``routed_chain`` (yearly); None on monthly falls back to ``broker``.
 
     Returns:
         ([put_trade, call_trade], spot, put_delta, call_delta) — both legs,
@@ -263,6 +298,9 @@ async def select_and_build_collar_entry(
     """
     del store  # unused — kept for signature parity / future audit logging
 
+    if closing_dte is not None and not _is_monthly(policy):
+        log.info("collar_entry.closing_dte_ignored", closing_dte=closing_dte)
+
     resolved_bod_path = bod_path if bod_path is not None else Path(DEFAULT_BOD_PATH)
 
     expiry_str, dte = _resolve_expiry(
@@ -272,7 +310,9 @@ async def select_and_build_collar_entry(
     strategy_name = STRATEGY_OVERLAY if policy is None else policy.collar_strategy_name
 
     try:
-        raw_chain = await broker.get_option_chain("NSE_INDEX|Nifty 50", expiry_str)
+        raw_chain = await _fetch_chain_rows(broker, chain_source, expiry_str, policy)
+    except CollarEntrySelectionError:
+        raise
     except Exception as exc:  # noqa: BLE001
         raise CollarEntrySelectionError(f"Chain fetch failed: {exc}") from exc
 

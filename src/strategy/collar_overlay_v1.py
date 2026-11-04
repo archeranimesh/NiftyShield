@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
@@ -30,6 +30,9 @@ from src.strategy.exit_signals import ExitSignalEngine
 from src.strategy.overlay_tenor import OVERLAY_TENORS, OverlayTenorPolicy
 from src.strategy.protocol import ApprovedAction, LegClose, SignalEvent
 from src.strategy.reentry_mixin import ReEntryMixin
+
+if TYPE_CHECKING:
+    from src.client.chain_source import ChainSource
 
 log = structlog.get_logger(__name__)
 
@@ -85,6 +88,7 @@ class CollarOverlayV1(ReEntryMixin):
         broker: Any = None,
         instrument_lookup: InstrumentLookup | None = None,
         tenor: OverlayTenorPolicy = OVERLAY_TENORS["monthly"],
+        chain_source: ChainSource | None = None,
     ) -> None:
         """Initialise CollarOverlayV1.
 
@@ -103,8 +107,11 @@ class CollarOverlayV1(ReEntryMixin):
             tenor: Tenor policy; supplies the ledger name, short-call exit thresholds,
                 DTE review window, re-entry DTE floor and reselection expiry. Defaults
                 to the monthly policy.
+            chain_source: Routed ``ChainSource`` for reselection. Required for a tenor
+                with ``routed_chain`` (yearly); monthly falls back to ``broker``.
         """
         self.tenor = tenor
+        self._chain_source = chain_source
         self.strategy_name = tenor.collar_strategy_name
         self.reentry_min_dte = tenor.reentry_min_dte
         self._store = store
@@ -562,6 +569,7 @@ class CollarOverlayV1(ReEntryMixin):
                 triggering_signal,
                 closing_dte=closing_dte,
                 policy=self.tenor,
+                chain_source=self._chain_source,
             )
         except CollarEntrySelectionError as exc:
             log.error(
