@@ -45,6 +45,7 @@ from src.instruments.strike_selector import (
 from src.models.portfolio import TradeAction
 from src.paper.constants import DEFAULT_BOD_PATH, LOT_SIZE, STRATEGY_OVERLAY
 from src.paper.models import PaperTrade
+from src.strategy.overlay_tenor import OverlayTenorPolicy, resolve_overlay_expiry
 
 if TYPE_CHECKING:
     from src.client.protocol import BrokerClient
@@ -129,9 +130,23 @@ def _select_best_combo(
     return call, put
 
 
-def _resolve_expiry(bod_path: Path, today: date, *, closing_dte: int | None) -> tuple[str, int]:
-    """Resolve the monthly expiry to trade — current month, or next month when
-    the position being closed had DTE <= 5 remaining (Collar3b rule #4).
+def _is_monthly(policy: OverlayTenorPolicy | None) -> bool:
+    """True when ``policy`` is absent or the monthly book (legacy selection path)."""
+    return policy is None or policy.expiry_bucket == "monthly"
+
+
+def _resolve_expiry(
+    bod_path: Path,
+    today: date,
+    *,
+    closing_dte: int | None,
+    policy: OverlayTenorPolicy | None = None,
+) -> tuple[str, int]:
+    """Resolve the expiry to trade.
+
+    Monthly (``policy`` None or monthly): current month, or next month when the
+    position being closed had DTE <= 5 remaining (Collar3b rule #4). Any other tenor:
+    ``resolve_overlay_expiry`` (bucket, roll window and entry floor from the policy).
 
     Returns:
         (expiry_str, dte).
@@ -143,6 +158,14 @@ def _resolve_expiry(bod_path: Path, today: date, *, closing_dte: int | None) -> 
         lookup = InstrumentLookup.from_file(bod_path)
     except Exception as exc:  # noqa: BLE001
         raise CollarEntrySelectionError(f"BOD load failed: {exc}") from exc
+
+    if policy is not None and not _is_monthly(policy):
+        expiry_str = resolve_overlay_expiry(lookup, today, policy)
+        if expiry_str is None:
+            raise CollarEntrySelectionError(
+                f"No {policy.expiry_bucket} expiry with DTE >= {policy.entry_min_dte}"
+            )
+        return expiry_str, (date.fromisoformat(expiry_str) - today).days
 
     min_expiry: str | None = None
     if closing_dte is not None and closing_dte <= 5:
@@ -166,10 +189,14 @@ def _resolve_expiry(bod_path: Path, today: date, *, closing_dte: int | None) -> 
     return expiry_str, dte
 
 
-def _check_gates(dte: int) -> None:
-    """DTE >= 14 gate. IVR >= 0.25 gate (mirrors ReEntryMixin / auto_cc_bootstrap)."""
-    if dte < _DTE_MIN_GATE:
-        raise CollarEntrySelectionError(f"DTE gate failed: dte={dte} < {_DTE_MIN_GATE}")
+def _check_gates(dte: int, policy: OverlayTenorPolicy | None = None) -> None:
+    """DTE floor gate (policy ``entry_min_dte``; default 14) and IVR >= 0.25 gate.
+
+    The IVR gate mirrors ReEntryMixin / auto_cc_bootstrap and is the same for every tenor.
+    """
+    min_dte = _DTE_MIN_GATE if policy is None else policy.entry_min_dte
+    if dte < min_dte:
+        raise CollarEntrySelectionError(f"DTE gate failed: dte={dte} < {min_dte}")
 
     try:
         vix_series = load_vix_series(settings.vix_data_dir)
@@ -195,6 +222,7 @@ async def select_and_build_collar_entry(
     closing_dte: int | None = None,
     bod_path: Path | None = None,
     lot_size: int = LOT_SIZE,
+    policy: OverlayTenorPolicy | None = None,
 ) -> tuple[list[PaperTrade], Decimal, float | None, float | None]:
     """Resolve expiry, run Collar1/Collar2 selection, apply gates, build two legs.
 
@@ -217,6 +245,8 @@ async def select_and_build_collar_entry(
             (current month is selected).
         bod_path: Override for the BOD instrument JSON path.
         lot_size: Quantity per leg.
+        policy: Tenor policy supplying the expiry bucket, DTE floor and ledger name for
+            the new legs. None (or the monthly policy) keeps the legacy monthly behaviour.
 
     Returns:
         ([put_trade, call_trade], spot, put_delta, call_delta) — both legs,
@@ -235,8 +265,11 @@ async def select_and_build_collar_entry(
 
     resolved_bod_path = bod_path if bod_path is not None else Path(DEFAULT_BOD_PATH)
 
-    expiry_str, dte = _resolve_expiry(resolved_bod_path, today, closing_dte=closing_dte)
-    _check_gates(dte)
+    expiry_str, dte = _resolve_expiry(
+        resolved_bod_path, today, closing_dte=closing_dte, policy=policy
+    )
+    _check_gates(dte, policy)
+    strategy_name = STRATEGY_OVERLAY if policy is None else policy.collar_strategy_name
 
     try:
         raw_chain = await broker.get_option_chain("NSE_INDEX|Nifty 50", expiry_str)
@@ -266,7 +299,7 @@ async def select_and_build_collar_entry(
     notes = f"Collar reentry via {triggering_signal}. Expiry={expiry_str} (DTE={dte})."
 
     put_trade = PaperTrade(
-        strategy_name=STRATEGY_OVERLAY,
+        strategy_name=strategy_name,
         leg_role=_COLLAR_PUT_ROLE,
         instrument_key=put_row["instrument_key"],
         trade_date=today,
@@ -276,7 +309,7 @@ async def select_and_build_collar_entry(
         notes=notes,
     )
     call_trade = PaperTrade(
-        strategy_name=STRATEGY_OVERLAY,
+        strategy_name=strategy_name,
         leg_role=_COLLAR_CALL_ROLE,
         instrument_key=call_row["instrument_key"],
         trade_date=today,

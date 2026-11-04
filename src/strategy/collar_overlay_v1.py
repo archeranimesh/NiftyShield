@@ -27,6 +27,7 @@ from src.paper.models import PaperPosition, PaperTrade
 from src.strategy._price_utils import find_option_leg, resolve_option_expiry
 from src.strategy.collar_entry import CollarEntrySelectionError, select_and_build_collar_entry
 from src.strategy.exit_signals import ExitSignalEngine
+from src.strategy.overlay_tenor import OVERLAY_TENORS, OverlayTenorPolicy
 from src.strategy.protocol import ApprovedAction, LegClose, SignalEvent
 from src.strategy.reentry_mixin import ReEntryMixin
 
@@ -36,7 +37,7 @@ log = structlog.get_logger(__name__)
 # action (atomic close both legs, then immediately reselect and open a fresh
 # two-leg pair). Mirrors IronCondorV1._auto_select_action's priority-selection
 # pattern. TIME_STOP is deliberately excluded — Collar3b operator ruling:
-# DTE_REVIEW (DTE<=5) is the only time-based trigger for Collar, TIME_STOP
+# DTE_REVIEW (DTE<=policy.review_dte; monthly 5) is the only time-based trigger for Collar, TIME_STOP
 # (fixed calendar days_held) is wrong for a position decoupled from actual
 # DTE-to-expiry. TIME_STOP may still appear in _check_reentry's own audit-log
 # trigger tuple (secondary, logging-only) but never drives this action.
@@ -83,6 +84,7 @@ class CollarOverlayV1(ReEntryMixin):
         vix_data_dir: Path | str | None = None,
         broker: Any = None,
         instrument_lookup: InstrumentLookup | None = None,
+        tenor: OverlayTenorPolicy = OVERLAY_TENORS["monthly"],
     ) -> None:
         """Initialise CollarOverlayV1.
 
@@ -98,7 +100,13 @@ class CollarOverlayV1(ReEntryMixin):
                 instrument keys that carry no strike/type in the key string
                 itself. If not injected, lazily built from ``DEFAULT_BOD_PATH``
                 on first use (same pattern as ``PaperStore._resolve_instrument_lookup``).
+            tenor: Tenor policy; supplies the ledger name, short-call exit thresholds,
+                DTE review window, re-entry DTE floor and reselection expiry. Defaults
+                to the monthly policy.
         """
+        self.tenor = tenor
+        self.strategy_name = tenor.collar_strategy_name
+        self.reentry_min_dte = tenor.reentry_min_dte
         self._store = store
         self._notifier = notifier
         self._broker = broker
@@ -199,6 +207,7 @@ class CollarOverlayV1(ReEntryMixin):
             delta=delta,
             dte=dte,
             days_held=days_held,
+            policy=self.tenor,
         )
 
         for result in results:
@@ -552,6 +561,7 @@ class CollarOverlayV1(ReEntryMixin):
                 market_today(),
                 triggering_signal,
                 closing_dte=closing_dte,
+                policy=self.tenor,
             )
         except CollarEntrySelectionError as exc:
             log.error(
