@@ -214,6 +214,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-11-05] yearly-ops-wiring YW-3 closed (`4832c2d`): Runbook, DB_REGISTRY note E, tree/context/decision entries for the yearly book ops wiring
 - [2026-11-04] yearly-ops-wiring YW-2 closed (`434e0bb`): yearly labels/reports: eod_summary rows, policy-aware snapshot dispatch, per-namespace overlay P&L
 - [2026-11-04] yearly-ops-wiring YW-1 closed (`d49880a`): Daemon registers yearly CC/PP/Collar behind MONITOR_YEARLY_OVERLAYS; routed chain, hourly cadence, policy-derived re-entry hint
 - [2026-11-04] yearly-collar YL-3 closed (`ad90a6e`): Collar entry chain routed via injected ChainSource; yearly without one fails loud
