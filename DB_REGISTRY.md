@@ -50,6 +50,10 @@ comparison (1-day + inception P&L %, tracking error vs. Nifty spot). Includes a 
 **Note D — `paper_overlay_pnl_snapshots`:** writer is `PaperStore.record_overlay_pnl_snapshot()` → `scripts/strategies/three_track/paper_3track_snapshot.py`. Daily P&L for CC/PP/Collar overlays
 (`overlay_type ∈ {cc, pp, collar}`), sourced from `paper_leg_snapshots`' real leg roles, not the collapsed display dict.
 
+**Note E — yearly overlay book rides existing tables (YF-1, YW-3):** the yearly CC / PP / Collar book adds no table. It writes `paper_trades`, `paper_nav_snapshots`, `paper_leg_snapshots`,
+`paper_exit_events` and `paper_overlay_pnl_snapshots` under three `strategy_name`s (`paper_nifty_overlay_yearly_cc`, `_pp`, `_collar`) beside the monthly `paper_nifty_overlay`. Read any of these
+tables filtered by `strategy_name` before concluding the yearly book is empty. Provenance columns (`delta_source`, `delta_asof`, `chain_source`, `chain_fetched_at`) are DSN-2 work and not present yet.
+
 **Note E — `paper_protection_recovery_snapshots`:** writer is `PaperStore.record_protection_recovery_snapshot()` → `scripts/strategies/three_track/paper_3track_snapshot.py`. Single NiftyBees-anchored
 series combining spot P&L with cc/pp/collar recovery framing. No `strategy_name` column by design.
 

@@ -32,7 +32,8 @@ Top-level `src/` packages, one line each (detail → `CONTEXT_TREE.md`):
 - `src/strategy/` — paper-backbone strategy layer. `PaperStrategy` protocol, `SignalEvent`/`ApprovedAction`/`LegSpec`/`LegClose`, `StrategyMonitor` daemon (tick loop, WARN dedup, auto-execute
   dispatch), `PaperExecutor`, `ReEntryMixin`. 9 strategies: `CSPNiftyV1`, `CCOverlayV1`, `PPOverlayV1`, `CollarOverlayV1`, `IronCondorV1`, `IronCondorV2`, `NiftyTrackComparisonV1`, `SignalTrackV1`,
   `NiftyCalendarV1` (`paper_signal_track_v1` — the `signals-paper-track/` execution layer, 30 s cadence, entry/exit via `open_signal_paper_entry` + `signal_exit.evaluate`). Engines:
-  `ExitSignalEngine`, `ProfitLockEngine`, `OverlayCloser`, `ic_close_executor`, `roll_utils`.
+  `ExitSignalEngine`, `ProfitLockEngine`, `OverlayCloser`, `ic_close_executor`, `roll_utils`. `overlay_tenor.py` holds `OVERLAY_TENORS` (monthly / yearly policy); with `MONITOR_YEARLY_OVERLAYS=1` the
+  daemon also registers the yearly CC/PP/Collar book (runbook: `docs/instructions/yearly_overlays.md`).
 - `src/signals/` — multi-LLM daily directional signal pipeline (shipped 2026-09-09; `docs/archive/plan/signals/`). Frozen Pydantic models
   (`MarketSnapshot`/`SignalResponse`/`DailySignal`/`SignalOutcome`, `Direction`/`TradeAction`), `SignalProvider` protocol, pure `build_prompt`, pure `SignalAggregator` consensus, `option_resolver.py`,
   `market_inputs.py` (gift_nifty / usd_inr / fii fetchers), `snapshot.py` `assemble_market_snapshot`, `SignalStore` (own SQLite tables

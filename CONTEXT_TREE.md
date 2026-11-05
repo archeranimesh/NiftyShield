@@ -116,6 +116,7 @@ src/
 │   ├── cc_overlay_v1.py      # CCOverlayV1 strategy: covered call protective overlay with delta gates
 │   ├── pp_overlay_v1.py      # PPOverlayV1 strategy: protective put rebalance overlay (IVR ≤ 0.60 gate)
 │   ├── collar_overlay_v1.py  # CollarOverlayV1 strategy: short call + long put atomic collar
+│   ├── overlay_tenor.py      # OverlayTenorPolicy + OVERLAY_TENORS registry (monthly/yearly thresholds, ledger names, cadence); daemon loops it for the yearly book
 │   ├── nifty_track_comparison_v1.py # NiftyTrackComparisonV1: manual-approval multi-leg comparison strategy
 │   ├── exit_signals.py       # ExitSignalEngine: static rule engine for CSP/CC/PP/Collar exit signals (INFO/WARN/ACTION)
 │   ├── overlay_closer.py     # OverlayCloser: atomic multi-leg close orchestrator (record_trades via store)
@@ -556,3 +557,4 @@ folders.
 |---|---|
 | `docs/strategies/regime_probe.pine` | Pine Script v6 sensor script (not a trading strategy) — emits a structured regime read. See DECISIONS.md. |
 | `docs/archive/tv_mcp_testing_framework.md` | 7-phase capability probe for the `tradesdontlie/tradingview-mcp` server. |
+| `docs/instructions/yearly_overlays.md` | Yearly (December) CC/PP/Collar runbook: `MONITOR_YEARLY_OVERLAYS` flag, host crons (not installed), BOD freshness, no-new-table finding. |
