@@ -2,11 +2,11 @@
 
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit.
 
-**Open: YV-5.**
+**Open: YV-3.**
 - [x] **YV-1** — Independence tests: monthly and yearly books never block or mix each other (positions, exit events, collateral gate, coverage) | Owner: Claude | Model: claude-sonnet-5-5 | Review:
   code-reviewer | SHA: 764d1d5
-- [ ] **YV-2** — E2E dry-run tests for `--auto-cc/--auto-pp/--auto-collar --expiry-type yearly` against `MockBrokerClient`, temp SQLite, YF-2 fixtures, zero-Greeks case included | Owner: Antigravity |
-  Model: n/a | Review: code-reviewer | SHA: —
+- [x] **YV-2** — E2E dry-run tests for `--auto-cc/--auto-pp/--auto-collar --expiry-type yearly` against `MockBrokerClient`, temp SQLite, YF-2 fixtures, zero-Greeks case included | Owner: Antigravity |
+  Model: n/a | Review: code-reviewer | SHA: f68e3c4
 - [ ] **YV-3** — Opt-in live smoke (`-m live`): dry run against the real Dec 2026 chain, no writes; record the output in the story | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA: —
 - [ ] **YV-4** — IC coexistence check: weekly/monthly/leaps/yearly distinct names; `leaps` = quarterly, `yearly` = December across frozen dates; daemon and snapshot loops cover all four | Owner:
   Claude | Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: —

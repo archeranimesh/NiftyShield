@@ -214,6 +214,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-11-05] yearly-validation YV-2 closed (`f68e3c4`): Yearly entry dry-run e2e tests (cc/pp/collar, zero-Greeks, no-write) in tests/integration
 - [2026-11-05] yearly-validation YV-1 closed (`764d1d5`): Independence tests: monthly and yearly books never block or mix (13 tests)
 - [2026-11-05] yearly-ops-wiring YW-3 closed (`4832c2d`): Runbook, DB_REGISTRY note E, tree/context/decision entries for the yearly book ops wiring
 - [2026-11-04] yearly-ops-wiring YW-2 closed (`434e0bb`): yearly labels/reports: eod_summary rows, policy-aware snapshot dispatch, per-namespace overlay P&L
