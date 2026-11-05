@@ -59,10 +59,12 @@ GATE_NAME = "niftybees_collateral_capacity"
 _COLLATERAL_DRAWING_STRATEGIES = (STRATEGY_CSP, STRATEGY_OVERLAY)
 
 # The yearly overlay book is a separate pool (decision 6, 2026-11-02): its open lots are
-# never added to the monthly pool and vice versa, and no NiftyBees units are allocated to
-# it during the paper phase. Going live needs a fixed unit split or a cross-book cap first.
+# never added to the monthly pool and vice versa. The yearly book has its own separate
+# physical NiftyBees holding of ~5,395.68 units, set to 5400 by Animesh's rounding on
+# 2026-11-05. The monthly gate reads only the paper_nifty_spot position, so the two pools
+# do not overlap. Edit this constant if the yearly holding changes.
 _YEARLY_COLLATERAL_STRATEGIES = YEARLY_OVERLAY_STRATEGIES
-YEARLY_NIFTYBEES_UNITS = 0
+YEARLY_NIFTYBEES_UNITS = 5400
 
 
 def _open_lots_across_strategies(

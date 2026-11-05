@@ -1384,8 +1384,9 @@ structure, after the `NOT_ACTIVE` check. The bi-weekly then enters on the next w
 
 **The yearly CC / PP / Collar book is opt-in via `MONITOR_YEARLY_OVERLAYS` (default off, needs `MONITOR_OVERLAYS=1`), adds no table, and has its own collateral pool.** The daemon loops over
 `OVERLAY_TENORS` rather than copying the registration block per tenor. The yearly namespace rides the existing tables under three `strategy_name`s (YF-1 audit §C). Decision 6 (2026-11-02) overrides
-the audit's shared-pool default: yearly open lots never count toward the monthly NiftyBees pool, and `YEARLY_NIFTYBEES_UNITS = 0` until live trading needs a unit split or cross-book cap. Yearly
-policy: entry floor 20 DTE, review and exit 15 DTE, 75% profit target on sold premium, alert-only 2.5x premium backstop on short calls, 3600 s monitor cadence. The host cron lines are listed in
+the audit's shared-pool default: yearly open lots never count toward the monthly NiftyBees pool, and the yearly book has its own separate physical NiftyBees holding of ~5,395.68 units, set as
+`YEARLY_NIFTYBEES_UNITS = 5400` (Animesh's rounding, 2026-11-05; the monthly gate reads only `paper_nifty_spot`, so the pools do not overlap; edit the constant if the holding changes). Yearly policy:
+entry floor 20 DTE, review and exit 15 DTE, 75% profit target on sold premium, alert-only 2.5x premium backstop on short calls, 3600 s monitor cadence. The host cron lines are listed in
 `docs/instructions/yearly_overlays.md` and not installed. Why: deploying the wiring must change nothing until Animesh enables it.
 
 ## Deferred / Not Yet Built

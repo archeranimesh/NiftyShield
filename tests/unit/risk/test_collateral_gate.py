@@ -16,10 +16,20 @@ from pathlib import Path
 import pytest
 
 from src.models.portfolio import TradeAction
-from src.paper.constants import STRATEGY_CSP, STRATEGY_OVERLAY, STRATEGY_SPOT
-from src.paper.models import PaperTrade
+from src.paper.constants import (
+    STRATEGY_CSP,
+    STRATEGY_OVERLAY,
+    STRATEGY_OVERLAY_YEARLY_CC,
+    STRATEGY_SPOT,
+    compute_max_lots,
+)
+from src.paper.models import GateViolation, PaperTrade
 from src.paper.store import PaperStore
-from src.risk.collateral_gate import GATE_NAME, check_collateral_capacity
+from src.risk.collateral_gate import (
+    GATE_NAME,
+    YEARLY_NIFTYBEES_UNITS,
+    check_collateral_capacity,
+)
 
 _SPOT_PRICE = Decimal("24500")
 _NIFTYBEES_LTP = Decimal("280")
@@ -130,3 +140,50 @@ class TestZeroHoldingEdgeCase:
         assert violation is not None
         assert violation.threshold == "0"
         assert violation.actual == "1"
+
+
+# At LTP 300 one lot needs ~5308 units, so the 5400-unit yearly holding supports 1 lot.
+_YEARLY_LTP = Decimal("300")
+
+
+def _yearly_gate(store: PaperStore, strategy: str, lots: int) -> GateViolation | None:
+    return check_collateral_capacity(
+        store=store,
+        strategy_name=strategy,
+        lots_requested=lots,
+        nifty_spot=_SPOT_PRICE,
+        niftybees_ltp=_YEARLY_LTP,
+        lot_size=_LOT_SIZE,
+    )
+
+
+class TestYearlyPool:
+    def _max_lots(self) -> int:
+        return compute_max_lots(
+            niftybees_units=YEARLY_NIFTYBEES_UNITS,
+            nifty_spot=_SPOT_PRICE,
+            niftybees_ltp=_YEARLY_LTP,
+            lot_size=_LOT_SIZE,
+        )
+
+    def test_yearly_units_constant_and_ceiling_within_returns_none(self, store: PaperStore) -> None:
+        assert YEARLY_NIFTYBEES_UNITS == 5400
+        max_lots = self._max_lots()
+        assert max_lots == 1
+        assert _yearly_gate(store, STRATEGY_OVERLAY_YEARLY_CC, max_lots) is None
+
+    def test_yearly_above_ceiling_returns_violation(self, store: PaperStore) -> None:
+        max_lots = self._max_lots()
+        violation = _yearly_gate(store, STRATEGY_OVERLAY_YEARLY_CC, max_lots + 1)
+        assert violation is not None
+        assert violation.threshold == str(max_lots)
+        assert violation.actual == str(max_lots + 1)
+
+    def test_monthly_open_does_not_consume_yearly_pool(self, store: PaperStore) -> None:
+        _seed_open_lot(store, STRATEGY_OVERLAY, "overlay_cc", "NSE_FO|M1")
+        assert _yearly_gate(store, STRATEGY_OVERLAY_YEARLY_CC, self._max_lots()) is None
+
+    def test_yearly_open_does_not_consume_monthly_pool(self, store: PaperStore) -> None:
+        _seed_niftybees(store, units=5725)
+        _seed_open_lot(store, STRATEGY_OVERLAY_YEARLY_CC, "overlay_cc", "NSE_FO|Y1")
+        assert _yearly_gate(store, STRATEGY_OVERLAY, 1) is None

@@ -17,8 +17,9 @@ backstop apply to short-call legs only (CC and the Collar call); PP and the Coll
 ## Ledger names and collateral
 
 The yearly book has one `strategy_name` per overlay: `paper_nifty_overlay_yearly_cc`, `paper_nifty_overlay_yearly_pp`, `paper_nifty_overlay_yearly_collar`. The monthly book keeps the single
-`paper_nifty_overlay` name split by `leg_role`. Its collateral gate is separate: yearly open lots are never added to the monthly NiftyBees pool and the reverse, and `YEARLY_NIFTYBEES_UNITS = 0` in
-`src/risk/collateral_gate.py`, so no NiftyBees units are allocated to the yearly book during the paper phase. Going live needs a fixed unit split or a cross-book cap first.
+`paper_nifty_overlay` name split by `leg_role`. Its collateral gate is separate: yearly open lots are never added to the monthly NiftyBees pool and the reverse, and `YEARLY_NIFTYBEES_UNITS = 5400` in
+`src/risk/collateral_gate.py`: the yearly book has its own separate holding of ~5,395.68 NiftyBees units, rounded to 5400 by Animesh on 2026-11-05. The monthly gate reads only `paper_nifty_spot`, so
+the pools do not overlap. Edit the constant if the holding changes.
 
 ## Host cron lines (listed, not installed)
 
