@@ -214,6 +214,7 @@ Prerequisite for `backtest-engine` (`docs/plan/backtest-engine/phase1/tasks.md` 
 ---
 
 ## Session Log
+- [2026-11-05] yearly-validation YV-4 closed (`44eb566`): IC coexistence tests: four types distinct, leaps quarterly, yearly December, shared Dec 2026 expiry on 2026-10-06 only
 - [2026-11-05] yearly-validation YV-3 closed (`5270055`): Opt-in live yearly smoke passes; selections recorded in findings.md
 - [2026-11-05] yearly-validation YV-2 closed (`f68e3c4`): Yearly entry dry-run e2e tests (cc/pp/collar, zero-Greeks, no-write) in tests/integration
 - [2026-11-05] yearly-validation YV-1 closed (`764d1d5`): Independence tests: monthly and yearly books never block or mix (13 tests)

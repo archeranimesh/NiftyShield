@@ -2,15 +2,15 @@
 
 Work top-down. Find the first unchecked `- [ ]` and do only that task. Each task = one commit.
 
-**Open: YV-4.**
+**Open: YV-5.**
 - [x] **YV-1** — Independence tests: monthly and yearly books never block or mix each other (positions, exit events, collateral gate, coverage) | Owner: Claude | Model: claude-sonnet-5-5 | Review:
   code-reviewer | SHA: 764d1d5
 - [x] **YV-2** — E2E dry-run tests for `--auto-cc/--auto-pp/--auto-collar --expiry-type yearly` against `MockBrokerClient`, temp SQLite, YF-2 fixtures, zero-Greeks case included | Owner: Antigravity |
   Model: n/a | Review: code-reviewer | SHA: f68e3c4
 - [x] **YV-3** — Opt-in live smoke (`-m live`): dry run against the real Dec 2026 chain, no writes; record the output in the story | Owner: Claude | Model: claude-sonnet-5-5 | Review: none | SHA:
   5270055
-- [ ] **YV-4** — IC coexistence check: weekly/monthly/leaps/yearly distinct names; `leaps` = quarterly, `yearly` = December across frozen dates; daemon and snapshot loops cover all four | Owner:
-  Claude | Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: —
+- [x] **YV-4** — IC coexistence check: weekly/monthly/leaps/yearly distinct names; `leaps` = quarterly, `yearly` = December across frozen dates; daemon and snapshot loops cover all four | Owner:
+  Claude | Model: claude-sonnet-5-5 | Review: code-reviewer | SHA: 44eb566
 - [ ] **YV-5** — Paper-run and roll runbook: first yearly CC in paper on Dec 2026, review cadence, and the go/no-go checklist for the Dec 2027 roll | Owner: Animesh | Model: n/a | Review: none | SHA:
   —
 
