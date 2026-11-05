@@ -97,6 +97,8 @@ from src.paper.constants import (
     STRATEGY_CC_OVERLAY,
     STRATEGY_COLLAR_OVERLAY,
     STRATEGY_OVERLAY,
+    STRATEGY_OVERLAY_YEARLY_CC,
+    STRATEGY_OVERLAY_YEARLY_COLLAR,
     STRATEGY_PP_OVERLAY,
     STRATEGY_SPOT,
     is_yearly_overlay_strategy,
@@ -1062,7 +1064,9 @@ class OverlayTrade:
 
 
 def _query_open_call_role(
-    db_path: Path, call_instrument_key: str, strategy_name: str = STRATEGY_OVERLAY
+    db_path: Path,
+    call_instrument_key: str,
+    strategy_name: str | tuple[str, ...] = STRATEGY_OVERLAY,
 ) -> str | None:
     """Return the leg_role of an already-open short call on *call_instrument_key*.
 
@@ -1073,7 +1077,9 @@ def _query_open_call_role(
     Args:
         db_path: Path to the SQLite portfolio DB.
         call_instrument_key: The instrument key of the call leg about to be entered.
-        strategy_name: Ledger namespace to query (default ``STRATEGY_OVERLAY``).
+        strategy_name: Ledger namespace to query (default ``STRATEGY_OVERLAY``), or a
+            tuple of namespaces searched together (yearly CC + collar share a call key
+            across two ledgers).
 
     Returns:
         The existing leg_role (``"overlay_cc"`` or ``"overlay_collar_call"``) if
@@ -1081,21 +1087,23 @@ def _query_open_call_role(
     """
     import sqlite3
 
+    names = (strategy_name,) if isinstance(strategy_name, str) else tuple(strategy_name)
+    placeholders = ",".join("?" * len(names))
     try:
         conn = sqlite3.connect(str(db_path))
         cur = conn.cursor()
         cur.execute(
-            """
+            f"""
             SELECT leg_role,
                    SUM(CASE WHEN action='SELL' THEN -quantity ELSE quantity END) AS net_qty
             FROM paper_trades
-            WHERE strategy_name = ?
+            WHERE strategy_name IN ({placeholders})
               AND instrument_key = ?
               AND leg_role IN ('overlay_cc', 'overlay_collar_call')
             GROUP BY leg_role
             HAVING net_qty < 0
             """,
-            (strategy_name, call_instrument_key),
+            (*names, call_instrument_key),
         )
         row = cur.fetchone()
         conn.close()
@@ -1619,7 +1627,15 @@ def main() -> None:
     # recording overlay_cc and overlay_collar_call on the same contract.
     existing_call_role: str | None = None
     if cfg.overlay_type in ("cc", "collar") and cfg.call_instrument_key:
-        existing_call_role = _query_open_call_role(args.db_path, cfg.call_instrument_key, ledger)
+        # Yearly CC and collar keep separate ledgers but share the call contract.
+        dedup_ledgers: str | tuple[str, ...] = (
+            (STRATEGY_OVERLAY_YEARLY_CC, STRATEGY_OVERLAY_YEARLY_COLLAR)
+            if ledger in (STRATEGY_OVERLAY_YEARLY_CC, STRATEGY_OVERLAY_YEARLY_COLLAR)
+            else ledger
+        )
+        existing_call_role = _query_open_call_role(
+            args.db_path, cfg.call_instrument_key, dedup_ledgers
+        )
         if existing_call_role:
             logger.info(
                 "open_call_role.found",

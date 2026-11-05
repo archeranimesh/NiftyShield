@@ -1772,3 +1772,143 @@ def test_auto_pp_bootstrap_failure_triggers_telegram_alert(tmp_path, capsys):
         assert "PP" in mock_notifier.send.call_args[0][0]
         captured = capsys.readouterr()
         assert "auto-PP bootstrap failed" in captured.err
+
+
+# ── Yearly CC/collar call dedup across separate ledgers ────────────────────────
+
+_CALL_KEY = "NSE_FO|NIFTY24500CE"
+
+
+def _record_call(
+    store: object,
+    ledger: str,
+    role: str,
+    action: TradeAction,
+    key: str = _CALL_KEY,
+    qty: int = 65,
+    day: int = 1,
+) -> None:
+    """Record one paper call-leg trade in *ledger* for the dedup tests."""
+    from src.paper.models import PaperTrade
+
+    store.record_trade(
+        PaperTrade(
+            strategy_name=ledger,
+            leg_role=role,
+            instrument_key=key,
+            trade_date=date(2026, 11, day),
+            action=action,
+            quantity=qty,
+            price=Decimal("120.5"),
+        )
+    )
+
+
+def test_yearly_cc_guard_sees_open_collar_call_in_collar_ledger(tmp_path):
+    """A yearly CC entry must see a short collar call held in the yearly collar ledger."""
+    from scripts.strategies.three_track.paper_3track_overlay_entry import _query_open_call_role
+    from src.paper.constants import STRATEGY_OVERLAY_YEARLY_CC, STRATEGY_OVERLAY_YEARLY_COLLAR
+    from src.paper.store import PaperStore
+
+    db = tmp_path / "t.sqlite"
+    _record_call(
+        PaperStore(db), STRATEGY_OVERLAY_YEARLY_COLLAR, "overlay_collar_call", TradeAction.SELL
+    )
+    both = (STRATEGY_OVERLAY_YEARLY_CC, STRATEGY_OVERLAY_YEARLY_COLLAR)
+
+    assert _query_open_call_role(db, _CALL_KEY, both) == "overlay_collar_call"
+    # Single-ledger lookup (the old behaviour) is blind to it.
+    assert _query_open_call_role(db, _CALL_KEY, STRATEGY_OVERLAY_YEARLY_CC) is None
+
+
+def test_yearly_collar_guard_sees_open_cc_in_cc_ledger(tmp_path):
+    """A yearly collar entry must see a short CC held in the yearly CC ledger."""
+    from scripts.strategies.three_track.paper_3track_overlay_entry import _query_open_call_role
+    from src.paper.constants import STRATEGY_OVERLAY_YEARLY_CC, STRATEGY_OVERLAY_YEARLY_COLLAR
+    from src.paper.store import PaperStore
+
+    db = tmp_path / "t.sqlite"
+    _record_call(PaperStore(db), STRATEGY_OVERLAY_YEARLY_CC, "overlay_cc", TradeAction.SELL)
+    both = (STRATEGY_OVERLAY_YEARLY_CC, STRATEGY_OVERLAY_YEARLY_COLLAR)
+
+    assert _query_open_call_role(db, _CALL_KEY, both) == "overlay_cc"
+
+
+def test_call_guard_ignores_other_key_and_closed_leg(tmp_path):
+    """A different call key, or a net-zero (closed) leg, must not block."""
+    from scripts.strategies.three_track.paper_3track_overlay_entry import _query_open_call_role
+    from src.paper.constants import STRATEGY_OVERLAY_YEARLY_CC, STRATEGY_OVERLAY_YEARLY_COLLAR
+    from src.paper.store import PaperStore
+
+    db = tmp_path / "t.sqlite"
+    store = PaperStore(db)
+    _record_call(store, STRATEGY_OVERLAY_YEARLY_COLLAR, "overlay_collar_call", TradeAction.SELL)
+    _record_call(
+        store, STRATEGY_OVERLAY_YEARLY_COLLAR, "overlay_collar_call", TradeAction.BUY, day=2
+    )
+    _record_call(
+        store, STRATEGY_OVERLAY_YEARLY_CC, "overlay_cc", TradeAction.SELL, key="NSE_FO|OTHERCE"
+    )
+    both = (STRATEGY_OVERLAY_YEARLY_CC, STRATEGY_OVERLAY_YEARLY_COLLAR)
+
+    assert _query_open_call_role(db, _CALL_KEY, both) is None
+
+
+def test_monthly_call_guard_stays_single_ledger(tmp_path):
+    """Default (monthly) lookup is unchanged: only STRATEGY_OVERLAY is searched."""
+    from scripts.strategies.three_track.paper_3track_overlay_entry import _query_open_call_role
+    from src.paper.constants import STRATEGY_OVERLAY, STRATEGY_OVERLAY_YEARLY_CC
+    from src.paper.store import PaperStore
+
+    db = tmp_path / "t.sqlite"
+    store = PaperStore(db)
+    _record_call(store, STRATEGY_OVERLAY_YEARLY_CC, "overlay_cc", TradeAction.SELL)
+    assert _query_open_call_role(db, _CALL_KEY) is None
+    _record_call(store, STRATEGY_OVERLAY, "overlay_collar_call", TradeAction.SELL)
+    assert _query_open_call_role(db, _CALL_KEY) == "overlay_collar_call"
+
+
+@pytest.mark.parametrize(
+    ("flag", "expiry", "expected"),
+    [
+        (
+            "--auto-cc",
+            "yearly",
+            ("paper_nifty_overlay_yearly_cc", "paper_nifty_overlay_yearly_collar"),
+        ),
+        (
+            "--auto-collar",
+            "yearly",
+            ("paper_nifty_overlay_yearly_cc", "paper_nifty_overlay_yearly_collar"),
+        ),
+        ("--auto-cc", "monthly", "paper_nifty_overlay"),
+    ],
+)
+def test_main_passes_dedup_ledgers_to_call_guard(tmp_path, flag, expiry, expected):
+    """main() widens the guard to both yearly ledgers; monthly keeps the single ledger."""
+    from scripts.strategies.three_track.paper_3track_overlay_entry import main
+
+    is_cc = flag == "--auto-cc"
+    cfg = load_overlay_config(
+        _write_yaml(tmp_path, _valid_cc_raw() if is_cc else _valid_collar_raw())
+    )
+    target = "scripts.strategies.three_track.paper_3track_overlay_entry"
+    argv = ["x.py", flag, "--expiry-type", expiry, "--db-path", str(tmp_path / "t.sqlite")]
+    with (
+        patch("sys.argv", argv),
+        patch(f"{target}.auto_cc_bootstrap", return_value=(cfg, None)),
+        patch(f"{target}.auto_collar_bootstrap", return_value=(cfg, None)),
+        patch(f"{target}.PaperStore") as mock_store_cls,
+        patch(f"{target}._query_open_call_role", return_value="overlay_cc") as mock_query,
+        patch(f"{target}.build_notifier", return_value=None),
+    ):
+        mock_store = MagicMock()
+        mock_store_cls.return_value = mock_store
+        mock_store.get_positions.return_value = []
+        mock_store.record_trades.return_value = ([], [])
+        try:
+            main()
+        except SystemExit:
+            pass
+
+    assert mock_query.call_args[0][2] == expected
