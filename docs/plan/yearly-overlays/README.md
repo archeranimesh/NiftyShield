@@ -53,7 +53,7 @@ SOLID triggers run against the plan (`docs/refactor/design-principles.md`):
 | `yearly-pp/` | `--auto-pp --expiry-type yearly` + yearly PP roll/re-entry | ✅ Done (YP-1..2) | `yearly-foundation` | — |
 | `yearly-collar/` | `--auto-collar --expiry-type yearly` + same-expiry pair validation | ✅ Done (YL-1..3), archive pending | `yearly-cc`, `yearly-pp` | — |
 | `yearly-ops-wiring/` | Daemon registration, labels, reports, crons for the yearly book | ✅ Done (YW-1..3, archive pending) | `yearly-collar` | — |
-| `yearly-validation/` | Independence tests, e2e dry-run, opt-in live smoke, IC coexistence check, paper-run runbook | 🔄 In progress (next YV-1) | `yearly-ops-wiring` | — |
+| `yearly-validation/` | Independence tests, e2e dry-run, opt-in live smoke, IC coexistence check, paper-run runbook | 🔄 In progress (next YV-2) | `yearly-ops-wiring` | — |
 
 Status: ⬜ Not started · 🔄 In progress · ✅ Done. This column is the epic's progress view — per-task checkboxes live only in each sub-story's `tasks.md`.
 
