@@ -1270,7 +1270,7 @@ def print_summary(
         dry_run: If True, label as preview.
     """
     mode = "DRY RUN — nothing written to DB" if dry_run else "RECORDED TO DB"
-    print(f"\n{'═' * 70}")
+    print(f"\n{'═' * 76}")
     print(
         f"  Overlay Entry | {cfg.entry_date} | Cycle {cfg.cycle} | "
         f"{cfg.overlay_type.upper()} | {mode}"
@@ -1279,20 +1279,26 @@ def print_summary(
         f"  Expiry: {cfg.expiry} ({cfg.expiry_type}, DTE={cfg.dte_at_entry}) | "
         f"lot_size={cfg.lot_size}"
     )
-    print(f"{'═' * 70}")
-    print(f"  {'Strategy':<24} {'Leg':<22} {'Act':>4} {'Price':>10}")
-    print(f"  {'─' * 64}")
+    print(f"{'═' * 76}")
+    print(f"  {'Strategy':<24} {'Leg':<22} {'Act':>4} {'Strike':>9} {'Price':>10}")
+    print(f"  {'─' * 74}")
 
     for ot in overlay_trades:
         t = ot.trade
-        print(f"  {t.strategy_name:<24} {t.leg_role:<22} {t.action.value:>4} {t.price:>10.2f}")
+        right = _LEG_ROLE_TO_ROW.get(t.leg_role, (None, None))[1]
+        strike = cfg.put_strike if right == "PE" else cfg.call_strike if right == "CE" else None
+        strike_txt = f"{format_strike(strike)} {right}" if strike is not None else "-"
+        print(
+            f"  {t.strategy_name:<24} {t.leg_role:<22} {t.action.value:>4} "
+            f"{strike_txt:>9} {t.price:>10.2f}"
+        )
 
     if warnings:
         print()
         for w in warnings:
             print(w)
 
-    print(f"{'═' * 70}")
+    print(f"{'═' * 76}")
     if dry_run:
         print("\n  Re-run without --dry-run to write to DB.")
     print()
